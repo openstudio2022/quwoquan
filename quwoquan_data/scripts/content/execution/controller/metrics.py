@@ -42,17 +42,24 @@ def _reliabletask_accepted_throughput(root: Path) -> dict[str, Any] | None:
         "reliabletask_fleet_report",
         label="reliabletask_fleet_report",
     )
+    accepted = int(report.get("commercialAcceptedCount") or 0)
+    required_quota = int(report.get("requiredQuota") or 0)
     if (
         report.get("passed") is not True
         or report.get("acceptedContentThroughputStatus") != "MEASURED"
+        or accepted < required_quota
     ):
         raise ValueError(
-            "ReliableTask publish fleet report 未形成 commercial accepted throughput"
+            "ReliableTask publish fleet report 未达准出配额："
+            f"已达标 {accepted} / 配额 {required_quota}"
+            f"（status={report.get('acceptedContentThroughputStatus')}）"
         )
     return {
         "measurementMode": "reliabletask_commercial_accepted",
         "backend": str(report.get("backend") or ""),
-        "publishedObjectCount": int(report.get("commercialAcceptedCount") or 0),
+        "publishedObjectCount": accepted,
+        "requiredQuota": required_quota,
+        "finalizedObjectCount": int(report.get("finalizedObjectCount") or 0),
         "objectsPerHour": float(
             report.get("acceptedContentThroughputPerHour") or 0.0
         ),

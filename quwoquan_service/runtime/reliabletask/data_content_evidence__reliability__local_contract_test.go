@@ -131,6 +131,73 @@ func TestDataContentFilesystemEvidenceVerifierRejectsEscapingEvidenceRef(t *test
 	}
 }
 
+func TestCountFinalizedDataContentObjectsCountsOnlyReviewedTriples(t *testing.T) {
+	evidenceRoot := t.TempDir()
+	executionID := "20260727--travel-homepage-coverage--cn-zhejiang--scale-034"
+	workPackage := filepath.Join(evidenceRoot, "data", "tasks", executionID)
+	writeDataContentObjectFixture(
+		t,
+		filepath.Join(workPackage, "entities", "地点", "景区", "西湖"),
+		"page.md", "manifest.json", "_entity.json",
+	)
+	writeDataContentObjectFixture(
+		t,
+		filepath.Join(workPackage, "posts", "article", "西湖春行"),
+		"page.md", "manifest.json", "_entity.json",
+	)
+	writeDataContentObjectFixture(
+		t,
+		filepath.Join(workPackage, "posts", "article", "未完成"),
+		"page.md",
+	)
+	writeDataContentObjectFixture(
+		t,
+		filepath.Join(workPackage, "posts", "article", "草稿", "4.draft", "普陀山"),
+		"page.md", "manifest.json", "_entity.json",
+	)
+
+	finalized, err := CountFinalizedDataContentObjects(evidenceRoot, executionID)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if finalized != 2 {
+		t.Fatalf("finalized object count=%d want=2", finalized)
+	}
+}
+
+func TestCountFinalizedDataContentObjectsTreatsAbsentWorkPackageAsZero(t *testing.T) {
+	finalized, err := CountFinalizedDataContentObjects(
+		t.TempDir(),
+		"20260727--travel-homepage-coverage--cn-zhejiang--scale-999",
+	)
+	if err != nil {
+		t.Fatalf("absent work package must not be an error: %v", err)
+	}
+	if finalized != 0 {
+		t.Fatalf("absent work package count=%d want=0", finalized)
+	}
+}
+
+func TestCountFinalizedDataContentObjectsRequiresEvidenceRoot(t *testing.T) {
+	_, err := CountFinalizedDataContentObjects("", "20260727--x--cn-zhejiang--scale-001")
+	if err == nil || !strings.Contains(err.Error(), "evidenceRoot") {
+		t.Fatalf("empty evidence root was not rejected: %v", err)
+	}
+}
+
+func writeDataContentObjectFixture(t *testing.T, directory string, files ...string) {
+	t.Helper()
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range files {
+		if err := os.WriteFile(filepath.Join(directory, name), []byte(name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func writeDataContentApplyFixture(t *testing.T, path string, payload map[string]string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

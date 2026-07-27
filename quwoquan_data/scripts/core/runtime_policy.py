@@ -62,6 +62,7 @@ class RuntimePolicy:
     source_plan_recovery_workers: int
     download_concurrency: int
     cursor_bridge_instances: int
+    oversample_factor: float
     startup_timeout_seconds: int
     preflight_network_timeout_seconds: int
     agent_timeout_seconds: int
@@ -184,6 +185,13 @@ def _non_negative_float(value: object, *, label: str) -> float:
     return float(value)
 
 
+def _oversample_factor(value: object, *, label: str) -> float:
+    """候选池相对准出配额的过采系数；小于 1 会让候选池永远无法覆盖配额。"""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 1:
+        raise ValueError(f"runtime policy {label} must be a number >= 1")
+    return float(value)
+
+
 def _mapping(value: object, *, label: str) -> Mapping[str, object]:
     if not isinstance(value, Mapping):
         raise ValueError(f"runtime policy {label} must be an object")
@@ -235,11 +243,12 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         label="policy.cursor",
     )
     workers = _mapping(policy.get("workers"), label="policy.workers")
+    selection = _mapping(policy.get("selection"), label="policy.selection")
     budgets = _mapping(policy.get("budgets"), label="policy.budgets")
     network = _mapping(policy.get("network"), label="policy.network")
     coverage = _mapping(policy.get("coverageDiscovery"), label="policy.coverageDiscovery")
     timeouts = _mapping(network.get("providerTimeoutSeconds"), label="policy.network.providerTimeoutSeconds")
-    expected_top = {"cursor", "workers", "budgets", "network", "coverageDiscovery"}
+    expected_top = {"cursor", "workers", "selection", "budgets", "network", "coverageDiscovery"}
     if set(policy) != expected_top:
         raise ValueError("runtime policy contains unknown or missing policy sections")
     return RuntimePolicy(
@@ -272,6 +281,10 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         cursor_bridge_instances=_positive_int(
             workers.get("cursorBridgeInstances"),
             label="workers.cursorBridgeInstances",
+        ),
+        oversample_factor=_oversample_factor(
+            selection.get("oversampleFactor"),
+            label="selection.oversampleFactor",
         ),
         startup_timeout_seconds=_positive_int(budgets.get("startupTimeoutSeconds"), label="budgets.startupTimeoutSeconds"),
         preflight_network_timeout_seconds=_positive_int(

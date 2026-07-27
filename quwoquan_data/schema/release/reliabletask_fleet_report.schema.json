@@ -19,6 +19,8 @@
     "finalizedWithinStageBudgetRate",
     "duplicatePublishCount",
     "missingObjectCount",
+    "requiredQuota",
+    "finalizedObjectCount",
     "idempotencyKey",
     "taskOutcomes",
     "completedAt"
@@ -109,6 +111,14 @@
       "minimum": 0
     },
     "missingObjectCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "requiredQuota": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "finalizedObjectCount": {
       "type": "integer",
       "minimum": 0
     },

@@ -628,12 +628,17 @@ func TestDataContentFleetRecordsAuthorStageWithoutCommercialAcceptance(t *testin
 		time.Now().UTC(),
 		0,
 		0,
+		1,
+		0,
 	)
-	if report.Passed ||
-		report.StageCompletedCount != 1 ||
+	if report.StageCompletedCount != 1 ||
 		report.PublishTaskCount != 0 ||
-		report.CommercialAcceptedCount != 0 {
+		report.CommercialAcceptedCount != 0 ||
+		report.AcceptedContentThroughputStatus != "GATE_BLOCK_NO_COMMERCIAL_BATCH" {
 		t.Fatalf("author stage was misreported as commercial: %#v", report)
+	}
+	if !report.Passed {
+		t.Fatalf("author stage quota was met but the batch did not pass: %#v", report)
 	}
 }
 
@@ -724,8 +729,10 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 		completed,
 		0,
 		0,
+		1,
+		0,
 	)
-	if blocked.Passed ||
+	if blocked.CommercialAcceptedCount != 0 ||
 		blocked.AcceptedContentThroughputPerHour != 0 ||
 		blocked.AcceptedContentThroughputStatus != "GATE_BLOCK_NO_COMMERCIAL_BATCH" {
 		t.Fatalf("control-plane completion was misreported as accepted: %#v", blocked)
@@ -746,9 +753,10 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 		completed,
 		0,
 		0,
+		1,
+		0,
 	)
-	if fixtureOnly.Passed ||
-		fixtureOnly.ObjectTransactionResultCount != 0 ||
+	if fixtureOnly.ObjectTransactionResultCount != 0 ||
 		fixtureOnly.CommercialAcceptedCount != 0 ||
 		fixtureOnly.AcceptedContentThroughputPerHour != 0 ||
 		fixtureOnly.AcceptedContentThroughputStatus != "GATE_BLOCK_NO_COMMERCIAL_BATCH" {
@@ -779,6 +787,8 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 		started,
 		completed,
 		0,
+		0,
+		1,
 		0,
 	)
 	if !measured.Passed ||
@@ -820,6 +830,8 @@ func TestDataContentFleetReportRejectsUnboundOrMalformedCommercialEvidence(t *te
 		started,
 		completed,
 		0,
+		0,
+		1,
 		0,
 	)
 	if report.Passed ||

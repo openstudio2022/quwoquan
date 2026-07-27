@@ -11,11 +11,15 @@ policy:
         value: "false"
     runtime: local
   workers:
-    author: 3
+    author: 8
     reviewer: 2
     research: 4
     download: 8
-    cursorBridgeInstances: 3
+    cursorBridgeInstances: 8
+  selection:
+    # 候选池 = ceil(准出配额 * oversampleFactor)。1.8 来自实测首过率，
+    # 质量不达标的对象直接丢弃、不重试，靠过采补足配额。
+    oversampleFactor: 1.8
   budgets:
     startupTimeoutSeconds: 240
     preflightNetworkTimeoutSeconds: 5
@@ -27,7 +31,7 @@ policy:
     researchMaxWavesPerRun: 0
     sourcePlanRecoveryPasses: 1
     sourcePlanRecoveryWorkers: 2
-    coldStartMaxWorkers: 3
+    coldStartMaxWorkers: 8
     workerStaggerSeconds: 8.0
     managedFutureGraceSeconds: 15
     schedulerStaleSeconds: 900

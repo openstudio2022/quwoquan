@@ -82,6 +82,8 @@ def _spec() -> dict:
         image_works_per_target=0,
         video_works_per_target=0,
         target_entity_count=1,
+        approved_quota=1,
+        oversample_factor=1.0,
     )
 
 
@@ -89,6 +91,7 @@ def test_select_targets_uses_static_coverage_identity_only(tmp_path: Path):
     targets, report = select_targets(
         discovery_path=_coverage_file(tmp_path / "舟山市.yaml"),
         limit=1,
+        quota=1,
         target_selector=TargetSelector.ALL,
     )
     assert [item["name"] for item in targets] == ["测试实体甲"]
@@ -126,6 +129,7 @@ def test_select_targets_preserves_leaf_name_as_canonical_alias(tmp_path: Path):
     targets, _report = select_targets(
         discovery_path=path,
         limit=1,
+        quota=1,
         target_selector=TargetSelector.ALL,
     )
 
@@ -158,11 +162,13 @@ def test_select_targets_applies_priority_only_when_explicit(tmp_path: Path) -> N
     all_targets, _ = select_targets(
         discovery_path=path,
         limit=1,
+        quota=1,
         target_selector=TargetSelector.ALL,
     )
     priority_targets, report = select_targets(
         discovery_path=path,
         limit=1,
+        quota=1,
         target_selector=TargetSelector.PRIORITY,
     )
 
@@ -196,6 +202,7 @@ def test_post_selection_preserves_parent_homepage_target_order(tmp_path: Path) -
     targets, report = select_targets(
         discovery_path=path,
         limit=2,
+        quota=2,
         target_selector=TargetSelector.ALL,
         target_names=("测试实体丙", "测试实体甲"),
     )
@@ -246,6 +253,7 @@ def test_source_ready_priority_qualifies_until_target_set_is_frozen(tmp_path: Pa
     targets, report = select_targets(
         discovery_path=path,
         limit=1,
+        quota=1,
         target_selector=TargetSelector.SOURCE_READY_PRIORITY,
         source_qualifier=qualify,
     )
@@ -299,6 +307,7 @@ def test_source_ready_priority_uses_explicit_runtime_targets_before_freezing(tmp
     targets, report = select_targets(
         discovery_path=path,
         limit=1,
+        quota=1,
         target_selector=TargetSelector.SOURCE_READY_PRIORITY,
         source_qualifier=qualify,
         target_names=("金丝雀对象",),
@@ -330,6 +339,7 @@ def test_source_ready_priority_reports_exhaustion_only_after_all_candidates(tmp_
         select_targets(
             discovery_path=path,
             limit=1,
+            quota=1,
             target_selector=TargetSelector.SOURCE_READY_PRIORITY,
             source_qualifier=lambda _target: TargetSourceQualification(
                 False,
@@ -394,6 +404,8 @@ def test_execution_spec_derives_entity_types_from_selected_targets():
         image_works_per_target=0,
         video_works_per_target=0,
         target_entity_count=3,
+        approved_quota=3,
+        oversample_factor=1.0,
     )
 
     assert spec["scope"]["entityTypes"] == [
@@ -417,6 +429,8 @@ def test_execution_spec_supports_strict_full_delivery():
         image_works_per_target=0,
         video_works_per_target=0,
         target_entity_count=1,
+        approved_quota=1,
+        oversample_factor=1.0,
     )
 
     assert spec["executionPolicy"]["selectionPolicy"] == "frozen"
@@ -478,8 +492,129 @@ def test_execution_spec_requires_readable_execution_id():
             entity_homepages_per_target=1,
             image_works_per_target=0,
             video_works_per_target=0,
+            approved_quota=1,
+            oversample_factor=1.0,
         )
     except ValueError as exc:
         assert "executionId" in str(exc)
     else:
         raise AssertionError("retired task identity must be rejected")
+
+
+def _pool_discovery(path: Path, count: int) -> Path:
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "districts": [
+                    {
+                        "district": "过采区",
+                        "leaves": [
+                            {
+                                "name": f"过采对象{index}",
+                                "canonicalName": f"过采对象{index}",
+                                "entityType": "地点/景区",
+                                "geoTagRef": (
+                                    "Topic/地理/行政区/中国/test-region-a/舟山市/过采区"
+                                ),
+                                "typeTagRefs": ["Entity/地点/景区/5A景区"],
+                                "selectionPriority": index + 1,
+                            }
+                            for index in range(count)
+                        ],
+                    }
+                ]
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_candidate_pool_may_exceed_the_approved_quota(tmp_path: Path) -> None:
+    """过采：候选池 5、配额 3，冻结整池，配额只约束下界。"""
+    path = _pool_discovery(tmp_path / "过采市.yaml", 5)
+
+    targets, report = select_targets(
+        discovery_path=path,
+        limit=5,
+        quota=3,
+        target_selector=TargetSelector.PRIORITY,
+    )
+
+    assert len(targets) == 5
+    assert report["limit"] == 5
+    assert report["approvedQuota"] == 3
+    assert report["selectionShortfall"] == 0
+
+
+def test_partial_supply_above_quota_still_freezes(tmp_path: Path) -> None:
+    """候选池只供给 4 个，但配额 3 已满足 → 放行，shortfall 归零。"""
+    path = _pool_discovery(tmp_path / "浅池市.yaml", 4)
+
+    targets, report = select_targets(
+        discovery_path=path,
+        limit=6,
+        quota=3,
+        target_selector=TargetSelector.PRIORITY,
+    )
+
+    assert len(targets) == 4  # < limit，但 >= quota
+    assert report["selectedCount"] == 4
+    assert report["selectionShortfall"] == 0
+
+
+def test_candidate_pool_exhausted_below_quota_is_a_selection_failure(
+    tmp_path: Path,
+) -> None:
+    """供给低于配额才算失败，错误必须说明候选池耗尽。"""
+    path = _pool_discovery(tmp_path / "枯竭市.yaml", 2)
+
+    with pytest.raises(ValueError, match="候选池耗尽，区域实体供给不足"):
+        select_targets(
+            discovery_path=path,
+            limit=6,
+            quota=4,
+            target_selector=TargetSelector.PRIORITY,
+        )
+
+
+def test_quota_above_candidate_pool_is_rejected_upfront(tmp_path: Path) -> None:
+    path = _pool_discovery(tmp_path / "越界市.yaml", 5)
+
+    with pytest.raises(ValueError, match="exceeds the candidate pool"):
+        select_targets(
+            discovery_path=path,
+            limit=2,
+            quota=3,
+            target_selector=TargetSelector.PRIORITY,
+        )
+
+
+def test_execution_spec_binds_acceptance_to_the_quota_not_the_pool() -> None:
+    """准出门只认配额；候选池只描述过采规模。"""
+    spec = build_execution_spec(
+        execution_id="20260712--travel-homepage-coverage--test-region-a--scale-777",
+        name="test-region-a实体主页过采",
+        title="test-region-a实体主页过采",
+        region="中国/test-region-a",
+        category="景区",
+        targets=[
+            {"name": f"过采对象{index}", "entityType": "地点/景区"}
+            for index in range(5)
+        ],
+        created_by="test",
+        entity_articles_per_target=0,
+        entity_homepages_per_target=1,
+        image_works_per_target=0,
+        video_works_per_target=0,
+        target_entity_count=5,
+        approved_quota=3,
+        oversample_factor=1.8,
+    )
+
+    assert spec["executionPolicy"]["targetEntityCount"] == 5
+    assert spec["executionPolicy"]["approvedQuota"] == 3
+    assert spec["executionPolicy"]["oversampleFactor"] == 1.8
+    assert spec["acceptance"]["minEntities"] == 3

@@ -1,3 +1,4 @@
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/spec.md#sit-001
 """Contract tests for the generic single-work-package content facade."""
 from __future__ import annotations
 
@@ -7,6 +8,8 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 
 DATA_ROOT = next(
@@ -151,6 +154,7 @@ def test_execute_freezes_generic_runtime_request(monkeypatch, tmp_path: Path) ->
             region_ref="test-region-a",
             selector="source-ready-priority",
             count=2,
+            quota=2,
             target_names=["测试实体甲", "测试实体乙"],
             topic=None,
             source_providers=[],
@@ -171,6 +175,116 @@ def test_execute_freezes_generic_runtime_request(monkeypatch, tmp_path: Path) ->
     assert "rollout" not in received
 
 
+def test_retry_inherits_the_previous_frozen_target_set(monkeypatch, tmp_path: Path) -> None:
+    reference_root = tmp_path / "quwoquan_data/reference/travel/entities/test-region-a"
+    reference_root.mkdir(parents=True)
+    received: dict[str, object] = {}
+    retry_of = "20260722--travel-homepage-coverage--test-region-a--pilot-001"
+    execution_id = "20260722--travel-homepage-coverage--test-region-a--pilot-002"
+    monkeypatch.setattr(recipe, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(
+        recipe,
+        "load_frozen_target_set",
+        lambda _execution_id: {
+            "targets": [
+                {"name": "测试实体乙"},
+                {"name": "测试实体甲"},
+            ]
+        },
+    )
+    monkeypatch.setattr(recipe, "_run_execution", lambda args, invoke=None: received.update(vars(args)))
+
+    recipe.handle_execute(
+        argparse.Namespace(
+            execution_id=execution_id,
+            retry_of=retry_of,
+            family="content/travel/homepage/homepage",
+            region_ref="test-region-a",
+            selector="source-ready-priority",
+            count=2,
+            quota=2,
+            target_names=[],
+            topic=None,
+            source_providers=[],
+            homepage_execution_id=None,
+            stage="plan-only",
+            recover_stage=None,
+            recovery_reason=None,
+        )
+    )
+
+    assert received["target_names"] == ("测试实体乙", "测试实体甲")
+
+
+def test_retry_rejects_target_or_count_drift(monkeypatch, tmp_path: Path) -> None:
+    reference_root = tmp_path / "quwoquan_data/reference/travel/entities/test-region-a"
+    reference_root.mkdir(parents=True)
+    retry_of = "20260722--travel-homepage-coverage--test-region-a--pilot-001"
+    monkeypatch.setattr(recipe, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(
+        recipe,
+        "load_frozen_target_set",
+        lambda _execution_id: {
+            "targets": [
+                {"name": "测试实体乙"},
+                {"name": "测试实体甲"},
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        recipe,
+        "_run_execution",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not execute")),
+    )
+
+    base = {
+        "execution_id": "20260722--travel-homepage-coverage--test-region-a--pilot-002",
+        "retry_of": retry_of,
+        "family": "content/travel/homepage/homepage",
+        "region_ref": "test-region-a",
+        "selector": "source-ready-priority",
+        "count": 2,
+        "quota": 2,
+        "target_names": ["测试实体甲", "测试实体乙"],
+        "topic": None,
+        "source_providers": [],
+        "homepage_execution_id": None,
+        "stage": "plan-only",
+        "recover_stage": None,
+        "recovery_reason": None,
+    }
+    with pytest.raises(SystemExit, match="previous frozen target order exactly"):
+        recipe.handle_execute(argparse.Namespace(**base))
+
+    base["count"] = 1
+    base["quota"] = 1
+    base["target_names"] = []
+    with pytest.raises(SystemExit, match=r"inherited candidate pool 2 must stay inside"):
+        recipe.handle_execute(argparse.Namespace(**base))
+
+
+def test_retry_without_predecessor_requires_explicit_targets(monkeypatch) -> None:
+    def missing_target_set(_execution_id: str) -> dict[str, object]:
+        raise FileNotFoundError("disposed predecessor")
+
+    monkeypatch.setattr(recipe, "load_frozen_target_set", missing_target_set)
+
+    with pytest.raises(SystemExit, match="provide every exact --target"):
+        recipe._retry_target_names(
+            "20260722--travel-homepage-coverage--test-region-a--pilot-001",
+            count=2,
+            quota=2,
+            requested_target_names=(),
+        )
+
+    assert recipe._retry_target_names(
+        "20260722--travel-homepage-coverage--test-region-a--pilot-001",
+        count=2,
+        quota=2,
+        requested_target_names=("测试实体乙", "测试实体甲"),
+    ) == ("测试实体乙", "测试实体甲")
+
+
 def test_plan_only_checks_workspace_before_creating_a_work_package(monkeypatch) -> None:
     args = argparse.Namespace(
         execution_id=EXECUTION_ID,
@@ -179,6 +293,7 @@ def test_plan_only_checks_workspace_before_creating_a_work_package(monkeypatch) 
         region_ref="test-region-a",
         selector="source-ready-priority",
         count=1,
+        quota=1,
         topic=None,
         source_providers=(),
         homepage_execution_id=None,
@@ -214,6 +329,7 @@ def test_post_execute_requires_explicit_homepage_execution(monkeypatch, tmp_path
         region_ref="test-region-b",
         selector="all",
         count=1,
+        quota=1,
         topic="test-topic-a",
         source_providers=[],
         homepage_execution_id=None,
@@ -244,6 +360,7 @@ def test_post_targets_derive_from_the_published_homepage_closure(
                 "regionRef": "test-region-b",
                 "selector": "source-ready-priority",
                 "count": 2,
+                "quota": 2,
                 "topic": None,
                 "sourceProviders": [],
                 "homepageExecutionId": None,
@@ -288,6 +405,7 @@ def test_post_targets_derive_from_the_published_homepage_closure(
         parent_id,
         region_ref="test-region-b",
         count=2,
+        quota=2,
     )
 
     assert names == ("测试实体乙", "测试实体甲")
@@ -306,6 +424,7 @@ def test_homepage_execute_requires_source_ready_selection(monkeypatch, tmp_path:
         region_ref="test-region-a",
         selector="all",
         count=1,
+        quota=1,
         target_names=[],
         topic=None,
         source_providers=[],
@@ -345,6 +464,7 @@ def test_frozen_runtime_request_rejects_unknown_or_unordered_fields() -> None:
         "regionRef": "test-region-a",
         "selector": "all",
         "count": 1,
+        "quota": 1,
         "topic": None,
         "sourceProviders": ["provider-b", "provider-a"],
         "homepageExecutionId": None,
@@ -382,6 +502,7 @@ def test_execute_rejects_a_provider_outside_the_vertical_policy(monkeypatch, tmp
         region_ref="test-region-a",
         selector="source-ready-priority",
         count=1,
+        quota=1,
         topic=None,
         source_providers=["provider-a"],
         homepage_execution_id=None,

@@ -19,12 +19,13 @@ from core.runtime_policy import apply_runtime_policy, load_runtime_policy
 from core.control_types import TargetSelector
 from content.execution import store
 from content.execution.homepage_binding import published_homepage_target_names
-from content.execution.request import RuntimeExecutionRequest
+from content.execution.request import RuntimeExecutionRequest, resolve_candidate_pool
 from governance.provider_policy import load_provider_policy
 from content.execution.workspace import (
     execution_manifest_path,
     execution_request_path,
     execution_root,
+    load_frozen_target_set,
     load_execution_manifest,
 )
 
@@ -124,6 +125,7 @@ def _resolve_selection(
             "intentLabel": intent,
             "homepageExecutionId": request.homepage_execution_id or "",
             "limit": request.count,
+            "approvedQuota": request.quota,
         }
     )
     return selection
@@ -212,6 +214,65 @@ def _runtime_preflight_argv(execution_id: str) -> list[str]:
         "--report-out",
         str(evidence),
     ]
+
+
+def _retry_target_names(
+    retry_of: str | None,
+    *,
+    count: int,
+    quota: int,
+    requested_target_names: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Keep a retry on the exact immutable target set of its predecessor."""
+
+    if not retry_of:
+        return requested_target_names
+    try:
+        target_set = load_frozen_target_set(retry_of)
+    except FileNotFoundError as exc:
+        if requested_target_names:
+            return requested_target_names
+        raise SystemExit(
+            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
+            "previous frozen target set is unavailable; provide every exact --target"
+        ) from exc
+    except ValueError as exc:
+        raise SystemExit(
+            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
+            "previous frozen target set is invalid"
+        ) from exc
+    targets = target_set.get("targets")
+    if not isinstance(targets, list):
+        raise SystemExit(
+            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
+            "previous frozen target set is invalid"
+        )
+    inherited_names = tuple(
+        str(target.get("name") or "").strip()
+        for target in targets
+        if isinstance(target, dict)
+    )
+    if (
+        len(inherited_names) != len(targets)
+        or any(not name for name in inherited_names)
+        or len(set(inherited_names)) != len(inherited_names)
+    ):
+        raise SystemExit(
+            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
+            "previous frozen target names are invalid"
+        )
+    if not quota <= len(inherited_names) <= count:
+        raise SystemExit(
+            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
+            f"inherited candidate pool {len(inherited_names)} must stay inside "
+            f"[--quota {quota}, --count {count}]"
+        )
+    if requested_target_names and requested_target_names != inherited_names:
+        raise SystemExit(
+            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
+            "--target must match the previous frozen target order exactly"
+        )
+    return inherited_names
 
 
 def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) -> None:
@@ -389,9 +450,10 @@ def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
     discovery_path = REPO_ROOT / "quwoquan_data/reference" / identity.vertical / "entities" / region_ref
     if not discovery_path.is_dir():
         raise SystemExit(f"[task execute] GATE_BLOCK region reference does not exist: {region_ref}")
-    count = getattr(args, "count", None)
-    if isinstance(count, bool) or not isinstance(count, int) or count < 1:
-        raise SystemExit("[task execute] GATE_BLOCK --count must be a positive integer")
+    quota, count = resolve_candidate_pool(
+        quota=getattr(args, "quota", None),
+        count=getattr(args, "count", None),
+    )
     selector = str(getattr(args, "selector", "") or "").strip()
     try:
         target_selector = TargetSelector(selector)
@@ -420,8 +482,17 @@ def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         requested_target_names
         if identity.content_type.value == "homepage"
         else published_homepage_target_names(
-            homepage_execution_id, region_ref=region_ref, count=count
+            homepage_execution_id,
+            region_ref=region_ref,
+            count=count,
+            quota=quota,
         )
+    )
+    target_names = _retry_target_names(
+        str(getattr(args, "retry_of", "") or "").strip() or None,
+        count=count,
+        quota=quota,
+        requested_target_names=target_names,
     )
     _run_execution(
         argparse.Namespace(
@@ -441,6 +512,7 @@ def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             content_type=identity.content_type.value,
             intent=identity.intent,
             count=count,
+            quota=quota,
         ),
         invoke=invoke,
     )
@@ -464,8 +536,13 @@ def register_recipe_parser(sub: argparse._SubParsersAction) -> None:
         required=True,
         choices=tuple(item.value for item in TargetSelector),
     )
-    pg.add_argument("--count", required=True, type=int, help="本次冻结目标数，仅写入运行 request")
-    pg.add_argument("--target", dest="target_names", action="append", default=[], help="仅在本次运行请求中限定候选实体；可重复，数量必须等于 --count")
+    pg.add_argument("--quota", required=True, type=int, help="准出配额（必须交付的达标对象数）")
+    pg.add_argument(
+        "--count",
+        type=int,
+        help="候选池上限；省略时按 runtime policy 的 oversampleFactor 由 --quota 推导",
+    )
+    pg.add_argument("--target", dest="target_names", action="append", default=[], help="仅在本次运行请求中限定候选实体；可重复，数量必须等于候选池大小")
     pg.add_argument("--topic", help="文章、图片或视频的主题")
     pg.add_argument(
         "--source-provider",

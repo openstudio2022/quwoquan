@@ -69,6 +69,8 @@ def _make_task(
         entity_homepages_per_target=0,
         image_works_per_target=2,
         video_works_per_target=0,
+        approved_quota=len(targets),
+        oversample_factor=1.0,
         target_entity_count=len(targets),
     )
     spec["content"]["research"]["imageCountPolicy"] = image_count_policy
@@ -143,6 +145,8 @@ def _make_homepage_task(name: str, targets: list[str]) -> str:
         entity_homepages_per_target=1,
         image_works_per_target=0,
         video_works_per_target=0,
+        approved_quota=len(targets),
+        oversample_factor=1.0,
         target_entity_count=len(targets),
     )
     spec["status"] = "active"
@@ -313,6 +317,8 @@ def test_scale_proof_reads_each_target_from_its_declared_entity_type():
         image_works_per_target=1,
         video_works_per_target=0,
         target_entity_count=2,
+        approved_quota=2,
+        oversample_factor=1.0,
     )
     spec["status"] = "active"
     store.save_spec(spec)

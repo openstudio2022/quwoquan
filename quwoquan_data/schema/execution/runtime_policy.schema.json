@@ -41,6 +41,14 @@
           "required": ["author", "reviewer", "research", "download", "cursorBridgeInstances"],
           "additionalProperties": false
         },
+        "selection": {
+          "type": "object",
+          "properties": {
+            "oversampleFactor": { "type": "number", "minimum": 1 }
+          },
+          "required": ["oversampleFactor"],
+          "additionalProperties": false
+        },
         "budgets": {
           "type": "object",
           "properties": {
@@ -206,7 +214,7 @@
           "additionalProperties": false
         }
       },
-      "required": ["cursor", "workers", "budgets", "coverageDiscovery", "network"],
+      "required": ["cursor", "workers", "selection", "budgets", "coverageDiscovery", "network"],
       "additionalProperties": false
     }
   },

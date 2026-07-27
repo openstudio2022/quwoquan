@@ -1,4 +1,4 @@
-"""ReliableTask 商业吞吐必须覆盖旧的批次文件时间估算。"""
+"""ReliableTask 商业吞吐必须覆盖旧的批次文件时间估算，并按配额而非全量判定。"""
 from __future__ import annotations
 
 import sys
@@ -20,8 +20,16 @@ from content.execution.controller.metrics import (  # noqa: E402
 from core.io import write_json  # noqa: E402
 
 
-def _report(*, passed: bool = True) -> dict[str, object]:
+def _report(
+    *,
+    passed: bool = True,
+    required_quota: int = 10,
+    commercial_accepted: int | None = None,
+) -> dict[str, object]:
     total = 10
+    accepted = commercial_accepted if commercial_accepted is not None else (
+        total if passed else total - 1
+    )
     return {
         "schema": "quwoquan.reliabletask_fleet_report",
         "passed": passed,
@@ -31,7 +39,7 @@ def _report(*, passed: bool = True) -> dict[str, object]:
         "stageCompletedCount": 0,
         "publishTaskCount": total,
         "objectTransactionResultCount": total,
-        "commercialAcceptedCount": total if passed else total - 1,
+        "commercialAcceptedCount": accepted,
         "controlPlaneTaskThroughputPerHour": 500.0,
         "acceptedContentThroughputPerHour": 480.0 if passed else 432.0,
         "acceptedContentThroughputStatus": (
@@ -43,6 +51,8 @@ def _report(*, passed: bool = True) -> dict[str, object]:
         "finalizedWithinStageBudgetRate": 1.0,
         "duplicatePublishCount": 0,
         "missingObjectCount": 0,
+        "requiredQuota": required_quota,
+        "finalizedObjectCount": accepted,
         "idempotencyKey": "executionId+entity+carrier+sourceRevision+stage",
         "taskOutcomes": [
             {"jobId": f"job-{index}", "status": "succeeded", "attempts": 1}
@@ -82,6 +92,32 @@ def test_metrics_reject_incomplete_commercial_fleet_report(
 
     with pytest.raises(
         ValueError,
-        match="未形成 commercial accepted throughput",
+        match="未达准出配额",
     ):
+        _reliabletask_accepted_throughput(tmp_path)
+
+
+def test_metrics_accept_quota_without_full_batch_success(tmp_path: Path) -> None:
+    """达配额即通过：8/10 达标、配额 7 时仍是合法的 MEASURED 吞吐。"""
+    write_json(
+        tmp_path / "evidence/reliabletask/publish_fleet_report.json",
+        _report(required_quota=7, commercial_accepted=8),
+    )
+
+    measured = _reliabletask_accepted_throughput(tmp_path)
+
+    assert measured is not None
+    assert measured["publishedObjectCount"] == 8
+    assert measured["requiredQuota"] == 7
+    assert measured["finalizedObjectCount"] == 8
+
+
+def test_metrics_reject_accepted_below_quota(tmp_path: Path) -> None:
+    """未达配额必须报清楚“已达标 / 配额”。"""
+    write_json(
+        tmp_path / "evidence/reliabletask/publish_fleet_report.json",
+        _report(required_quota=9, commercial_accepted=5),
+    )
+
+    with pytest.raises(ValueError, match="已达标 5 / 配额 9"):
         _reliabletask_accepted_throughput(tmp_path)

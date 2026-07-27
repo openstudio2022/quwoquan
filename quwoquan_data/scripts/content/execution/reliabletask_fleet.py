@@ -168,6 +168,46 @@ def _object_timeout_seconds(jobs: list[object]) -> int:
     return timeout_seconds
 
 
+def _required_quota(
+    execution_id: str,
+    stage: QueueJobStage,
+    pending_job_count: int,
+) -> int:
+    """Remaining approved quota this fleet invocation must still deliver.
+
+    The batch gate admits on quota, never on全量成功, so the request carries the
+    quota that is still outstanding for this stage.  Objects already accepted in
+    an earlier invocation are subtracted; the oversampled surplus is free to fail.
+    """
+    from content.execution import store
+
+    policy = store.load_spec(execution_id).get("executionPolicy") or {}
+    approved = policy.get("approvedQuota")
+    if isinstance(approved, bool) or not isinstance(approved, int) or approved < 1:
+        raise ValueError(
+            f"execution {execution_id} executionPolicy.approvedQuota is required"
+        )
+    already_accepted = sum(
+        1
+        for job in _load_jobs(execution_id)
+        if job.backend is QueueBackend.RELIABLE_TASK
+        and job.stage is stage
+        and job.state is QueueJobState.SUCCEEDED
+    )
+    remaining = approved - already_accepted
+    if remaining < 1:
+        raise ValueError(
+            f"execution {execution_id} 已达 {stage.value} 准出配额 "
+            f"{approved}（已接受 {already_accepted}），无需再派发 fleet"
+        )
+    if remaining > pending_job_count:
+        raise ValueError(
+            f"候选池耗尽，区域实体供给不足：{stage.value} 剩余配额 {remaining} "
+            f"超过待执行 job 数 {pending_job_count}"
+        )
+    return remaining
+
+
 def build_fleet_request(
     execution_id: str,
     stage: QueueJobStage,
@@ -190,6 +230,7 @@ def build_fleet_request(
         "requireCommercial": stage is QueueJobStage.PUBLISH,
         "recoverDeadTasks": _has_audited_remote_recovery(execution_id, stage),
         "objectTimeoutMilliseconds": object_timeout_seconds * 1000,
+        "requiredQuota": _required_quota(execution_id, stage, len(jobs)),
         "jobs": [_fleet_job_document(job) for job in sorted(jobs, key=lambda item: item.job_id)],
     }
     assert_valid(

@@ -237,9 +237,10 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 			time.Now().UTC(),
 			int(outboxes)-total,
 			total-len(taskRows),
+			total,
+			0,
 		)
-		if report.Passed ||
-			report.CommercialAcceptedCount != 0 ||
+		if report.CommercialAcceptedCount != 0 ||
 			report.AcceptedContentThroughputPerHour != 0 ||
 			report.AcceptedContentThroughputStatus != "GATE_BLOCK_NO_COMMERCIAL_BATCH" {
 			t.Fatalf(
@@ -458,6 +459,8 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 		task.UpdatedAt,
 		0,
 		0,
+		1,
+		0,
 	)
 	if !report.Passed ||
 		report.CommercialAcceptedCount != 1 ||
@@ -537,6 +540,7 @@ func TestProductionDataContentWorkerUsesReliableTaskFleet(t *testing.T) {
 		"requireCommercial":         true,
 		"recoverDeadTasks":          false,
 		"objectTimeoutMilliseconds": dataContentFleetIntegrationObjectTimeout.Milliseconds(),
+		"requiredQuota":             1,
 		"jobs":                      []reliabletask.DataContentJob{fixture.Job},
 	})
 	if err != nil {
@@ -605,6 +609,7 @@ func TestProductionDataContentWorkerUsesReliableTaskFleet(t *testing.T) {
 	}
 	if !report.Passed ||
 		report.CommercialAcceptedCount != 1 ||
+		report.RequiredQuota != 1 ||
 		report.AcceptedContentThroughputPerHour <= 0 {
 		t.Fatalf("production fleet report is not commercially accepted: %#v", report)
 	}

@@ -23,6 +23,8 @@ type DataContentFleetReport struct {
 	FinalizedWithinStageBudgetRate    float64                  `json:"finalizedWithinStageBudgetRate"`
 	DuplicatePublishCount             int                      `json:"duplicatePublishCount"`
 	MissingObjectCount                int                      `json:"missingObjectCount"`
+	RequiredQuota                     int                      `json:"requiredQuota"`
+	FinalizedObjectCount              int                      `json:"finalizedObjectCount"`
 	IdempotencyKey                    string                   `json:"idempotencyKey"`
 	TaskOutcomes                      []DataContentTaskOutcome `json:"taskOutcomes"`
 	CompletedAt                       string                   `json:"completedAt"`
@@ -38,12 +40,20 @@ type DataContentTaskOutcome struct {
 	FailureCode string `json:"failureCode,omitempty"`
 }
 
+// BuildDataContentFleetReport projects one batch onto a quota gate: a publish
+// batch passes once commercially accepted objects reach requiredQuota, an
+// author batch once succeeded tasks reach it. Objects below the quota line are
+// discarded by the caller, so a batch is oversampled instead of retried.
+// finalizedObjectCount is an observation of on-disk finished objects and never
+// participates in the gate.
 func BuildDataContentFleetReport(
 	tasks []ReliableAsyncTask,
 	startedAt time.Time,
 	completedAt time.Time,
 	duplicatePublishCount int,
 	missingObjectCount int,
+	requiredQuota int,
+	finalizedObjectCount int,
 ) DataContentFleetReport {
 	if completedAt.Before(startedAt) {
 		completedAt = startedAt
@@ -93,14 +103,22 @@ func BuildDataContentFleetReport(
 		recoveryRate = finalizedRate
 	}
 	acceptedStatus := "GATE_BLOCK_NO_COMMERCIAL_BATCH"
-	if publishTasks > 0 && commercialAccepted == publishTasks {
+	if publishTasks > 0 && commercialAccepted >= requiredQuota {
 		acceptedStatus = "MEASURED"
 	} else if publishTasks > 0 {
 		acceptedStatus = "GATE_BLOCK_INCOMPLETE_COMMERCIAL_BATCH"
 	}
+	passed := false
+	if total > 0 && publishTasks > 0 {
+		passed = commercialAccepted >= requiredQuota &&
+			duplicatePublishCount == 0 &&
+			missingObjectCount == 0
+	} else if total > 0 {
+		passed = succeeded >= requiredQuota && missingObjectCount == 0
+	}
 	return DataContentFleetReport{
 		Schema:                            "quwoquan.reliabletask_fleet_report",
-		Passed:                            total > 0 && publishTasks > 0 && commercialAccepted == publishTasks && succeeded == total && duplicatePublishCount == 0 && missingObjectCount == 0,
+		Passed:                            passed,
 		Backend:                           "mongodb+redis",
 		Total:                             total,
 		Succeeded:                         succeeded,
@@ -115,6 +133,8 @@ func BuildDataContentFleetReport(
 		FinalizedWithinStageBudgetRate:    finalizedRate,
 		DuplicatePublishCount:             duplicatePublishCount,
 		MissingObjectCount:                missingObjectCount,
+		RequiredQuota:                     requiredQuota,
+		FinalizedObjectCount:              finalizedObjectCount,
 		IdempotencyKey:                    "executionId+entity+carrier+sourceRevision+stage",
 		TaskOutcomes:                      outcomes,
 		CompletedAt:                       completedAt.UTC().Format(time.RFC3339Nano),

@@ -13,7 +13,7 @@ from core.control_types import (
     QueueJobState,
     QueueTimelineEvent,
 )
-from core.data_issue import DataIssue, DataRecoveryAction
+from core.data_issue import DataIssue, DataIssueCode, DataRecoveryAction
 from core.io import read_json
 from content.execution import production_contracts as pc
 from content.execution import store
@@ -103,6 +103,8 @@ def acquire_lease(
                 continue
             lease_expired = job.state is STATE_LEASED and job.lease.is_expired(now)
             if job.state not in (STATE_QUEUED, STATE_FAILED) and not lease_expired:
+                continue
+            if job.state is STATE_FAILED and not job.same_run_retryable:
                 continue
             if job.not_before_epoch > now:
                 continue
@@ -436,6 +438,16 @@ def _with_failure_fingerprint(
     return updated, is_stuck
 
 
+# 质量类失败直接丢弃：批次靠过采候选池补足配额，重试同一个不达标对象只会
+# 空耗 worker。基础设施类失败（启动、超时）仍消耗 queueMaxAttempts 重试预算。
+_DISCARDED_ISSUE_CODES = frozenset(
+    {
+        DataIssueCode.QUEUE_EXECUTION_FAILED,
+        DataIssueCode.QUEUE_RESULT_ENVELOPE_INVALID,
+    }
+)
+
+
 def _apply_failure(
     job: QueueJob,
     issue: DataIssue,
@@ -447,10 +459,11 @@ def _apply_failure(
     """Apply one typed failure transition and calculate retry/dead state."""
     now = _clock_now()
     startup_count = job.startup_failure_count + (1 if startup_failure else 0)
+    discarded = not startup_failure and issue.code in _DISCARDED_ISSUE_CODES
     candidate = replace(
         job,
         lease=QueueLease(),
-        same_run_retryable=same_run_retryable,
+        same_run_retryable=same_run_retryable and not discarded,
         startup_failure_count=startup_count,
         last_issue=issue,
     )
@@ -460,11 +473,15 @@ def _apply_failure(
         if startup_failure
         else candidate.attempt >= candidate.max_attempts
     )
-    if stuck or exhausted:
+    if stuck or exhausted or discarded:
         failed = candidate.with_timing(
             QueueTimelineEvent.FAILED,
             at=store.now_iso(),
-            attributes={"issueCode": issue.code.value, "terminal": True},
+            attributes={
+                "issueCode": issue.code.value,
+                "terminal": True,
+                "disposition": "discarded" if discarded else "exhausted",
+            },
             state=STATE_DEAD,
             not_before_epoch=0.0,
             stuck_detected=stuck,
@@ -485,7 +502,11 @@ def _apply_failure(
     return candidate.with_timing(
         QueueTimelineEvent.FAILED,
         at=store.now_iso(),
-        attributes={"issueCode": issue.code.value, "terminal": False},
+        attributes={
+            "issueCode": issue.code.value,
+            "terminal": False,
+            "disposition": "retryable",
+        },
         state=STATE_FAILED,
         not_before_epoch=now + _backoff_seconds(startup_count if startup_failure else candidate.attempt),
     )

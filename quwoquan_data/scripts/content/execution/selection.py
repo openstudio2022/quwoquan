@@ -21,6 +21,13 @@ from content.execution import store
 from content.execution import validate_execution_id
 from content.execution.identity import SelectionPolicy
 from content.execution.contracts import ExecutionStateTransition
+from content.execution.selection_discovery import (
+    coverage_target_from_selection,
+    leaf_selection_name,
+    load_partitions,
+    ordered_partition_leaves,
+    partition_targets,
+)
 from content.execution.selection_materialization import write_selected_task
 from content.execution.source_selection import (
     TargetSourceQualifier,
@@ -37,6 +44,8 @@ class SelectionRequest:
     execution_id: str
     discovery_path: Path
     limit: int
+    quota: int
+    oversample_factor: float
     region: str
     category: str
     name: str
@@ -91,146 +100,45 @@ def execution_failure_items(state: ExecutionStateTransition) -> list[dict[str, A
         )
     return items
 
-def _master_list_file_partitions(path: Path) -> list[dict[str, Any]]:
-    """单个主清单市州文件（discovery_seed/2）→ 区县分区列表。"""
-    import yaml
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, Mapping):
-        raise ValueError(f"{path}: 主清单文件顶层必须是 mapping")
-    partitions: list[dict[str, Any]] = []
-    for group in data.get("districts") or []:
-        if not isinstance(group, Mapping):
-            continue
-        district = str(group.get("district") or "").strip()
-        leaves = [leaf for leaf in (group.get("leaves") or []) if isinstance(leaf, Mapping)]
-        if district and leaves:
-            partitions.append({"key": district, "leaves": leaves})
-    return partitions
-def _master_list_partitions(root: Path) -> list[dict[str, Any]]:
-    """walk 主清单目录：区县分组映射为 partition，与 decompose discovery JSON partitions 同构。"""
-    partitions: list[dict[str, Any]] = []
-    for path in sorted(root.rglob("*.yaml")):
-        partitions.extend(_master_list_file_partitions(path))
-    if not partitions:
-        raise ValueError(f"{root}: 主清单目录未发现任何区县分组（districts/leaves）")
-    return partitions
-def _load_partitions(path: Path) -> list[dict[str, Any]]:
-    if path.is_dir():
-        return _master_list_partitions(path)
-    if path.suffix in {".yaml", ".yml"}:
-        # 市州级主清单单文件允许执行请求精确圈定一个市州。
-        partitions = _master_list_file_partitions(path)
-        if not partitions:
-            raise ValueError(f"{path}: 主清单文件未发现任何区县分组（districts/leaves）")
-        return partitions
-    data = read_json(path)
-    rows = data.get("partitions") if isinstance(data, dict) else []
-    if not isinstance(rows, list):
-        raise ValueError(f"{path}: partitions must be an array")
-    return [row for row in rows if isinstance(row, dict)]
-# 主清单 leaf → coverageTarget 契约字段透传集（task_spec.schema.json coverageTargets 同口径）。
-_MASTER_LIST_LIST_FIELDS = ("geoTagRefs", "typeTagRefs", "aliases")
-def _apply_master_list_fields(row: dict[str, Any], leaf: Mapping[str, Any]) -> dict[str, Any]:
-    geo_tag_ref = str(leaf.get("geoTagRef") or "").strip()
-    if geo_tag_ref:
-        row["geoTagRef"] = geo_tag_ref
-    for list_field in _MASTER_LIST_LIST_FIELDS:
-        values = [str(v).strip() for v in (leaf.get(list_field) or []) if str(v).strip()]
-        if list_field == "aliases":
-            source_name = str(leaf.get("name") or "").strip()
-            canonical_name = str(leaf.get("canonicalName") or source_name).strip()
-            if source_name and source_name != canonical_name and source_name not in values:
-                values.insert(0, source_name)
-        if values:
-            row[list_field] = values
-    return row
-
-
-def _coverage_target_from_selection(row: Mapping[str, Any]) -> dict[str, Any]:
-    """Project the one runtime qualification binding into the frozen spec."""
-
-    target = _apply_master_list_fields(
-        {"entityType": row["entityType"], "name": row["name"]},
-        row,
-    )
-    raw_source = row.get("qualifiedHomepageSource")
-    if raw_source is not None:
-        if not isinstance(raw_source, Mapping):
-            raise TypeError("qualifiedHomepageSource must be an object")
-        target["qualifiedHomepageSource"] = QualifiedHomepageSource.from_mapping(
-            raw_source
-        ).to_dict()
-    return target
-def _partition_targets(
-    partitions: Iterable[Mapping[str, Any]],
+def _candidate_pool_exhausted(
     *,
-    target_selector: TargetSelector,
-) -> dict[str, dict[str, Any]]:
-    by_name: dict[str, dict[str, Any]] = {}
-    for part in partitions:
-        region = str(part.get("key") or "").strip()
-        for leaf in _ordered_partition_leaves(part, target_selector=target_selector):
-            source_name = str(leaf.get("name") or "").strip()
-            name = _leaf_selection_name(leaf)
-            etype = str(leaf.get("entityType") or "地点/景区").strip()
-            if name and name not in by_name:
-                by_name[name] = _apply_master_list_fields(
-                    {
-                        "name": name,
-                        "entityType": etype,
-                        "region": region,
-                        "sourceName": source_name,
-                    },
-                    leaf,
-                )
-    return by_name
-def _leaf_selection_name(leaf: Mapping[str, Any]) -> str:
-    source_name = str(leaf.get("name") or "").strip()
-    return str(leaf.get("canonicalName") or source_name).strip()
-def _leaf_selection_priority(leaf: Mapping[str, Any]) -> float | None:
-    if "selectionPriority" not in leaf:
-        return None
-    try:
-        return float(leaf.get("selectionPriority"))
-    except (TypeError, ValueError):
-        return None
-def _ordered_partition_leaves(
-    part: Mapping[str, Any],
-    *,
-    target_selector: TargetSelector,
-) -> list[Mapping[str, Any]]:
-    leaves = [leaf for leaf in (part.get("leaves") or []) if isinstance(leaf, Mapping)]
-    if target_selector is TargetSelector.ALL:
-        return leaves
-    if target_selector not in {
-        TargetSelector.PRIORITY,
-        TargetSelector.SOURCE_READY_PRIORITY,
-    }:
-        raise ValueError(f"unsupported target selector: {target_selector}")
-    if not any(_leaf_selection_priority(leaf) is not None for leaf in leaves):
-        return leaves
-    return sorted(
-        leaves,
-        key=lambda leaf: (
-            _leaf_selection_priority(leaf)
-            if _leaf_selection_priority(leaf) is not None
-            else float("inf"),
-            _leaf_selection_name(leaf),
-        ),
+    selected_count: int,
+    quota: int,
+    limit: int,
+    discovery_path: Path,
+) -> ValueError:
+    return ValueError(
+        f"候选池耗尽，区域实体供给不足：selected={selected_count} quota={quota} "
+        f"candidatePool={limit} discovery={discovery_path}"
     )
+
 
 def select_targets(
     *,
     discovery_path: Path,
     limit: int,
+    quota: int,
     target_selector: TargetSelector,
     source_qualifier: TargetSourceQualifier | None = None,
     target_names: tuple[str, ...] = (),
 ) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    """Select up to ``limit`` candidates and require at least ``quota`` of them.
+
+    ``limit`` is the oversampled candidate pool, not a delivery promise: objects
+    that later fail a quality gate are discarded rather than retried, so the pool
+    is intentionally larger than the approved quota.  Only falling below the
+    quota is a selection failure.
+    """
     if not isinstance(target_selector, TargetSelector):
         raise TypeError("target_selector must be TargetSelector")
-    partitions = _load_partitions(discovery_path)
-    by_name = _partition_targets(partitions, target_selector=target_selector)
+    if isinstance(quota, bool) or not isinstance(quota, int) or quota < 1:
+        raise ValueError("quota must be a positive integer")
+    if quota > limit:
+        raise ValueError(
+            f"approved quota {quota} exceeds the candidate pool {limit}"
+        )
+    partitions = load_partitions(discovery_path)
+    by_name = partition_targets(partitions, target_selector=target_selector)
     selected: list[dict[str, str]] = []
     seen: set[str] = set()
 
@@ -251,13 +159,19 @@ def select_targets(
                 "targetSelector": target_selector.value,
                 "discoveryPath": str(discovery_path),
                 "limit": limit,
+                "approvedQuota": quota,
                 "selectedCount": len(selected),
-                "selectionShortfall": max(0, limit - len(selected)),
+                "selectionShortfall": max(0, quota - len(selected)),
                 "targets": selected,
                 "requestedTargetNames": list(target_names),
             }
-            if len(selected) != limit:
-                raise ValueError(f"selected {len(selected)} targets, expected {limit}")
+            if len(selected) < quota:
+                raise _candidate_pool_exhausted(
+                    selected_count=len(selected),
+                    quota=quota,
+                    limit=limit,
+                    discovery_path=discovery_path,
+                )
             return selected, report
 
     def add(name: str) -> None:
@@ -275,11 +189,11 @@ def select_targets(
     while True:
         scanned_any = False
         for part in partitions:
-            leaves = _ordered_partition_leaves(part, target_selector=target_selector)
+            leaves = ordered_partition_leaves(part, target_selector=target_selector)
             if depth >= len(leaves):
                 continue
             scanned_any = True
-            name = _leaf_selection_name(leaves[depth])
+            name = leaf_selection_name(leaves[depth])
             row = by_name.get(name)
             if row is not None and name not in candidate_names:
                 candidate_rows.append(row)
@@ -294,6 +208,7 @@ def select_targets(
             candidate_rows,
             discovery_ref=str(discovery_path),
             limit=limit,
+            quota=quota,
             source_qualifier=source_qualifier,
             target_names=target_names,
         )
@@ -302,16 +217,22 @@ def select_targets(
             add(str(row["name"]))
             if len(selected) >= limit:
                 break
-    if len(selected) != limit:
-        raise ValueError(f"selected {len(selected)} targets, expected {limit}")
+    if len(selected) < quota:
+        raise _candidate_pool_exhausted(
+            selected_count=len(selected),
+            quota=quota,
+            limit=limit,
+            discovery_path=discovery_path,
+        )
     report = {
         "schema": "quwoquan_data.target_selection",
         "strategy": "deterministic round-robin regional coverage",
         "targetSelector": target_selector.value,
         "discoveryPath": str(discovery_path),
         "limit": limit,
+        "approvedQuota": quota,
         "selectedCount": len(selected),
-        "selectionShortfall": max(0, limit - len(selected)),
+        "selectionShortfall": max(0, quota - len(selected)),
         "targets": selected,
     }
     if target_selector is TargetSelector.SOURCE_READY_PRIORITY:
@@ -338,6 +259,8 @@ def build_execution_spec(
     entity_homepages_per_target: int,
     image_works_per_target: int,
     video_works_per_target: int,
+    approved_quota: int,
+    oversample_factor: float,
     intent_label: str | None = None,
     preset_ref: str | None = None,
     target_entity_count: int | None = None,
@@ -364,6 +287,18 @@ def build_execution_spec(
     target_entity_count = _validated_quota(
         resolved_target_count, field="targetEntityCount"
     )
+    approved_quota = _validated_quota(approved_quota, field="approvedQuota")
+    if approved_quota < 1 or approved_quota > target_entity_count:
+        raise ValueError(
+            f"approvedQuota {approved_quota} must be between 1 and the candidate "
+            f"pool {target_entity_count}"
+        )
+    if (
+        isinstance(oversample_factor, bool)
+        or not isinstance(oversample_factor, (int, float))
+        or oversample_factor < 1
+    ):
+        raise ValueError("oversampleFactor must be a number >= 1")
     required_article_angles = DEFAULT_ARTICLE_ANGLES[:entity_articles_per_target]
     research_lanes = []
     if entity_homepages_per_target > 0:
@@ -430,7 +365,7 @@ def build_execution_spec(
             "entityTypes": selected_entity_types,
             # 主清单契约字段（geoTagRef/geoTagRefs/typeTagRefs/aliases）随目标透传，
             # 物化链路（build/homepage.py）据此写 _entity.json 并统一打标（WP3）。
-            "coverageTargets": [_coverage_target_from_selection(row) for row in targets],
+            "coverageTargets": [coverage_target_from_selection(row) for row in targets],
         },
         content={
             "modalityContract": "separated_research",
@@ -449,7 +384,8 @@ def build_execution_spec(
             },
         },
         acceptance={
-            "minEntities": target_entity_count,
+            # 准出只认配额；候选池是过采冗余，不是交付承诺。
+            "minEntities": approved_quota,
             "minPostsPerEntity": objects_per_target,
             "requiredAngles": required_article_angles,
             "scoredAngles": (["image"] if image_works_per_target else []),
@@ -460,8 +396,11 @@ def build_execution_spec(
     spec.setdefault("acceptance", {})["requiredAngles"] = required_article_angles
     spec["executionPolicy"] = {
         "selectionPolicy": selection_policy.value,
+        # targetEntityCount 是候选池；approvedQuota 才是准出配额。
         "targetEntityCount": target_entity_count,
         "targetObjectCount": target_object_count,
+        "approvedQuota": approved_quota,
+        "oversampleFactor": float(oversample_factor),
     }
     spec["queuePolicy"] = {
         "backend": "reliabletask",
@@ -517,9 +456,11 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
         raise TypeError("SelectionRequest.target_selector must be TargetSelector")
     discovery = request.discovery_path
     requested_limit = max(1, int(request.limit))
+    approved_quota = int(request.quota)
     targets, report = select_targets(
         discovery_path=discovery,
         limit=requested_limit,
+        quota=approved_quota,
         target_selector=request.target_selector,
         source_qualifier=request.source_qualifier,
         target_names=request.target_names,
@@ -538,7 +479,9 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
         entity_homepages_per_target=int(request.entity_homepages_per_target or 0),
         image_works_per_target=int(request.image_works_per_target or 0),
         video_works_per_target=int(request.video_works_per_target or 0),
-        target_entity_count=requested_limit,
+        target_entity_count=len(targets),
+        approved_quota=approved_quota,
+        oversample_factor=float(request.oversample_factor),
         selection_policy=request.selection_policy,
     )
     spec["title"] = str(request.title or request.name)

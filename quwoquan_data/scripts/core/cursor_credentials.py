@@ -8,7 +8,8 @@
 
 - `resolve_cursor_api_key()`：每次 agent 调用前从**单一真相源**动态读取最新 key
   （默认 `~/.config/quwoquan/cursor_api_key`），并只在当前进程内回写 SDK 需要的
-  `CURSOR_API_KEY`。
+  `CURSOR_API_KEY`。文件按行解析，`#` 注释行与空行被跳过，只有首个有效行是现行 key，
+  因此轮换可以把旧 key 注释留档而不污染凭据。
   运营/daemon
   轮换时只需原子更新该文件，无需重启长进程。
 - `is_cursor_auth_error()`：把 401/403/unauthorized/invalid api key/plan_required 等
@@ -58,6 +59,20 @@ def cursor_api_key_file() -> Path:
     return Path(raw).expanduser() if raw else DEFAULT_CURSOR_API_KEY_FILE
 
 
+def parse_cursor_api_key(content: str) -> str | None:
+    """Return the first active key line from a key-file body.
+
+    Rotation keeps superseded keys in the file behind ``#`` so the previous value
+    stays auditable; only the first non-blank, non-comment line is the live key.
+    """
+    for line in str(content or "").splitlines():
+        candidate = line.strip()
+        if not candidate or candidate.startswith("#"):
+            continue
+        return candidate
+    return None
+
+
 def cursor_key_file_issues() -> list[str]:
     """Return redacted contract failures for the sole supported credential source."""
     key_file = cursor_api_key_file()
@@ -70,10 +85,13 @@ def cursor_key_file_issues() -> list[str]:
     if stat.st_mode & 0o077:
         return ["cursor API key file permissions must be 0600 or stricter"]
     try:
-        if not key_file.read_text(encoding="utf-8").strip():
-            return ["cursor API key file is empty"]
+        content = key_file.read_text(encoding="utf-8")
     except OSError:
         return ["cursor API key file missing or unreadable"]
+    if not content.strip():
+        return ["cursor API key file is empty"]
+    if parse_cursor_api_key(content) is None:
+        return ["cursor API key file has no active key line (all lines are comments)"]
     return []
 
 
@@ -89,11 +107,13 @@ def resolve_cursor_api_key(*, refresh: bool = True) -> str | None:
     if not refresh:
         return str(os.environ.get(CURSOR_API_KEY_ENV) or "").strip() or None
     try:
-        file_key = key_file.read_text(encoding="utf-8").strip()
+        file_key = parse_cursor_api_key(key_file.read_text(encoding="utf-8"))
     except OSError:
         return None
+    if not file_key:
+        return None
     os.environ[CURSOR_API_KEY_ENV] = file_key
-    return file_key or None
+    return file_key
 
 
 def is_cursor_auth_error(

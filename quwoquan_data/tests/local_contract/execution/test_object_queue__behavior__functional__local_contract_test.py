@@ -320,7 +320,9 @@ def test_governed_article_author_complete_requires_real_agent_draft():
     write_json(draft_dir / "draft_meta.json", {"generator": "pending"})
     job = oq.acquire_lease(batch, worker="w1", stage="author")
     completed = oq.complete_job(batch, job.job_id, job.lease.holder or "")
-    assert completed.state is oq.STATE_FAILED
+    # 交付质量不达标 → 直接丢弃为终态，不进重试队列。
+    assert completed.state is oq.STATE_DEAD
+    assert completed.same_run_retryable is False
     assert completed.last_issue is not None
     assert "draft_meta.generator is pending" in completed.last_issue.message
 
@@ -410,7 +412,9 @@ def test_governed_article_author_complete_backfill_does_not_rescue_placeholder()
     write_json(draft_dir / "draft_meta.json", {"generator": "agent"})
     job = oq.acquire_lease(batch, worker="w1", stage="author")
     completed = oq.complete_job(batch, job.job_id, job.lease.holder or "")
-    assert completed.state is oq.STATE_FAILED
+    # 交付质量不达标 → 直接丢弃为终态，不进重试队列。
+    assert completed.state is oq.STATE_DEAD
+    assert completed.same_run_retryable is False
     assert completed.last_issue is not None
     assert "placeholder" in completed.last_issue.message
 
@@ -466,7 +470,12 @@ def test_failure_escalates_to_dead():
     batch = _execution_id("test_batch_fail")
     oq.enqueue_ref_job(batch, "rf", "author", max_attempts=2)
     j1 = oq.acquire_lease(batch, worker="w1", stage="author")
-    r1 = oq.fail_job(batch, j1.job_id, j1.lease.holder or "", issue=_queue_issue(j1, "boom1"))
+    r1 = oq.fail_job(
+        batch,
+        j1.job_id,
+        j1.lease.holder or "",
+        issue=_queue_issue(j1, "boom1", kind=QueueFailureKind.TIMEOUT),
+    )
     assert r1.state is oq.STATE_FAILED  # attempt 1 < max 2
     # 失败退避：模拟退避窗口已过，job 可再次重取
     path = oq._job_path(batch, j1.job_id)
@@ -476,8 +485,58 @@ def test_failure_escalates_to_dead():
 
     write_json(path, payload)
     j2 = oq.acquire_lease(batch, worker="w1", stage="author")
-    r2 = oq.fail_job(batch, j2.job_id, j2.lease.holder or "", issue=_queue_issue(j2, "boom2"))
+    r2 = oq.fail_job(
+        batch,
+        j2.job_id,
+        j2.lease.holder or "",
+        issue=_queue_issue(j2, "boom2", kind=QueueFailureKind.TIMEOUT),
+    )
     assert r2.state is oq.STATE_DEAD  # attempt 2 >= max 2 → 转人工
+
+
+def test_quality_failure_is_discarded_instead_of_retried():
+    """质量不达标的对象直接丢弃：不占重试预算，也不再被重新 lease。"""
+    batch = _execution_id("test_batch_discard")
+    oq.enqueue_ref_job(batch, "rq", "author", max_attempts=5)
+    job = oq.acquire_lease(batch, worker="w1", stage="author")
+    assert job is not None
+    discarded = oq.fail_job(
+        batch,
+        job.job_id,
+        job.lease.holder or "",
+        issue=_queue_issue(job, "author output remains placeholder"),
+    )
+
+    assert discarded.state is oq.STATE_DEAD
+    assert discarded.attempt == 1  # 远未耗尽 maxAttempts，仍然终态
+    assert discarded.same_run_retryable is False
+    payload = read_json(oq._job_path(batch, job.job_id))
+    assert payload["timings"][-1]["disposition"] == "discarded"
+    assert payload["lastIssue"]["code"] == "DATA.QUEUE.EXECUTION_FAILED"
+    assert oq.acquire_lease(batch, worker="w2", stage="author") is None
+
+
+def test_non_retryable_failed_job_is_never_re_leased():
+    """sameRunRetryable=False 的失败对象不得回到可 lease 集合。"""
+    batch = _execution_id("test_batch_no_release")
+    oq.enqueue_ref_job(batch, "rnr", "author", max_attempts=5)
+    job = oq.acquire_lease(batch, worker="w1", stage="author")
+    assert job is not None
+    oq.fail_job(
+        batch,
+        job.job_id,
+        job.lease.holder or "",
+        issue=_queue_issue(job, "infra blip", kind=QueueFailureKind.TIMEOUT),
+        same_run_retryable=False,
+    )
+    path = oq._job_path(batch, job.job_id)
+    payload = read_json(path)
+    payload["notBeforeEpoch"] = 0
+    from core.io import write_json
+
+    write_json(path, payload)
+
+    assert oq.acquire_lease(batch, worker="w2", stage="author") is None
 
 
 def test_lease_mismatch_rejected():
@@ -577,7 +636,12 @@ def test_fail_sets_backoff_not_before():
     batch = _execution_id("test_batch_backoff")
     oq.enqueue_ref_job(batch, "rb", "author", max_attempts=3)
     j1 = oq.acquire_lease(batch, worker="w1", stage="author")
-    oq.fail_job(batch, j1.job_id, j1.lease.holder or "", issue=_queue_issue(j1, "boom"))
+    oq.fail_job(
+        batch,
+        j1.job_id,
+        j1.lease.holder or "",
+        issue=_queue_issue(j1, "boom", kind=QueueFailureKind.TIMEOUT),
+    )
     payload = read_json(oq._job_path(batch, j1.job_id))
     assert payload["state"] == oq.STATE_FAILED
     assert payload["notBeforeEpoch"] > oq._now(), "failed job must back off before re-lease"
@@ -737,7 +801,7 @@ def test_stuck_detection_forces_dead_before_max_attempts():
         write_json(oq._job_path(batch, job_id), payload)
         job = oq.acquire_lease(batch, worker="w1", stage="author")
         assert job is not None
-        issue = _queue_issue(job, "same issue")
+        issue = _queue_issue(job, "same issue", kind=QueueFailureKind.TIMEOUT)
         last = oq.fail_job(
             batch,
             job.job_id,

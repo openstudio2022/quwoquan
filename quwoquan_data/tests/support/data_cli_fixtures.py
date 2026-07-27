@@ -124,6 +124,8 @@ def _make_task(
         "selectionPolicy": "frozen",
         "targetEntityCount": 2,
         "targetObjectCount": 2,
+        "approvedQuota": 2,
+        "oversampleFactor": 1.0,
     }
     store.save_spec(spec)
     store.save_progress(

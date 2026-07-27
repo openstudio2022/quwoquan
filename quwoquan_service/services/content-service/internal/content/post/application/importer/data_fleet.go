@@ -32,6 +32,7 @@ type FleetRequest struct {
 	RequireCommercial bool                          `json:"requireCommercial"`
 	RecoverDeadTasks  *bool                         `json:"recoverDeadTasks"`
 	ObjectTimeoutMS   int                           `json:"objectTimeoutMilliseconds"`
+	RequiredQuota     int                           `json:"requiredQuota"`
 	Jobs              []reliabletask.DataContentJob `json:"jobs"`
 }
 
@@ -92,6 +93,13 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 		request.ObjectTimeoutMS < 1 || len(request.Jobs) == 0 {
 		return FleetRequest{}, errors.New(
 			"fleet request requires executionId, recoverDeadTasks, objectTimeoutMilliseconds and at least one job",
+		)
+	}
+	if request.RequiredQuota < 1 || request.RequiredQuota > len(request.Jobs) {
+		return FleetRequest{}, fmt.Errorf(
+			"fleet request requiredQuota=%d must be between 1 and the %d frozen jobs",
+			request.RequiredQuota,
+			len(request.Jobs),
 		)
 	}
 	jobIDs := make(map[string]struct{}, len(request.Jobs))

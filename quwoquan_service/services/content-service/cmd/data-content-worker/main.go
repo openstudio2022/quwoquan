@@ -200,12 +200,21 @@ func run() error {
 	if countErr != nil {
 		return fmt.Errorf("count data content outboxes: %w", countErr)
 	}
+	finalizedObjectCount, finalizedErr := reliabletask.CountFinalizedDataContentObjects(
+		cfg.EvidenceRoot,
+		request.ExecutionID,
+	)
+	if finalizedErr != nil {
+		return fmt.Errorf("count finalized data content objects: %w", finalizedErr)
+	}
 	report := reliabletask.BuildDataContentFleetReport(
 		tasks,
 		startedAt,
 		completedAt,
 		max(0, int(outboxCount)-len(request.Jobs)),
 		max(0, len(request.Jobs)-len(tasks)),
+		request.RequiredQuota,
+		finalizedObjectCount,
 	)
 	if err := writeJSONAtomically(*reportPath, report); err != nil {
 		return err
@@ -225,9 +234,17 @@ func run() error {
 	}
 	if request.RequireCommercial && !report.Passed {
 		return fmt.Errorf(
-			"commercial ReliableTask gate blocked: accepted=%d/%d status=%s",
+			"commercial ReliableTask gate blocked: accepted=%d/quota=%d "+
+				"succeeded=%d/total=%d publishTasks=%d finalizedObjects=%d "+
+				"duplicatePublish=%d missingObjects=%d status=%s",
 			report.CommercialAcceptedCount,
+			report.RequiredQuota,
+			report.Succeeded,
+			report.Total,
 			report.PublishTaskCount,
+			report.FinalizedObjectCount,
+			report.DuplicatePublishCount,
+			report.MissingObjectCount,
 			report.AcceptedContentThroughputStatus,
 		)
 	}

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from core.control_types import TargetSelector
 from core.paths import REPO_ROOT
+from core.runtime_policy import active_runtime_policy
 from content.execution import store
 from content.execution.identity import SelectionPolicy
 from content.execution.selection import (
@@ -15,14 +16,25 @@ from content.execution.source_selection import (
 )
 
 
-def _homepage_source_qualifier(target: TargetSourceCandidate) -> TargetSourceQualification:
+def _homepage_source_qualifier(
+    execution_id: str,
+    target: TargetSourceCandidate,
+) -> TargetSourceQualification:
     from content.source.research.baike_com import geo_context_terms_from_ref
     from content.source.research.homepage_authority import qualify_homepage_authority_content
+    from content.homepage.quality_policy import (
+        homepage_body_char_minimum,
+        homepage_fact_count_minimum,
+        homepage_fact_char_minimum,
+    )
 
     qualification = qualify_homepage_authority_content(
         target.name,
         entity_aliases=target.aliases,
         geo_context_terms=geo_context_terms_from_ref(target.geo_tag_ref),
+        minimum_body_chars=homepage_body_char_minimum(execution_id),
+        minimum_fact_count=homepage_fact_count_minimum(execution_id),
+        minimum_fact_chars=homepage_fact_char_minimum(execution_id),
     )
     return TargetSourceQualification(
         accepted=qualification.accepted,
@@ -54,12 +66,14 @@ def ensure_execution_spec(
             raise SystemExit(
                 "[task execute] GATE_BLOCK source-ready-priority currently requires homepage carrier"
             )
-        source_qualifier = _homepage_source_qualifier
+        source_qualifier = lambda target: _homepage_source_qualifier(execution_id, target)
     create_execution_selection(
         SelectionRequest(
             execution_id=execution_id,
             discovery_path=REPO_ROOT / str(selection.get("discovery")),
             limit=int(selection.get("limit")),
+            quota=int(selection["approvedQuota"]),
+            oversample_factor=active_runtime_policy().oversample_factor,
             region=str(selection["region"]),
             category=str(selection["category"]),
             name=str(selection["name"]),

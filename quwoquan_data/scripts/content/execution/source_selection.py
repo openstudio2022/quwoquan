@@ -110,20 +110,24 @@ def qualify_source_ready_targets(
     *,
     discovery_ref: str,
     limit: int,
+    quota: int,
     source_qualifier: TargetSourceQualifier,
     target_names: tuple[str, ...],
 ) -> tuple[list[dict[str, Any]], dict[str, object], tuple[str, ...]]:
-    """Freeze the first qualified targets from the complete ordered reference set.
+    """Freeze the qualified candidate pool from the complete ordered reference set.
 
     The reference set is finite and version-controlled.  A qualification budget
     must never turn early source rejections into an incorrect claim that the
-    region has no eligible targets.
+    region has no eligible targets.  ``limit`` caps the oversampled pool while
+    ``quota`` is the only count that must be reached.
     """
     requested_target_names = tuple(name.strip() for name in target_names if name.strip())
     if len(set(requested_target_names)) != len(requested_target_names):
         raise ValueError("explicit target names must not contain duplicates")
-    if requested_target_names and limit != len(requested_target_names):
-        raise ValueError("explicit target count must equal --count")
+    if requested_target_names and not quota <= len(requested_target_names) <= limit:
+        raise ValueError(
+            "explicit target count must fall inside the [--quota, --count] candidate pool range"
+        )
     if requested_target_names:
         scoped_rows = _restrict_to_requested_targets(candidate_rows, requested_target_names)
     else:
@@ -174,16 +178,17 @@ def qualify_source_ready_targets(
                     break
             if len(selected) >= limit:
                 break
-    if len(selected) != limit:
+    if len(selected) < quota:
         raise DataIssueError(
             (
                 data_issue(
                     DataIssueCode.SOURCE_QUALIFICATION_EXHAUSTED,
                     stage=DataIssueStage.SOURCE_GATE,
                     ref=discovery_ref,
-                    message="source qualification did not yield the requested frozen target count",
+                    message="候选池耗尽，区域实体供给不足：source qualification 未达准出配额",
                     attributes={
-                        "requestedCount": limit,
+                        "candidatePool": limit,
+                        "approvedQuota": quota,
                         "acceptedCount": len(selected),
                         "evaluatedCount": len(qualification_rows),
                         "candidateCount": len(scoped_rows),

@@ -60,21 +60,35 @@ class PublishedHomepageBinding:
             ),
         )
 
-    def target_names(self, *, region_ref: str, count: int) -> tuple[str, ...]:
+    def target_names(self, *, region_ref: str, count: int, quota: int) -> tuple[str, ...]:
+        """Bind post targets to the homepages that actually reached canonical publish.
+
+        A homepage batch is admitted on quota, so its publish closure is a subset
+        of the frozen target set.  Posts may only parent objects that exist, and
+        only the quota — never the oversampled candidate pool — must be met.
+        """
         if self.region_ref != region_ref:
             raise ValueError("post region must equal its homepage execution region")
-        expected_refs = {
+        frozen_refs = {
             f"{target.entity_type}/{target.name}" for target in self.targets
         }
-        if self.published_refs != expected_refs:
+        unknown_refs = self.published_refs - frozen_refs
+        if unknown_refs:
             raise ValueError(
-                "homepage canonical publish closure does not equal its frozen target set"
+                "homepage canonical publish closure contains objects outside its "
+                "frozen target set: " + ", ".join(sorted(unknown_refs))
             )
-        if count > len(self.targets):
+        published_targets = tuple(
+            target
+            for target in self.targets
+            if f"{target.entity_type}/{target.name}" in self.published_refs
+        )
+        if len(published_targets) < quota:
             raise ValueError(
-                f"post count {count} exceeds published homepage count {len(self.targets)}"
+                f"published homepage count {len(published_targets)} is below the "
+                f"approved quota {quota}"
             )
-        return tuple(target.name for target in self.targets[:count])
+        return tuple(target.name for target in published_targets[:count])
 
 
 def published_homepage_target_names(
@@ -82,10 +96,12 @@ def published_homepage_target_names(
     *,
     region_ref: str,
     count: int,
+    quota: int,
 ) -> tuple[str, ...]:
     return PublishedHomepageBinding.load(homepage_execution_id).target_names(
         region_ref=region_ref,
         count=count,
+        quota=quota,
     )
 
 

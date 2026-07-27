@@ -81,7 +81,7 @@ def test_cursor_startup_probe_suite_realizes_runtime_policy_concurrency(monkeypa
     report = pr.cursor_startup_probe_suite(model="composer", attempts=6)
 
     assert report["successCount"] == 6
-    assert report["effectiveConcurrency"] == 3
+    assert report["effectiveConcurrency"] == 6
     assert report["unrecoveredFailures"] == 0
     assert [row["attempt"] for row in report["results"]] == list(range(1, 7))
 

@@ -2,10 +2,39 @@
 from __future__ import annotations
 
 import argparse
+import math
 from dataclasses import dataclass
 
 from core.codec import JsonObject, JsonObjectDecodeError
 from core.control_types import TargetSelector
+
+
+def resolve_candidate_pool(
+    *,
+    quota: object,
+    count: object,
+) -> tuple[int, int]:
+    """Return the approved quota and the oversampled candidate pool.
+
+    ``--quota`` is the delivery promise.  ``--count`` only widens the candidate
+    pool beyond the policy oversample factor; omitting it derives the pool from
+    that single policy truth source.
+    """
+    from core.runtime_policy import active_runtime_policy
+
+    if isinstance(quota, bool) or not isinstance(quota, int) or quota < 1:
+        raise SystemExit("[task execute] GATE_BLOCK --quota must be a positive integer")
+    factor = active_runtime_policy().oversample_factor
+    derived = int(math.ceil(quota * factor))
+    if count is None:
+        return quota, derived
+    if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+        raise SystemExit("[task execute] GATE_BLOCK --count must be a positive integer")
+    if count < quota:
+        raise SystemExit(
+            f"[task execute] GATE_BLOCK --count {count} must not be smaller than --quota {quota}"
+        )
+    return quota, count
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,6 +43,7 @@ class RuntimeExecutionRequest:
     region_ref: str
     selector: TargetSelector
     count: int
+    quota: int
     topic: str | None
     source_providers: tuple[str, ...]
     homepage_execution_id: str | None
@@ -26,6 +56,10 @@ class RuntimeExecutionRequest:
             raise ValueError("selector must be TargetSelector")
         if isinstance(self.count, bool) or self.count < 1:
             raise ValueError("count must be a positive integer")
+        if isinstance(self.quota, bool) or self.quota < 1:
+            raise ValueError("quota must be a positive integer")
+        if self.quota > self.count:
+            raise ValueError("quota must not exceed the candidate pool count")
         if any(not provider.strip() for provider in self.source_providers):
             raise ValueError("sourceProviders must contain non-empty provider IDs")
         if tuple(sorted(set(self.source_providers))) != self.source_providers:
@@ -34,14 +68,19 @@ class RuntimeExecutionRequest:
             raise ValueError("targetNames must be deduplicated")
         if any(not name.strip() for name in self.target_names):
             raise ValueError("targetNames must contain non-empty values")
-        if self.target_names and self.count != len(self.target_names):
-            raise ValueError("targetNames count must equal count")
+        if self.target_names and not (
+            self.quota <= len(self.target_names) <= self.count
+        ):
+            raise ValueError(
+                "targetNames size must fall inside the [quota, count] candidate pool range"
+            )
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "RuntimeExecutionRequest":
-        count = getattr(args, "count", None)
-        if isinstance(count, bool) or not isinstance(count, int) or count < 1:
-            raise SystemExit("[task execute] GATE_BLOCK --count must be a positive integer")
+        quota, count = resolve_candidate_pool(
+            quota=getattr(args, "quota", None),
+            count=getattr(args, "count", None),
+        )
         family_ref = str(getattr(args, "family", "") or "").strip()
         region_ref = str(getattr(args, "region_ref", "") or "").strip().strip("/")
         selector_raw = str(getattr(args, "selector", "") or "").strip()
@@ -77,6 +116,7 @@ class RuntimeExecutionRequest:
             region_ref=region_ref,
             selector=selector,
             count=count,
+            quota=quota,
             topic=topic,
             source_providers=providers,
             homepage_execution_id=homepage_execution_id,
@@ -92,6 +132,7 @@ class RuntimeExecutionRequest:
                 "regionRef",
                 "selector",
                 "count",
+                "quota",
                 "topic",
                 "sourceProviders",
                 "homepageExecutionId",
@@ -107,6 +148,7 @@ class RuntimeExecutionRequest:
                 region_ref=document.string("regionRef").strip().strip("/"),
                 selector=TargetSelector(document.string("selector")),
                 count=document.integer("count"),
+                quota=document.integer("quota"),
                 topic=document.optional_string("topic"),
                 source_providers=document.string_list("sourceProviders"),
                 homepage_execution_id=document.optional_string("homepageExecutionId"),
@@ -121,6 +163,7 @@ class RuntimeExecutionRequest:
             "regionRef": self.region_ref,
             "selector": self.selector.value,
             "count": self.count,
+            "quota": self.quota,
             "topic": self.topic,
             "sourceProviders": list(self.source_providers),
             "homepageExecutionId": self.homepage_execution_id,
@@ -128,4 +171,4 @@ class RuntimeExecutionRequest:
         }
 
 
-__all__ = ["RuntimeExecutionRequest"]
+__all__ = ["RuntimeExecutionRequest", "resolve_candidate_pool"]

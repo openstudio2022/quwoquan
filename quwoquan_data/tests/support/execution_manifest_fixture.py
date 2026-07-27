@@ -155,6 +155,9 @@ class ExecutionFixtureBuilder:
                 "selectionPolicy": "frozen",
                 "targetEntityCount": len(targets),
                 "targetObjectCount": len(targets),
+                # 合约夹具不做过采：候选池与准出配额相同。
+                "approvedQuota": len(targets),
+                "oversampleFactor": 1.0,
                 "executionBranch": "dev1.0",
                 "gitCommitSha": "local-contract-fixture",
             },

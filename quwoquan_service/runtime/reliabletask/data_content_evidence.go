@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -125,6 +126,90 @@ func (v DataContentFilesystemEvidenceVerifier) VerifyDataContentResult(
 		return fmt.Errorf("reliabletask commercial result canonical object digest mismatch")
 	}
 	return nil
+}
+
+// dataContentFinalizedObjectFiles is the on-disk signature of one finished Data
+// content object: page body, carrier manifest and entity binding together.
+var dataContentFinalizedObjectFiles = []string{
+	"page.md",
+	"manifest.json",
+	"_entity.json",
+}
+
+// dataContentDraftDirectoryName holds pre-review page bodies, so its subtree is
+// never a finished object.
+const dataContentDraftDirectoryName = "4.draft"
+
+// CountFinalizedDataContentObjects observes how many finished objects the
+// execution work package holds on disk. It is a metric only; the commercial
+// quota gate stays bound to ReliableTask results. A work package that does not
+// exist yet counts as zero rather than an error.
+func CountFinalizedDataContentObjects(
+	evidenceRoot string,
+	executionID string,
+) (int, error) {
+	root, err := existingDataContentRoot(evidenceRoot, "evidenceRoot")
+	if err != nil {
+		return 0, err
+	}
+	execution := strings.TrimSpace(executionID)
+	if execution == "" {
+		return 0, fmt.Errorf("reliabletask data evidence requires executionId")
+	}
+	workPackage, err := resolveDataContentRelativePath(
+		root,
+		filepath.ToSlash(filepath.Join("data", "tasks", execution)),
+		"executionId",
+	)
+	if err != nil {
+		return 0, err
+	}
+	info, err := os.Lstat(workPackage)
+	if os.IsNotExist(err) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("reliabletask data evidence work package: %w", err)
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return 0, fmt.Errorf("reliabletask data evidence work package must be a directory")
+	}
+	finalized := 0
+	walkErr := filepath.WalkDir(
+		workPackage,
+		func(path string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if !entry.IsDir() {
+				return nil
+			}
+			if entry.Type()&os.ModeSymlink != 0 {
+				return fs.SkipDir
+			}
+			if entry.Name() == dataContentDraftDirectoryName {
+				return fs.SkipDir
+			}
+			if dataContentObjectFinalized(path) {
+				finalized++
+			}
+			return nil
+		},
+	)
+	if walkErr != nil {
+		return 0, walkErr
+	}
+	return finalized, nil
+}
+
+func dataContentObjectFinalized(directory string) bool {
+	for _, name := range dataContentFinalizedObjectFiles {
+		info, err := os.Lstat(filepath.Join(directory, name))
+		if err != nil || !info.Mode().IsRegular() {
+			return false
+		}
+	}
+	return true
 }
 
 func existingDataContentRoot(value string, label string) (string, error) {

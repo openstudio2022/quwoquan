@@ -24,6 +24,7 @@ func TestDataFleetReadRequestAcceptsBoundAuthorAndPublishJobs(t *testing.T) {
 		"requireCommercial":         true,
 		"recoverDeadTasks":          false,
 		"objectTimeoutMilliseconds": 120000,
+		"requiredQuota":             1,
 		"jobs": []map[string]string{
 			{
 				"entityRef":      entityRef,
@@ -55,9 +56,75 @@ func TestDataFleetReadRequestAcceptsBoundAuthorAndPublishJobs(t *testing.T) {
 		decoded.RecoverDeadTasks == nil ||
 		*decoded.RecoverDeadTasks ||
 		decoded.ObjectTimeout().Milliseconds() != 120000 ||
+		decoded.RequiredQuota != 1 ||
 		len(decoded.Jobs) != 1 ||
 		decoded.Jobs[0].JobID != "job-publish-001" {
 		t.Fatalf("fleet request drift: %#v", decoded)
+	}
+}
+
+func TestDataFleetReadRequestBoundsRequiredQuotaToFrozenJobs(t *testing.T) {
+	executionID := "20260720--travel-image-publish--cn-zhejiang--canary-902"
+	entityRef := "/entity/地点/景区/西湖"
+	sourceRevision := "sha256:" + strings.Repeat("a", 64)
+	job := func(jobID string) map[string]string {
+		return map[string]string{
+			"entityRef":      entityRef,
+			"carrier":        "image",
+			"sourceRevision": sourceRevision,
+			"idempotencyKey": executionID + "|" + entityRef + "|image|" + sourceRevision + "|publish",
+			"jobId":          jobID,
+			"executionId":    executionID,
+			"ref":            "image-source-001",
+			"stage":          "publish",
+			"partitionKey":   "canonical-publish",
+		}
+	}
+	writeRequest := func(t *testing.T, quota any) string {
+		t.Helper()
+		request := map[string]any{
+			"schema":                    importer.FleetRequestSchema,
+			"executionId":               executionID,
+			"requireCommercial":         true,
+			"recoverDeadTasks":          false,
+			"objectTimeoutMilliseconds": 120000,
+			"jobs":                      []map[string]string{job("job-publish-001"), job("job-publish-002")},
+		}
+		if quota != nil {
+			request["requiredQuota"] = quota
+		}
+		payload, err := json.Marshal(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), "request.json")
+		if err := os.WriteFile(path, payload, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	for _, rejected := range []struct {
+		name  string
+		quota any
+	}{
+		{name: "missing", quota: nil},
+		{name: "zero", quota: 0},
+		{name: "above job count", quota: 3},
+	} {
+		t.Run(rejected.name, func(t *testing.T) {
+			_, err := importer.ReadFleetRequest(writeRequest(t, rejected.quota))
+			if err == nil || !strings.Contains(err.Error(), "requiredQuota") {
+				t.Fatalf("requiredQuota %v was not rejected: %v", rejected.quota, err)
+			}
+		})
+	}
+
+	decoded, err := importer.ReadFleetRequest(writeRequest(t, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.RequiredQuota != 2 {
+		t.Fatalf("requiredQuota=%d want=2", decoded.RequiredQuota)
 	}
 }
 

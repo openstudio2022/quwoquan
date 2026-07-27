@@ -8,6 +8,7 @@
     "requireCommercial",
     "recoverDeadTasks",
     "objectTimeoutMilliseconds",
+    "requiredQuota",
     "jobs"
   ],
   "additionalProperties": false,
@@ -26,6 +27,10 @@
       "type": "boolean"
     },
     "objectTimeoutMilliseconds": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "requiredQuota": {
       "type": "integer",
       "minimum": 1
     },

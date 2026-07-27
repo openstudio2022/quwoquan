@@ -77,6 +77,8 @@ def _mixed_type_task(name: str = "类型冲突读路径批") -> str:
         image_works_per_target=0,
         video_works_per_target=0,
         target_entity_count=2,
+        approved_quota=2,
+        oversample_factor=1.0,
     )
     store.save_spec(spec)
     return spec["executionId"]

@@ -54,6 +54,50 @@ def test_missing_empty_or_permissive_key_file_is_rejected(tmp_path, monkeypatch)
     assert "0600" in cc.cursor_key_file_issues()[0]
 
 
+def test_rotated_file_keeps_only_the_first_active_key_line(tmp_path, monkeypatch):
+    key_file = _key_file(tmp_path, "crsr_rotated_new\n#crsr_rotated_old\n")
+    monkeypatch.setenv(cc.CURSOR_API_KEY_FILE_ENV, str(key_file))
+
+    assert cc.cursor_key_file_issues() == []
+    assert cc.resolve_cursor_api_key() == "crsr_rotated_new"
+    assert os.environ[cc.CURSOR_API_KEY_ENV] == "crsr_rotated_new"
+
+
+def test_surrounding_whitespace_and_leading_blank_lines_are_stripped(tmp_path, monkeypatch):
+    key_file = _key_file(tmp_path, "\n   \n   # leading indented comment\n\t crsr_padded_key \t\n")
+    monkeypatch.setenv(cc.CURSOR_API_KEY_FILE_ENV, str(key_file))
+
+    assert cc.resolve_cursor_api_key() == "crsr_padded_key"
+
+
+def test_comment_only_file_reports_no_active_key(tmp_path, monkeypatch):
+    key_file = _key_file(tmp_path, "#crsr_retired_one\n# crsr_retired_two\n")
+    monkeypatch.setenv(cc.CURSOR_API_KEY_FILE_ENV, str(key_file))
+
+    issues = cc.cursor_key_file_issues()
+    assert issues and "no active key line" in issues[0]
+    assert cc.resolve_cursor_api_key() is None
+
+
+def test_key_file_issues_never_leak_key_material(tmp_path, monkeypatch):
+    secret = "crsr_super_secret_value"
+    permissive = _key_file(tmp_path, f"{secret}\n#{secret}_old\n")
+    permissive.chmod(0o644)
+    monkeypatch.setenv(cc.CURSOR_API_KEY_FILE_ENV, str(permissive))
+
+    issues = cc.cursor_key_file_issues()
+    assert issues
+    assert all(secret not in issue for issue in issues)
+
+
+def test_parse_cursor_api_key_is_a_pure_function():
+    assert cc.parse_cursor_api_key("crsr_a\n#crsr_b\n") == "crsr_a"
+    assert cc.parse_cursor_api_key("#crsr_a\ncrsr_b") == "crsr_b"
+    assert cc.parse_cursor_api_key("") is None
+    assert cc.parse_cursor_api_key("\n\n  \n") is None
+    assert cc.parse_cursor_api_key("   # only a comment") is None
+
+
 def test_refresh_false_uses_only_transient_value_after_valid_file_contract(tmp_path, monkeypatch):
     key_file = _key_file(tmp_path)
     monkeypatch.setenv(cc.CURSOR_API_KEY_FILE_ENV, str(key_file))

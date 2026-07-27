@@ -207,6 +207,8 @@
         "selectionPolicy",
         "targetEntityCount",
         "targetObjectCount",
+        "approvedQuota",
+        "oversampleFactor",
         "executionBranch",
         "gitCommitSha"
       ],
@@ -215,6 +217,8 @@
         "selectionPolicy": {"const": "frozen"},
         "targetEntityCount": {"type": "integer", "minimum": 0},
         "targetObjectCount": {"type": "integer", "minimum": 0},
+        "approvedQuota": {"type": "integer", "minimum": 1},
+        "oversampleFactor": {"type": "number", "minimum": 1},
         "executionBranch": {"type": "string", "minLength": 1},
         "gitCommitSha": {"type": "string", "minLength": 1}
       }

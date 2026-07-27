@@ -315,15 +315,31 @@ class ExecutionPolicy:
     selection_policy: SelectionPolicy
     target_entity_count: int
     target_object_count: int
+    approved_quota: int
+    oversample_factor: float
     execution_branch: str
     git_commit_sha: str
 
+    def __post_init__(self) -> None:
+        if not 1 <= self.approved_quota <= self.target_entity_count:
+            raise ValueError(
+                "executionPolicy.approvedQuota must be between 1 and "
+                "targetEntityCount (the oversampled candidate pool)"
+            )
+        if self.oversample_factor < 1:
+            raise ValueError("executionPolicy.oversampleFactor must be >= 1")
+
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any]) -> "ExecutionPolicy":
+        raw_factor = payload.get("oversampleFactor")
+        if isinstance(raw_factor, bool) or not isinstance(raw_factor, (int, float)):
+            raise ValueError("executionPolicy.oversampleFactor must be a number")
         return cls(
             selection_policy=SelectionPolicy(_string(payload, "selectionPolicy")),
             target_entity_count=_non_negative_int(payload, "targetEntityCount"),
             target_object_count=_non_negative_int(payload, "targetObjectCount"),
+            approved_quota=_non_negative_int(payload, "approvedQuota"),
+            oversample_factor=float(raw_factor),
             execution_branch=_string(payload, "executionBranch"),
             git_commit_sha=_string(payload, "gitCommitSha"),
         )
@@ -333,6 +349,8 @@ class ExecutionPolicy:
             "selectionPolicy": self.selection_policy.value,
             "targetEntityCount": self.target_entity_count,
             "targetObjectCount": self.target_object_count,
+            "approvedQuota": self.approved_quota,
+            "oversampleFactor": self.oversample_factor,
             "executionBranch": self.execution_branch,
             "gitCommitSha": self.git_commit_sha,
         }
@@ -481,9 +499,9 @@ class ExecutionSpec:
             raise ValueError(
                 "executionPolicy.targetObjectCount must equal the frozen quota total"
             )
-        if self.acceptance.min_entities != target_count:
+        if self.acceptance.min_entities != self.execution_policy.approved_quota:
             raise ValueError(
-                "acceptance.minEntities must equal the frozen target count"
+                "acceptance.minEntities must equal executionPolicy.approvedQuota"
             )
         if self.acceptance.min_posts_per_entity != objects_per_target:
             raise ValueError(
