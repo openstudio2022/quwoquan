@@ -95,6 +95,15 @@ jobs:
       - name: Go 构建
         run: make build
 
+      - name: 恢复自托管 Go 缓存可清理权限
+        if: always()
+        run: |
+          for cache_dir in "$GOCACHE" "$GOMODCACHE"; do
+            if [ -d "$cache_dir" ]; then
+              chmod -R u+w "$cache_dir"
+            fi
+          done
+
       # L2 由 delivery-gate 负责，此处仅 build
       - id: finish
         if: always()
