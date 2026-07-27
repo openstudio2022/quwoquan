@@ -191,8 +191,16 @@ jobs:
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: 设置 job 隔离 Docker 配置
         run: |
+          docker_context="$(docker context show)"
+          docker_host="$(docker context inspect "$docker_context" --format '{{.Endpoints.docker.Host}}')"
+          if [[ -z "$docker_host" ]]; then
+            echo "当前 Docker context 未提供 daemon endpoint" >&2
+            exit 1
+          fi
+          DOCKER_HOST="$docker_host" docker version >/dev/null
           docker_config="${RUNNER_TEMP}/quwoquan-service-pipeline/${GITHUB_RUN_ID}/${{ matrix.service }}/docker-config"
           mkdir -p "$docker_config"
+          echo "DOCKER_HOST=${docker_host}" >> "$GITHUB_ENV"
           echo "DOCKER_CONFIG=${docker_config}" >> "$GITHUB_ENV"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -275,8 +283,16 @@ jobs:
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: 设置 release artifact 隔离 Docker 配置
         run: |
+          docker_context="$(docker context show)"
+          docker_host="$(docker context inspect "$docker_context" --format '{{.Endpoints.docker.Host}}')"
+          if [[ -z "$docker_host" ]]; then
+            echo "当前 Docker context 未提供 daemon endpoint" >&2
+            exit 1
+          fi
+          DOCKER_HOST="$docker_host" docker version >/dev/null
           docker_config="${RUNNER_TEMP}/quwoquan-service-pipeline/${GITHUB_RUN_ID}/release-artifact/docker-config"
           mkdir -p "$docker_config"
+          echo "DOCKER_HOST=${docker_host}" >> "$GITHUB_ENV"
           echo "DOCKER_CONFIG=${docker_config}" >> "$GITHUB_ENV"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
