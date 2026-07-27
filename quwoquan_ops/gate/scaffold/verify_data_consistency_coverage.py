@@ -8,7 +8,13 @@ from nonfunctional_coverage_lib import Failures, ROOT
 
 def main() -> int:
     failures = Failures()
-    failures.require_path(ROOT / "quwoquan_data" / "publish", "data publish truth source")
+    publish_paths = ROOT / "quwoquan_data" / "scripts" / "core" / "paths.py"
+    failures.require_path(publish_paths, "data publish path authority")
+    if publish_paths.is_file() and (
+        'PUBLISH_ROOT = Path(os.environ.get("QWQ_PUBLISH_ROOT", DATA_ROOT / "publish"))'
+        not in publish_paths.read_text(encoding="utf-8")
+    ):
+        failures.add("data publish truth source: canonical PUBLISH_ROOT declaration is missing")
     failures.require_any_canonical_test(
         label="data consistency coverage",
         patterns=(
