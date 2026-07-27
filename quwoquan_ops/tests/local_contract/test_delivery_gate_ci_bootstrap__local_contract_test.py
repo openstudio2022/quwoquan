@@ -81,10 +81,16 @@ def test_delivery_gate_shards_app_contract_without_weakening_local_full_gate() -
     ui_job = workflow.split("  quwoquan_app_tests_ui:", 1)[1].split(
         "  quwoquan_app_tests_runtime:", 1
     )[0]
+    runtime_job = workflow.split("  quwoquan_app_tests_runtime:", 1)[1].split(
+        "  quwoquan_data:", 1
+    )[0]
     assert "runs-on: [self-hosted, macOS, ARM64]" in ui_job
     assert "runs-on: ubuntu-latest" not in workflow
     assert "needs: [topology_regression, quwoquan_app_tests_runtime]" in ui_job
     assert "needs.quwoquan_app_tests_runtime.result == 'success'" in ui_job
+    assert "needs: [topology_regression, quwoquan_service]" in runtime_job
+    assert "needs.quwoquan_service.result == 'success'" in runtime_job
+    assert "needs.quwoquan_service.result == 'skipped'" in runtime_job
     assert "QWQ_APP_GATE_PHASE: static" in workflow
     assert "QWQ_APP_TEST_SHARD: ui" in workflow
     assert "QWQ_APP_TEST_SHARD: runtime" in workflow

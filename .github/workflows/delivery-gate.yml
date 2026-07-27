@@ -263,10 +263,18 @@ jobs:
 
   quwoquan_app_tests_runtime:
     name: Delivery Gate — App Runtime Tests (L1)
+    # Service gate 会连续执行 60 个 kustomize build；它与长 Flutter Runtime
+    # 分片在同一物理 Mac 上并发时，Go runtime 可能因宿主资源争用崩溃。
+    # service 未受影响时为 skipped，App-only 变更仍可直接运行 Runtime。
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 45
-    needs: topology_regression
-    if: ${{ needs.topology_regression.outputs.app == 'true' }}
+    needs: [topology_regression, quwoquan_service]
+    if: >-
+      ${{
+        always() &&
+        needs.topology_regression.outputs.app == 'true' &&
+        (needs.quwoquan_service.result == 'success' || needs.quwoquan_service.result == 'skipped')
+      }}
     env:
       PUB_HOSTED_URL: https://pub.flutter-io.cn
       FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn

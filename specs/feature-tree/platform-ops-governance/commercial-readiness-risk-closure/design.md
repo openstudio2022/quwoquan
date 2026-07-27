@@ -62,7 +62,7 @@
   - 主线 Service Pipeline 固定使用仓库注册的 `self-hosted/macOS/ARM64` runner；Go builder 基镜像固定为多架构 OCI index digest，以 `BUILDPLATFORM` 原生执行工具链并显式向 `TARGETOS/TARGETARCH` 交叉编译，QEMU 只执行 linux/amd64 最终运行层装配，避免模拟 Go runtime 的不稳定性。GitHub-hosted 预算不可用不得改变 GHCR digest、SBOM、provenance 或 manifest 契约；每个 Go job 在 runner 启动后的 step 使用 `RUNNER_TEMP` 设置可变 cache，禁止在 job-level `env` 引用尚不可用的 `runner` context，checkout 不清理未受版本控制的运行输出。Docker 凭据与构建状态按 job 隔离时，先从宿主当前 context 保存并校验 daemon endpoint，再切换隔离 `DOCKER_CONFIG`，禁止回退到未运行的默认 socket。Delivery Gate 校验受控宿主 Python 版本后，为 Service 与 Data job 分别在 `RUNNER_TEMP` 创建隔离 venv，避免 macOS `setup-python` 子安装器回落到不可写的 `/Users/runner` 或改写系统 framework，也不保留长期工具缓存。
   - Docker Hub 固定 digest QEMU 安装镜像、GHCR 认证、digest descriptor、不可变 pull 与 push 的瞬时传输失败按相同 Action/image 或相同 context、Dockerfile、build args、tag、SBOM 和 provenance 参数最多尝试三次，并使用 5 秒、15 秒退避；矩阵关闭 `fail-fast` 以保留全部服务结论。三次均失败或成功尝试未返回合法 digest 时仍硬失败，ReleaseManifest 只能引用成功尝试产生的 digest。
   - Flutter SDK resolve 只访问官方 release manifest；网络 EOF、超时、限流与服务端错误使用相同 URL 最多尝试三次并按 5 秒、15 秒退避，404 等确定性错误立即失败，解析结果仍必须匹配仓库固定版本、架构和官方 SHA-256。
-  - App UI 与 Runtime 仍覆盖完整且互斥的测试目录，但当前两个 self-hosted runner 共享同一物理 Mac，两个长 Flutter 分片必须由 workflow 串行调度。Runtime 失败时 UI 不生成伪证据，UI 自身仍保留 45 分钟硬上限。
+  - App UI 与 Runtime 仍覆盖完整且互斥的测试目录，但当前两个 self-hosted runner 共享同一物理 Mac。Service 的 60 个环境构建、Runtime 与 UI 三个长资源分片必须由 workflow 依次调度；纯 App 变更的 Service 为 skipped 时不阻塞 Runtime，前序长分片失败时后序不生成伪证据，各 job 仍保留 45 分钟硬上限。
   - Prod runtime 基镜像固定为仍受支持的 Alpine 3.22 digest，依赖安装必须保留包索引签名校验；不得以 `--allow-untrusted` 绕过供应链失败。
   - Recommendation 使用固定 digest 的官方 Python 3.11 slim-bookworm 多架构索引；Dockerfile 已显式安装唯一缺失的 `libgomp1`，不需要携带完整 Python 开发基镜像及其 236 MB 单层。
 - 理由：在 Provider、SFU、真实数据和公网入口尚未就绪时，仍需验证第一方容器可部署性，但该结果不能被误用为生产准出。
