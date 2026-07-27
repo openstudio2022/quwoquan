@@ -67,7 +67,8 @@ def test_delivery_gate_shards_app_contract_without_weakening_local_full_gate() -
     ui_job = workflow.split("  quwoquan_app_tests_ui:", 1)[1].split(
         "  quwoquan_app_tests_runtime:", 1
     )[0]
-    assert "runs-on: macos-latest" in ui_job
+    assert "runs-on: [self-hosted, macOS, ARM64]" in ui_job
+    assert "runs-on: ubuntu-latest" not in workflow
     assert "QWQ_APP_GATE_PHASE: static" in workflow
     assert "QWQ_APP_TEST_SHARD: ui" in workflow
     assert "QWQ_APP_TEST_SHARD: runtime" in workflow
@@ -79,6 +80,19 @@ def test_delivery_gate_shards_app_contract_without_weakening_local_full_gate() -
     assert "test/local_contract/ui/" in gate
     for runtime_root in ("app", "cloud", "core", "quality"):
         assert f'"test/local_contract/{runtime_root}/"' in gate
+
+
+def test_pr_control_jobs_do_not_consume_github_hosted_actions_minutes() -> None:
+    for workflow_path in (
+        ROOT / ".github/workflows/delivery-gate.yml",
+        ROOT / ".github/workflows/pre-release-gate.yml",
+        ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml",
+        ROOT / ".github/workflows/artifact-lifecycle.yml",
+    ):
+        workflow = workflow_path.read_text(encoding="utf-8")
+        assert "runs-on: ubuntu-latest" not in workflow
+        assert "runs-on: macos-latest" not in workflow
+        assert "runs-on: [self-hosted, macOS, ARM64]" in workflow
 
 
 def test_contract_metadata_bootstrap_creates_cache_parent_before_mktemp() -> None:

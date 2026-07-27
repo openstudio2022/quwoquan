@@ -43,7 +43,7 @@ on:
 jobs:
   topology_regression:
     name: Delivery Gate — Topology
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 15
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
@@ -82,7 +82,7 @@ jobs:
 
   quwoquan_service:
     name: Delivery Gate — Service (L2)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 45
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.service == 'true' }}
@@ -118,7 +118,7 @@ jobs:
 
   search_contract_smoke:
     name: Delivery Gate — Search /search Contract Smoke
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 20
     needs: topology_regression
     if: >-
@@ -157,7 +157,7 @@ jobs:
 
   quwoquan_app:
     name: Delivery Gate — App Static (L1)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 45
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
@@ -207,7 +207,7 @@ jobs:
     name: Delivery Gate — App UI Tests (L1)
     # UI 分片包含 iOS/macOS 渲染器生成的精确像素 golden；Linux Skia 的
     # 字体与抗锯齿结果不同，不能把跨平台像素漂移误报为产品视觉回归。
-    runs-on: macos-latest
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 45
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
@@ -253,7 +253,7 @@ jobs:
 
   quwoquan_app_tests_runtime:
     name: Delivery Gate — App Runtime Tests (L1)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 45
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
@@ -299,7 +299,7 @@ jobs:
 
   quwoquan_data:
     name: Delivery Gate — Data
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 45
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.data == 'true' }}
@@ -328,7 +328,7 @@ jobs:
 
   ops_portal:
     name: Delivery Gate — Ops Portal
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 25
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.portal == 'true' }}
@@ -376,7 +376,7 @@ jobs:
       - quwoquan_data
       - ops_portal
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 15
     outputs:
       critical_path_seconds: ${{ steps.timing.outputs.critical_path_seconds }}
