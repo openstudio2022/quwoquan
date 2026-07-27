@@ -30,7 +30,10 @@ def test_prod_hosted_build_images_match_their_governed_repositories() -> None:
     build_images = runtime["targets"]["prod-hosted"]["buildImages"]
 
     assert build_images["goBaseImage"].startswith("docker.io/library/golang:")
-    assert build_images["alpineBaseImage"].startswith("docker.io/library/alpine:")
+    assert (
+        build_images["alpineBaseImage"]
+        == "docker.io/library/alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce"
+    )
     assert build_images["pythonBaseImage"].startswith("docker.io/library/python:")
 
 
