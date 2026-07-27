@@ -105,6 +105,9 @@ def test_mainline_release_delivery_uses_bounded_same_input_retries() -> None:
         for step in jobs["validate-deploy"]["steps"]
         if step.get("id")
     }
+    release_runs = [
+        str(step.get("run") or "") for step in jobs["validate-deploy"]["steps"]
+    ]
 
     assert image_job["strategy"]["fail-fast"] is False
     for attempt in (1, 2, 3):
@@ -118,10 +121,41 @@ def test_mainline_release_delivery_uses_bounded_same_input_retries() -> None:
     assert release_steps["release_registry_login_attempt_2"]["continue-on-error"] is True
     assert release_steps["release_bundle_attempt_1"]["continue-on-error"] is True
     assert release_steps["release_bundle_attempt_2"]["continue-on-error"] is True
-    assert workflow.count("run: sleep 5") == 2
-    assert workflow.count("run: sleep 15") == 2
+    assert release_runs.count("sleep 5") == 2
+    assert release_runs.count("sleep 15") == 2
     assert "release artifact push failed after 3 bounded attempts" in workflow
     assert ":latest" not in workflow
+
+
+def test_mainline_qemu_setup_uses_bounded_same_digest_retries() -> None:
+    workflow = (ROOT / ".github/workflows/service_pipeline.yml").read_text(
+        encoding="utf-8"
+    )
+    document = yaml.safe_load(workflow)
+    steps = document["jobs"]["build-release-images"]["steps"]
+    steps_by_id = {step.get("id"): step for step in steps if step.get("id")}
+    attempts = [steps_by_id[f"qemu_attempt_{attempt}"] for attempt in (1, 2, 3)]
+
+    assert all(
+        step["uses"]
+        == "docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130"
+        for step in attempts
+    )
+    assert all(step["with"] == attempts[0]["with"] for step in attempts)
+    assert attempts[0]["continue-on-error"] is True
+    assert attempts[1]["continue-on-error"] is True
+    assert "continue-on-error" not in attempts[2]
+    assert attempts[0]["with"] == {
+        "image": (
+            "docker.io/tonistiigi/binfmt@sha256:"
+            "b4c6a09270133b3c5b4dff94f83067df4dd27eced195fc6a1dbad102999e24dd"
+        ),
+        "platforms": "amd64",
+        "cache-image": False,
+    }
+    runs = [str(step.get("run") or "") for step in steps]
+    assert runs.count("sleep 5") == 1
+    assert runs.count("sleep 15") == 1
 
 
 def test_mainline_pipeline_uses_controlled_self_hosted_amd64_builder() -> None:

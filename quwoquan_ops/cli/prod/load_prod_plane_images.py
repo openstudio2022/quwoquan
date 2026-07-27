@@ -13,13 +13,11 @@ from typing import Any
 
 import yaml
 
-from quwoquan_ops.cli.prod.registry_transport import run_with_bounded_retry
-
-
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli.prod.registry_transport import run_with_bounded_retry
 from quwoquan_ops.cli.lib.prod_management_access import prod_management_ssh_host
 
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
