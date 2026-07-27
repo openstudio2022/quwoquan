@@ -79,15 +79,18 @@ def test_mainline_image_build_does_not_create_unbounded_actions_storage() -> Non
     assert gate.main() == 0
 
 
-def test_mainline_image_build_retries_only_transient_ghcr_oauth_eof() -> None:
+def test_mainline_image_build_retries_only_declared_transient_registry_eof() -> None:
     workflow = (ROOT / ".github/workflows/service_pipeline.yml").read_text(
         encoding="utf-8"
     )
 
     assert "登录镜像仓库（重试瞬时网络失败）" in workflow
+    assert "构建、生成 SBOM/provenance 并推送（重试声明的瞬时 registry EOF）" in workflow
     assert workflow.count("for attempt in 1 2 3; do") >= 2
     assert "failed to fetch oauth token:.*EOF" in workflow
     assert "https://ghcr.io/(token|v2/).*EOF" in workflow
+    assert "https://registry-1\\.docker\\.io/v2/docker/buildkit-syft-scanner/.*EOF" in workflow
+    assert "declared transient registry EOF persisted after" in workflow
     assert "--attest type=sbom" in workflow
     assert "--attest type=provenance,mode=max" in workflow
     assert 'docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25' in workflow
