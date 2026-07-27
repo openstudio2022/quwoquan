@@ -99,5 +99,8 @@ def test_mainline_pipeline_uses_controlled_self_hosted_amd64_builder() -> None:
     assert 'cache_root="${RUNNER_TEMP}/quwoquan-service-pipeline/${GITHUB_RUN_ID}"' in workflow
     assert 'echo "GOCACHE=${cache_root}/go-build" >> "$GITHUB_ENV"' in workflow
     assert 'echo "GOMODCACHE=${cache_root}/go-mod" >> "$GITHUB_ENV"' in workflow
+    assert 'docker_config="${RUNNER_TEMP}/quwoquan-service-pipeline/${GITHUB_RUN_ID}/${{ matrix.service }}/docker-config"' in workflow
+    assert 'echo "DOCKER_CONFIG=${docker_config}" >> "$GITHUB_ENV"' in workflow
+    assert "设置 release artifact 隔离 Docker 配置" in workflow
     assert "${{ runner.temp }}" not in workflow
     assert "github.workspace }}/.qwq_output/env/repo/local/ci/cache/go" not in workflow
