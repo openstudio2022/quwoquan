@@ -108,6 +108,7 @@ def verify() -> list[str]:
             "Reclaim closed pull-request caches",
             "refs/pull/${{ github.event.pull_request.number }}/merge",
             "actions/caches/${cache_id}",
+            "runs-on: [self-hosted, macOS, ARM64]",
         ):
             if token not in lifecycle:
                 issues.append(f"artifact lifecycle workflow missing {token!r}")

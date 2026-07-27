@@ -100,8 +100,8 @@
       "backend": "ssh-hosted",
       "portProfile": null,
       "buildImages": {
-        "goBaseImage": "docker.io/library/golang:1.24-bookworm@sha256:98d673f18a1aac43da744209873cb79323e11706f909251bcfb131828b95559d",
-        "alpineBaseImage": "docker.io/library/alpine:3.20@sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e",
+        "goBaseImage": "docker.io/library/golang:1.24-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac",
+        "alpineBaseImage": "docker.io/library/alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce",
         "pythonBaseImage": "docker.io/library/python:3.11@sha256:143c7a1877acd77bd323d544cb7b39ba0a975288a7204f47586c2597130d80ad"
       },
       "sharedClusterNote": "gray-initial and full share the same physical cluster because of current cost constraints; gamma is local-only and has no remote target",

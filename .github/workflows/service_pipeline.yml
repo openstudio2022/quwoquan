@@ -29,8 +29,9 @@ env:
   REGISTRY: ${{ secrets.DOCKER_REGISTRY || 'ghcr.io' }}
   IMAGE_PREFIX: ${{ github.repository }}
   QWQ_OUTPUT_ROOT: .qwq_output
-  GOCACHE: ${{ github.workspace }}/.qwq_output/env/repo/local/ci/cache/go/build
-  GOMODCACHE: ${{ github.workspace }}/.qwq_output/env/repo/local/ci/cache/go/mod
+  # Go cache is intentionally assigned per job below under runner.temp. Never
+  # place read-only Go module files inside github.workspace: checkout clean
+  # would make one self-hosted matrix job poison another job's workspace.
   # docker/build-push-action otherwise uploads one .dockerbuild Actions Artifact
   # for every matrix image. The immutable GHCR digest is the release input;
   # Build records are neither a deploy dependency nor useful durable evidence.
@@ -52,6 +53,8 @@ jobs:
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          clean: false
       - name: Generate versions
         id: versions
         env:
@@ -80,8 +83,13 @@ jobs:
     defaults:
       run:
         working-directory: quwoquan_service
+    env:
+      GOCACHE: ${{ runner.temp }}/quwoquan-service-pipeline/${{ github.run_id }}/go-build
+      GOMODCACHE: ${{ runner.temp }}/quwoquan-service-pipeline/${{ github.run_id }}/go-mod
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          clean: false
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -94,15 +102,6 @@ jobs:
 
       - name: Go 构建
         run: make build
-
-      - name: 恢复自托管 Go 缓存可清理权限
-        if: always()
-        run: |
-          for cache_dir in "$GOCACHE" "$GOMODCACHE"; do
-            if [ -d "$cache_dir" ]; then
-              chmod -R u+w "$cache_dir"
-            fi
-          done
 
       # L2 由 delivery-gate 负责，此处仅 build
       - id: finish
@@ -188,6 +187,8 @@ jobs:
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          clean: false
       - id: base_images
         name: Resolve governed builder base images
         run: |
@@ -265,6 +266,8 @@ jobs:
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          clean: false
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
         with:
@@ -389,6 +392,8 @@ jobs:
       critical_path_seconds: ${{ steps.timing.outputs.critical_path_seconds }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          clean: false
       - name: Enforce service pipeline results
         env:
           PREPARE_RESULT: ${{ needs.prepare-release.result }}

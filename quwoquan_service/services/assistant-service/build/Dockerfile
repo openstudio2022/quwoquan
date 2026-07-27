@@ -5,8 +5,10 @@ ARG GO_BASE_IMAGE
 ARG ALPINE_BASE_IMAGE
 ARG GO_BUILD_FLAGS=-p=1
 
-FROM ${GO_BASE_IMAGE} AS builder
+FROM --platform=${BUILDPLATFORM} ${GO_BASE_IMAGE} AS builder
 ARG GO_BUILD_FLAGS
+ARG TARGETOS
+ARG TARGETARCH
 ARG GOPROXY=https://goproxy.cn,direct
 ARG GOSUMDB=sum.golang.google.cn
 ENV GOPROXY=${GOPROXY}
@@ -18,11 +20,11 @@ RUN --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
 COPY . .
 RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
-    CGO_ENABLED=0 GOMAXPROCS=1 GOGC=10 GOMEMLIMIT=1024MiB \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=10 GOMEMLIMIT=1024MiB \
     go build ${GO_BUILD_FLAGS} -o /assistant-service ./services/assistant-service/cmd/api
 RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
-    CGO_ENABLED=0 GOMAXPROCS=1 GOGC=10 GOMEMLIMIT=1024MiB \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=10 GOMEMLIMIT=1024MiB \
     go build ${GO_BUILD_FLAGS} -o /assistant-policy-publish ./services/assistant-service/cmd/policy-publish
 
 FROM ${ALPINE_BASE_IMAGE}

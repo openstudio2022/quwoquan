@@ -54,8 +54,24 @@ def validate_service_build_image_contract() -> list[str]:
         dockerfile_text = dockerfile.read_text(encoding="utf-8")
         if "ARG GO_BASE_IMAGE\n" not in dockerfile_text:
             issues.append(f"{dockerfile.relative_to(ROOT)} must not default GO_BASE_IMAGE")
+        if "FROM --platform=${BUILDPLATFORM} ${GO_BASE_IMAGE} AS builder" not in dockerfile_text:
+            issues.append(
+                f"{dockerfile.relative_to(ROOT)} must build Go on BUILDPLATFORM"
+            )
+        if "ARG TARGETOS\n" not in dockerfile_text or "ARG TARGETARCH\n" not in dockerfile_text:
+            issues.append(
+                f"{dockerfile.relative_to(ROOT)} must declare target OS and architecture"
+            )
+        if "CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH}" not in dockerfile_text:
+            issues.append(
+                f"{dockerfile.relative_to(ROOT)} must cross-compile Go for the image target"
+            )
         if "ARG ALPINE_BASE_IMAGE\n" not in dockerfile_text:
             issues.append(f"{dockerfile.relative_to(ROOT)} must not default ALPINE_BASE_IMAGE")
+        if "--allow-untrusted" in dockerfile_text:
+            issues.append(
+                f"{dockerfile.relative_to(ROOT)} must not bypass package signature checks"
+            )
 
     service_pipeline = (
         ROOT / ".github/workflows/service_pipeline.yml"

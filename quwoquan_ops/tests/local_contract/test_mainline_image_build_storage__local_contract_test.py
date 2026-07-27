@@ -29,9 +29,35 @@ def test_prod_hosted_build_images_match_their_governed_repositories() -> None:
     )
     build_images = runtime["targets"]["prod-hosted"]["buildImages"]
 
-    assert build_images["goBaseImage"].startswith("docker.io/library/golang:")
-    assert build_images["alpineBaseImage"].startswith("docker.io/library/alpine:")
+    assert build_images["goBaseImage"] == (
+        "docker.io/library/golang:1.24-bookworm@sha256:"
+        "1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac"
+    )
+    assert (
+        build_images["alpineBaseImage"]
+        == "docker.io/library/alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce"
+    )
     assert build_images["pythonBaseImage"].startswith("docker.io/library/python:")
+
+    dockerfiles = sorted(
+        (ROOT / "quwoquan_service/services").glob("*/build/Dockerfile")
+    )
+    dockerfiles.append(
+        ROOT / "quwoquan_service/control-plane/platform-ops/build/Dockerfile"
+    )
+    for dockerfile in dockerfiles:
+        text = dockerfile.read_text(encoding="utf-8")
+        if "ARG GO_BASE_IMAGE\n" in text:
+            assert (
+                "FROM --platform=${BUILDPLATFORM} ${GO_BASE_IMAGE} AS builder"
+                in text
+            ), dockerfile
+            assert "ARG TARGETOS\n" in text, dockerfile
+            assert "ARG TARGETARCH\n" in text, dockerfile
+            assert (
+                "CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH}" in text
+            ), dockerfile
+        assert "--allow-untrusted" not in text, dockerfile
 
 
 def test_mainline_image_build_does_not_create_unbounded_actions_storage() -> None:
@@ -66,5 +92,13 @@ def test_mainline_pipeline_uses_controlled_self_hosted_amd64_builder() -> None:
     assert "cache-image: false" in workflow
     assert workflow.count("version: v0.35.0") == 2
     assert workflow.count("cache-binary: false") == 2
-    assert "恢复自托管 Go 缓存可清理权限" in workflow
-    assert 'chmod -R u+w "$cache_dir"' in workflow
+    assert workflow.count("clean: false") == 5
+    assert (
+        "${{ runner.temp }}/quwoquan-service-pipeline/${{ github.run_id }}/go-build"
+        in workflow
+    )
+    assert (
+        "${{ runner.temp }}/quwoquan-service-pipeline/${{ github.run_id }}/go-mod"
+        in workflow
+    )
+    assert "github.workspace }}/.qwq_output/env/repo/local/ci/cache/go" not in workflow

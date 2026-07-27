@@ -51,7 +51,9 @@
 
 - same-digest、Action pin、SBOM/provenance 和缺制品 fail-closed 必须由可执行门禁直接证明。
 - GHCR digest 是成功构建的唯一交付输入；CI 必须关闭自动 Docker build record 上传和未受控的 GHA layer cache，不能以成功 Actions Artifact 或无限增长缓存承担发布传递。
-- 主线 Service Pipeline 使用仓库已注册、在线且标签受控的 self-hosted macOS ARM64 runner；跨架构镜像只能通过固定 Action 的 QEMU/Buildx 生成 linux/amd64 OCI，不得因 GitHub-hosted 计费预算不可用而回退本地临时构建或放弃 attestation。
+- 主线 Service Pipeline 使用仓库已注册、在线且标签受控的 self-hosted macOS ARM64 runner。
+- Go builder 必须以不可变多架构索引在原生 `BUILDPLATFORM` 运行并通过 `TARGETOS/TARGETARCH` 交叉编译；最终 linux/amd64 运行层才使用固定 Action 的 QEMU/Buildx，禁止用 QEMU 执行 Go 工具链，也不得因 GitHub-hosted 计费预算不可用而回退本地临时构建或放弃 attestation。
+- Prod 构建基镜像必须使用用途匹配的固定 digest；服务 Dockerfile 必须支持受控 runtime 的包管理器，镜像源签名异常时硬失败，禁止以 `--allow-untrusted` 伪造供应链通过。
 
 <a id="req-004"></a>
 ### REQ-004 灰度发布串行、真实 SLO 回读并可回滚
@@ -133,8 +135,9 @@
 - THEN ReleaseManifest 绑定 git commit、OCI/config/portal/SBOM/provenance/signature/test evidence digest。
 - THEN gray-initial/carry-on/full 只消费同一 manifest，禁止 latest 与部署时重建。
 - THEN ReleaseManifest 配置包以 GHCR OCI digest 交付；Actions Artifact 无容量时仍 fail-closed 地消费同一 OCI 内容，不允许在部署 job 重生 manifest。
-- THEN Service Pipeline 在受控 runner 上通过 QEMU/Buildx 构建 linux/amd64，仍生成相同 SBOM/provenance 与 release manifest；runner 或跨架构前置缺失时硬失败。
-- THEN Go module cache 保持在 `.qwq_output`，且 Go job 无论成功失败都恢复属主写权限，后续矩阵 job 不得因只读 module cache 无法清理工作区。
+- THEN Service Pipeline 在受控 runner 上以原生 ARM64 Go builder 交叉编译 linux/amd64 二进制，QEMU/Buildx 只装配目标运行层，仍生成相同 SBOM/provenance 与 release manifest；runner、多架构 builder 索引或跨架构前置缺失时硬失败。
+- THEN Go module cache 按 job 隔离在 `runner.temp`，不进入 checkout 工作区或 GitHub Actions cache；后续矩阵 job 不得因另一 job 的只读 module cache 失败。
+- THEN Prod 的受控 Alpine runtime 通过签名包索引安装运行依赖；包索引签名不可信时不得使用 `--allow-untrusted` 继续构建。
 - THEN Docker build record 与无界 Buildx GHA layer cache 不进入 Actions 存储；失败诊断仍按短保留期、单次运行范围保留。
 
 <a id="sit-004"></a>

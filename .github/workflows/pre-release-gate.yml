@@ -43,7 +43,7 @@ concurrency:
 jobs:
   resolve_profile:
     name: Resolve validation profile
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     outputs:
       profile: ${{ steps.resolve.outputs.profile }}
     steps:
@@ -58,7 +58,7 @@ jobs:
     needs:
       - resolve_profile
     if: ${{ needs.resolve_profile.outputs.profile != 'pr_light' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Require explicit release environment URL
@@ -96,7 +96,7 @@ jobs:
       - resolve_profile
       - search_runtime_smoke
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: 输出 04 PR gate 摘要

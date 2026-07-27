@@ -119,8 +119,9 @@ def main() -> int:
         "cache-image: false",
         "version: v0.35.0",
         "cache-binary: false",
-        "恢复自托管 Go 缓存可清理权限",
-        'chmod -R u+w "$cache_dir"',
+        "clean: false",
+        "${{ runner.temp }}/quwoquan-service-pipeline/${{ github.run_id }}/go-build",
+        "${{ runner.temp }}/quwoquan-service-pipeline/${{ github.run_id }}/go-mod",
     ):
         if token not in pipeline_text:
             issues.append(
@@ -135,6 +136,7 @@ def main() -> int:
         "cache-to: type=gha",
         "runs-on: ubuntu-latest",
         "actions/cache@",
+        "github.workspace }}/.qwq_output/env/repo/local/ci/cache/go",
     ):
         if forbidden in pipeline_text:
             issues.append(
