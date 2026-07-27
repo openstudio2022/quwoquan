@@ -104,9 +104,13 @@ jobs:
         uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260
       - name: 安装 kustomize
         run: bash quwoquan_ops/cli/shared/install_kustomize.sh
+      - name: 设置 Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
       - name: 安装 Python 依赖 (recommendation-service)
         run: |
-          pip install -r quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/requirements.txt
+          python3 -m pip install -r quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/requirements.txt
       - name: Gate (quwoquan_service)
         run: |
           bash quwoquan_ops/gate/gate_repo.sh --scope service
