@@ -292,8 +292,9 @@ run_app() {
   fi
   # local_contract tests — fast, no external deps. Canonical App entry is test/local_contract/.
   # 使用 tee 边跑边输出：原先整段输出进变量，长时间无日志易被误判为「卡住」。
-  # CI 在独立 runner 上按目录分片，但本地 `--scope app` 仍默认一次跑完整目录；
-  # 分片不改变测试全集，也不放宽每个分片内部的 concurrency=1 契约。
+  # CI 按目录分片，workflow 在共享物理宿主上串行调度两个长测试分片；
+  # 本地 `--scope app` 仍默认一次跑完整目录。分片不改变测试全集，也不
+  # 放宽每个分片内部的 concurrency=1 契约。
   local app_test_shard="${QWQ_APP_TEST_SHARD:-all}"
   local run_pa_core="true"
   local -a flutter_test_targets

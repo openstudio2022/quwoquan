@@ -214,10 +214,13 @@ jobs:
     name: Delivery Gate — App UI Tests (L1)
     # UI 分片包含 iOS/macOS 渲染器生成的精确像素 golden；Linux Skia 的
     # 字体与抗锯齿结果不同，不能把跨平台像素漂移误报为产品视觉回归。
+    # 两个 self-hosted runner 位于同一物理 Mac；UI 与 Runtime 同时长跑会
+    # 争用 Flutter/渲染资源并导致测试已通过后的 stream shutdown 超时。
+    # 因此保留完整分片，但在 Runtime 成功后再启动 UI。
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 45
-    needs: topology_regression
-    if: ${{ needs.topology_regression.outputs.app == 'true' }}
+    needs: [topology_regression, quwoquan_app_tests_runtime]
+    if: ${{ needs.topology_regression.outputs.app == 'true' && needs.quwoquan_app_tests_runtime.result == 'success' }}
     env:
       PUB_HOSTED_URL: https://pub.flutter-io.cn
       FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
