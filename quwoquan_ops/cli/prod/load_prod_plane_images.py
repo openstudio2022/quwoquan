@@ -216,6 +216,8 @@ def _remote_image_digest(
     if result.returncode != 0:
         return None
     digest = result.stdout.strip()
+    if re.fullmatch(r"[0-9a-f]{64}", digest):
+        digest = f"sha256:{digest}"
     return digest if re.fullmatch(r"sha256:[0-9a-f]{64}", digest) else None
 
 

@@ -178,6 +178,22 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
         self.assertIn("universal_newlines=True", script)
         self.assertNotIn("text=True", script)
         self.assertNotIn("capture_output=True", script)
+        self.assertIn("while remaining:", script)
+        self.assertIn('["podman", "rm", name]', script)
+        self.assertNotIn('["podman", "rm", *sorted(set(selected))]', script)
+
+    def test_remote_reclaim_removes_only_scoped_dependents_in_safe_order(self) -> None:
+        spec, projections = prevalidate.load_projection()
+        script = prevalidate._remote_reclaim_script(
+            projection=projections["service"],
+            policy=spec["staleRuntimeReclaimPolicy"],
+        )
+        self.assertIn("while remaining:", script)
+        self.assertIn('["podman", "rm", name]', script)
+        self.assertIn("dependency-order retries", script)
+        self.assertNotIn('["podman", "rm", *sorted(set(selected))]', script)
+        self.assertNotIn('["podman", "rm", "-f"', script)
+        self.assertNotIn("--volumes", script)
 
     def test_oci_release_artifact_is_materialized_by_digest_only(self) -> None:
         digest = "d" * 64

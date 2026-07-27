@@ -68,7 +68,8 @@
 - 约束与影响如下。
   - 隔离数据使用重新摘要的不可提升配置投影和独立随机认证材料。unit 不得继承正式 credentials。
   - ReleaseManifest 配置包和镜像均以 GHCR digest 消费。Actions Artifact 不是成功 job 间传递或正式发布证据。
-  - 旧运行面回收只允许匹配声明前缀且处于 `Created/Exited` 的容器和未使用镜像。禁止删除任何 volume 或恢复容器。
+  - 旧运行面回收只允许匹配声明前缀且处于 `Created/Exited` 的容器和未使用镜像；容器存在依赖时对同一受控集合迭代删除，禁止用 `--depend` 扩大范围。禁止删除任何 volume 或恢复容器。
+  - 镜像传输后的内容身份统一为 `sha256:<hex>`；兼容旧 Podman `image inspect .Id` 返回的裸 64 位 hex，但仍必须与本地 Docker content ID 完全一致，不能以 tag 或 RepoDigest 替代。
   - prod-hosted 当前系统 Python 3.6 是远端预检脚本的最低运行基线；inline 脚本使用 `universal_newlines` 等兼容接口，宿主侧编排可继续使用受控本机 Python。
   - 报告必须并列输出 container runtime、Provider readiness 与 release eligibility。后两者在完整生产证据前固定为 `GATE_BLOCK`。
 - 制品生命周期约束如下。

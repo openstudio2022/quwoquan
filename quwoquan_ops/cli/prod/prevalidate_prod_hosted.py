@@ -442,10 +442,30 @@ for item in containers:
             continue
         if name.startswith(prefixes) and state in allowed:
             selected.append(name)
-if selected:
-    removed = run(["podman", "rm", *sorted(set(selected))])
-    if removed.returncode != 0:
-        raise SystemExit(removed.stderr or removed.stdout)
+remaining = sorted(set(selected))
+removed_containers = []
+last_errors = {{}}
+while remaining:
+    next_remaining = []
+    removed_this_pass = []
+    for name in remaining:
+        removed = run(["podman", "rm", name])
+        if removed.returncode == 0:
+            removed_this_pass.append(name)
+            removed_containers.append(name)
+            continue
+        next_remaining.append(name)
+        last_errors[name] = (removed.stderr or removed.stdout).strip()
+    if not removed_this_pass:
+        details = "; ".join(
+            "{{}}: {{}}".format(name, last_errors.get(name) or "podman rm failed")
+            for name in next_remaining
+        )
+        raise SystemExit(
+            "unable to remove scoped stale containers after dependency-order retries: "
+            + details
+        )
+    remaining = next_remaining
 prune = run(["podman", "image", "prune", "-a", "-f"])
 if prune.returncode != 0:
     raise SystemExit(prune.stderr or prune.stdout)
@@ -453,7 +473,7 @@ stat = os.statvfs(pathlib.Path.home())
 print(json.dumps({{
     "plane": "{projection.name}",
     "status": "completed",
-    "removedContainers": sorted(set(selected)),
+    "removedContainers": sorted(removed_containers),
     "preservedContainers": sorted(preserved),
     "volumesRemoved": False,
     "containerFreeBytes": stat.f_bavail * stat.f_frsize,
