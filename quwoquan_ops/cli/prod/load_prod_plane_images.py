@@ -13,6 +13,8 @@ from typing import Any
 
 import yaml
 
+from quwoquan_ops.cli.prod.registry_transport import run_with_bounded_retry
+
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
@@ -155,15 +157,21 @@ def _pull_and_tag_release_image(
     *,
     platform: str,
 ) -> None:
-    pull = subprocess.run(
-        ["docker", "pull", "--platform", platform, source_ref],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        check=False,
+    argv = ["docker", "pull", "--platform", platform, source_ref]
+    pull = run_with_bounded_retry(
+        lambda: subprocess.run(
+            argv,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+        )
     )
     if pull.returncode != 0:
-        raise SystemExit(f"FAIL: docker pull failed for {source_ref}:\n{pull.stdout}")
+        raise SystemExit(
+            f"FAIL: docker pull failed after 3 bounded attempts for {source_ref}:\n"
+            f"{pull.stdout}"
+        )
     tag = subprocess.run(
         ["docker", "tag", source_ref, target_ref],
         stdout=subprocess.PIPE,

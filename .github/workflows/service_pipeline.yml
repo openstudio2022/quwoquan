@@ -122,7 +122,8 @@ jobs:
       contents: read
       packages: write
     strategy:
-      fail-fast: true
+      # 单个 GHCR 传输瞬态不得取消尚未执行的服务；每个服务仍独立硬失败。
+      fail-fast: false
       matrix:
         include:
           - service: recommendation-service
@@ -334,7 +335,32 @@ jobs:
         with:
           version: v0.35.0
           cache-binary: false
-      - name: 登录镜像仓库
+      - id: release_registry_login_attempt_1
+        name: 登录镜像仓库（第 1 次）
+        continue-on-error: true
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.DOCKER_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: GHCR 登录退避（5 秒）
+        if: ${{ steps.release_registry_login_attempt_1.outcome == 'failure' }}
+        run: sleep 5
+      - id: release_registry_login_attempt_2
+        name: 登录镜像仓库（第 2 次）
+        if: ${{ steps.release_registry_login_attempt_1.outcome == 'failure' }}
+        continue-on-error: true
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.DOCKER_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: GHCR 登录退避（15 秒）
+        if: ${{ steps.release_registry_login_attempt_1.outcome == 'failure' && steps.release_registry_login_attempt_2.outcome == 'failure' }}
+        run: sleep 15
+      - id: release_registry_login_attempt_3
+        name: 登录镜像仓库（第 3 次）
+        if: ${{ steps.release_registry_login_attempt_1.outcome == 'failure' && steps.release_registry_login_attempt_2.outcome == 'failure' }}
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ${{ env.REGISTRY }}
@@ -414,8 +440,9 @@ jobs:
             kustomize build --load-restrictor LoadRestrictionsNone "quwoquan_ops/environments/$env" > /dev/null
             echo "$env autonomous assembly OK"
           done
-      - id: release_bundle
-        name: Publish deployable release artifact to GHCR
+      - id: release_bundle_attempt_1
+        name: Publish deployable release artifact to GHCR（第 1 次）
+        continue-on-error: true
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
         with:
           context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
@@ -427,6 +454,64 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact:sha-${{ github.sha }}
           sbom: true
           provenance: mode=max
+      - name: GHCR release artifact 推送退避（5 秒）
+        if: ${{ steps.release_bundle_attempt_1.outcome == 'failure' }}
+        run: sleep 5
+      - id: release_bundle_attempt_2
+        name: Publish deployable release artifact to GHCR（第 2 次）
+        if: ${{ steps.release_bundle_attempt_1.outcome == 'failure' }}
+        continue-on-error: true
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
+          file: quwoquan_ops/cli/prod/release_artifact.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact:${{ needs.prepare-release.outputs.image_version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact:sha-${{ github.sha }}
+          sbom: true
+          provenance: mode=max
+      - name: GHCR release artifact 推送退避（15 秒）
+        if: ${{ steps.release_bundle_attempt_1.outcome == 'failure' && steps.release_bundle_attempt_2.outcome == 'failure' }}
+        run: sleep 15
+      - id: release_bundle_attempt_3
+        name: Publish deployable release artifact to GHCR（第 3 次）
+        if: ${{ steps.release_bundle_attempt_1.outcome == 'failure' && steps.release_bundle_attempt_2.outcome == 'failure' }}
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
+          file: quwoquan_ops/cli/prod/release_artifact.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact:${{ needs.prepare-release.outputs.image_version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact:sha-${{ github.sha }}
+          sbom: true
+          provenance: mode=max
+      - id: release_bundle
+        name: Resolve successful release artifact digest
+        if: always()
+        env:
+          ATTEMPT_1_OUTCOME: ${{ steps.release_bundle_attempt_1.outcome }}
+          ATTEMPT_1_DIGEST: ${{ steps.release_bundle_attempt_1.outputs.digest }}
+          ATTEMPT_2_OUTCOME: ${{ steps.release_bundle_attempt_2.outcome }}
+          ATTEMPT_2_DIGEST: ${{ steps.release_bundle_attempt_2.outputs.digest }}
+          ATTEMPT_3_OUTCOME: ${{ steps.release_bundle_attempt_3.outcome }}
+          ATTEMPT_3_DIGEST: ${{ steps.release_bundle_attempt_3.outputs.digest }}
+        run: |
+          for attempt in 1 2 3; do
+            outcome_name="ATTEMPT_${attempt}_OUTCOME"
+            digest_name="ATTEMPT_${attempt}_DIGEST"
+            outcome="${!outcome_name}"
+            digest="${!digest_name}"
+            if [[ "$outcome" == "success" && "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "digest=$digest" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "::error::release artifact push failed after 3 bounded attempts"
+          exit 1
       - id: release_bundle_ref
         name: Record immutable OCI release artifact
         run: |
