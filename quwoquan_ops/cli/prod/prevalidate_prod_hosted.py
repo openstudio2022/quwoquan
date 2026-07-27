@@ -361,10 +361,52 @@ def _reclaim_stale_runtime(
     if projection.name != str(policy.get("plane") or ""):
         return {"plane": projection.name, "status": "not-required"}
     key = _resolve_key(projection, key_dir)
+    script = _remote_reclaim_script(projection=projection, policy=policy)
+    result = subprocess.run(
+        [
+            "ssh",
+            "-i",
+            str(key),
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            f"{projection.account}@{host}",
+            "python3 -",
+        ],
+        input=script,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise PrevalidationError(
+            "scoped stale runtime reclaim failed: "
+            f"{result.stderr.strip() or result.stdout.strip()}"
+        )
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise PrevalidationError("stale runtime reclaim returned invalid JSON") from error
+    required = int(
+        ((policy.get("minimumHostResources") or {}).get("postReclaimContainerFreeBytes"))
+        or 0
+    )
+    if required and int(report.get("containerFreeBytes") or 0) < required:
+        raise PrevalidationError(
+            "container free bytes remain insufficient after scoped reclaim: "
+            f"{report.get('containerFreeBytes')} < {required}"
+        )
+    return report
+
+
+def _remote_reclaim_script(
+    *, projection: PlaneProjection, policy: dict[str, Any]
+) -> str:
     encoded_policy = base64.b64encode(
         json.dumps(policy, separators=(",", ":"), sort_keys=True).encode("utf-8")
     ).decode("ascii")
-    script = f'''
+    return f'''
 import base64
 import json
 import os
@@ -374,7 +416,13 @@ import subprocess
 policy = json.loads(base64.b64decode("{encoded_policy}").decode("utf-8"))
 
 def run(argv):
-    return subprocess.run(argv, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    return subprocess.run(
+        argv,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        check=False,
+    )
 
 listed = run(["podman", "ps", "-a", "--format", "json"])
 if listed.returncode != 0:
@@ -412,42 +460,6 @@ print(json.dumps({{
     "imagePrune": prune.stdout.strip(),
 }}))
 '''
-    result = subprocess.run(
-        [
-            "ssh",
-            "-i",
-            str(key),
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            f"{projection.account}@{host}",
-            "python3 -",
-        ],
-        input=script,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise PrevalidationError(
-            "scoped stale runtime reclaim failed: "
-            f"{result.stderr.strip() or result.stdout.strip()}"
-        )
-    try:
-        report = json.loads(result.stdout)
-    except json.JSONDecodeError as error:
-        raise PrevalidationError("stale runtime reclaim returned invalid JSON") from error
-    required = int(
-        ((policy.get("minimumHostResources") or {}).get("postReclaimContainerFreeBytes"))
-        or 0
-    )
-    if required and int(report.get("containerFreeBytes") or 0) < required:
-        raise PrevalidationError(
-            "container free bytes remain insufficient after scoped reclaim: "
-            f"{report.get('containerFreeBytes')} < {required}"
-        )
-    return report
 
 
 def _run(argv: list[str], *, env: dict[str, str] | None = None) -> dict[str, Any]:
