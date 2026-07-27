@@ -189,6 +189,11 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: 设置 job 隔离 Docker 配置
+        run: |
+          docker_config="${RUNNER_TEMP}/quwoquan-service-pipeline/${GITHUB_RUN_ID}/${{ matrix.service }}/docker-config"
+          mkdir -p "$docker_config"
+          echo "DOCKER_CONFIG=${docker_config}" >> "$GITHUB_ENV"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           clean: false
@@ -268,6 +273,11 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: 设置 release artifact 隔离 Docker 配置
+        run: |
+          docker_config="${RUNNER_TEMP}/quwoquan-service-pipeline/${GITHUB_RUN_ID}/release-artifact/docker-config"
+          mkdir -p "$docker_config"
+          echo "DOCKER_CONFIG=${docker_config}" >> "$GITHUB_ENV"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           clean: false

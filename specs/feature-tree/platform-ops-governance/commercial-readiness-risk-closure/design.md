@@ -59,8 +59,9 @@
   - Actions cache 不是发布输入：PR 只读默认分支的依赖缓存，不得写入按 PR ref 隔离的副本；历史或未来遗留的 PR merge-ref 缓存在 PR 关闭时按精确 ref 自动删除；Service Pipeline 继续审计成功运行中的意外 Build Record。
   - main 只触发 OCI 制品生产，不自动启动正式 rollout；正式 rollout 必须由人工 dispatch 绑定成功 main Service Pipeline run，且默认 dry-run。第一方 prevalidate 继续只经 stackctl deploy mode=prevalidate 执行。
   - SSH 管理 endpoint 只在 `access-isolation.yaml.management` 声明；`runtime.yaml` 及其 App package 投影只含 canonical HTTPS/WSS public base，禁止携带管理 IP。
-  - 主线 Service Pipeline 固定使用仓库注册的 `self-hosted/macOS/ARM64` runner；Go builder 基镜像固定为多架构 OCI index digest，以 `BUILDPLATFORM` 原生执行工具链并显式向 `TARGETOS/TARGETARCH` 交叉编译，QEMU 只执行 linux/amd64 最终运行层装配，避免模拟 Go runtime 的不稳定性。GitHub-hosted 预算不可用不得改变 GHCR digest、SBOM、provenance 或 manifest 契约；每个 Go job 在 runner 启动后的 step 使用 `RUNNER_TEMP` 设置可变 cache，禁止在 job-level `env` 引用尚不可用的 `runner` context，checkout 不清理未受版本控制的运行输出。
+  - 主线 Service Pipeline 固定使用仓库注册的 `self-hosted/macOS/ARM64` runner；Go builder 基镜像固定为多架构 OCI index digest，以 `BUILDPLATFORM` 原生执行工具链并显式向 `TARGETOS/TARGETARCH` 交叉编译，QEMU 只执行 linux/amd64 最终运行层装配，避免模拟 Go runtime 的不稳定性。GitHub-hosted 预算不可用不得改变 GHCR digest、SBOM、provenance 或 manifest 契约；每个 Go job 在 runner 启动后的 step 使用 `RUNNER_TEMP` 设置可变 cache，禁止在 job-level `env` 引用尚不可用的 `runner` context，checkout 不清理未受版本控制的运行输出。Delivery Gate 校验受控宿主 Python 版本后，为 Service 与 Data job 分别在 `RUNNER_TEMP` 创建隔离 venv，避免 macOS `setup-python` 子安装器回落到不可写的 `/Users/runner` 或改写系统 framework，也不保留长期工具缓存。
   - Prod runtime 基镜像固定为仍受支持的 Alpine 3.22 digest，依赖安装必须保留包索引签名校验；不得以 `--allow-untrusted` 绕过供应链失败。
+  - Recommendation 使用固定 digest 的官方 Python 3.11 slim-bookworm 多架构索引；Dockerfile 已显式安装唯一缺失的 `libgomp1`，不需要携带完整 Python 开发基镜像及其 236 MB 单层。
 - 理由：在 Provider、SFU、真实数据和公网入口尚未就绪时，仍需验证第一方容器可部署性，但该结果不能被误用为生产准出。
 - 被否决方案：使用 `latest`、远端临时构建、旧容器、裸 IP public base，或把容器启动成功写成正式发布成功。
 - 约束与影响如下。

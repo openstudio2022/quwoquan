@@ -104,14 +104,13 @@ jobs:
         uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260
       - name: 安装 kustomize
         run: bash quwoquan_ops/cli/shared/install_kustomize.sh
-      - name: 设置 Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        env:
-          # self-hosted runner 的默认 tool-cache 指向不可写的 /Users/runner；
-          # 使用 job 临时目录，既不污染宿主机也不形成长期 Actions 缓存。
-          RUNNER_TOOL_CACHE: ${{ runner.temp }}/python-toolcache
-        with:
-          python-version: '3.12'
+      - name: 设置 job 临时 Python venv
+        run: |
+          python_bin="$(command -v python3)"
+          "$python_bin" -c 'import sys; assert (3, 12) <= sys.version_info[:2] < (3, 14), sys.version'
+          venv_root="${RUNNER_TEMP}/quwoquan-delivery-gate/${GITHUB_RUN_ID}/service-python"
+          "$python_bin" -m venv "$venv_root"
+          echo "$venv_root/bin" >> "$GITHUB_PATH"
       - name: 安装 Python 依赖 (recommendation-service)
         run: |
           python3 -m pip install -r quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/requirements.txt
@@ -320,12 +319,13 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - name: 设置 Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: '3.12'
+      - name: 设置 job 临时 Python venv
+        run: |
+          venv_root="${RUNNER_TEMP}/quwoquan-delivery-gate/${GITHUB_RUN_ID}/data-python"
+          python3 -m venv "$venv_root"
+          echo "$venv_root/bin" >> "$GITHUB_PATH"
       - name: 安装 Data 依赖
-        run: pip install -r quwoquan_data/requirements.txt
+        run: python3 -m pip install -r quwoquan_data/requirements.txt
       - name: Gate (quwoquan_data)
         run: bash quwoquan_ops/gate/gate_repo.sh --scope data
       - id: finish

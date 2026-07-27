@@ -30,8 +30,15 @@ def test_delivery_gate_bootstrap_uses_verified_sdk_without_actions_toolchain_cac
     assert "flutter pub get --enforce-lockfile" in workflow
     assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" in workflow
     assert "QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy" in workflow
-    assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in workflow
-    assert "RUNNER_TOOL_CACHE: ${{ runner.temp }}/python-toolcache" in workflow
+    assert "actions/setup-python@" not in workflow
+    assert 'venv_root="${RUNNER_TEMP}/quwoquan-delivery-gate/${GITHUB_RUN_ID}/service-python"' in workflow
+    assert 'venv_root="${RUNNER_TEMP}/quwoquan-delivery-gate/${GITHUB_RUN_ID}/data-python"' in workflow
+    assert 'echo "$venv_root/bin" >> "$GITHUB_PATH"' in workflow
+    service_job = workflow.split("  quwoquan_service:", 1)[1].split(
+        "  search_contract_smoke:", 1
+    )[0]
+    assert 'python_bin="$(command -v python3)"' in service_job
+    assert "(3, 12) <= sys.version_info[:2] < (3, 14)" in service_job
     assert "python3 -m pip install -r quwoquan_service/services/recommendation-service" in workflow
 
 

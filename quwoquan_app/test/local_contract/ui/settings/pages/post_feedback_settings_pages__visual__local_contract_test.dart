@@ -30,7 +30,8 @@ void main() {
 
   testWidgets('我的举报浅色 iOS 页面视觉基线', (tester) async {
     await _setPhoneSurface(tester);
-    final now = DateTime.utc(2026, 7, 20);
+    // 固定为跨年历史日期，避免测试运行日跨过相对时间阈值后污染 golden。
+    final now = DateTime.utc(2024, 7, 20);
     final query = AlphaContentReportQueryAdapter(<ContentMyReportItem>[
       ContentMyReportItem(
         id: 'report-1',
