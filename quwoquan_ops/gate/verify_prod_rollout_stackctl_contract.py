@@ -120,8 +120,9 @@ def main() -> int:
         "version: v0.35.0",
         "cache-binary: false",
         "clean: false",
-        "${{ runner.temp }}/quwoquan-service-pipeline/${{ github.run_id }}/go-build",
-        "${{ runner.temp }}/quwoquan-service-pipeline/${{ github.run_id }}/go-mod",
+        'cache_root="${RUNNER_TEMP}/quwoquan-service-pipeline/${GITHUB_RUN_ID}"',
+        'echo "GOCACHE=${cache_root}/go-build" >> "$GITHUB_ENV"',
+        'echo "GOMODCACHE=${cache_root}/go-mod" >> "$GITHUB_ENV"',
     ):
         if token not in pipeline_text:
             issues.append(

@@ -29,7 +29,7 @@ env:
   REGISTRY: ${{ secrets.DOCKER_REGISTRY || 'ghcr.io' }}
   IMAGE_PREFIX: ${{ github.repository }}
   QWQ_OUTPUT_ROOT: .qwq_output
-  # Go cache is intentionally assigned per job below under runner.temp. Never
+  # Go cache is intentionally assigned per job below under RUNNER_TEMP. Never
   # place read-only Go module files inside github.workspace: checkout clean
   # would make one self-hosted matrix job poison another job's workspace.
   # docker/build-push-action otherwise uploads one .dockerbuild Actions Artifact
@@ -83,9 +83,6 @@ jobs:
     defaults:
       run:
         working-directory: quwoquan_service
-    env:
-      GOCACHE: ${{ runner.temp }}/quwoquan-service-pipeline/${{ github.run_id }}/go-build
-      GOMODCACHE: ${{ runner.temp }}/quwoquan-service-pipeline/${{ github.run_id }}/go-mod
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -93,6 +90,12 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: 设置 job 隔离 Go 缓存
+        run: |
+          cache_root="${RUNNER_TEMP}/quwoquan-service-pipeline/${GITHUB_RUN_ID}"
+          echo "GOCACHE=${cache_root}/go-build" >> "$GITHUB_ENV"
+          echo "GOMODCACHE=${cache_root}/go-mod" >> "$GITHUB_ENV"
 
       - name: 设置 Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
