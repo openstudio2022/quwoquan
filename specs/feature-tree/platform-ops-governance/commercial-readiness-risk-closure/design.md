@@ -68,6 +68,7 @@
   - 隔离数据使用重新摘要的不可提升配置投影和独立随机认证材料。unit 不得继承正式 credentials。
   - ReleaseManifest 配置包和镜像均以 GHCR digest 消费。Actions Artifact 不是成功 job 间传递或正式发布证据。
   - 旧运行面回收只允许匹配声明前缀且处于 `Created/Exited` 的容器和未使用镜像。禁止删除任何 volume 或恢复容器。
+  - prod-hosted 当前系统 Python 3.6 是远端预检脚本的最低运行基线；inline 脚本使用 `universal_newlines` 等兼容接口，宿主侧编排可继续使用受控本机 Python。
   - 报告必须并列输出 container runtime、Provider readiness 与 release eligibility。后两者在完整生产证据前固定为 `GATE_BLOCK`。
 - 制品生命周期约束如下。
   - Actions Artifact 只可保存有明确保留期的失败诊断。路径只能包含需要复验的 `summary.json`、`report.json` 或失败日志。

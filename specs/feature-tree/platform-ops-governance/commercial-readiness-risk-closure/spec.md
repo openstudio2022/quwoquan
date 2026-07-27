@@ -190,6 +190,7 @@
 - WHEN stackctl 在唯一 prevalidate namespace 执行 first-party scope。
 - THEN host 资源/端口、隔离空数据、integration image-only、service/edge systemd 和容器 digest 均可机读复验。
 - THEN 受限单机的当前可用空间与可回收空间分别报告；只可删除声明匹配且未运行的旧容器、清理未使用镜像，禁止删除 volume，并在任何镜像传输前复验回收后的实际空间。
+- THEN 受控回收与巡检的远端 inline Python 必须兼容当前 prod-hosted 系统 Python 3.6；不得使用只在更新解释器中存在的 subprocess 参数导致镜像传输前误阻断。
 - THEN 容器进程存活与 Provider readiness 分开判定；SLS 等被排除能力可使对应服务 readiness 保持阻断，但不得伪装为容器未部署或正式健康。
 - THEN 报告分别给出容器部署与正式发布资格；不写 ledger/receipt，正式发布仍为 `GATE_BLOCK`。
 

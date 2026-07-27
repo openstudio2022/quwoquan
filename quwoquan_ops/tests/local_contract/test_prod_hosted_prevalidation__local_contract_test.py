@@ -168,6 +168,17 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             spec["minimumHostResources"]["postReclaimContainerFreeBytes"],
         )
 
+    def test_remote_reclaim_script_supports_host_python_3_6(self) -> None:
+        spec, projections = prevalidate.load_projection()
+        script = prevalidate._remote_reclaim_script(
+            projection=projections["service"],
+            policy=spec["staleRuntimeReclaimPolicy"],
+        )
+        compile(script, "<prod-hosted-reclaim>", "exec")
+        self.assertIn("universal_newlines=True", script)
+        self.assertNotIn("text=True", script)
+        self.assertNotIn("capture_output=True", script)
+
     def test_oci_release_artifact_is_materialized_by_digest_only(self) -> None:
         digest = "d" * 64
         expected = Path("/tmp/release-artifacts")
