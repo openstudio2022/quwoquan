@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import yaml
+
 from quwoquan_ops.gate import verify_prod_rollout_stackctl_contract as gate
 
 
@@ -16,9 +18,12 @@ def test_mainline_image_build_uses_governed_context_and_base_images() -> None:
 
     assert "context: quwoquan_service" in workflow
     assert "id: base_images" in workflow
-    assert "GO_BASE_IMAGE=${{ steps.base_images.outputs.go_base_image }}" in workflow
-    assert "ALPINE_BASE_IMAGE=${{ steps.base_images.outputs.alpine_base_image }}" in workflow
-    assert "PYTHON_BASE_IMAGE=${{ steps.base_images.outputs.python_base_image }}" in workflow
+    assert "GO_BASE_IMAGE: ${{ steps.base_images.outputs.go_base_image }}" in workflow
+    assert "ALPINE_BASE_IMAGE: ${{ steps.base_images.outputs.alpine_base_image }}" in workflow
+    assert "PYTHON_BASE_IMAGE: ${{ steps.base_images.outputs.python_base_image }}" in workflow
+    assert '--build-arg "GO_BASE_IMAGE=$GO_BASE_IMAGE"' in workflow
+    assert '--build-arg "ALPINE_BASE_IMAGE=$ALPINE_BASE_IMAGE"' in workflow
+    assert '--build-arg "PYTHON_BASE_IMAGE=$PYTHON_BASE_IMAGE"' in workflow
 
 
 def test_prod_hosted_build_images_match_their_governed_repositories() -> None:
@@ -72,6 +77,51 @@ def test_mainline_image_build_does_not_create_unbounded_actions_storage() -> Non
     assert "cache-from: type=gha" not in workflow
     assert "cache-to: type=gha" not in workflow
     assert gate.main() == 0
+
+
+def test_mainline_image_build_retries_only_transient_ghcr_oauth_eof() -> None:
+    workflow = (ROOT / ".github/workflows/service_pipeline.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "登录镜像仓库（重试瞬时网络失败）" in workflow
+    assert workflow.count("for attempt in 1 2 3; do") >= 2
+    assert "failed to fetch oauth token:.*EOF" in workflow
+    assert "https://ghcr.io/(token|v2/).*EOF" in workflow
+    assert "--attest type=sbom" in workflow
+    assert "--attest type=provenance,mode=max" in workflow
+    assert 'docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25' in workflow
+
+
+def test_mainline_release_delivery_uses_bounded_same_input_retries() -> None:
+    workflow = (ROOT / ".github/workflows/service_pipeline.yml").read_text(
+        encoding="utf-8"
+    )
+    document = yaml.safe_load(workflow)
+    jobs = document["jobs"]
+    image_job = jobs["build-release-images"]
+    release_steps = {
+        step.get("id"): step
+        for step in jobs["validate-deploy"]["steps"]
+        if step.get("id")
+    }
+
+    assert image_job["strategy"]["fail-fast"] is False
+    for attempt in (1, 2, 3):
+        release_login = release_steps[f"release_registry_login_attempt_{attempt}"]
+        assert release_login["uses"].startswith("docker/login-action@")
+        release = release_steps[f"release_bundle_attempt_{attempt}"]
+        assert release["uses"].startswith("docker/build-push-action@")
+        assert release["with"] == release_steps["release_bundle_attempt_1"]["with"]
+
+    assert release_steps["release_registry_login_attempt_1"]["continue-on-error"] is True
+    assert release_steps["release_registry_login_attempt_2"]["continue-on-error"] is True
+    assert release_steps["release_bundle_attempt_1"]["continue-on-error"] is True
+    assert release_steps["release_bundle_attempt_2"]["continue-on-error"] is True
+    assert workflow.count("run: sleep 5") == 2
+    assert workflow.count("run: sleep 15") == 2
+    assert "release artifact push failed after 3 bounded attempts" in workflow
+    assert ":latest" not in workflow
 
 
 def test_mainline_pipeline_uses_controlled_self_hosted_amd64_builder() -> None:

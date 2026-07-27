@@ -10,6 +10,7 @@ from unittest import mock
 from quwoquan_ops.cli.prod import collect_mainline_image_descriptors as collector
 from quwoquan_ops.cli.prod import fetch_mainline_release_artifact as fetcher
 from quwoquan_ops.cli.prod import load_prod_plane_images as image_loader
+from quwoquan_ops.cli.prod import registry_transport
 
 
 class MainlineReleaseOCITransportContractTest(unittest.TestCase):
@@ -18,6 +19,24 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
     spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-003
     spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-008
     """
+
+    def test_registry_transport_retries_same_command_with_bounded_backoff(self) -> None:
+        command = mock.Mock(
+            side_effect=[
+                subprocess.CompletedProcess(["docker"], 1, stdout="", stderr="EOF"),
+                subprocess.CompletedProcess(["docker"], 1, stdout="", stderr="EOF"),
+                subprocess.CompletedProcess(["docker"], 0, stdout="ok", stderr=""),
+            ]
+        )
+        with mock.patch.object(registry_transport.time, "sleep") as sleep_mock:
+            result = registry_transport.run_with_bounded_retry(command)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(command.call_count, 3)
+        self.assertEqual(
+            sleep_mock.call_args_list,
+            [mock.call(5), mock.call(15)],
+        )
 
     def test_collector_resolves_ghcr_tag_to_digest_descriptor(self) -> None:
         manifest = {

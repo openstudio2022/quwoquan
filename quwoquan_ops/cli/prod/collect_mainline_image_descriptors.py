@@ -13,6 +13,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from quwoquan_ops.cli.prod.registry_transport import run_with_bounded_retry
+
 
 DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
 
@@ -32,11 +34,14 @@ def load_manifest(path: Path) -> dict[str, Any]:
 
 
 def resolve_registry_digest(ref: str) -> str:
-    result = subprocess.run(
-        ["docker", "buildx", "imagetools", "inspect", ref],
-        text=True,
-        capture_output=True,
-        check=False,
+    argv = ["docker", "buildx", "imagetools", "inspect", ref]
+    result = run_with_bounded_retry(
+        lambda: subprocess.run(
+            argv,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
     )
     if result.returncode != 0:
         raise RuntimeError(
