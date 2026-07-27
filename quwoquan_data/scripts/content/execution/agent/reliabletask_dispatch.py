@@ -20,7 +20,7 @@ from core.data_issue import (
 from content.execution.context import ExecutionContext
 from content.execution.queue.core import _load_jobs
 from content.execution.queue.model import QueueJob
-from content.execution.queue.runtime import record_reliabletask_failure
+from content.execution.queue.runtime import DISCARDED_ISSUE_CODES, record_reliabletask_failure
 from content.execution.reliabletask_jobs import uses_reliabletask
 
 
@@ -39,6 +39,7 @@ class ReliableTaskDispatchResult:
     attempted_count: int
     completed_count: int
     issues: tuple[DataIssue, ...] = ()
+    discarded: tuple[DataIssue, ...] = ()
 
     @property
     def can_continue(self) -> bool:
@@ -55,6 +56,36 @@ def _failure_recovery(queue_stage: QueueJobStage) -> DataRecoveryAction:
         if queue_stage is QueueJobStage.AUTHOR
         else DataRecoveryAction.STOP
     )
+
+
+_TERMINAL_JOB_STATES = frozenset({QueueJobState.BLOCKED, QueueJobState.DEAD})
+
+
+def _succeeded_count(execution_id: str, queue_stage: QueueJobStage) -> int:
+    """跨轮次统计本阶段累计达标作业数；单轮 fleet receipt 不足以表达恢复后的进度。"""
+    return sum(
+        1
+        for job in _declared_jobs(execution_id, queue_stage)
+        if job.state is QueueJobState.SUCCEEDED
+    )
+
+
+def _active_jobs(
+    execution_id: str,
+    queue_stage: QueueJobStage,
+) -> tuple[QueueJob, ...]:
+    """仍可被下一轮 fleet 继续推进的作业；终态丢弃作业不在其中。"""
+    return tuple(
+        job
+        for job in _remaining_jobs(execution_id, queue_stage)
+        if job.state not in _TERMINAL_JOB_STATES
+    )
+
+
+def _quota_reached(execution_id: str, queue_stage: QueueJobStage) -> bool:
+    from content.execution.spec_contract import approved_quota
+
+    return _succeeded_count(execution_id, queue_stage) >= approved_quota(execution_id)
 
 
 def _remaining_jobs(
@@ -174,25 +205,41 @@ def _dispatch_fleet(
         queue_stage,
         outcomes=report.outcomes,
     )
-    remaining = _remaining_jobs(ctx.execution_id, queue_stage)
-    terminal = any(
-        job.state in {QueueJobState.BLOCKED, QueueJobState.DEAD} for job in remaining
-    )
+    # 对象级质量失败由过采候选池吸收；批次级问题（receipt 与声明作业不一致、
+    # fleet 不可用）不属于任何对象，永远不可被配额吸收。未知问题码按批次级处理，
+    # 宁可阻断也不静默放行。
+    discarded = tuple(issue for issue in issues if issue.code in DISCARDED_ISSUE_CODES)
+    blocking = tuple(issue for issue in issues if issue.code not in DISCARDED_ISSUE_CODES)
+    active = _active_jobs(ctx.execution_id, queue_stage)
+    if blocking:
+        status = ReliableTaskDispatchStatus.BLOCKED
+    elif active:
+        status = ReliableTaskDispatchStatus.WAITING
+    elif _quota_reached(ctx.execution_id, queue_stage):
+        status = ReliableTaskDispatchStatus.COMPLETED
+    else:
+        # 候选池已全部终态但达标数不足配额：过采系数偏低或区域供给不足，
+        # 必须让运行者看见，而不是继续空转。
+        from content.execution.spec_contract import approved_quota
+
+        status = ReliableTaskDispatchStatus.BLOCKED
+        blocking = (
+            _contract_issue(
+                stage,
+                f"候选池耗尽但未达准出配额："
+                f"达标 {_succeeded_count(ctx.execution_id, queue_stage)}"
+                f"/{approved_quota(ctx.execution_id)}，"
+                f"丢弃 {len(discarded)}；需提高 oversampleFactor 或扩充区域实体供给",
+            ),
+        )
     return ReliableTaskDispatchResult(
         stage=stage,
         queue_stage=queue_stage,
-        status=(
-            ReliableTaskDispatchStatus.BLOCKED
-            if terminal or issues
-            else ReliableTaskDispatchStatus.COMPLETED
-            if not remaining
-            else ReliableTaskDispatchStatus.WAITING
-        ),
+        status=status,
         attempted_count=sum(int(getattr(outcome, "attempts", 0)) for outcome in report.outcomes),
-        completed_count=sum(
-            1 for outcome in report.outcomes if getattr(outcome, "status", "") == "succeeded"
-        ),
-        issues=issues,
+        completed_count=_succeeded_count(ctx.execution_id, queue_stage),
+        issues=blocking,
+        discarded=discarded,
     )
 
 
@@ -207,7 +254,13 @@ def dispatch_reliabletask_checkpoint(
     if queue_stage is None:
         return None
     declared = _declared_jobs(ctx.execution_id, queue_stage)
-    if not declared or all(job.state is QueueJobState.SUCCEEDED for job in declared):
+    if not declared:
+        return None
+    # 已达配额且无可推进作业时本 checkpoint 即完成：剩余作业都是终态丢弃对象，
+    # 再次派发只会让批次重新撞上同一批不达标对象。
+    if not _active_jobs(ctx.execution_id, queue_stage) and _quota_reached(
+        ctx.execution_id, queue_stage
+    ):
         return None
     return _dispatch_fleet(ctx, stage, queue_stage)
 

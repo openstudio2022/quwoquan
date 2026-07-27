@@ -440,7 +440,7 @@ def _with_failure_fingerprint(
 
 # 质量类失败直接丢弃：批次靠过采候选池补足配额，重试同一个不达标对象只会
 # 空耗 worker。基础设施类失败（启动、超时）仍消耗 queueMaxAttempts 重试预算。
-_DISCARDED_ISSUE_CODES = frozenset(
+DISCARDED_ISSUE_CODES = frozenset(
     {
         DataIssueCode.QUEUE_EXECUTION_FAILED,
         DataIssueCode.QUEUE_RESULT_ENVELOPE_INVALID,
@@ -459,7 +459,7 @@ def _apply_failure(
     """Apply one typed failure transition and calculate retry/dead state."""
     now = _clock_now()
     startup_count = job.startup_failure_count + (1 if startup_failure else 0)
-    discarded = not startup_failure and issue.code in _DISCARDED_ISSUE_CODES
+    discarded = not startup_failure and issue.code in DISCARDED_ISSUE_CODES
     candidate = replace(
         job,
         lease=QueueLease(),

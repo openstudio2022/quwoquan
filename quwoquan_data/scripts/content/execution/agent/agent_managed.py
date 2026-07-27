@@ -119,6 +119,7 @@ def run_managed_controller(ctx: ExecutionContext) -> int:
                     f"ReliableTask {dispatch.queue_stage.value}: "
                     f"attempted={dispatch.attempted_count}, "
                     f"completed={dispatch.completed_count}, "
+                    f"discarded={len(dispatch.discarded)}, "
                     f"status={dispatch.status.value}"
                 )
                 if dispatch.status is ReliableTaskDispatchStatus.COMPLETED:

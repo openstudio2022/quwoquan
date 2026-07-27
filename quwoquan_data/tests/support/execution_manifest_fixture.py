@@ -45,6 +45,8 @@ class ExecutionFixtureBuilder:
         default_factory=lambda: (_DEFAULT_TARGET,)
     )
     retry_of: str | None = None
+    # 过采场景：候选池大于准出配额。省略时候选池与配额相同（不过采）。
+    approved_quota: int | None = None
 
     def _normalized_targets(self) -> list[dict[str, object]]:
         identity = parse_execution_id(self.execution_id)
@@ -113,6 +115,7 @@ class ExecutionFixtureBuilder:
         }[identity.content_type]
         quotas[quota_key] = 1
         targets = self._normalized_targets()
+        quota = self.approved_quota if self.approved_quota is not None else len(targets)
         entity_types = tuple(
             dict.fromkeys(str(item["entityType"]) for item in targets)
         )
@@ -147,7 +150,7 @@ class ExecutionFixtureBuilder:
                 "quotas": quotas,
             },
             "acceptance": {
-                "minEntities": len(targets),
+                "minEntities": quota,
                 "minPostsPerEntity": 1,
                 "requiredAngles": [],
             },
@@ -155,9 +158,8 @@ class ExecutionFixtureBuilder:
                 "selectionPolicy": "frozen",
                 "targetEntityCount": len(targets),
                 "targetObjectCount": len(targets),
-                # 合约夹具不做过采：候选池与准出配额相同。
-                "approvedQuota": len(targets),
-                "oversampleFactor": 1.0,
+                "approvedQuota": quota,
+                "oversampleFactor": len(targets) / quota,
                 "executionBranch": "dev1.0",
                 "gitCommitSha": "local-contract-fixture",
             },

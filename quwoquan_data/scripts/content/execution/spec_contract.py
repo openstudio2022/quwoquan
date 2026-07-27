@@ -19,6 +19,23 @@ from content.source.contracts import QualifiedHomepageSource
 EXECUTION_SPEC_SCHEMA = "quwoquan.content.execution_spec"
 
 
+def approved_quota(execution_id: str) -> int:
+    """本次 execution 的准出配额：候选池过采后必须交付的达标对象数。
+
+    批次准出、checkpoint 推进与 fleet dispatch 共用这一个读取口，
+    避免「配额」在各层出现第二真相源。
+    """
+    from content.execution import store
+
+    policy = store.load_spec(execution_id).get("executionPolicy") or {}
+    value = policy.get("approvedQuota")
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError(
+            f"execution {execution_id} executionPolicy.approvedQuota is required"
+        )
+    return value
+
+
 def _object(payload: Mapping[str, Any], field: str) -> Mapping[str, Any]:
     value = payload.get(field)
     if not isinstance(value, Mapping):
