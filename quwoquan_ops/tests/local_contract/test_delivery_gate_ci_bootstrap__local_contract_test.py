@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import io
+import json
 import re
+import urllib.error
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -194,3 +198,50 @@ def test_flutter_release_resolution_honors_repository_pinned_version() -> None:
         "sha256": "b" * 64,
         "version": "3.44.3",
     }
+
+
+def test_flutter_release_manifest_download_retries_transient_ssl_eof() -> None:
+    setup = _load_setup_module()
+    payload = {"current_release": {"stable": "locked"}, "releases": []}
+    response = io.BytesIO(json.dumps(payload).encode("utf-8"))
+    transient = urllib.error.URLError("SSL: UNEXPECTED_EOF_WHILE_READING")
+
+    with (
+        mock.patch.object(
+            setup.urllib.request,
+            "urlopen",
+            side_effect=[transient, transient, response],
+        ) as opened,
+        mock.patch.object(setup.time, "sleep") as slept,
+    ):
+        downloaded = setup._download_json(
+            "https://storage.googleapis.com/flutter_infra_release/releases/releases_macos.json"
+        )
+
+    assert downloaded == payload
+    assert opened.call_count == 3
+    assert [item.args[0] for item in slept.call_args_list] == [5, 15]
+
+
+def test_flutter_release_manifest_download_does_not_retry_not_found() -> None:
+    setup = _load_setup_module()
+    not_found = urllib.error.HTTPError(
+        "https://storage.googleapis.com/flutter_infra_release/releases/missing.json",
+        404,
+        "not found",
+        {},
+        None,
+    )
+    with (
+        mock.patch.object(setup.urllib.request, "urlopen", side_effect=not_found) as opened,
+        mock.patch.object(setup.time, "sleep") as slept,
+    ):
+        try:
+            setup._download_json(not_found.url)
+        except urllib.error.HTTPError as error:
+            assert error.code == 404
+        else:
+            raise AssertionError("404 must fail without retry")
+
+    assert opened.call_count == 1
+    slept.assert_not_called()

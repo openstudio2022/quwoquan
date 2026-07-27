@@ -11,6 +11,8 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
@@ -35,10 +37,31 @@ ARCH_NAMES = {
 }
 
 
-def _download_json(url: str) -> dict[str, Any]:
+def _download_json(url: str, *, max_attempts: int = 3) -> dict[str, Any]:
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be positive")
     request = urllib.request.Request(url, headers={"User-Agent": "quwoquan-ci/1"})
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as error:
+            if error.code not in {408, 429, 500, 502, 503, 504} or attempt >= max_attempts:
+                raise
+            failure: BaseException = error
+        except (urllib.error.URLError, TimeoutError, ConnectionError, json.JSONDecodeError) as error:
+            if attempt >= max_attempts:
+                raise
+            failure = error
+        wait_seconds = (5, 15)[min(attempt - 1, 1)]
+        print(
+            f"Flutter release manifest download failed transiently "
+            f"({type(failure).__name__}); retry {attempt}/{max_attempts - 1} "
+            f"after {wait_seconds}s",
+            file=sys.stderr,
+        )
+        time.sleep(wait_seconds)
+    raise RuntimeError("unreachable Flutter release manifest retry state")
 
 
 def select_current_release(
