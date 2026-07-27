@@ -119,6 +119,8 @@ def main() -> int:
         "cache-image: false",
         "version: v0.35.0",
         "cache-binary: false",
+        "恢复自托管 Go 缓存可清理权限",
+        'chmod -R u+w "$cache_dir"',
     ):
         if token not in pipeline_text:
             issues.append(
