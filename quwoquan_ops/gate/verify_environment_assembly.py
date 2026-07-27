@@ -84,7 +84,9 @@ def validate_service_build_image_contract() -> list[str]:
         ("PYTHON_BASE_IMAGE", "python_base_image"),
     ):
         if (
-            f"{image_variable}=${{{{ steps.base_images.outputs.{output} }}}}"
+            f"{image_variable}: ${{{{ steps.base_images.outputs.{output} }}}}"
+            not in service_pipeline
+            or f'--build-arg "{image_variable}=${image_variable}"'
             not in service_pipeline
         ):
             issues.append(

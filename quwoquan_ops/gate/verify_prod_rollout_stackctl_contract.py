@@ -109,9 +109,6 @@ def main() -> int:
         "/release-artifact:sha-${{ github.sha }}",
         'DOCKER_BUILD_RECORD_UPLOAD: "false"',
         "id: base_images",
-        "GO_BASE_IMAGE=${{ steps.base_images.outputs.go_base_image }}",
-        "ALPINE_BASE_IMAGE=${{ steps.base_images.outputs.alpine_base_image }}",
-        "PYTHON_BASE_IMAGE=${{ steps.base_images.outputs.python_base_image }}",
         "runs-on: [self-hosted, macOS, ARM64]",
         "docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130",
         "image: docker.io/tonistiigi/binfmt@sha256:b4c6a09270133b3c5b4dff94f83067df4dd27eced195fc6a1dbad102999e24dd",
@@ -127,6 +124,19 @@ def main() -> int:
         if token not in pipeline_text:
             issues.append(
                 f"{SERVICE_PIPELINE.relative_to(ROOT)} missing release provenance token: {token}"
+            )
+    for image_variable, output in (
+        ("GO_BASE_IMAGE", "go_base_image"),
+        ("ALPINE_BASE_IMAGE", "alpine_base_image"),
+        ("PYTHON_BASE_IMAGE", "python_base_image"),
+    ):
+        if (
+            f"{image_variable}: ${{{{ steps.base_images.outputs.{output} }}}}"
+            not in pipeline_text
+            or f'--build-arg "{image_variable}=${image_variable}"' not in pipeline_text
+        ):
+            issues.append(
+                f"{SERVICE_PIPELINE.relative_to(ROOT)} must pass governed {image_variable} to release image builds"
             )
     for forbidden in (
         "actions/upload-artifact@",

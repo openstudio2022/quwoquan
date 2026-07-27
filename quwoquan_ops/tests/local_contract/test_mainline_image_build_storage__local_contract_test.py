@@ -16,9 +16,12 @@ def test_mainline_image_build_uses_governed_context_and_base_images() -> None:
 
     assert "context: quwoquan_service" in workflow
     assert "id: base_images" in workflow
-    assert "GO_BASE_IMAGE=${{ steps.base_images.outputs.go_base_image }}" in workflow
-    assert "ALPINE_BASE_IMAGE=${{ steps.base_images.outputs.alpine_base_image }}" in workflow
-    assert "PYTHON_BASE_IMAGE=${{ steps.base_images.outputs.python_base_image }}" in workflow
+    assert "GO_BASE_IMAGE: ${{ steps.base_images.outputs.go_base_image }}" in workflow
+    assert "ALPINE_BASE_IMAGE: ${{ steps.base_images.outputs.alpine_base_image }}" in workflow
+    assert "PYTHON_BASE_IMAGE: ${{ steps.base_images.outputs.python_base_image }}" in workflow
+    assert '--build-arg "GO_BASE_IMAGE=$GO_BASE_IMAGE"' in workflow
+    assert '--build-arg "ALPINE_BASE_IMAGE=$ALPINE_BASE_IMAGE"' in workflow
+    assert '--build-arg "PYTHON_BASE_IMAGE=$PYTHON_BASE_IMAGE"' in workflow
 
 
 def test_prod_hosted_build_images_match_their_governed_repositories() -> None:
@@ -72,6 +75,20 @@ def test_mainline_image_build_does_not_create_unbounded_actions_storage() -> Non
     assert "cache-from: type=gha" not in workflow
     assert "cache-to: type=gha" not in workflow
     assert gate.main() == 0
+
+
+def test_mainline_image_build_retries_only_transient_ghcr_oauth_eof() -> None:
+    workflow = (ROOT / ".github/workflows/service_pipeline.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "登录镜像仓库（重试瞬时网络失败）" in workflow
+    assert workflow.count("for attempt in 1 2 3; do") == 2
+    assert "failed to fetch oauth token:.*EOF" in workflow
+    assert "https://ghcr.io/(token|v2/).*EOF" in workflow
+    assert "--attest type=sbom" in workflow
+    assert "--attest type=provenance,mode=max" in workflow
+    assert 'docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25' in workflow
 
 
 def test_mainline_pipeline_uses_controlled_self_hosted_amd64_builder() -> None:

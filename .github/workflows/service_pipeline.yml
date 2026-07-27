@@ -240,27 +240,59 @@ jobs:
         with:
           version: v0.35.0
           cache-binary: false
-      - name: 登录镜像仓库
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.DOCKER_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: 登录镜像仓库（重试瞬时网络失败）
+        env:
+          REGISTRY_PASSWORD: ${{ secrets.DOCKER_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          for attempt in 1 2 3; do
+            if printf '%s' "$REGISTRY_PASSWORD" | docker login "$REGISTRY" --username "$GITHUB_ACTOR" --password-stdin; then
+              exit 0
+            fi
+            if [[ "$attempt" == 3 ]]; then
+              echo "GHCR login failed after ${attempt} attempts" >&2
+              exit 1
+            fi
+            sleep "$((attempt * 5))"
+          done
       - id: image
-        name: 构建、生成 SBOM/provenance 并推送
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}:${{ needs.prepare-release.outputs.image_version }}
-          build-args: |
-            GO_BASE_IMAGE=${{ steps.base_images.outputs.go_base_image }}
-            ALPINE_BASE_IMAGE=${{ steps.base_images.outputs.alpine_base_image }}
-            PYTHON_BASE_IMAGE=${{ steps.base_images.outputs.python_base_image }}
-          sbom: true
-          provenance: mode=max
+        name: 构建、生成 SBOM/provenance 并推送（重试瞬时 GHCR OAuth EOF）
+        env:
+          BUILD_CONTEXT: ${{ matrix.context }}
+          BUILD_DOCKERFILE: ${{ matrix.dockerfile }}
+          IMAGE_TAG: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}:${{ needs.prepare-release.outputs.image_version }}
+          GO_BASE_IMAGE: ${{ steps.base_images.outputs.go_base_image }}
+          ALPINE_BASE_IMAGE: ${{ steps.base_images.outputs.alpine_base_image }}
+          PYTHON_BASE_IMAGE: ${{ steps.base_images.outputs.python_base_image }}
+        run: |
+          set -o pipefail
+          build_log="$(mktemp)"
+          for attempt in 1 2 3; do
+            set +e
+            docker buildx build \
+              --file "$BUILD_DOCKERFILE" \
+              --platform linux/amd64 \
+              --push \
+              --tag "$IMAGE_TAG" \
+              --build-arg "GO_BASE_IMAGE=$GO_BASE_IMAGE" \
+              --build-arg "ALPINE_BASE_IMAGE=$ALPINE_BASE_IMAGE" \
+              --build-arg "PYTHON_BASE_IMAGE=$PYTHON_BASE_IMAGE" \
+              --attest type=sbom \
+              --attest type=provenance,mode=max \
+              "$BUILD_CONTEXT" 2>&1 | tee "$build_log"
+            build_status="${PIPESTATUS[0]}"
+            set -e
+            if [[ "$build_status" == 0 ]]; then
+              exit 0
+            fi
+            if ! grep -Eq 'failed to fetch oauth token:.*EOF|https://ghcr.io/(token|v2/).*EOF' "$build_log"; then
+              exit "$build_status"
+            fi
+            if [[ "$attempt" == 3 ]]; then
+              echo "GHCR transient OAuth failure persisted after ${attempt} attempts" >&2
+              exit "$build_status"
+            fi
+            sleep "$((attempt * 5))"
+          done
 
   validate-deploy:
     name: 校验 Kustomize 部署
