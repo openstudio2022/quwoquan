@@ -107,8 +107,9 @@ jobs:
       - name: 设置 Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         env:
-          # self-hosted runner 的默认 tool-cache 指向不可写的 /Users/runner；
-          # 使用 job 临时目录，既不污染宿主机也不形成长期 Actions 缓存。
+          # self-hosted runner 的默认 AGENT_TOOLSDIRECTORY 指向不可写的 /Users/runner；
+          # setup-python 的 macOS 安装脚本优先读取该变量，因此两项必须共同投影到 job 临时目录。
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/python-toolcache
           RUNNER_TOOL_CACHE: ${{ runner.temp }}/python-toolcache
         with:
           python-version: '3.12'

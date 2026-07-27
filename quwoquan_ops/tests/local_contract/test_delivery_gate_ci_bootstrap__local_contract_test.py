@@ -31,6 +31,7 @@ def test_delivery_gate_bootstrap_uses_verified_sdk_without_actions_toolchain_cac
     assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" in workflow
     assert "QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy" in workflow
     assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in workflow
+    assert "AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/python-toolcache" in workflow
     assert "RUNNER_TOOL_CACHE: ${{ runner.temp }}/python-toolcache" in workflow
     assert "python3 -m pip install -r quwoquan_service/services/recommendation-service" in workflow
 
