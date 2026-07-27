@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -37,6 +38,30 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
             sleep_mock.call_args_list,
             [mock.call(5), mock.call(15)],
         )
+
+    def test_registry_transport_entrypoints_bootstrap_repo_package(self) -> None:
+        root = Path(__file__).resolve().parents[3]
+        for script_name in (
+            "collect_mainline_image_descriptors.py",
+            "fetch_mainline_release_artifact.py",
+            "load_prod_plane_images.py",
+        ):
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(root / "quwoquan_ops/cli/prod" / script_name),
+                    "--help",
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"{script_name}: {result.stdout}{result.stderr}",
+            )
 
     def test_collector_resolves_ghcr_tag_to_digest_descriptor(self) -> None:
         manifest = {

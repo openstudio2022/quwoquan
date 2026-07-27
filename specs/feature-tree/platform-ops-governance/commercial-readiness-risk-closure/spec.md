@@ -52,7 +52,7 @@
 - same-digest、Action pin、SBOM/provenance 和缺制品 fail-closed 必须由可执行门禁直接证明。
 - GHCR digest 是成功构建的唯一交付输入；CI 必须关闭自动 Docker build record 上传和未受控的 GHA layer cache，不能以成功 Actions Artifact 或无限增长缓存承担发布传递。
 - 主线 Service Pipeline 使用仓库已注册、在线且标签受控的 self-hosted macOS ARM64 runner。
-- GHCR 登录、digest 解析、不可变镜像拉取或同一不可变 tag 推送发生临时网络错误时，只允许对完全相同的输入做带退避的有限重试；单个服务不得取消其余矩阵证据，连续失败必须硬失败，禁止换 tag、重生清单或丢弃 SBOM/provenance。
+- 固定 digest 的 QEMU 安装镜像、GHCR 登录、digest 解析、不可变镜像拉取或同一不可变 tag 推送发生临时网络错误时，只允许对完全相同的输入做带退避的有限重试；单个服务不得取消其余矩阵证据，连续失败必须硬失败，禁止换镜像、换 tag、重生清单或丢弃 SBOM/provenance。
 - Go builder 必须以不可变多架构索引在原生 `BUILDPLATFORM` 运行并通过 `TARGETOS/TARGETARCH` 交叉编译；最终 linux/amd64 运行层才使用固定 Action 的 QEMU/Buildx，禁止用 QEMU 执行 Go 工具链，也不得因 GitHub-hosted 计费预算不可用而回退本地临时构建或放弃 attestation。
 - Prod 构建基镜像必须使用用途匹配的固定 digest；Recommendation 固定使用官方 Python 3.11 slim-bookworm 多架构索引，避免完整开发镜像放大传输与 ECS 磁盘占用。服务 Dockerfile 必须支持受控 runtime 的包管理器，镜像源签名异常时硬失败，禁止以 `--allow-untrusted` 伪造供应链通过。
 

@@ -230,7 +230,32 @@ jobs:
                   raise SystemExit(f"governed build image {key} must use sha256 digest")
               print(f"{output}={value}")
           PY
-      - name: 设置 linux/amd64 QEMU
+      - id: qemu_attempt_1
+        name: 设置 linux/amd64 QEMU（第 1 次）
+        continue-on-error: true
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+        with:
+          image: docker.io/tonistiigi/binfmt@sha256:b4c6a09270133b3c5b4dff94f83067df4dd27eced195fc6a1dbad102999e24dd
+          platforms: amd64
+          cache-image: false
+      - name: QEMU setup 退避（5 秒）
+        if: ${{ steps.qemu_attempt_1.outcome == 'failure' }}
+        run: sleep 5
+      - id: qemu_attempt_2
+        name: 设置 linux/amd64 QEMU（第 2 次）
+        if: ${{ steps.qemu_attempt_1.outcome == 'failure' }}
+        continue-on-error: true
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+        with:
+          image: docker.io/tonistiigi/binfmt@sha256:b4c6a09270133b3c5b4dff94f83067df4dd27eced195fc6a1dbad102999e24dd
+          platforms: amd64
+          cache-image: false
+      - name: QEMU setup 退避（15 秒）
+        if: ${{ steps.qemu_attempt_1.outcome == 'failure' && steps.qemu_attempt_2.outcome == 'failure' }}
+        run: sleep 15
+      - id: qemu_attempt_3
+        name: 设置 linux/amd64 QEMU（第 3 次）
+        if: ${{ steps.qemu_attempt_1.outcome == 'failure' && steps.qemu_attempt_2.outcome == 'failure' }}
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
         with:
           image: docker.io/tonistiigi/binfmt@sha256:b4c6a09270133b3c5b4dff94f83067df4dd27eced195fc6a1dbad102999e24dd
