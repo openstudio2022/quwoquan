@@ -163,6 +163,14 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
         self.assertTrue(reclaim["enabled"])
         self.assertFalse(reclaim["removeVolumes"])
         self.assertIn("quwoquan-data-recovery-mongodb", reclaim["preservedContainers"])
+        external = reclaim["externalBuildContainers"]
+        self.assertTrue(external["enabled"])
+        self.assertEqual(external["allowedStates"], ["storage"])
+        self.assertTrue(external["requirePidZero"])
+        self.assertGreaterEqual(external["minimumAgeSeconds"], 86400)
+        self.assertRegex("golang-working-container", external["namePattern"])
+        self.assertRegex("327ccb6c43b2-working-container-1", external["namePattern"])
+        self.assertNotRegex("quwoquan-data-recovery-mongodb", external["namePattern"])
         self.assertGreaterEqual(
             spec["minimumHostResources"]["containerEffectiveFreeBytes"],
             spec["minimumHostResources"]["postReclaimContainerFreeBytes"],
@@ -191,6 +199,12 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
         self.assertIn("while remaining:", script)
         self.assertIn('["podman", "rm", name]', script)
         self.assertIn("dependency-order retries", script)
+        self.assertIn('"ps", "--external", "-a", "--format", "json"', script)
+        self.assertIn('state not in external_states', script)
+        self.assertIn('pid != 0', script)
+        self.assertIn('now - created < minimum_age_seconds', script)
+        self.assertIn('external_name_pattern.fullmatch', script)
+        self.assertIn('["podman", "rm", container_id]', script)
         self.assertNotIn('["podman", "rm", *sorted(set(selected))]', script)
         self.assertNotIn('["podman", "rm", "-f"', script)
         self.assertNotIn("--volumes", script)

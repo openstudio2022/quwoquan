@@ -92,6 +92,7 @@ def load_projection() -> tuple[dict[str, Any], dict[str, PlaneProjection]]:
     if spec.get("capacityStrategy") != "constrained-single-host":
         raise PrevalidationError("prevalidation capacity strategy must be explicit")
     reclaim = spec.get("staleRuntimeReclaimPolicy") or {}
+    external_build = reclaim.get("externalBuildContainers") or {}
     if not (
         reclaim.get("enabled") is True
         and reclaim.get("plane") == "service"
@@ -103,6 +104,22 @@ def load_projection() -> tuple[dict[str, Any], dict[str, PlaneProjection]]:
         raise PrevalidationError(
             "prevalidation stale runtime reclaim must be scoped and volume-preserving"
         )
+    if not (
+        external_build.get("enabled") is True
+        and external_build.get("allowedStates") == ["storage"]
+        and external_build.get("requirePidZero") is True
+        and int(external_build.get("minimumAgeSeconds") or 0) >= 86400
+        and external_build.get("namePattern")
+    ):
+        raise PrevalidationError(
+            "prevalidation external build reclaim must be stale, stopped, and name-scoped"
+        )
+    try:
+        re.compile(str(external_build["namePattern"]))
+    except re.error as error:
+        raise PrevalidationError(
+            "prevalidation external build reclaim name pattern is invalid"
+        ) from error
     plane_specs = {
         str(item.get("plane")): item
         for item in (access.get("planes") or [])
@@ -411,7 +428,9 @@ import base64
 import json
 import os
 import pathlib
+import re
 import subprocess
+import time
 
 policy = json.loads(base64.b64decode("{encoded_policy}").decode("utf-8"))
 
@@ -466,6 +485,49 @@ while remaining:
             + details
         )
     remaining = next_remaining
+
+external_policy = policy.get("externalBuildContainers") or {{}}
+removed_external_build_containers = []
+if external_policy.get("enabled") is True:
+    external = run(["podman", "ps", "--external", "-a", "--format", "json"])
+    if external.returncode != 0:
+        raise SystemExit(external.stderr or external.stdout)
+    external_containers = json.loads(external.stdout)
+    external_states = {{
+        str(item).lower() for item in external_policy.get("allowedStates") or []
+    }}
+    external_name_pattern = re.compile(str(external_policy.get("namePattern") or ""))
+    minimum_age_seconds = int(external_policy.get("minimumAgeSeconds") or 0)
+    now = int(time.time())
+    selected_external = []
+    for item in external_containers:
+        names = item.get("Names") or []
+        if isinstance(names, str):
+            names = [names]
+        state = str(item.get("State") or "").lower()
+        container_id = str(item.get("Id") or item.get("ID") or "")
+        try:
+            created = int(item.get("Created") or 0)
+            pid = int(item.get("Pid") or 0)
+        except (TypeError, ValueError):
+            continue
+        if (
+            not container_id
+            or state not in external_states
+            or external_policy.get("requirePidZero") is not True
+            or pid != 0
+            or created <= 0
+            or now - created < minimum_age_seconds
+            or not names
+            or not all(external_name_pattern.fullmatch(str(name)) for name in names)
+        ):
+            continue
+        selected_external.append((container_id, sorted(str(name) for name in names)))
+    for container_id, names in selected_external:
+        removed = run(["podman", "rm", container_id])
+        if removed.returncode != 0:
+            raise SystemExit(removed.stderr or removed.stdout)
+        removed_external_build_containers.extend(names)
 prune = run(["podman", "image", "prune", "-a", "-f"])
 if prune.returncode != 0:
     raise SystemExit(prune.stderr or prune.stdout)
@@ -474,6 +536,7 @@ print(json.dumps({{
     "plane": "{projection.name}",
     "status": "completed",
     "removedContainers": sorted(removed_containers),
+    "removedExternalBuildContainers": sorted(removed_external_build_containers),
     "preservedContainers": sorted(preserved),
     "volumesRemoved": False,
     "containerFreeBytes": stat.f_bavail * stat.f_frsize,

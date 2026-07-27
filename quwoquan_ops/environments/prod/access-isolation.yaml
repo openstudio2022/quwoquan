@@ -63,6 +63,12 @@ prevalidation:
     containerNamePrefixes: [quwoquan-service-prod_]
     allowedStates: [created, exited]
     preservedContainers: [quwoquan-data-recovery-mongodb]
+    externalBuildContainers:
+      enabled: true
+      allowedStates: [storage]
+      requirePidZero: true
+      minimumAgeSeconds: 604800
+      namePattern: '^[A-Za-z0-9][A-Za-z0-9_.-]*-working-container(?:-[0-9]+)?$'
     pruneUnusedImages: true
     removeVolumes: false
   resourceLimits:
