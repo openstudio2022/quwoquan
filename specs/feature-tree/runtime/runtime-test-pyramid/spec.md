@@ -43,6 +43,7 @@
 - 已关闭验收至少有一个真实、职责匹配且可运行的 `spec_ref`；未闭合验收由同节点 OPEN 明确完成判定。
 - App、Service、Data、Ops 的 canonical 三层目录是唯一测试入口。
 - 运行报告从测试代码、执行结果、环境和制品摘要实时生成，不提交覆盖清单或证据索引。
+- 视觉基线的 fixture 必须与执行日期无关；会跨越相对时间阈值的当前日期不得写入 golden 输入。
 
 <a id="req-002"></a>
 ### REQ-002 禁止新增 T1-T4、L1-L4、contract-test 等第二套分层名称
@@ -67,4 +68,5 @@
 - THEN 节点 spec 不包含测试文件、命令、通过率或历史证据，测试代码以 `spec_ref` 直接关联稳定验收锚点。
 - THEN 每个已关闭验收都有真实测试或可执行治理门反向引用；OPEN 中的未完成验收不会被误报为通过。
 - THEN App、Service、Data、Ops 的 canonical 三层目录是唯一测试入口。
+- THEN golden fixture 使用固定、跨执行日期稳定的输入，不因相对时间阈值自动漂移。
 - THEN 动态报告能从当前代码与运行结果定位实际测试、环境和制品摘要，不读取 tracked inventory。
