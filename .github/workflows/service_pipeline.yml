@@ -281,7 +281,7 @@ jobs:
             sleep "$((attempt * 5))"
           done
       - id: image
-        name: 构建、生成 SBOM/provenance 并推送（重试瞬时 GHCR OAuth EOF）
+        name: 构建、生成 SBOM/provenance 并推送（重试声明的瞬时 registry EOF）
         env:
           BUILD_CONTEXT: ${{ matrix.context }}
           BUILD_DOCKERFILE: ${{ matrix.dockerfile }}
@@ -310,11 +310,11 @@ jobs:
             if [[ "$build_status" == 0 ]]; then
               exit 0
             fi
-            if ! grep -Eq 'failed to fetch oauth token:.*EOF|https://ghcr.io/(token|v2/).*EOF' "$build_log"; then
+            if ! grep -Eq 'failed to fetch oauth token:.*EOF|https://ghcr.io/(token|v2/).*EOF|https://registry-1\.docker\.io/v2/docker/buildkit-syft-scanner/.*EOF' "$build_log"; then
               exit "$build_status"
             fi
             if [[ "$attempt" == 3 ]]; then
-              echo "GHCR transient OAuth failure persisted after ${attempt} attempts" >&2
+              echo "declared transient registry EOF persisted after ${attempt} attempts" >&2
               exit "$build_status"
             fi
             sleep "$((attempt * 5))"
