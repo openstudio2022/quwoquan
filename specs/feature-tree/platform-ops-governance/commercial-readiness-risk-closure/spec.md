@@ -137,7 +137,7 @@
 - THEN ReleaseManifest 配置包以 GHCR OCI digest 交付；Actions Artifact 无容量时仍 fail-closed 地消费同一 OCI 内容，不允许在部署 job 重生 manifest。
 - THEN Service Pipeline 在受控 runner 上以原生 ARM64 Go builder 交叉编译 linux/amd64 二进制，QEMU/Buildx 只装配目标运行层，仍生成相同 SBOM/provenance 与 release manifest；runner、多架构 builder 索引或跨架构前置缺失时硬失败。
 - THEN Go module cache 在 runner 启动后的 step 通过 `RUNNER_TEMP` 按 job 隔离，不进入 checkout 工作区或 GitHub Actions cache；job-level `env` 不得引用不可用的 `runner` context，后续矩阵 job 不得因另一 job 的只读 module cache 失败。
-- THEN Delivery Gate 的 Python tool cache 同时覆盖 `AGENT_TOOLSDIRECTORY` 与 `RUNNER_TOOL_CACHE`，不得尝试写入 self-hosted macOS runner 不可写的 `/Users/runner`。
+- THEN Delivery Gate 硬校验 self-hosted runner 的受控 Python 版本并在 `RUNNER_TEMP` 创建隔离 venv，不得运行会尝试写入 `/Users/runner` 或系统 framework 的 Python 安装器。
 - THEN Prod 的受控 Alpine runtime 通过签名包索引安装运行依赖；包索引签名不可信时不得使用 `--allow-untrusted` 继续构建。
 - THEN Recommendation 只消费固定 digest 的 Python slim runtime；完整 Python 开发镜像或传输不完整的 layer 不得作为发布输入。
 - THEN Docker build record 与无界 Buildx GHA layer cache 不进入 Actions 存储；失败诊断仍按短保留期、单次运行范围保留。

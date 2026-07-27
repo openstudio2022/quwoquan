@@ -106,8 +106,10 @@ jobs:
         run: bash quwoquan_ops/cli/shared/install_kustomize.sh
       - name: 设置 job 临时 Python venv
         run: |
+          python_bin="$(command -v python3)"
+          "$python_bin" -c 'import sys; assert (3, 12) <= sys.version_info[:2] < (3, 14), sys.version'
           venv_root="${RUNNER_TEMP}/quwoquan-delivery-gate/${GITHUB_RUN_ID}/service-python"
-          python3 -m venv "$venv_root"
+          "$python_bin" -m venv "$venv_root"
           echo "$venv_root/bin" >> "$GITHUB_PATH"
       - name: 安装 Python 依赖 (recommendation-service)
         run: |
