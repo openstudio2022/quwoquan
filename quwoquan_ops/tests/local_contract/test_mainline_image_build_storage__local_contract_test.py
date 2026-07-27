@@ -66,5 +66,13 @@ def test_mainline_pipeline_uses_controlled_self_hosted_amd64_builder() -> None:
     assert "cache-image: false" in workflow
     assert workflow.count("version: v0.35.0") == 2
     assert workflow.count("cache-binary: false") == 2
-    assert "恢复自托管 Go 缓存可清理权限" in workflow
-    assert 'chmod -R u+w "$cache_dir"' in workflow
+    assert workflow.count("clean: false") == 5
+    assert (
+        "${{ runner.temp }}/quwoquan-service-pipeline/${{ github.run_id }}/go-build"
+        in workflow
+    )
+    assert (
+        "${{ runner.temp }}/quwoquan-service-pipeline/${{ github.run_id }}/go-mod"
+        in workflow
+    )
+    assert "github.workspace }}/.qwq_output/env/repo/local/ci/cache/go" not in workflow

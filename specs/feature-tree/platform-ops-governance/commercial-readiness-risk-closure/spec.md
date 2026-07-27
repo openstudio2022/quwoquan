@@ -134,7 +134,7 @@
 - THEN gray-initial/carry-on/full 只消费同一 manifest，禁止 latest 与部署时重建。
 - THEN ReleaseManifest 配置包以 GHCR OCI digest 交付；Actions Artifact 无容量时仍 fail-closed 地消费同一 OCI 内容，不允许在部署 job 重生 manifest。
 - THEN Service Pipeline 在受控 runner 上通过 QEMU/Buildx 构建 linux/amd64，仍生成相同 SBOM/provenance 与 release manifest；runner 或跨架构前置缺失时硬失败。
-- THEN Go module cache 保持在 `.qwq_output`，且 Go job 无论成功失败都恢复属主写权限，后续矩阵 job 不得因只读 module cache 无法清理工作区。
+- THEN Go module cache 按 job 隔离在 `runner.temp`，不进入 checkout 工作区或 GitHub Actions cache；后续矩阵 job 不得因另一 job 的只读 module cache 失败。
 - THEN Docker build record 与无界 Buildx GHA layer cache 不进入 Actions 存储；失败诊断仍按短保留期、单次运行范围保留。
 
 <a id="sit-004"></a>
