@@ -2,8 +2,10 @@ ARG GO_BASE_IMAGE
 ARG ALPINE_BASE_IMAGE
 ARG GO_BUILD_FLAGS=-p=1
 
-FROM ${GO_BASE_IMAGE} AS builder
+FROM --platform=${BUILDPLATFORM} ${GO_BASE_IMAGE} AS builder
 ARG GO_BUILD_FLAGS
+ARG TARGETOS
+ARG TARGETARCH
 ARG GOPROXY=https://goproxy.cn,direct
 ARG GOSUMDB=sum.golang.google.cn
 ENV GOPROXY=${GOPROXY}
@@ -14,7 +16,7 @@ RUN go mod download
 COPY quwoquan_service/ ./
 COPY quwoquan_ops/environments/ /build/quwoquan_ops/environments/
 COPY quwoquan_ops/external/ /build/quwoquan_ops/external/
-RUN CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
     go build ${GO_BUILD_FLAGS} -o /platform-ops-service ./control-plane/platform-ops/cmd/api
 RUN set -eux; \
     facts=/runtime-facts; \
