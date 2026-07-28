@@ -107,6 +107,6 @@
 - 类型：`external_dependency`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：仓库已具备 DNS plan/apply/verify、CAA、邮件防护与 DNS-01 证书签发链路，但当前会话未提供非生产/生产公网 IPv4、IPv6、Cloudflare zone token/zone id 与 ACME account email，不能伪造 live DNS/TLS 成功证据。
-- 目标：通过受保护变量提供 `QWQ_NONPROD_PUBLIC_IPV4/IPv6`、`QWQ_PROD_PUBLIC_IPV4/IPv6`、`QWQ_DNS_API_TOKEN`、`QWQ_DNS_ZONE_ID`、`QWQ_ACME_ACCOUNT_EMAIL`，执行 apply、证书签发、四 target HTTPS/WSS 验证并保存 receipt。
+- 影响或价值：仓库已具备 loopback DNS plan/apply/verify、CAA、邮件防护与 DNS-01 证书签发链路，但当前会话未提供 Cloudflare zone token/zone id 与 ACME account email，不能伪造 live DNS/TLS 成功证据。
+- 目标：通过受保护变量提供 `QWQ_DNS_API_TOKEN`、`QWQ_DNS_ZONE_ID`、`QWQ_ACME_ACCOUNT_EMAIL`，执行 apply、证书签发、四个本地 target HTTPS/WSS 与 prod-hosted 外部公共 CA 验证并保存 receipt。
 - 完成判定：DNS A/AAAA/CAA/MX/SPF、反向解析、证书 SAN/有效期及四环境公开角色 HTTP/WSS 探针全部通过，且证据报告可回读。
