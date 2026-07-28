@@ -265,7 +265,7 @@ class _OccupationPickerPage extends StatelessWidget {
     final groups = _occupationGroups(options);
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
-      title: UITextConstants.careerInterestOccupationPickerTitle,
+      title: ProfileText.careerInterestOccupationPickerTitle,
       onBack: () => Navigator.of(context).maybePop(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
@@ -522,27 +522,27 @@ String _tagLabel(String label, String displayLabel) {
 String _categoryLabel(UserCareerInterestCategoryConfig category) {
   switch (category.labelKey) {
     case 'career_interest_category_all':
-      return UITextConstants.careerInterestCategoryAll;
+      return ProfileText.careerInterestCategoryAll;
     case 'career_interest_category_travel_photo':
-      return UITextConstants.careerInterestCategoryTravelPhoto;
+      return ProfileText.careerInterestCategoryTravelPhoto;
     case 'career_interest_category_campus':
-      return UITextConstants.careerInterestCategoryCampus;
+      return ProfileText.careerInterestCategoryCampus;
     case 'career_interest_category_life':
-      return UITextConstants.careerInterestCategoryLife;
+      return ProfileText.careerInterestCategoryLife;
     case 'career_interest_category_art':
-      return UITextConstants.careerInterestCategoryArt;
+      return ProfileText.careerInterestCategoryArt;
     case 'career_interest_category_tech':
-      return UITextConstants.careerInterestCategoryTech;
+      return ProfileText.careerInterestCategoryTech;
     case 'career_occupation_category_product_ops':
-      return UITextConstants.careerOccupationCategoryProductOps;
+      return ProfileText.careerOccupationCategoryProductOps;
     case 'career_occupation_category_engineering':
-      return UITextConstants.careerOccupationCategoryEngineering;
+      return ProfileText.careerOccupationCategoryEngineering;
     case 'career_occupation_category_design':
-      return UITextConstants.careerOccupationCategoryDesign;
+      return ProfileText.careerOccupationCategoryDesign;
     case 'career_occupation_category_student':
-      return UITextConstants.careerOccupationCategoryStudent;
+      return ProfileText.careerOccupationCategoryStudent;
     case 'career_occupation_category_freelance':
-      return UITextConstants.careerOccupationCategoryFreelance;
+      return ProfileText.careerOccupationCategoryFreelance;
     default:
       return category.id;
   }

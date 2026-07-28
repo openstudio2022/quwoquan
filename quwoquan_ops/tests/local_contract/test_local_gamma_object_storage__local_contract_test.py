@@ -35,7 +35,7 @@ class LocalGammaObjectStorageTest(unittest.TestCase):
                 stat.S_IMODE((first.work_root / "certificates/object-storage/minio/private.key").stat().st_mode),
                 0o600,
             )
-            self.assertEqual(first.environment["LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT"], "gamma-upload.quwoquan-env.test:19130")
+            self.assertEqual(first.environment["LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT"], "upload.gamma.quwoquan.com:19130")
             self.assertEqual(first.host_endpoint, "https://gamma-upload.localhost:19130")
             self.assertNotIn(".qwq_output", str(first.secret_path))
 
@@ -59,7 +59,7 @@ class LocalGammaObjectStorageTest(unittest.TestCase):
             self.assertIn("gamma-local", str(gamma.secret_path))
             self.assertEqual(
                 beta.environment["BETA_OBJECT_STORAGE_ENDPOINT"],
-                "beta-upload.quwoquan-env.test:18130",
+                "upload.beta.quwoquan.com:18130",
             )
             self.assertEqual(
                 beta.host_endpoint,

@@ -14,10 +14,15 @@ type Handler struct {
 	service *apprelease.Service
 }
 
+type downloadPageModel struct {
+	Platform string
+}
+
 func NewHandler(service *apprelease.Service) *Handler { return &Handler{service: service} }
 
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/ops/app-recovery/version", h.version)
+	mux.HandleFunc("/downloads/android/latest.json", h.androidLatest)
 	mux.HandleFunc("/download", h.downloadLanding)
 	mux.HandleFunc("/download/", h.download)
 }
@@ -51,7 +56,7 @@ func (h *Handler) downloadLanding(w http.ResponseWriter, r *http.Request) {
 		h.notFound(w)
 		return
 	}
-	h.routeDetectedPlatform(w, r, false)
+	h.renderLanding(w, h.detectPlatform(r))
 }
 
 func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
@@ -61,59 +66,85 @@ func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
 	}
 	switch strings.TrimSuffix(r.URL.Path, "/") {
 	case "/download/mobile":
-		h.routeDetectedPlatform(w, r, true)
+		h.renderLanding(w, h.detectPlatform(r))
+	case "/download/desktop":
+		h.renderLanding(w, "")
 	case "/download/ios":
-		h.redirectPlatform(w, r, apprelease.PlatformIOS)
+		h.renderIOSInstall(w)
 	case "/download/android":
-		h.redirectPlatform(w, r, apprelease.PlatformAndroid)
+		h.redirectAndroid(w, r)
 	default:
 		h.notFound(w)
 	}
 }
 
-func (h *Handler) routeDetectedPlatform(w http.ResponseWriter, r *http.Request, requireMobile bool) {
-	if h.service == nil {
-		h.unavailable(w)
-		return
+func (h *Handler) detectPlatform(r *http.Request) string {
+	if explicit := apprelease.NormalizePlatform(r.URL.Query().Get("platform")); explicit != "" {
+		return explicit
 	}
-	if platform := apprelease.DetectPlatform(r.UserAgent()); platform != "" {
-		h.redirectPlatform(w, r, platform)
-		return
+	if clientHint := apprelease.NormalizePlatform(
+		strings.Trim(r.Header.Get("Sec-CH-UA-Platform"), `"`),
+	); clientHint != "" {
+		return clientHint
 	}
-	if requireMobile {
-		h.renderLanding(w)
-		return
-	}
-	h.renderLanding(w)
+	return apprelease.DetectPlatform(r.UserAgent())
 }
 
-func (h *Handler) redirectPlatform(w http.ResponseWriter, r *http.Request, platform string) {
+func (h *Handler) redirectAndroid(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		h.unavailable(w)
 		return
 	}
-	release, ok := h.service.Release(platform)
+	release, ok := h.service.Release(apprelease.PlatformAndroid)
 	if !ok {
 		h.unavailable(w)
 		return
 	}
-	target := release.UpdateURL
-	if platform == apprelease.PlatformAndroid {
-		target = release.APKURL
-		w.Header().Set("X-Quwoquan-APK-SHA256", strings.ToLower(release.APKSHA256))
-		w.Header().Set("X-Quwoquan-APK-Build", release.LatestBuild)
-	}
+	w.Header().Set("X-Quwoquan-APK-SHA256", strings.ToLower(release.APKSHA256))
+	w.Header().Set("X-Quwoquan-APK-Build", release.LatestBuild)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "no-referrer")
-	http.Redirect(w, r, target, http.StatusTemporaryRedirect)
+	http.Redirect(w, r, release.APKURL, http.StatusTemporaryRedirect)
 }
 
-func (h *Handler) renderLanding(w http.ResponseWriter) {
+func (h *Handler) androidLatest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet || h.service == nil {
+		h.notFound(w)
+		return
+	}
+	release, ok := h.service.Release(apprelease.PlatformAndroid)
+	if !ok {
+		h.unavailable(w)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"latestVersion":               release.LatestVersion,
+		"latestBuild":                 release.LatestBuild,
+		"apkUrl":                      release.APKURL,
+		"apkSizeBytes":                release.APKSizeBytes,
+		"apkSHA256":                   strings.ToLower(release.APKSHA256),
+		"apkSigningCertificateSHA256": strings.ToLower(release.APKSigningCertificateSHA256),
+		"minAndroidVersion":           release.MinAndroidVersion,
+		"packageName":                 release.APKPackageName,
+	})
+}
+
+func (h *Handler) renderLanding(w http.ResponseWriter, platform string) {
+	h.writeHTMLHeaders(w)
+	_ = downloadPage.Execute(w, downloadPageModel{Platform: platform})
+}
+
+func (h *Handler) renderIOSInstall(w http.ResponseWriter) {
+	h.writeHTMLHeaders(w)
+	_ = iosInstallPage.Execute(w, nil)
+}
+
+func (h *Handler) writeHTMLHeaders(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
 	w.Header().Set("Referrer-Policy", "no-referrer")
-	_ = downloadPage.Execute(w, nil)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 }
 
 func (h *Handler) unavailable(w http.ResponseWriter) {
@@ -127,18 +158,36 @@ func (h *Handler) notFound(w http.ResponseWriter) {
 func (h *Handler) writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
 
 var downloadPage = template.Must(template.New("download").Parse(`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>下载趣我圈</title><style>
-:root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans SC",sans-serif;background:#f7f7fc;color:#111827}
-body{margin:0;min-height:100vh;display:grid;place-items:center}.wrap{width:min(280px,calc(100vw - 48px));text-align:center}
-h1{font-size:28px;line-height:1.3;margin:0 0 16px;font-weight:600}p{font-size:17px;line-height:1.5;color:#6b7280;margin:0 0 28px}
-a{display:flex;height:48px;align-items:center;justify-content:center;border-radius:24px;text-decoration:none;font-size:17px;font-weight:500;margin-top:12px}
-.primary{background:#0a84ff;color:#fff}.secondary{border:1px solid #0a84ff;color:#0a84ff;background:transparent}
-</style></head><body><main class="wrap"><h1>获取趣我圈</h1><p>请选择与你设备对应的官方版本</p>
-<a class="primary" href="/download/ios">iPhone / iPad</a><a class="secondary" href="/download/android">Android / 鸿蒙</a>
+<title>获取趣我圈</title><style>
+:root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK SC","Noto Sans SC",sans-serif;background:#f6f8fc;color:#111318}
+body{margin:0;min-height:100vh;display:grid;place-items:center}.wrap{width:min(320px,calc(100vw - 48px));text-align:center}
+h1{font-size:28px;line-height:1.3;margin:0 0 16px;font-weight:600}p{font-size:17px;line-height:1.5;color:#6b707c;margin:0 0 28px}
+a{display:flex;height:50px;align-items:center;justify-content:center;border-radius:25px;text-decoration:none;font-size:17px;font-weight:500;margin-top:12px}
+.primary{background:#087bff;color:#fff}.secondary{border:1px solid #087bff;color:#087bff;background:transparent}
+</style></head><body><main class="wrap">
+{{if eq .Platform "android"}}<h1>趣我圈 Android 版</h1><p>下载趣我圈官方签名版本</p>
+<a class="primary" href="/download/android">下载</a><a class="secondary" href="/">使用网页版</a>
+{{else if eq .Platform "ios"}}<h1>趣我圈 iOS 网页版</h1><p>添加到主屏幕，快速打开</p>
+<a class="primary" href="/download/ios">安装</a><a class="secondary" href="/">使用网页版</a>
+{{else}}<h1>获取趣我圈</h1><p>请选择与你设备对应的官方方式</p>
+<a class="primary" href="/download/android">Android 下载</a><a class="secondary" href="/download/ios">iOS 网页版</a>
+<a class="secondary" href="/">使用网页版</a>{{end}}
 </main></body></html>`))
+
+var iosInstallPage = template.Must(template.New("ios-install").Parse(`<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>安装趣我圈 iOS 网页版</title><style>
+:root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK SC","Noto Sans SC",sans-serif;background:#f6f8fc;color:#111318}
+body{margin:0;min-height:100vh;display:grid;place-items:center}.wrap{width:min(320px,calc(100vw - 48px))}
+h1{text-align:center;font-size:28px;line-height:1.3;margin:0 0 16px;font-weight:600}p,ol{font-size:17px;line-height:1.7;color:#6b707c}ol{padding-left:24px;margin:0 0 28px}
+a{display:flex;height:50px;align-items:center;justify-content:center;border-radius:25px;text-decoration:none;font-size:17px;font-weight:500;background:#087bff;color:#fff}
+</style></head><body><main class="wrap"><h1>安装趣我圈 iOS 网页版</h1>
+<p>请在 Safari 中完成以下操作：</p><ol><li>点击浏览器的“分享”按钮</li><li>选择“添加到主屏幕”</li><li>确认后从主屏幕打开趣我圈</li></ol>
+<a href="/">立即使用网页版</a></main></body></html>`))

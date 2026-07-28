@@ -30,6 +30,6 @@ void main() {
     expect(videoPage, contains('participant.hasScreenShareTrack'));
     expect(videoPage, contains('track: sharer?.screenShareTrack'));
     expect(shareSurface, contains('RtcVideoTrackRenderer('));
-    expect(shareSurface, contains('UITextConstants.callScreenShareConnecting'));
+    expect(shareSurface, contains('CallText.callScreenShareConnecting'));
   });
 }

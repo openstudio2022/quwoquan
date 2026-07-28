@@ -67,8 +67,8 @@ extension _CreatePageStateHelpers on _CreatePageState {
       context: context,
       builder: (dialogContext) {
         return CupertinoAlertDialog(
-          title: const Text(UITextConstants.createExitConfirmTitle),
-          content: const Text(UITextConstants.createExitConfirmDesc),
+          title: const Text(CreationText.createExitConfirmTitle),
+          content: const Text(CreationText.createExitConfirmDesc),
           actions: <Widget>[
             CupertinoDialogAction(
               key: TestKeys.createDiscardAndExitButton,
@@ -84,7 +84,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
                 );
                 _doClose();
               },
-              child: const Text(UITextConstants.discard),
+              child: const Text(CreationText.discard),
             ),
             CupertinoDialogAction(
               key: TestKeys.createSaveAndExitButton,
@@ -107,11 +107,11 @@ extension _CreatePageStateHelpers on _CreatePageState {
                   );
                 }
               },
-              child: const Text(UITextConstants.saveDraft),
+              child: const Text(CreationText.saveDraft),
             ),
             CupertinoDialogAction(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text(UITextConstants.cancel),
+              child: const Text(FoundationText.cancel),
             ),
           ],
         );
@@ -197,7 +197,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
       return;
     }
     if (state.hasVideo && state.editorKind == CreateEditorKind.media) {
-      AppToast.show(context, UITextConstants.createDeleteVideoBeforeImages);
+      AppToast.show(context, CreationText.createDeleteVideoBeforeImages);
       return;
     }
     final remainingSlots =
@@ -307,7 +307,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
     if (!mounted) return;
     final state = ref.read(createEditorProvider);
     if (state.imagePaths.isNotEmpty) {
-      AppToast.show(context, UITextConstants.createClearImagesBeforeVideo);
+      AppToast.show(context, CreationText.createClearImagesBeforeVideo);
       return;
     }
     final result = await _openMediaPicker(
@@ -326,7 +326,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
     }
     final item = result.items.first;
     if (!item.isVideo) {
-      AppToast.show(context, UITextConstants.mediaPickerVideoOnly);
+      AppToast.show(context, MediaText.mediaPickerVideoOnly);
       return;
     }
     final prepared = await _prepareVideoForMediaEditor(item.path);
@@ -433,7 +433,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
       if (result.type == CreateMediaType.video) {
         AppToast.show(
           context,
-          UITextConstants.createTextEditorVideoNotSupported,
+          CreationText.createTextEditorVideoNotSupported,
         );
         return;
       }
@@ -444,7 +444,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
     }
     if (result.type == CreateMediaType.video) {
       if (state.imagePaths.isNotEmpty) {
-        AppToast.show(context, UITextConstants.createClearImagesBeforeVideo);
+        AppToast.show(context, CreationText.createClearImagesBeforeVideo);
         return;
       }
       await _applyVideoPathToMediaEditor(result.path, previousState: state);
@@ -454,7 +454,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
       return;
     }
     if (state.hasVideo) {
-      AppToast.show(context, UITextConstants.createDeleteVideoBeforeImages);
+      AppToast.show(context, CreationText.createDeleteVideoBeforeImages);
       return;
     }
     ref
@@ -474,7 +474,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
     final launcher = widget.videoEditorLauncher;
     if (launcher == null &&
         !ref.read(platformCapabilitiesProvider).nativeVideoEditing) {
-      AppToast.show(context, UITextConstants.videoEditorCapabilityUnavailable);
+      AppToast.show(context, MediaText.videoEditorCapabilityUnavailable);
       return;
     }
     await _flushDraftIfDirty('subpage_push');
@@ -717,11 +717,11 @@ extension _CreatePageStateHelpers on _CreatePageState {
 
   String _draftToolbarLabel(CreateDraftSaveStatus status) {
     return switch (status) {
-      CreateDraftSaveStatus.idle => UITextConstants.createDraftToolbar,
-      CreateDraftSaveStatus.dirty => UITextConstants.createDraftSaving,
-      CreateDraftSaveStatus.saving => UITextConstants.createDraftSaving,
-      CreateDraftSaveStatus.saved => UITextConstants.createDraftSaved,
-      CreateDraftSaveStatus.failed => UITextConstants.createDraftSaveFailed,
+      CreateDraftSaveStatus.idle => CreationText.createDraftToolbar,
+      CreateDraftSaveStatus.dirty => CreationText.createDraftSaving,
+      CreateDraftSaveStatus.saving => CreationText.createDraftSaving,
+      CreateDraftSaveStatus.saved => CreationText.createDraftSaved,
+      CreateDraftSaveStatus.failed => CreationText.createDraftSaveFailed,
     };
   }
 
@@ -738,9 +738,9 @@ extension _CreatePageStateHelpers on _CreatePageState {
           state: state,
           title: _mediaHeaderHintForState(state),
           trailing: state.hasVideo
-              ? UITextConstants.createMediaSingleVideoCaption
+              ? CreationText.createMediaSingleVideoCaption
               : state.isOneTapMovie
-              ? UITextConstants.createMediaOneTapMovieSingleCaption
+              ? CreationText.createMediaOneTapMovieSingleCaption
               : '${state.imagePaths.length} / ${_CreatePageState._kMaxMediaImages}',
         ),
         SizedBox(height: AppSpacing.interGroupMd),
@@ -752,7 +752,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
         ),
         SizedBox(height: AppSpacing.interGroupSm),
         _buildInputPanel(
-          label: UITextConstants.createMediaBodySectionLabel,
+          label: CreationText.createMediaBodySectionLabel,
           currentLength: state.body.length,
           input: CupertinoTextField(
             key: state.mediaKind == CreateMediaKind.video
@@ -764,7 +764,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
             maxLines: null,
             minLines: 4,
             padding: EdgeInsets.zero,
-            placeholder: UITextConstants.createMediaBodyPlaceholder,
+            placeholder: CreationText.createMediaBodyPlaceholder,
             decoration: const BoxDecoration(),
             onChanged: (value) {
               ref.read(createEditorProvider.notifier).updateMediaBody(value);
@@ -870,7 +870,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
                   ),
                   SizedBox(width: AppSpacing.intraGroupXs),
                   Text(
-                    UITextConstants.createAddTitleWithOptional,
+                    CreationText.createAddTitleWithOptional,
                     style: TextStyle(
                       color: AppColors.iosAccentLight,
                       fontSize: AppTypography.base,
@@ -888,7 +888,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
               children: <Widget>[
                 _buildSectionHeader(
                   title: CreatePageText.titleFieldLabel,
-                  trailing: UITextConstants.createFieldOptionalTag,
+                  trailing: CreationText.createFieldOptionalTag,
                 ),
                 SizedBox(height: AppSpacing.intraGroupSm),
                 CupertinoTextField(
@@ -896,7 +896,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
                   controller: _titleController,
                   focusNode: _titleFocusNode,
                   padding: EdgeInsets.zero,
-                  placeholder: UITextConstants.createTitleSummaryPlaceholder,
+                  placeholder: CreationText.createTitleSummaryPlaceholder,
                   decoration: const BoxDecoration(),
                   onChanged: (value) {
                     ref.read(createEditorProvider.notifier).updateTitle(value);

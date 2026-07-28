@@ -19,13 +19,13 @@ void main() {
         ),
       );
 
-      expect(find.text(UITextConstants.joinedCircle), findsOneWidget);
+      expect(find.text(CommunityText.joinedCircle), findsOneWidget);
       expect(
-        find.text(UITextConstants.circleActionEnterDiscussion),
+        find.text(ObjectHomepageText.circleActionEnterDiscussion),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.editCircle), findsNothing);
-      expect(find.text(UITextConstants.manageCenter), findsNothing);
+      expect(find.text(CommunityText.editCircle), findsNothing);
+      expect(find.text(CommunityText.manageCenter), findsNothing);
     });
 
     testWidgets('visitor 默认显示加入和进入讨论', (tester) async {
@@ -39,12 +39,12 @@ void main() {
         ),
       );
 
-      expect(find.text(UITextConstants.joinCircle), findsOneWidget);
+      expect(find.text(CommunityText.joinCircle), findsOneWidget);
       expect(
-        find.text(UITextConstants.circleActionEnterDiscussion),
+        find.text(ObjectHomepageText.circleActionEnterDiscussion),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.followCircle), findsNothing);
+      expect(find.text(CommunityText.followCircle), findsNothing);
     });
 
     testWidgets('审批圈子 visitor 显示申请加入和进入讨论', (tester) async {
@@ -59,9 +59,9 @@ void main() {
         ),
       );
 
-      expect(find.text(UITextConstants.circleJoinApproval), findsOneWidget);
+      expect(find.text(CommunityText.circleJoinApproval), findsOneWidget);
       expect(
-        find.text(UITextConstants.circleActionEnterDiscussion),
+        find.text(ObjectHomepageText.circleActionEnterDiscussion),
         findsOneWidget,
       );
     });
@@ -77,9 +77,9 @@ void main() {
         ),
       );
 
-      expect(find.text(UITextConstants.joinPending), findsOneWidget);
+      expect(find.text(CommunityText.joinPending), findsOneWidget);
       expect(
-        find.text(UITextConstants.circleActionEnterDiscussion),
+        find.text(ObjectHomepageText.circleActionEnterDiscussion),
         findsOneWidget,
       );
     });
@@ -99,7 +99,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text(UITextConstants.joinCircle));
+      await tester.tap(find.text(CommunityText.joinCircle));
       await tester.pump();
 
       expect(called, isTrue);
@@ -118,7 +118,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text(UITextConstants.circleActionEnterDiscussion));
+      await tester.tap(find.text(ObjectHomepageText.circleActionEnterDiscussion));
       await tester.pump();
 
       expect(called, isTrue);

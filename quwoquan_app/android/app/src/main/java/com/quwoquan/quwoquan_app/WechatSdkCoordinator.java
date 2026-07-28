@@ -231,11 +231,7 @@ public final class WechatSdkCoordinator {
         }
         return false;
       }
-      packageInfo =
-          activity
-              .getPackageManager()
-              .getPackageInfo(activity.getPackageName(), PackageManager.GET_SIGNATURES);
-      for (Signature signature : packageInfo.signatures) {
+      for (Signature signature : preApi28PackageSignatures()) {
         if (expected.equals(md5(signature.toByteArray()))) {
           return true;
         }
@@ -244,6 +240,15 @@ public final class WechatSdkCoordinator {
       Log.e(TAG, "signature_check_failed", error);
     }
     return false;
+  }
+
+  @SuppressWarnings("deprecation") // SigningInfo is available only on API 28+.
+  private Signature[] preApi28PackageSignatures() throws PackageManager.NameNotFoundException {
+    PackageInfo packageInfo =
+        activity
+            .getPackageManager()
+            .getPackageInfo(activity.getPackageName(), PackageManager.GET_SIGNATURES);
+    return packageInfo.signatures == null ? new Signature[0] : packageInfo.signatures;
   }
 
   private boolean isPackageInstalled() {

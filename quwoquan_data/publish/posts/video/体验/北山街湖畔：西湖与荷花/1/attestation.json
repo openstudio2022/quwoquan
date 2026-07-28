@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260728--travel-video-golden--hangzhou-west-lake--pilot-007",
+  "executionBinding": "frozen",
+  "objectRef": "杭州西湖_video",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_sdk",
+    "model": "composer-2.5",
+    "modelFamily": "composer",
+    "runId": "run-e6933a74-e43a-4d03-a843-cc498216f137",
+    "resultHash": "sha256:d6e36336f464ef29dc65abde7a092ddc63ef85cd5a3d44f8fcfc2cac4bbdfbba"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

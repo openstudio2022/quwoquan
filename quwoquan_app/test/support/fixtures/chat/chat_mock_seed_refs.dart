@@ -1,4 +1,4 @@
-import 'package:quwoquan_cloud_mock/chat_fixture.dart';
+import '../../cloud_services/repository_mock_reexports.dart';
 
 final _chatFixtureEngine = AlphaChatStateEngine();
 

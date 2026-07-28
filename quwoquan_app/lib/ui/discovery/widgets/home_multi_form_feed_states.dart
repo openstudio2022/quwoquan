@@ -24,12 +24,10 @@ class _HomeFeedSkeletonState extends State<_HomeFeedSkeleton>
       _pulse = null;
       return;
     }
-    _pulse ??=
-        AnimationController(
-            vsync: this,
-            duration: const Duration(milliseconds: 900),
-          )
-          ..repeat(reverse: true);
+    _pulse ??= AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
   }
 
   @override
@@ -40,9 +38,8 @@ class _HomeFeedSkeletonState extends State<_HomeFeedSkeleton>
 
   @override
   Widget build(BuildContext context) {
-    final pageBackground = SettingsSemanticConstants.conversationSheetCardSurface(
-      widget.isDark,
-    );
+    final pageBackground =
+        SettingsSemanticConstants.conversationSheetCardSurface(widget.isDark);
     return ColoredBox(
       color: pageBackground,
       child: ListView.separated(
@@ -71,7 +68,9 @@ class _HomeFeedSkeletonCard extends StatelessWidget {
       height: height ?? DiscoveryFeedSpacing.homeFeedSkeletonLineHeight,
       decoration: BoxDecoration(
         color: fill,
-        borderRadius: BorderRadius.circular(DiscoveryFeedSpacing.homeFeedMediaCornerRadius),
+        borderRadius: BorderRadius.circular(
+          DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
+        ),
       ),
     );
 
@@ -144,18 +143,16 @@ class _HomeFeedSkeletonCard extends StatelessWidget {
   }
 }
 
-/// 任务 A · 空态：加载完成但无内容时的运营兜底文案 + 再试入口（不编造内容）。
-class _HomeFeedEmptyState extends StatelessWidget {
-  const _HomeFeedEmptyState({required this.isDark, required this.onRetry});
+/// 关注频道加载成功但尚无动态时的正常空态。
+class _HomeFollowingFeedEmptyState extends StatelessWidget {
+  const _HomeFollowingFeedEmptyState({required this.isDark});
 
   final bool isDark;
-  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    final pageBackground = SettingsSemanticConstants.conversationSheetCardSurface(
-      isDark,
-    );
+    final pageBackground =
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final primaryText = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
@@ -164,35 +161,17 @@ class _HomeFeedEmptyState extends StatelessWidget {
       isDark,
       ColorType.foregroundSecondary,
     );
-    final accent = AppColors.iosAccent(context);
     return ColoredBox(
       color: pageBackground,
       child: Center(
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           child: Column(
-            key: const ValueKey('home-feed-empty'),
+            key: const ValueKey('home-following-feed-empty'),
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Container(
-                width: AppSpacing.avatarUserLg,
-                height: AppSpacing.avatarUserLg,
-                decoration: BoxDecoration(
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.surfaceMuted,
-                  ),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  CupertinoIcons.sparkles,
-                  size: AppSpacing.iconMedium,
-                  color: secondaryText,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.containerSm),
               Text(
-                DiscoveryFeedText.homeFeedEmptyTitle,
+                DiscoveryFeedText.followingFeedEmptyTitle,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: AppTypography.iosSubheadline,
@@ -202,33 +181,12 @@ class _HomeFeedEmptyState extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                DiscoveryFeedText.homeFeedEmptyDescription,
+                DiscoveryFeedText.followingFeedEmptyDescription,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: AppTypography.iosBody,
                   color: secondaryText,
                   height: AppSpacing.textLineHeightBody,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              CupertinoButton(
-                key: const ValueKey('home-feed-empty-retry'),
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg,
-                  vertical: AppSpacing.sm,
-                ),
-                onPressed: onRetry,
-                child: Semantics(
-                  button: true,
-                  label: UITextConstants.tryAgain,
-                  child: Text(
-                    UITextConstants.tryAgain,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosBody,
-                      fontWeight: AppTypography.semiBold,
-                      color: accent,
-                    ),
-                  ),
                 ),
               ),
             ],
@@ -238,4 +196,3 @@ class _HomeFeedEmptyState extends StatelessWidget {
     );
   }
 }
-

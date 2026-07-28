@@ -74,12 +74,52 @@ extension_fields:
     minimum: 0
   hasError:
     type: bool
+  hasCache:
+    type: bool
   action:
     type: string
     max_length: 128
   journey:
     type: string
     max_length: 128
+  flowId:
+    type: string
+    max_length: 96
+  entryMode:
+    type: string
+    max_length: 64
+  step:
+    type: string
+    max_length: 64
+  fromStep:
+    type: string
+    max_length: 64
+  toStep:
+    type: string
+    max_length: 64
+  provider:
+    type: string
+    max_length: 32
+  otpPurpose:
+    type: string
+    max_length: 32
+  consentState:
+    type: string
+    max_length: 32
+  failureKind:
+    type: string
+    max_length: 64
+  attemptIndex:
+    type: int
+    minimum: 0
+  countdownBucket:
+    type: string
+    max_length: 32
+  motionReduced:
+    type: bool
+  dismissPolicy:
+    type: string
+    max_length: 64
   callType:
     type: string
     enum:
@@ -481,6 +521,47 @@ events:
   - traceId
   normal_sample_rate: 1.0
   internal_priority: critical
+- event_type: login_funnel
+  log_type: event
+  required_extensions:
+  - action
+  - flowId
+  - step
+  - result
+  optional_extensions:
+  - entryMode
+  - fromStep
+  - toStep
+  - provider
+  - otpPurpose
+  - consentState
+  - durationMs
+  - attemptIndex
+  - countdownBucket
+  - motionReduced
+  - dismissPolicy
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: login_operation
+  log_type: event
+  required_extensions:
+  - operationId
+  - surfaceId
+  - result
+  optional_extensions:
+  - flowId
+  - step
+  - provider
+  - otpPurpose
+  - failReasonCode
+  - failureKind
+  - recoveryAction
+  - durationMs
+  - attemptIndex
+  - requestId
+  - traceId
+  normal_sample_rate: 1.0
+  internal_priority: critical
 - event_type: chat_interaction_outcome
   log_type: event
   required_extensions:
@@ -518,6 +599,8 @@ events:
   - operationId
   - result
   optional_extensions:
+  - surfaceId
+  - hasCache
   - durationMs
   - failReasonCode
   - recoveryAction
@@ -554,6 +637,65 @@ events:
   - recoveryAction
   - requestId
   - traceId
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: article_reader_enter
+  log_type: event
+  required_extensions:
+  - surfaceId
+  - objectType
+  - objectId
+  - durationMs
+  - result
+  optional_extensions: []
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: article_reader_dwell
+  log_type: event
+  required_extensions:
+  - surfaceId
+  - objectType
+  - objectId
+  - durationMs
+  - result
+  optional_extensions: []
+  normal_sample_rate: 0.1
+  internal_priority: normal
+- event_type: article_reader_exit
+  log_type: event
+  required_extensions:
+  - surfaceId
+  - objectType
+  - objectId
+  - durationMs
+  - result
+  optional_extensions: []
+  normal_sample_rate: 1.0
+  internal_priority: critical
+- event_type: article_reader_error
+  log_type: event
+  required_extensions:
+  - surfaceId
+  - objectType
+  - objectId
+  - errorCode
+  - recoveryAction
+  - result
+  optional_extensions:
+  - durationMs
+  normal_sample_rate: 1.0
+  internal_priority: error
+- event_type: article_reader_recovery
+  log_type: event
+  required_extensions:
+  - surfaceId
+  - objectType
+  - objectId
+  - recoveryAction
+  - result
+  optional_extensions:
+  - durationMs
+  - errorCode
   normal_sample_rate: 1.0
   internal_priority: critical
 - event_type: video_preview_track_load

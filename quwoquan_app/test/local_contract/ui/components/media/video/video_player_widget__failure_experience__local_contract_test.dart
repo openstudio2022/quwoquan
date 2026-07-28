@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,10 +17,10 @@ void main() {
   final thumbnail =
       MediaDeliveryResolver(
         MediaEndpointConfig(
-          avatarBaseUrl: 'https://alpha-avatar.quwoquan-env.test:17100',
-          imageBaseUrl: 'https://alpha-image.quwoquan-env.test:17100',
-          videoBaseUrl: 'https://alpha-video.quwoquan-env.test:17100',
-          attachmentBaseUrl: 'https://alpha-image.quwoquan-env.test:17100',
+          avatarBaseUrl: 'https://cdn.alpha.quwoquan.com:17100',
+          imageBaseUrl: 'https://cdn.alpha.quwoquan.com:17100',
+          videoBaseUrl: 'https://cdn.alpha.quwoquan.com:17100',
+          attachmentBaseUrl: 'https://cdn.alpha.quwoquan.com:17100',
         ),
       ).resolve(
         'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
@@ -74,16 +75,13 @@ void main() {
       find.byKey(const ValueKey<String>('video-player-error')),
       findsOneWidget,
     );
-    expect(
-      find.text(UITextConstants.videoPlaybackTemporaryTitle),
-      findsOneWidget,
-    );
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
     expect(find.text('请稍后重试'), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('video-player-retry')),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.retry), findsOneWidget);
+    expect(find.text(SearchText.reload), findsOneWidget);
     expect(find.byType(ImmersiveMediaFailureContent), findsOneWidget);
     expect(find.byIcon(Icons.image_not_supported_outlined), findsNothing);
     expect(find.byIcon(CupertinoIcons.refresh), findsNothing);
@@ -107,11 +105,11 @@ void main() {
     await pumpOverlay(tester, failure: failure);
 
     expect(
-      find.text(UITextConstants.videoPlaybackUnavailableTitle),
+      find.text(SearchText.recoveryContentUnavailableTitle),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.videoPlaybackUnavailableMessage),
+      find.text(SearchText.recoveryContentUnavailableMessage),
       findsOneWidget,
     );
     expect(
@@ -128,29 +126,29 @@ void main() {
     await pumpOverlay(tester, failure: failure);
 
     expect(
-      find.text(UITextConstants.videoPlaybackUnsupportedTitle),
+      find.text(SearchText.recoveryContentUnavailableTitle),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.videoPlaybackUnsupportedMessage),
+      find.text(SearchText.recoveryContentUnavailableMessage),
       findsOneWidget,
     );
     expect(
       find.byKey(const ValueKey<String>('video-player-retry')),
       findsNothing,
     );
-    expect(find.text(UITextConstants.retry), findsNothing);
+    expect(find.text(SearchText.reload), findsNothing);
   });
 
-  testWidgets('重试中以禁用文字状态替代加载图标', (tester) async {
+  testWidgets('重试中按钮禁用并只显示按钮内进度', (tester) async {
     final failure = MediaPlaybackFailure.fromKind(
       MediaCandidateFailureKind.certificateVerifyFailed,
     );
 
     await pumpOverlay(tester, failure: failure, retrying: true, onRetry: () {});
 
-    expect(find.text(UITextConstants.mediaRetrying), findsOneWidget);
-    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    expect(find.text(SearchText.reload), findsNothing);
+    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
     expect(
       tester
           .widget<CupertinoButton>(

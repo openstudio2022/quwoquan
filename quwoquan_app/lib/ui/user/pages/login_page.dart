@@ -30,6 +30,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart'
         authenticationChallengeCommandWriterProvider;
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/welcome/welcome_appearance.dart';

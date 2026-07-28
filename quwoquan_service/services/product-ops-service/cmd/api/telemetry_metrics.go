@@ -18,6 +18,9 @@ var (
 	appExperienceEventTotal   *prometheus.CounterVec
 	contentPublicationEvents  *prometheus.CounterVec
 	contentPublishVisible     *prometheus.HistogramVec
+	articleReaderEvents       *prometheus.CounterVec
+	articleReaderEnter        *prometheus.HistogramVec
+	articleReaderDwell        *prometheus.HistogramVec
 	videoPreviewTrackLoads    *prometheus.CounterVec
 	videoPreviewTrackLoadTime *prometheus.HistogramVec
 )
@@ -61,6 +64,20 @@ func registerTelemetryMetrics() {
 			Help:    "Client-observed elapsed time from publication start to visible result.",
 			Buckets: []float64{1, 5, 15, 30, 60, 120, 300, 600, 900, 1800, 3600},
 		}, []string{"content_type", "result"})
+		articleReaderEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "ops_article_reader_events_total",
+			Help: "Accepted article-reader lifecycle facts by catalogued stage and outcome.",
+		}, []string{"stage", "result"})
+		articleReaderEnter = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "ops_article_reader_enter_duration_seconds",
+			Help:    "Client-observed elapsed time until an article reader is usable.",
+			Buckets: []float64{0.05, 0.1, 0.25, 0.5, 0.8, 1.2, 2, 3, 5, 10},
+		}, []string{"result"})
+		articleReaderDwell = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "ops_article_reader_dwell_seconds",
+			Help:    "Sampled active article-reader dwell duration.",
+			Buckets: []float64{1, 5, 15, 30, 60, 120, 300, 600, 1800},
+		}, []string{"result"})
 		videoPreviewTrackLoads = prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "ops_video_preview_track_loads_total",
 			Help: "Accepted video preview-track manifest loads by bounded result.",
@@ -77,6 +94,9 @@ func registerTelemetryMetrics() {
 		registerCollector(&appExperienceEventTotal)
 		registerCollector(&contentPublicationEvents)
 		registerCollector(&contentPublishVisible)
+		registerCollector(&articleReaderEvents)
+		registerCollector(&articleReaderEnter)
+		registerCollector(&articleReaderDwell)
 		registerCollector(&videoPreviewTrackLoads)
 		registerCollector(&videoPreviewTrackLoadTime)
 	})
@@ -133,6 +153,20 @@ func recordAppExperienceEvents(records []application.EventRecordInput) {
 					contentPublishVisible.WithLabelValues(contentType, result).Observe(
 						float64(*record.DurationMS) / 1000,
 					)
+				}
+			}
+		case "article_reader_enter", "article_reader_dwell", "article_reader_exit",
+			"article_reader_error", "article_reader_recovery":
+			stage := record.EventType[len("article_reader_"):]
+			result := telemetryString(record.Result, "unknown")
+			articleReaderEvents.WithLabelValues(stage, result).Inc()
+			if record.DurationMS != nil && *record.DurationMS >= 0 {
+				duration := float64(*record.DurationMS) / 1000
+				switch stage {
+				case "enter":
+					articleReaderEnter.WithLabelValues(result).Observe(duration)
+				case "dwell":
+					articleReaderDwell.WithLabelValues(result).Observe(duration)
 				}
 			}
 		case "video_preview_track_load":

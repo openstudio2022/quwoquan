@@ -1,0 +1,32 @@
+backend: postgres
+tables:
+  control_plane_documents:
+    entity: ConfigInstanceReport
+    role: authoritative
+    description: platform-ops scope 下 namespace=config_instance_reports 的运行实例配置 ACK；body 保存经服务身份和候选 ReleaseManifest 摘要校验后的规范文档。
+    pk:
+    - scope
+    - namespace
+    - document_id
+    columns:
+    - name: scope
+      type: TEXT
+      constraints: [PK, NOT_NULL]
+    - name: namespace
+      type: TEXT
+      constraints: [PK, NOT_NULL]
+    - name: document_id
+      type: TEXT
+      constraints: [PK, NOT_NULL]
+    - name: body
+      type: JSONB
+      constraints: [NOT_NULL]
+    - name: updated_at
+      type: TIMESTAMPTZ
+      constraints: [NOT_NULL]
+      default: NOW()
+    indexes:
+    - name: idx_control_plane_documents_namespace
+      columns: [scope, namespace, document_id]
+    optimistic_lock: updated_at
+role: authoritative

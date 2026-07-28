@@ -10,14 +10,30 @@ import re
 from pathlib import Path
 from typing import Any
 
+try:
+    from quwoquan_ops.cli.prod.collect_release_artifact_descriptors import (
+        ARTIFACT_SCHEMAS,
+    )
+except ModuleNotFoundError:  # Direct CLI execution sets sys.path to this directory.
+    from collect_release_artifact_descriptors import ARTIFACT_SCHEMAS
+
 
 DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
+REQUIRED_RELEASE_ARTIFACTS = (
+    "publicWeb",
+    "androidOfficialRelease",
+    "opsPortal",
+    "contractGraph",
+    "providerBindings",
+    "testEvidence",
+)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--artifact-dir", required=True, type=Path)
-    parser.add_argument("--image-descriptors-dir", required=True, type=Path)
+    parser.add_argument("--image-descriptors-dir", type=Path)
+    parser.add_argument("--artifact-descriptors-dir", type=Path)
     return parser.parse_args()
 
 
@@ -95,7 +111,66 @@ def validate_descriptor(
     }
 
 
-def finalize(artifact_dir: Path, descriptors_dir: Path) -> dict[str, Any]:
+def load_release_artifacts(
+    artifact_dir: Path,
+    descriptors_dir: Path,
+) -> dict[str, dict[str, Any]]:
+    artifacts: dict[str, dict[str, Any]] = {}
+    for descriptor_path in sorted(descriptors_dir.glob("*.json")):
+        descriptor = load_json(descriptor_path)
+        artifact_id = str(descriptor.get("artifactId") or "").strip()
+        schema = str(descriptor.get("schema") or "").strip()
+        relative = str(descriptor.get("path") or "").strip()
+        declared_digest = str(descriptor.get("sha256") or "").strip()
+        if artifact_id not in REQUIRED_RELEASE_ARTIFACTS:
+            raise ValueError(f"unsupported release artifact id: {artifact_id!r}")
+        if artifact_id in artifacts:
+            raise ValueError(f"duplicate release artifact descriptor: {artifact_id}")
+        expected_schema = ARTIFACT_SCHEMAS[artifact_id]
+        if schema != expected_schema:
+            raise ValueError(
+                f"release artifact {artifact_id} schema mismatch: "
+                f"{schema!r} != {expected_schema!r}"
+            )
+        relative_path = Path(relative)
+        if (
+            not relative
+            or relative_path.is_absolute()
+            or ".." in relative_path.parts
+        ):
+            raise ValueError(f"release artifact {artifact_id} path is unsafe")
+        artifact_path = (artifact_dir / relative_path).resolve()
+        if artifact_dir.resolve() not in artifact_path.parents:
+            raise ValueError(f"release artifact {artifact_id} escapes artifact root")
+        if not artifact_path.is_file():
+            raise ValueError(f"release artifact {artifact_id} is missing: {relative}")
+        actual_digest = sha256_file(artifact_path)
+        if declared_digest != actual_digest:
+            raise ValueError(f"release artifact {artifact_id} digest mismatch")
+        digest_field = (
+            "manifestSHA256"
+            if artifact_id in {"publicWeb", "androidOfficialRelease"}
+            else "contentSHA256"
+        )
+        artifacts[artifact_id] = {
+            "schema": schema,
+            "path": relative_path.as_posix(),
+            digest_field: actual_digest,
+        }
+    if set(artifacts) != set(REQUIRED_RELEASE_ARTIFACTS):
+        missing = sorted(set(REQUIRED_RELEASE_ARTIFACTS) - set(artifacts))
+        extra = sorted(set(artifacts) - set(REQUIRED_RELEASE_ARTIFACTS))
+        raise ValueError(
+            f"release artifact descriptor set mismatch: missing={missing}, extra={extra}"
+        )
+    return artifacts
+
+
+def finalize(
+    artifact_dir: Path,
+    descriptors_dir: Path | None,
+    artifact_descriptors_dir: Path | None = None,
+) -> dict[str, Any]:
     manifest_path = artifact_dir / "manifest.json"
     manifest = load_json(manifest_path)
     if manifest.get("schema") != "mainline-release-artifact":
@@ -112,7 +187,18 @@ def finalize(artifact_dir: Path, descriptors_dir: Path) -> dict[str, Any]:
     if not image_version:
         raise ValueError("release artifact is missing imageVersion")
 
-    descriptors = load_image_descriptors(descriptors_dir)
+    if descriptors_dir is None:
+        if artifact_descriptors_dir is None or manifest.get("status") != "component-ready":
+            raise ValueError(
+                "existing image descriptors may only be reused while attaching "
+                "whole-app artifacts to a component-ready manifest"
+            )
+        existing_images = manifest.get("images")
+        if not isinstance(existing_images, dict):
+            raise ValueError("component-ready manifest is missing immutable images")
+        descriptors = existing_images
+    else:
+        descriptors = load_image_descriptors(descriptors_dir)
     required_set = set(required)
     if set(descriptors) != required_set:
         missing = sorted(required_set - set(descriptors))
@@ -141,7 +227,17 @@ def finalize(artifact_dir: Path, descriptors_dir: Path) -> dict[str, Any]:
             raise ValueError(f"release config digest mismatch for {service}")
 
     manifest["images"] = images
-    manifest["status"] = "deployable"
+    if artifact_descriptors_dir is None:
+        manifest.pop("requiredArtifacts", None)
+        manifest.pop("artifacts", None)
+        manifest["status"] = "component-ready"
+    else:
+        manifest["requiredArtifacts"] = list(REQUIRED_RELEASE_ARTIFACTS)
+        manifest["artifacts"] = load_release_artifacts(
+            artifact_dir,
+            artifact_descriptors_dir,
+        )
+        manifest["status"] = "deployable"
     manifest.pop("manifestDigest", None)
     manifest["manifestDigest"] = (
         "sha256:" + hashlib.sha256(canonical_bytes(manifest)).hexdigest()
@@ -156,12 +252,24 @@ def finalize(artifact_dir: Path, descriptors_dir: Path) -> dict[str, Any]:
 def main() -> int:
     args = parse_args()
     try:
-        manifest = finalize(args.artifact_dir.resolve(), args.image_descriptors_dir.resolve())
+        manifest = finalize(
+            args.artifact_dir.resolve(),
+            (
+                args.image_descriptors_dir.resolve()
+                if args.image_descriptors_dir is not None
+                else None
+            ),
+            (
+                args.artifact_descriptors_dir.resolve()
+                if args.artifact_descriptors_dir is not None
+                else None
+            ),
+        )
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"FAIL: {error}")
         return 1
     print(
-        "OK: deployable release artifact "
+        f"OK: {manifest['status']} release artifact "
         f"{manifest['manifestDigest']} includes {len(manifest['images'])} immutable images"
     )
     return 0

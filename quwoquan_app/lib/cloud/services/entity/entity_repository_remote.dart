@@ -2,9 +2,9 @@ part of 'entity_repository.dart';
 
 /// 将 pure-contract Homepage facets 投影为 App 页面 DTO。
 ///
-/// 它不包含 transport、fixture 或运行环境分支，因此 production 可注入 Remote
-/// facets，alpha/test 则在 production 图外注入 `quwoquan_cloud_mock` 的 typed
-/// adapter。页面始终只消费 [HomepageQuery] / [HomepageCommandWriter]。
+/// 它不包含 transport、fixture 或运行环境分支；四环境统一注入 Remote facets，
+/// local_contract 可在测试树内覆盖 typed port。页面始终只消费
+/// [HomepageQuery] / [HomepageCommandWriter]。
 class HomepageFacetProjectionAdapter implements HomepageFacetSet {
   HomepageFacetProjectionAdapter({
     required this.query,

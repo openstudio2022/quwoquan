@@ -31,7 +31,7 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
       final caps = ref.read(platformCapabilitiesProvider);
       final hasQuickLogin = caps.quickLoginPersistence
           ? stored.hasValidQuickLoginCredential
-          : stored.refreshToken.trim().isNotEmpty;
+          : stored.quickLoginRefreshToken.isNotEmpty;
       final fullPhone = _validFullPhoneOrEmpty(
         stored.rememberedLoginIdentifier,
       );
@@ -80,13 +80,13 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
           .read(authenticationChallengeCommandWriterProvider)
           .resolveOneTapLoginHint(
             ResolveOneTapLoginHintCommand(
-            vendor: probe.vendor,
-            carrierToken: probe.carrierToken,
-            deviceId: session.installId.isNotEmpty
-                ? session.installId
-                : stored.installId,
-            platform: CloudRequestHeaders.platform(),
-            appVersion: CloudRequestHeaders.appVersion,
+              vendor: probe.vendor,
+              carrierToken: probe.carrierToken,
+              deviceId: session.installId.isNotEmpty
+                  ? session.installId
+                  : stored.installId,
+              platform: CloudRequestHeaders.platform(),
+              appVersion: CloudRequestHeaders.appVersion,
             ),
           )
           .timeout(_LoginFrameHostState._probeTimeout);
@@ -217,7 +217,7 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
           kind: LoginEntryKind.phoneOtp,
           phoneOtpState: LoginPhoneOtpState.idle(),
           primaryAction: LoginPrimaryAction.requestOtp,
-          message: UITextConstants.loginSessionExpiredHint,
+          message: FoundationText.loginSessionExpiredHint,
         ),
       );
       return;
@@ -233,7 +233,7 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
         kind: LoginEntryKind.phoneOtp,
         phoneOtpState: prefilled,
         primaryAction: LoginPrimaryAction.requestOtp,
-        message: UITextConstants.loginSessionExpiredHint,
+        message: FoundationText.loginSessionExpiredHint,
       ),
     );
   }
@@ -310,7 +310,7 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
     _setPhoneOtpState(
       state.copyWith(
         phase: LoginPhoneOtpPhase.invalid,
-        message: UITextConstants.loginPhoneInvalid,
+        message: FoundationText.loginPhoneInvalid,
       ),
     );
   }
@@ -353,8 +353,8 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
       return;
     }
     final message = _isValidMainlandPhone(state.phone)
-        ? UITextConstants.loginOtpRequired
-        : UITextConstants.loginPhoneInvalid;
+        ? FoundationText.loginOtpRequired
+        : FoundationText.loginPhoneInvalid;
     _setPhoneOtpState(
       state.copyWith(
         phase: _isValidMainlandPhone(state.phone)
@@ -403,13 +403,13 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
           .read(authenticationChallengeCommandWriterProvider)
           .sendOtp(
             SendOtpCommand(
-            phone: state.phone,
-            deviceId: session.installId.isNotEmpty
-                ? session.installId
-                : stored.installId,
-            platform: CloudRequestHeaders.platform(),
-            appVersion: CloudRequestHeaders.appVersion,
-            sourceOperation: 'login',
+              phone: state.phone,
+              deviceId: session.installId.isNotEmpty
+                  ? session.installId
+                  : stored.installId,
+              platform: CloudRequestHeaders.platform(),
+              appVersion: CloudRequestHeaders.appVersion,
+              sourceOperation: 'login',
             ),
           );
       if (!_isCurrentLoginAttempt(attempt)) {
@@ -481,15 +481,15 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
           .read(accountSessionLoginCommandWriterProvider)
           .loginWithPhone(
             LoginWithPhoneCommand(
-            phone: state.phone,
-            otpCode: state.code,
-            deviceId: session.installId.isNotEmpty
-                ? session.installId
-                : stored.installId,
-            platform: CloudRequestHeaders.platform(),
-            appVersion: CloudRequestHeaders.appVersion,
-            agreementVersion: AuthLegalConfig.agreementVersion,
-            privacyVersion: AuthLegalConfig.privacyVersion,
+              phone: state.phone,
+              otpCode: state.code,
+              deviceId: session.installId.isNotEmpty
+                  ? session.installId
+                  : stored.installId,
+              platform: CloudRequestHeaders.platform(),
+              appVersion: CloudRequestHeaders.appVersion,
+              agreementVersion: AuthLegalConfig.agreementVersion,
+              privacyVersion: AuthLegalConfig.privacyVersion,
             ),
           );
       if (!_isCurrentLoginAttempt(attempt)) {
@@ -510,7 +510,7 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
       _setPhoneOtpState(
         state.copyWith(
           phase: LoginPhoneOtpPhase.success,
-          message: UITextConstants.loginRedirecting,
+          message: FoundationText.loginRedirecting,
         ),
       );
       // 登录成功提交自动填充上下文，便于系统保存手机号/验证码以供下次自动填充。

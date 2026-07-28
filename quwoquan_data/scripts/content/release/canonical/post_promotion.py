@@ -3,7 +3,11 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from typing import Any, Mapping
 
+from core.image_deduplication import perceptual_hash_distance
+from core.image_safety import NEAR_DUP_HAMMING
+from core.io import read_json
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
 from core.tree_integrity import tree_integrity_stats
 from content.execution.workspace import execution_root, write_publish_ref
@@ -21,22 +25,99 @@ from content.release.canonical.object_transaction_lock import (
 )
 
 
-def _approved_post_refs(root: Path) -> tuple[str, ...]:
-    refs: list[str] = []
-    posts = root / "posts"
-    for attestation_path in sorted(posts.rglob("5.review/attestation.json")):
-        from core.io import read_json
-
-        attestation = read_json(attestation_path)
-        if not isinstance(attestation, dict) or attestation.get("decision") != "approved":
+def _image_identities(manifest: Mapping[str, Any]) -> tuple[tuple[str, str, str], ...]:
+    rows: list[tuple[str, str, str]] = []
+    for raw in manifest.get("assets") or []:
+        if not isinstance(raw, Mapping):
             continue
-        post_root = attestation_path.parent.parent
-        if not (post_root / "manifest.json").is_file():
-            raise ObjectTransactionError(f"approved post missing manifest: {post_root}")
-        refs.append(post_root.relative_to(posts).as_posix())
+        kind = str(raw.get("kind") or "").strip()
+        mime = str(raw.get("mimeType") or "").strip().lower()
+        if kind != "image" and not mime.startswith("image/"):
+            continue
+        rows.append(
+            (
+                str(raw.get("assetId") or "").strip() or "<unnamed-image>",
+                str(raw.get("sha256") or "").strip().lower(),
+                str(raw.get("perceptualHash") or "").strip().lower(),
+            )
+        )
+    return tuple(rows)
+
+
+def _assert_cross_publish_image_unique(
+    *,
+    package_root: Path,
+    canonical_post: Path,
+) -> None:
+    """Reject exact or perceptually duplicated images across canonical posts."""
+
+    package_manifest = read_json(package_root / "object/manifest.json")
+    if not isinstance(package_manifest, Mapping):
+        raise ObjectTransactionError("post transaction manifest must be an object")
+    candidates = _image_identities(package_manifest)
+    if str(package_manifest.get("contentType") or "").strip() == "image":
+        if not candidates or any(not perceptual for _, _, perceptual in candidates):
+            raise ObjectTransactionError(
+                "commercial image post requires perceptualHash for every image asset"
+            )
+
+    accepted: list[tuple[str, str, str, str]] = []
+    for manifest_path in sorted((PUBLISH_ROOT / "posts").glob("**/manifest.json")):
+        if manifest_path.parent == canonical_post:
+            continue
+        existing = read_json(manifest_path)
+        if not isinstance(existing, Mapping):
+            raise ObjectTransactionError(
+                f"canonical post manifest must be an object: {manifest_path}"
+            )
+        existing_ref = manifest_path.parent.relative_to(PUBLISH_ROOT).as_posix()
+        accepted.extend(
+            (existing_ref, asset_id, digest, perceptual)
+            for asset_id, digest, perceptual in _image_identities(existing)
+        )
+
+    for index, (asset_id, digest, perceptual) in enumerate(candidates):
+        peers = accepted + [
+            ("pending-post", peer_id, peer_digest, peer_perceptual)
+            for peer_id, peer_digest, peer_perceptual in candidates[:index]
+        ]
+        for peer_ref, peer_id, peer_digest, peer_perceptual in peers:
+            if digest and peer_digest and digest == peer_digest:
+                raise ObjectTransactionError(
+                    "canonical image identity duplicated by sha256: "
+                    f"{asset_id} conflicts with {peer_ref}:{peer_id}"
+                )
+            if (
+                perceptual
+                and peer_perceptual
+                and perceptual_hash_distance(perceptual, peer_perceptual)
+                <= NEAR_DUP_HAMMING
+            ):
+                raise ObjectTransactionError(
+                    "canonical image identity duplicated by perceptualHash: "
+                    f"{asset_id} conflicts with {peer_ref}:{peer_id}"
+                )
+
+
+def _qualified_post_refs(execution_id: str) -> tuple[str, ...]:
+    from content.execution.post_review_closure import (
+        indexed_post_targets,
+        load_post_review_closure,
+    )
+
+    closure = load_post_review_closure(
+        execution_id,
+        expected_object_targets=indexed_post_targets(execution_id),
+    )
+    refs = tuple(
+        publish_ref.removeprefix("posts/")
+        for publish_ref in closure.qualified_publish_refs
+    )
     if not refs:
-        raise ObjectTransactionError("execution has no approved posts for canonical promotion")
-    return tuple(refs)
+        raise ObjectTransactionError(
+            "post review closure has no qualified posts for canonical promotion"
+        )
+    return refs
 
 
 @canonical_publish_serialized
@@ -48,14 +129,16 @@ def promote_post_object(execution_id: str, post_ref: str) -> dict[str, str]:
         normalized_ref = normalized_ref.removeprefix("posts/")
     if len(normalized_ref.split("/")) < 4:
         raise ObjectTransactionError(f"post objectRef is invalid: {post_ref!r}")
+    if normalized_ref not in set(_qualified_post_refs(execution_id)):
+        raise ObjectTransactionError(
+            f"post is discarded by the post review closure: {normalized_ref}"
+        )
     post_root = root / "posts" / normalized_ref
     attestation_path = post_root / "5.review/attestation.json"
     if not attestation_path.is_file() or not (post_root / "manifest.json").is_file():
         raise ObjectTransactionError(
             f"post is not materialized and reviewed: {normalized_ref}"
         )
-    from core.io import read_json
-
     attestation = read_json(attestation_path)
     if not isinstance(attestation, dict) or attestation.get("decision") != "approved":
         raise ObjectTransactionError(f"post is not review-approved: {normalized_ref}")
@@ -76,6 +159,10 @@ def promote_post_object(execution_id: str, post_ref: str) -> dict[str, str]:
         object_ref=normalized_ref,
         transaction_id=transaction_id,
         package_root=package_root,
+    )
+    _assert_cross_publish_image_unique(
+        package_root=package_root,
+        canonical_post=canonical_post,
     )
     if apply_report.is_file() and (canonical_post / "manifest.json").is_file():
         if (
@@ -118,8 +205,7 @@ def promote_post_object(execution_id: str, post_ref: str) -> dict[str, str]:
 
 
 def promote_execution_posts(execution_id: str) -> tuple[str, ...]:
-    root = execution_root(execution_id)
-    refs = _approved_post_refs(root)
+    refs = _qualified_post_refs(execution_id)
     for post_ref in refs:
         promote_post_object(execution_id, post_ref)
     write_publish_ref(execution_id, post_refs=refs)

@@ -1,0 +1,38 @@
+domain: OPS
+aggregate: ConfigInstanceReport
+description: 实例配置 ACK 的身份、候选版本与存储失败语义。
+errors:
+- code: OPS.USER.config_instance_report_invalid
+  kind: USER
+  reason: config_instance_report_invalid
+  http_status: 400
+  recovery_action: configure
+  dart_const: configInstanceReportInvalid
+  go_const: ErrConfigInstanceReportInvalid
+  user_message: {zh: 实例配置报告无效, en: The instance config report is invalid}
+- code: OPS.USER.config_instance_report_conflict
+  kind: USER
+  reason: config_instance_report_conflict
+  http_status: 409
+  recovery_action: refresh
+  dart_const: configInstanceReportConflict
+  go_const: ErrConfigInstanceReportConflict
+  user_message: {zh: 实例配置报告与当前候选版本不一致, en: The instance config report conflicts with the current candidate}
+- code: OPS.SYSTEM.config_instance_report_candidate_unavailable
+  kind: SYSTEM
+  reason: config_instance_report_candidate_unavailable
+  http_status: 503
+  recovery_action: retry
+  recovery_after_seconds: 2
+  dart_const: configInstanceReportCandidateUnavailable
+  go_const: ErrConfigInstanceReportCandidateUnavailable
+  user_message: {zh: 当前发布候选尚未就绪, en: The current release candidate is not ready}
+- code: OPS.SYSTEM.config_instance_report_storage_failed
+  kind: SYSTEM
+  reason: config_instance_report_storage_failed
+  http_status: 500
+  recovery_action: retry
+  recovery_after_seconds: 2
+  dart_const: configInstanceReportStorageFailed
+  go_const: ErrConfigInstanceReportStorageFailed
+  user_message: {zh: 实例配置报告保存失败, en: The instance config report could not be stored}

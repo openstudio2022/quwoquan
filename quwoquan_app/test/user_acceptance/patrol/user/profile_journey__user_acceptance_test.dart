@@ -86,14 +86,14 @@ void main() {
       await _verifyAuthorImpactEvidence($);
 
       // 编辑资料真实保存并回读：入口、字段编辑、远端写入及主页刷新缺一不可。
-      final editEntry = find.text(UITextConstants.profileEditLabel);
+      final editEntry = find.text(ProfileText.profileEditLabel);
       expect(editEntry.evaluate(), isNotEmpty, reason: '我的主页必须提供编辑资料入口');
       await $.tester.tap(editEntry.first);
       await $.pump(const Duration(milliseconds: 400));
       await $.pump(const Duration(seconds: 1));
       final reachedEdit = await _waitForFinderInTree(
         $,
-        find.text(UITextConstants.editProfileSaveAction),
+        find.text(ProfileText.editProfileSaveAction),
         timeout: const Duration(seconds: 12),
       );
       expect(reachedEdit, isTrue, reason: '编辑资料页应可从我的主页进入');
@@ -123,8 +123,8 @@ void main() {
       expect(reachedProfile, isTrue, reason: '作者头像应跳转到用户主页');
 
       // 关注/取关真实往返：无论 seed 初态如何，都先归一为未关注，再验证完整往返。
-      final followEntry = find.text(UITextConstants.follow);
-      final followingEntry = find.text(UITextConstants.following);
+      final followEntry = find.text(FoundationText.follow);
+      final followingEntry = find.text(FoundationText.following);
       expect(
         followEntry.evaluate().isNotEmpty ||
             followingEntry.evaluate().isNotEmpty,
@@ -200,7 +200,7 @@ Future<void> _verifyAuthorImpactEvidence(PatrolIntegrationTester $) async {
     timeout: const Duration(seconds: 15),
   );
   expect(reachedEvidence, isTrue, reason: '证据明细必须回读服务端 evidence，而非样本或空态');
-  await $.tester.tap(find.text(UITextConstants.confirm));
+  await $.tester.tap(find.text(FoundationText.confirm));
   await $.pump(const Duration(milliseconds: 300));
 }
 
@@ -302,7 +302,7 @@ Future<void> _recoverToHomeFeed(PatrolIntegrationTester $) async {
 Future<bool> _tapBottomProfileTab(PatrolIntegrationTester $) async {
   for (final label in <String>[
     AppConceptConstants.profile,
-    UITextConstants.bottomNavGuestProfile,
+    FoundationText.bottomNavGuestProfile,
   ]) {
     final finder = find.text(label);
     if (finder.evaluate().isNotEmpty) {

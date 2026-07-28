@@ -89,11 +89,11 @@ void main() {
       template.landingUrl,
       startsWith(AppPublicContentLinks.postWebUrl('moment_1')),
     );
-    expect(find.text(UITextConstants.shareTemplateMomentTitle), findsOneWidget);
-    expect(find.text(UITextConstants.copyLink), findsOneWidget);
+    expect(find.text(MediaText.shareTemplateMomentTitle), findsOneWidget);
+    expect(find.text(FoundationText.copyLink), findsOneWidget);
     expect(find.text(ChatText.shareActionSavePoster), findsOneWidget);
     expect(find.text(ChatText.shareInternalTitle), findsOneWidget);
-    expect(find.text(UITextConstants.shareTargetCircle), findsOneWidget);
+    expect(find.text(ContentText.shareTargetCircle), findsOneWidget);
     expect(find.text(ChatText.shareTargetGroup), findsOneWidget);
     expect(find.text(ChatText.shareTargetMessage), findsOneWidget);
     expect(find.text(ChatText.shareExternalTitle), findsOneWidget);
@@ -151,7 +151,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text(UITextConstants.copyLink));
+    await tester.tap(find.text(FoundationText.copyLink));
     await tester.pump();
 
     expect(handler.executed, equals(<String>['copy_link']));
@@ -182,16 +182,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(UITextConstants.sectionLoadFailedTitleDefault),
-      findsOneWidget,
-    );
-    expect(find.text(UITextConstants.shareTargetCircle), findsOneWidget);
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+    expect(find.text(ContentText.shareTargetCircle), findsOneWidget);
     expect(find.text(ChatText.shareTargetGroup), findsOneWidget);
     expect(find.text(ChatText.shareTargetMessage), findsOneWidget);
     expect(find.text(ChatText.shareExternalTitle), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.tap(find.text(SearchText.reload));
     await tester.pump();
     expect(retryCount, 1);
   });
@@ -250,7 +247,7 @@ void main() {
                   template,
                   const ContentShareAction(
                     id: 'copy_link',
-                    label: UITextConstants.copyLink,
+                    label: FoundationText.copyLink,
                   ),
                 );
               },
@@ -314,11 +311,8 @@ void main() {
       template.landingUrl,
       startsWith(AppPublicContentLinks.postWebUrl('work_1')),
     );
-    expect(find.text(UITextConstants.shareTemplateWorkTitle), findsOneWidget);
-    expect(
-      find.text(UITextConstants.shareCircleVisibilityNotice),
-      findsNothing,
-    );
+    expect(find.text(MediaText.shareTemplateWorkTitle), findsOneWidget);
+    expect(find.text(ContentText.shareCircleVisibilityNotice), findsNothing);
     expect(find.textContaining('#攻略 #夜景'), findsOneWidget);
   });
 
@@ -360,7 +354,7 @@ void main() {
 
     expect(template.isBlocked, isTrue);
     expect(find.text(ChatText.sharePrivateBlocked), findsAtLeastNWidgets(1));
-    expect(find.text(UITextConstants.copyLink), findsNothing);
+    expect(find.text(FoundationText.copyLink), findsNothing);
   });
 
   testWidgets('关闭 identity share flag 仍使用身份模板布局但标记为非身份模板', (tester) async {
@@ -402,7 +396,7 @@ void main() {
       ),
       findsAtLeastNWidgets(1),
     );
-    expect(find.text(UITextConstants.copyLink), findsOneWidget);
+    expect(find.text(FoundationText.copyLink), findsOneWidget);
     expect(find.text(ChatText.shareActionSavePoster), findsOneWidget);
   });
 
@@ -558,8 +552,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
-    expect(find.text(UITextConstants.submitNotCompleted), findsOneWidget);
-    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+    expect(find.text(ContentText.submitNotCompleted), findsOneWidget);
+    expect(find.text(ContentText.tryAgain), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('content-share-panel')),
       findsOneWidget,
@@ -619,7 +613,7 @@ void main() {
       find.text(UITextConstants.shareCircleConfirmTitle('摄影同好圈')),
       findsOneWidget,
     );
-    await tester.tap(find.text(UITextConstants.confirm));
+    await tester.tap(find.text(FoundationText.confirm));
     await tester.pumpAndSettle();
 
     expect(placementWriter.lastCommand?.postId, 'post_share_target');

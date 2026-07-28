@@ -423,15 +423,15 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(HomePage), findsOneWidget);
-      expect(find.text(UITextConstants.homeTabFollowing), findsWidgets);
-      expect(find.text(UITextConstants.homeTabRecommended), findsWidgets);
-      expect(find.text(UITextConstants.circleScenarioCampus), findsWidgets);
-      expect(find.text(UITextConstants.homeTabTravel), findsWidgets);
-      expect(find.text(UITextConstants.homeTabPhotography), findsWidgets);
-      expect(find.text(UITextConstants.homeTabTech), findsWidgets);
-      expect(find.text(UITextConstants.homeTabCarFriends), findsWidgets);
+      expect(find.text(DiscoveryText.homeTabFollowing), findsWidgets);
+      expect(find.text(DiscoveryText.homeTabRecommended), findsWidgets);
+      expect(find.text(DiscoveryText.circleScenarioCampus), findsWidgets);
+      expect(find.text(DiscoveryText.homeTabTravel), findsWidgets);
+      expect(find.text(DiscoveryText.homeTabPhotography), findsWidgets);
+      expect(find.text(DiscoveryText.homeTabTech), findsWidgets);
+      expect(find.text(DiscoveryText.homeTabCarFriends), findsWidgets);
       expect(
-        find.text(UITextConstants.circleScenarioTravelPhotography),
+        find.text(DiscoveryText.circleScenarioTravelPhotography),
         findsNothing,
       );
       expect(find.byIcon(CupertinoIcons.search), findsAtLeastNWidgets(1));
@@ -448,8 +448,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byKey(TestKeys.globalSearchLauncherButton), findsOneWidget);
-      expect(find.text(UITextConstants.globalXiaoquSearchHint), findsOneWidget);
-      expect(find.text(UITextConstants.globalXiaoquSearchAsk), findsOneWidget);
+      expect(find.text(DiscoveryText.globalXiaoquSearchHint), findsOneWidget);
+      expect(find.text(DiscoveryText.globalXiaoquSearchAsk), findsOneWidget);
       expect(
         tester.getSize(find.byKey(TestKeys.globalAssistantEntryMark)),
         const Size.square(AppSpacing.globalAssistantEntryMarkSize),
@@ -458,7 +458,7 @@ void main() {
         find.byKey(TestKeys.globalAssistantEntryMark),
       );
       final assistantLabelRect = tester.getRect(
-        find.text(UITextConstants.globalXiaoquSearchAsk),
+        find.text(DiscoveryText.globalXiaoquSearchAsk),
       );
       expect(
         assistantLabelRect.top - assistantMarkRect.bottom,
@@ -507,7 +507,7 @@ void main() {
         ),
       );
       final searchHint = tester.widget<Text>(
-        find.text(UITextConstants.globalXiaoquSearchHint),
+        find.text(DiscoveryText.globalXiaoquSearchHint),
       );
       final searchIcon = tester.widget<Icon>(
         find
@@ -588,7 +588,7 @@ void main() {
       final searchTop = tester.getTopLeft(searchBar).dy;
       final searchSize = tester.getSize(searchBar);
       final searchHint = tester.widget<Text>(
-        find.text(UITextConstants.globalXiaoquSearchHint),
+        find.text(DiscoveryText.globalXiaoquSearchHint),
       );
       final safeTop =
           tester.view.viewPadding.top / tester.view.devicePixelRatio;
@@ -633,7 +633,7 @@ void main() {
         find
             .descendant(
               of: selectedTab,
-              matching: find.text(UITextConstants.homeTabRecommended),
+              matching: find.text(DiscoveryText.homeTabRecommended),
             )
             .first,
       );
@@ -967,10 +967,10 @@ void main() {
         tester.getBottomRight(panel).dy,
         closeTo(tester.getSize(page).height, 2.0),
       );
-      expect(find.text(UITextConstants.copyLink), findsOneWidget);
-      expect(find.text(UITextConstants.cancel), findsOneWidget);
-      expect(find.text(UITextConstants.share), findsNothing);
-      expect(find.text(UITextConstants.viewOriginal), findsNothing);
+      expect(find.text(FoundationText.copyLink), findsOneWidget);
+      expect(find.text(FoundationText.cancel), findsOneWidget);
+      expect(find.text(FoundationText.share), findsNothing);
+      expect(find.text(ContentText.viewOriginal), findsNothing);
       expect(find.text('打赏'), findsNothing);
       expect(find.text('私信'), findsNothing);
       expect(find.text('字体设置'), findsNothing);
@@ -1259,12 +1259,12 @@ void main() {
       );
 
       // 撤销会恢复原卡片，并把 HotPath 反向行为反馈给服务端。
-      expect(find.text(UITextConstants.undo), findsOneWidget);
-      await tester.tap(find.text(UITextConstants.undo));
+      expect(find.text(ContentText.undo), findsOneWidget);
+      await tester.tap(find.text(ContentText.undo));
       await tester.pumpAndSettle();
       expect(cardFinder, findsOneWidget);
       expect(find.text(_singleRecommendPostBody), findsOneWidget);
-      expect(find.text(UITextConstants.notInterestedUndone), findsOneWidget);
+      expect(find.text(ContentText.notInterestedUndone), findsOneWidget);
 
       // 清理撤销成功 toast 的 3s 计时器，避免挂起 Timer。
       await tester.pump(const Duration(seconds: 3));

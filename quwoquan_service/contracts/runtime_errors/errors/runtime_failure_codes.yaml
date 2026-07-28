@@ -28,6 +28,27 @@ codes:
     defaultLocation:
       businessObject: app_request
       functionModule: network_client
+  - code: APP.NETWORK.connection_refused
+    origin: remoteDependency
+    kind: network
+    nature: transient
+    defaultLocation:
+      businessObject: app_request
+      functionModule: network_client
+  - code: APP.NETWORK.name_resolution_failed
+    origin: environment
+    kind: network
+    nature: transient
+    defaultLocation:
+      businessObject: app_request
+      functionModule: network_client
+  - code: APP.NETWORK.connection_failed
+    origin: environment
+    kind: network
+    nature: transient
+    defaultLocation:
+      businessObject: app_request
+      functionModule: network_client
   - code: APP.NETWORK.secure_connection_failed
     origin: environment
     kind: network

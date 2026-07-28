@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
 import 'package:quwoquan_app/cloud/rtc/generated/rtc_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
 import 'package:quwoquan_app/core/auth/auth_continuation.dart';
@@ -14,124 +15,12 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
-enum UiErrorCategory {
-  pageLoad,
-  sectionLoad,
-  listAppend,
-  submit,
-  authRequired,
-  permissionRequired,
-  validation,
-  notFound,
-  rateLimited,
-  backgroundAction,
-}
-
-enum UiErrorScope { page, section, form, dialog, global, inlineField }
-
-enum UiErrorPresentation {
-  transientNotice,
-  appendFooter,
-  emptyPage,
-  sectionSoftCard,
-  actionDialog,
-  gateCard,
-  formInlineCard,
-  inlineField,
-}
-
-enum UiErrorTone { neutral, info, caution, critical }
-
-enum UiErrorAppearanceMode { inherit, light, dark }
-
-enum UiErrorActionType { retry, login, openSettings, dismiss, resubmit }
-
-class UiErrorAction {
-  const UiErrorAction({required this.type, required this.label});
-
-  final UiErrorActionType type;
-  final String label;
-}
-
-class UiErrorSemantic {
-  const UiErrorSemantic({
-    required this.category,
-    required this.scope,
-    required this.title,
-    required this.message,
-    this.secondaryMessage,
-    this.primaryAction,
-    this.secondaryAction,
-    this.dismissible = false,
-    this.sourceCode,
-    this.failureKind,
-    this.copyKey,
-    this.recoveryAction,
-    this.presentation = UiErrorPresentation.emptyPage,
-    this.tone = UiErrorTone.neutral,
-    this.appearanceMode = UiErrorAppearanceMode.inherit,
-    this.sourceRouteId,
-    this.sourceSurfaceId,
-  });
-
-  final UiErrorCategory category;
-  final UiErrorScope scope;
-  final String title;
-  final String message;
-  final String? secondaryMessage;
-  final UiErrorAction? primaryAction;
-  final UiErrorAction? secondaryAction;
-  final bool dismissible;
-  final String? sourceCode;
-  final RuntimeFailureKind? failureKind;
-  final String? copyKey;
-  final RuntimeRecoveryAction? recoveryAction;
-  final UiErrorPresentation presentation;
-  final UiErrorTone tone;
-  final UiErrorAppearanceMode appearanceMode;
-  final String? sourceRouteId;
-  final String? sourceSurfaceId;
-}
-
-extension UiErrorAppearanceModeX on UiErrorAppearanceMode {
-  String? get routeValue {
-    return switch (this) {
-      UiErrorAppearanceMode.inherit => null,
-      UiErrorAppearanceMode.light => 'light',
-      UiErrorAppearanceMode.dark => 'dark',
-    };
-  }
-
-  Brightness? get brightness {
-    return switch (this) {
-      UiErrorAppearanceMode.inherit => null,
-      UiErrorAppearanceMode.light => Brightness.light,
-      UiErrorAppearanceMode.dark => Brightness.dark,
-    };
-  }
-}
-
-UiErrorAppearanceMode uiErrorAppearanceModeFromBrightness(
-  Brightness brightness,
-) {
-  return brightness == Brightness.dark
-      ? UiErrorAppearanceMode.dark
-      : UiErrorAppearanceMode.light;
-}
-
-UiErrorAppearanceMode uiErrorAppearanceModeFromRouteValue(String? raw) {
-  return switch ((raw ?? '').trim()) {
-    'light' => UiErrorAppearanceMode.light,
-    'dark' => UiErrorAppearanceMode.dark,
-    _ => UiErrorAppearanceMode.inherit,
-  };
-}
-
-String? uiErrorAppearanceRouteValueFor(BuildContext context) {
-  return uiErrorAppearanceModeFromBrightness(
-    CupertinoTheme.of(context).brightness ?? Brightness.light,
-  ).routeValue;
-}
+import 'app_user_recovery.dart';
+import 'ui_error_appearance.dart';
+import 'ui_error_models.dart';
+export 'app_user_recovery.dart';
+export 'ui_error_appearance.dart';
+export 'ui_error_models.dart';
 
 class UiErrorSemanticResolver {
   const UiErrorSemanticResolver._();
@@ -140,12 +29,17 @@ class UiErrorSemanticResolver {
     return Localizations.of<AppLocalizations>(context, AppLocalizations);
   }
 
-  static String _retryLabel(BuildContext context) {
-    return UITextConstants.tryAgain;
+  static String _retryLabel(
+    BuildContext context, {
+    required UiErrorCategory category,
+  }) {
+    return category == UiErrorCategory.pageLoad
+        ? SearchText.reload
+        : ContentText.tryAgain;
   }
 
   static String _confirmLabel(BuildContext context) {
-    return _maybeL10n(context)?.confirm ?? UITextConstants.confirm;
+    return _maybeL10n(context)?.confirm ?? FoundationText.confirm;
   }
 
   static String _openSettingsLabel(BuildContext context) {
@@ -161,13 +55,47 @@ class UiErrorSemanticResolver {
     AuthContinuation? continuation,
     bool allowRetry = true,
     bool allowOpenSettings = false,
+    bool verifiedUpdateAvailable = false,
     UiErrorPresentation? presentation,
     UiErrorTone? tone,
     UiErrorAppearanceMode appearanceMode = UiErrorAppearanceMode.inherit,
     String? sourceRouteId,
     String? sourceSurfaceId,
+    String? sourceOperationId,
   }) {
     final failure = _runtimeFailureFromError(error);
+    final effectiveSourceOperationId =
+        error is CloudException &&
+            (error.sourceOperationId?.trim().isNotEmpty ?? false)
+        ? error.sourceOperationId!.trim()
+        : sourceOperationId;
+    if (verifiedUpdateAvailable ||
+        allowOpenSettings ||
+        _usesUserRecoveryContract(category)) {
+      final group = AppUserRecoveryContract.classify(
+        error: error,
+        failure: failure,
+        category: category,
+        allowOpenSettings: allowOpenSettings,
+        verifiedUpdateAvailable: verifiedUpdateAvailable,
+      );
+      return AppUserRecoveryContract.semanticFor(
+        group: group,
+        category: category,
+        scope: scope,
+        retryAfterSeconds: AppUserRecoveryContract.retryAfterSeconds(error),
+        sourceCode: _sourceCode(error, failure),
+        failureKind: failure?.kind,
+        presentation: presentation,
+        tone: tone,
+        appearanceMode: appearanceMode,
+        sourceRouteId: sourceRouteId,
+        sourceSurfaceId: sourceSurfaceId,
+        sourceOperationId: effectiveSourceOperationId,
+        requestId: error is CloudException ? error.requestId : null,
+        traceId: error is CloudException ? error.traceId : null,
+      );
+    }
     final recoveryAction = _deriveRecoveryAction(
       error,
       failure,
@@ -175,7 +103,13 @@ class UiErrorSemanticResolver {
       allowRetry: allowRetry,
       allowOpenSettings: allowOpenSettings,
     );
-    final domainMessage = _domainMessage(context, error, category: category);
+    final domainMessage = _domainMessage(
+      context,
+      error,
+      failure: failure,
+      category: category,
+      sourceOperationId: effectiveSourceOperationId,
+    );
     final fallbackMessage = _fallbackMessage(
       context,
       error: error,
@@ -183,6 +117,7 @@ class UiErrorSemanticResolver {
       failure: failure,
       authGateReason: authGateReason,
       allowOpenSettings: allowOpenSettings,
+      sourceOperationId: effectiveSourceOperationId,
     );
     final message = domainMessage ?? fallbackMessage;
     final sourceCode = _sourceCode(error, failure);
@@ -198,6 +133,7 @@ class UiErrorSemanticResolver {
       authGateReason: authGateReason,
       failure: failure,
       allowOpenSettings: allowOpenSettings,
+      sourceOperationId: effectiveSourceOperationId,
     );
     final secondaryMessage = _secondaryMessage(
       authGateReason: authGateReason,
@@ -212,6 +148,7 @@ class UiErrorSemanticResolver {
       secondaryMessage: secondaryMessage,
       primaryAction: _primaryAction(
         context,
+        error: error,
         category: category,
         recoveryAction: recoveryAction,
         authGateReason: authGateReason,
@@ -237,6 +174,9 @@ class UiErrorSemanticResolver {
       appearanceMode: appearanceMode,
       sourceRouteId: sourceRouteId,
       sourceSurfaceId: sourceSurfaceId,
+      sourceOperationId: effectiveSourceOperationId,
+      requestId: error is CloudException ? error.requestId : null,
+      traceId: error is CloudException ? error.traceId : null,
     );
   }
 
@@ -246,30 +186,28 @@ class UiErrorSemanticResolver {
     AuthContinuation? continuation,
     UiErrorScope scope = UiErrorScope.global,
   }) {
+    const group = AppUserRecoveryGroup.loginAgain;
+    final copy = AppUserRecoveryContract.copyFor(group);
     return UiErrorSemantic(
       category: UiErrorCategory.authRequired,
       scope: scope,
-      title: reason.title,
-      message: reason.prompt,
-      secondaryMessage: _secondaryMessage(
-        authGateReason: reason,
-        continuation: continuation,
-        failure: null,
-      ),
-      primaryAction: UiErrorAction(
-        type: UiErrorActionType.login,
-        label: UITextConstants.login,
-      ),
-      secondaryAction: UiErrorAction(
-        type: UiErrorActionType.dismiss,
-        label: UITextConstants.loginLater,
-      ),
+      title: copy.title,
+      message: copy.message,
+      primaryAction: copy.action,
       dismissible: true,
-      copyKey: 'authRequired',
-      recoveryAction: RuntimeRecoveryAction.surface,
+      copyKey: 'recovery.loginAgain',
+      recoveryAction: copy.recoveryAction,
       presentation: UiErrorPresentation.gateCard,
       tone: UiErrorTone.info,
+      userRecoveryGroup: group,
     );
+  }
+
+  static bool _usesUserRecoveryContract(UiErrorCategory category) {
+    return switch (category) {
+      UiErrorCategory.submit || UiErrorCategory.validation => false,
+      _ => true,
+    };
   }
 
   static UiErrorPresentation _presentationFor({
@@ -342,6 +280,9 @@ class UiErrorSemanticResolver {
             error.type == CloudErrorType.unauthorized)) {
       return RuntimeRecoveryAction.surface;
     }
+    if (_statusCode(error, failure) == 409 && allowRetry) {
+      return RuntimeRecoveryAction.retry;
+    }
     if (failure?.kind == RuntimeFailureKind.validation ||
         category == UiErrorCategory.validation) {
       return category == UiErrorCategory.submit
@@ -351,10 +292,10 @@ class UiErrorSemanticResolver {
     if (error is CloudException) {
       final retryableCloud =
           error.type == CloudErrorType.timeout ||
-          error.type == CloudErrorType.network ||
+          (error.type == CloudErrorType.network &&
+              failure?.nature == RuntimeFailureNature.transient) ||
           error.type == CloudErrorType.server ||
-          error.type == CloudErrorType.invalidResponse ||
-          error.type == CloudErrorType.unknown;
+          error.type == CloudErrorType.rateLimited;
       if (allowRetry && retryableCloud) {
         return RuntimeRecoveryAction.retry;
       }
@@ -366,12 +307,8 @@ class UiErrorSemanticResolver {
     if (allowRetry &&
         (failure?.nature == RuntimeFailureNature.transient ||
             failure?.kind == RuntimeFailureKind.timeout ||
-            failure?.kind == RuntimeFailureKind.network ||
             failure?.kind == RuntimeFailureKind.unavailable ||
             failure?.kind == RuntimeFailureKind.rateLimited)) {
-      return RuntimeRecoveryAction.retry;
-    }
-    if (allowRetry && failure == null) {
       return RuntimeRecoveryAction.retry;
     }
     return RuntimeRecoveryAction.surface;
@@ -388,34 +325,30 @@ class UiErrorSemanticResolver {
   static String? _domainMessage(
     BuildContext context,
     Object error, {
+    required RuntimeFailureBase? failure,
     required UiErrorCategory category,
+    String? sourceOperationId,
   }) {
     if (category == UiErrorCategory.listAppend ||
         category == UiErrorCategory.backgroundAction ||
         category == UiErrorCategory.sectionLoad) {
       return null;
     }
-    final failureKind = _effectiveFailureKind(
-      error,
-      _runtimeFailureFromError(error),
-    );
-    if (category == UiErrorCategory.pageLoad &&
-        switch (failureKind) {
-          RuntimeFailureKind.network ||
-          RuntimeFailureKind.timeout ||
-          RuntimeFailureKind.rateLimited ||
-          RuntimeFailureKind.unavailable => true,
-          _ => false,
-        }) {
-      return null;
-    }
     final l10n = _maybeL10n(context);
     if (error is CloudException) {
+      final code = error.code?.trim() ?? '';
+      if (category == UiErrorCategory.pageLoad &&
+          (_statusCode(error, failure) != null ||
+              code.startsWith('APP.') ||
+              sourceOperationId == 'GetFeed')) {
+        // 页面级基础设施与 Feed 路由错误由统一语义表决定，禁止被服务端
+        // 泛化 userMessage 或领域默认文案重新解释为其它原因。
+        return null;
+      }
       final userMessage = error.userMessage?.trim() ?? '';
       if (userMessage.isNotEmpty) {
         return userMessage;
       }
-      final code = error.code?.trim() ?? '';
       if (code.isEmpty) {
         final localMessage = error.message.trim();
         if (category != UiErrorCategory.pageLoad && localMessage.isNotEmpty) {
@@ -430,7 +363,7 @@ class UiErrorSemanticResolver {
             return _localizedContentMessage(l10n, contentError);
           }
           return ContentErrorMessages.zh[contentError] ??
-              UITextConstants.contentUnavailableReason;
+              ContentText.contentUnavailableReason;
         }
       }
       if (code.startsWith('ENTITY.')) {
@@ -516,14 +449,14 @@ class UiErrorSemanticResolver {
               l10n,
               zh:
                   IntegrationLocationErrorMessages.zh[integrationError] ??
-                  UITextConstants.contentLoadSoftFailed,
+                  FoundationText.contentLoadSoftFailed,
               en:
                   IntegrationLocationErrorMessages.en[integrationError] ??
-                  UITextConstants.contentLoadSoftFailed,
+                  FoundationText.contentLoadSoftFailed,
             );
           }
           return IntegrationLocationErrorMessages.zh[integrationError] ??
-              UITextConstants.contentLoadSoftFailed;
+              FoundationText.contentLoadSoftFailed;
         }
       }
     }
@@ -537,6 +470,7 @@ class UiErrorSemanticResolver {
     required RuntimeFailureBase? failure,
     AuthGateReason? authGateReason,
     required bool allowOpenSettings,
+    String? sourceOperationId,
   }) {
     final failureKind = _effectiveFailureKind(error, failure);
     if (category == UiErrorCategory.authRequired && authGateReason != null) {
@@ -545,34 +479,37 @@ class UiErrorSemanticResolver {
     if (allowOpenSettings ||
         category == UiErrorCategory.permissionRequired ||
         failure?.nature == RuntimeFailureNature.requiresPermission) {
-      return UITextConstants.authPermissionDenied;
+      return FoundationText.authPermissionDenied;
     }
     return switch (category) {
-      UiErrorCategory.pageLoad ||
+      UiErrorCategory.pageLoad => _pageLoadMessage(
+        error,
+        failure,
+        sourceOperationId: sourceOperationId,
+      ),
       UiErrorCategory.sectionLoad => switch (failureKind) {
-        RuntimeFailureKind.auth => UITextConstants.needLogin,
+        RuntimeFailureKind.auth => FoundationText.needLogin,
         RuntimeFailureKind.notFound => _notFoundMessage(error, failure),
         RuntimeFailureKind.network ||
         RuntimeFailureKind.timeout ||
-        RuntimeFailureKind.unavailable => UITextConstants.pageLoadFailedMessage,
-        _ => UITextConstants.pageLoadFailedMessage,
+        RuntimeFailureKind.unavailable => SearchText.pageLoadFailedMessage,
+        _ => SearchText.pageLoadFailedMessage,
       },
-      UiErrorCategory.listAppend => UITextConstants.appendFailedRetry,
+      UiErrorCategory.listAppend => FoundationText.appendFailedRetry,
       UiErrorCategory.submit => switch (failure?.kind) {
-        RuntimeFailureKind.validation => UITextConstants.validationCheckFields,
+        RuntimeFailureKind.validation => ContentText.validationCheckFields,
         RuntimeFailureKind.auth =>
-          authGateReason?.prompt ?? UITextConstants.loginThenRetry,
-        RuntimeFailureKind.rateLimited => UITextConstants.rateLimitedRetryLater,
-        _ => UITextConstants.operationFailedRetry,
+          authGateReason?.prompt ?? ContentText.loginThenRetry,
+        RuntimeFailureKind.rateLimited => ContentText.rateLimitedRetryLater,
+        _ => ContentText.operationFailedRetry,
       },
-      UiErrorCategory.validation => UITextConstants.validationCheckFields,
+      UiErrorCategory.validation => ContentText.validationCheckFields,
       UiErrorCategory.notFound => _notFoundMessage(error, failure),
-      UiErrorCategory.rateLimited => UITextConstants.rateLimitedRetryLater,
-      UiErrorCategory.backgroundAction => UITextConstants.operationFailedRetry,
+      UiErrorCategory.rateLimited => ContentText.rateLimitedRetryLater,
+      UiErrorCategory.backgroundAction => ContentText.operationFailedRetry,
       UiErrorCategory.authRequired =>
-        authGateReason?.prompt ?? UITextConstants.loginThenRetry,
-      UiErrorCategory.permissionRequired =>
-        UITextConstants.authPermissionDenied,
+        authGateReason?.prompt ?? ContentText.loginThenRetry,
+      UiErrorCategory.permissionRequired => FoundationText.authPermissionDenied,
     };
   }
 
@@ -582,66 +519,171 @@ class UiErrorSemanticResolver {
     required AuthGateReason? authGateReason,
     required RuntimeFailureBase? failure,
     required bool allowOpenSettings,
+    String? sourceOperationId,
   }) {
-    final failureKind = _effectiveFailureKind(error, failure);
     if (category == UiErrorCategory.authRequired && authGateReason != null) {
       return authGateReason.title;
     }
     if (allowOpenSettings ||
         category == UiErrorCategory.permissionRequired ||
         failure?.nature == RuntimeFailureNature.requiresPermission) {
-      return UITextConstants.permissionRequiredTitle;
+      return ContentText.permissionRequiredTitle;
     }
     return switch (category) {
-      UiErrorCategory.pageLoad => switch (failureKind) {
-        RuntimeFailureKind.notFound => _pageLoadTitle(error, failure),
-        RuntimeFailureKind.network ||
-        RuntimeFailureKind.timeout ||
-        RuntimeFailureKind.unavailable => _pageLoadTitle(error, failure),
-        _ => _pageLoadTitle(error, failure),
-      },
+      UiErrorCategory.pageLoad => _pageLoadTitle(
+        error,
+        failure,
+        sourceOperationId: sourceOperationId,
+      ),
       UiErrorCategory.sectionLoad => _sectionLoadTitle(error, failure),
-      UiErrorCategory.listAppend => UITextConstants.appendFailedTitle,
-      UiErrorCategory.submit => UITextConstants.submitNotCompleted,
-      UiErrorCategory.authRequired => UITextConstants.needLogin,
-      UiErrorCategory.permissionRequired =>
-        UITextConstants.permissionRequiredTitle,
-      UiErrorCategory.validation => UITextConstants.checkFieldsTitle,
-      UiErrorCategory.notFound => UITextConstants.contentUnavailable,
-      UiErrorCategory.rateLimited => UITextConstants.rateLimitedRetryLater,
-      UiErrorCategory.backgroundAction => UITextConstants.operationFailed,
+      UiErrorCategory.listAppend => SearchText.appendFailedTitle,
+      UiErrorCategory.submit => ContentText.submitNotCompleted,
+      UiErrorCategory.authRequired => FoundationText.needLogin,
+      UiErrorCategory.permissionRequired => ContentText.permissionRequiredTitle,
+      UiErrorCategory.validation => ContentText.checkFieldsTitle,
+      UiErrorCategory.notFound => ContentText.contentUnavailable,
+      UiErrorCategory.rateLimited => ContentText.rateLimitedRetryLater,
+      UiErrorCategory.backgroundAction => CreationText.operationFailed,
     };
   }
 
-  static String _pageLoadTitle(Object error, RuntimeFailureBase? failure) {
+  static String _pageLoadTitle(
+    Object error,
+    RuntimeFailureBase? failure, {
+    String? sourceOperationId,
+  }) {
     final code = _sourceCode(error, failure) ?? '';
-    if (code.startsWith('CONTENT.')) {
-      return UITextConstants.workOpenFailedTitle;
+    final status = _statusCode(error, failure);
+    if (code == RuntimeFailureCodes.appNetworkOffline) {
+      return SearchText.deviceOfflineTitle;
+    }
+    if (code == RuntimeFailureCodes.appNetworkNameResolutionFailed) {
+      return SearchText.serviceNameResolutionTitle;
+    }
+    if (code == RuntimeFailureCodes.appNetworkConnectionRefused ||
+        code == RuntimeFailureCodes.appNetworkConnectionFailed) {
+      return SearchText.serviceConnectionTitle;
+    }
+    if (code == RuntimeFailureCodes.appNetworkSecureConnectionFailed) {
+      return SearchText.secureConnectionTitle;
+    }
+    if (code == RuntimeFailureCodes.appTimeoutRequestTimeout) {
+      return SearchText.contentLoadTimeoutTitle;
+    }
+    if (status == 401) return SearchText.sessionExpiredTitle;
+    if (status == 403) return SearchText.contentForbiddenTitle;
+    if (status == 410 && code == ContentErrorCode.contentDeleted.code) {
+      return SearchText.recoveryContentGoneTitle;
+    }
+    if (status == 404) {
+      return sourceOperationId == 'GetFeed'
+          ? SearchText.feedVersionMismatchTitle
+          : SearchText.contentMissingTitle;
+    }
+    if (status == 400 || status == 422) {
+      return SearchText.contentRequestInvalidTitle;
+    }
+    if (status == 409) return SearchText.contentConflictTitle;
+    if (status == 429) return SearchText.contentRateLimitedTitle;
+    if (_isContentUpstreamTimeout(status: status, code: code)) {
+      return SearchText.contentServiceTimeoutTitle;
+    }
+    if (_isContentDependencyUnavailable(status: status, code: code)) {
+      return SearchText.contentServiceUnavailableTitle;
+    }
+    if (status != null && status >= 500) {
+      return SearchText.contentServiceFailedTitle;
+    }
+    if (code == RuntimeFailureCodes.appContractInvalidJson ||
+        code == RuntimeFailureCodes.appContractInvalidResponse) {
+      return SearchText.invalidContentResponseTitle;
+    }
+    if (code.startsWith('ENTITY.')) {
+      return ContentText.homepageLoadFailedTitle;
+    }
+    if (code.startsWith('USER.')) {
+      return ContentText.userProfileLoadFailedTitle;
+    }
+    if (code.startsWith('CIRCLE.')) {
+      return ContentText.circleLoadFailedTitle;
     }
     if (code.startsWith('CHAT.')) {
       return ChatText.chatOpenFailedTitle;
     }
-    if (code.startsWith('ENTITY.')) {
-      return UITextConstants.homepageLoadFailedTitle;
+    if (code.startsWith('CONTENT.')) {
+      return ContentText.workOpenFailedTitle;
     }
-    if (code.startsWith('USER.')) {
-      return UITextConstants.userProfileLoadFailedTitle;
+    return SearchText.pageLoadFailedTitle;
+  }
+
+  static String _pageLoadMessage(
+    Object error,
+    RuntimeFailureBase? failure, {
+    String? sourceOperationId,
+  }) {
+    final code = _sourceCode(error, failure) ?? '';
+    final status = _statusCode(error, failure);
+    if (code == RuntimeFailureCodes.appNetworkOffline) {
+      return SearchText.deviceOfflineMessage;
     }
-    if (code.startsWith('CIRCLE.')) {
-      return UITextConstants.circleLoadFailedTitle;
+    if (code == RuntimeFailureCodes.appNetworkNameResolutionFailed) {
+      return SearchText.serviceNameResolutionMessage;
     }
-    return UITextConstants.pageLoadFailedTitle;
+    if (code == RuntimeFailureCodes.appNetworkConnectionRefused ||
+        code == RuntimeFailureCodes.appNetworkConnectionFailed) {
+      return SearchText.serviceConnectionMessage;
+    }
+    if (code == RuntimeFailureCodes.appNetworkSecureConnectionFailed) {
+      return SearchText.secureConnectionMessage;
+    }
+    if (code == RuntimeFailureCodes.appTimeoutRequestTimeout) {
+      return SearchText.contentLoadTimeoutMessage;
+    }
+    if (status == 401) return SearchText.sessionExpiredMessage;
+    if (status == 403) return SearchText.contentForbiddenMessage;
+    if (status == 410 && code == ContentErrorCode.contentDeleted.code) {
+      return SearchText.recoveryContentGoneMessage;
+    }
+    if (status == 404) {
+      return sourceOperationId == 'GetFeed'
+          ? SearchText.feedVersionMismatchMessage
+          : SearchText.contentMissingMessage;
+    }
+    if (status == 400 || status == 422) {
+      return SearchText.contentRequestInvalidMessage;
+    }
+    if (status == 409) return SearchText.contentConflictMessage;
+    if (status == 429) {
+      final seconds = error is CloudException
+          ? error.retryAfter?.inSeconds
+          : null;
+      return SearchText.contentRateLimitedMessageFor(seconds ?? 0);
+    }
+    if (_isContentUpstreamTimeout(status: status, code: code)) {
+      return SearchText.contentServiceTimeoutMessage;
+    }
+    if (_isContentDependencyUnavailable(status: status, code: code)) {
+      return SearchText.contentServiceUnavailableMessage;
+    }
+    if (status != null && status >= 500) {
+      return SearchText.contentServiceFailedMessage;
+    }
+    if (code == RuntimeFailureCodes.appContractInvalidJson ||
+        code == RuntimeFailureCodes.appContractInvalidResponse) {
+      return SearchText.invalidContentResponseMessage;
+    }
+    return SearchText.pageLoadFailedMessage;
   }
 
   static String _sectionLoadTitle(Object error, RuntimeFailureBase? failure) {
     final code = _sourceCode(error, failure) ?? '';
     if (code.startsWith('CONTENT.') && code.contains('comment')) {
-      return UITextConstants.commentLoadFailedTitle;
+      return ContentText.commentLoadFailedTitle;
     }
     if (code.startsWith('CIRCLE.')) {
-      return UITextConstants.sectionLoadFailedTitleDefault;
+      return ContentText.sectionLoadFailedTitleDefault;
     }
-    return UITextConstants.sectionLoadFailedTitleDefault;
+    return ContentText.sectionLoadFailedTitleDefault;
   }
 
   static String _notFoundMessage(Object error, RuntimeFailureBase? failure) {
@@ -649,7 +691,7 @@ class UiErrorSemanticResolver {
     if (code.startsWith('CHAT.')) {
       return ChatText.chatOpenFailedMessage;
     }
-    return UITextConstants.contentUnavailableReason;
+    return ContentText.contentUnavailableReason;
   }
 
   static String? _secondaryMessage({
@@ -659,7 +701,7 @@ class UiErrorSemanticResolver {
   }) {
     if (authGateReason == null && continuation == null) {
       return failure?.kind == RuntimeFailureKind.auth
-          ? UITextConstants.loginToContinue
+          ? ContentText.loginToContinue
           : null;
     }
     if (continuation is SubmitCommentContinuation) {
@@ -753,6 +795,7 @@ class UiErrorSemanticResolver {
 
   static UiErrorAction? _primaryAction(
     BuildContext context, {
+    required Object error,
     required UiErrorCategory category,
     required RuntimeRecoveryAction recoveryAction,
     required AuthGateReason? authGateReason,
@@ -771,7 +814,7 @@ class UiErrorSemanticResolver {
         failure?.kind == RuntimeFailureKind.auth) {
       return const UiErrorAction(
         type: UiErrorActionType.login,
-        label: UITextConstants.login,
+        label: FoundationText.login,
       );
     }
     if (category == UiErrorCategory.submit &&
@@ -782,9 +825,16 @@ class UiErrorSemanticResolver {
       );
     }
     if (allowRetry && recoveryAction == RuntimeRecoveryAction.retry) {
+      final status = _statusCode(error, failure);
+      final retryAfterSeconds = status == 429 && error is CloudException
+          ? (error.retryAfter?.inSeconds ?? 0)
+          : 0;
       return UiErrorAction(
         type: UiErrorActionType.retry,
-        label: _retryLabel(context),
+        label: failure?.transportStatus == 409
+            ? SearchText.refresh
+            : _retryLabel(context, category: category),
+        availableAfterSeconds: retryAfterSeconds,
       );
     }
     return null;
@@ -797,7 +847,7 @@ class UiErrorSemanticResolver {
     if (scope == UiErrorScope.dialog) {
       return const UiErrorAction(
         type: UiErrorActionType.dismiss,
-        label: UITextConstants.cancel,
+        label: FoundationText.cancel,
       );
     }
     return null;
@@ -830,7 +880,27 @@ class UiErrorSemanticResolver {
     if (error is RuntimeFailureBase) {
       return error;
     }
-    return null;
+    return CloudErrorMapper.runtimeFailureFromException(error);
+  }
+
+  static int? _statusCode(Object error, RuntimeFailureBase? failure) {
+    if (error is CloudException) return error.statusCode;
+    return failure?.transportStatus;
+  }
+
+  static bool _isContentUpstreamTimeout({
+    required int? status,
+    required String code,
+  }) {
+    return status == 504 || code == ContentErrorCode.upstreamTimeout.code;
+  }
+
+  static bool _isContentDependencyUnavailable({
+    required int? status,
+    required String code,
+  }) {
+    return status == 503 ||
+        code == ContentErrorCode.requiredDependencyUnavailable.code;
   }
 
   static RuntimeFailureKind? _effectiveFailureKind(

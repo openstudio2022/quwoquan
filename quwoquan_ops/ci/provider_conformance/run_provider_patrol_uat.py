@@ -79,8 +79,6 @@ def main() -> int:
         environment,
         "--api-contract-env",
         environment,
-        "--data-source",
-        "remote",
         "--gateway-base-url",
         _required_url(public_bases, "api"),
         "--product-ops-base-url",

@@ -57,6 +57,40 @@ def _placement_is_map_like(placement: Mapping[str, Any]) -> bool:
         pass
     return False
 
+def _placement_caption_section_overlap(placement: Mapping[str, Any]) -> int:
+    """Score whether a repeated visual's caption belongs to its declared section."""
+    from core.localization import fold_to_simplified
+
+    def _han_bigrams(value: object) -> set[str]:
+        text = fold_to_simplified(str(value or ""))
+        chars = "".join(re.findall(r"[\u3400-\u9fff]", text))
+        return {chars[index : index + 2] for index in range(max(0, len(chars) - 1))}
+
+    caption_terms = _han_bigrams(
+        placement.get("subjectKey") or placement.get("caption")
+    )
+    section_terms = _han_bigrams(placement.get("sectionSlug"))
+    return len(caption_terms & section_terms)
+
+
+def _prefer_homepage_placement(
+    existing: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    """Choose one semantic authority when a source page repeats a visual."""
+    existing_caption = str(existing.get("caption") or "").strip()
+    candidate_caption = str(candidate.get("caption") or "").strip()
+    existing_rank = (
+        _placement_caption_section_overlap(existing),
+        int(bool(existing_caption)),
+    )
+    candidate_rank = (
+        _placement_caption_section_overlap(candidate),
+        int(bool(candidate_caption)),
+    )
+    return candidate if candidate_rank > existing_rank else existing
+
+
 @dataclass(frozen=True, slots=True)
 class HomepageAssetSelection:
     """Typed publish decision for all page images considered by a homepage."""
@@ -87,18 +121,16 @@ def select_homepage_assets(
         if isinstance(raw_placements, list):
             placements = [row for row in raw_placements if isinstance(row, dict)]
     # imagePlacements 按规范化后的原始 wiki 文件名精确索引（禁止实体名子串污染）。
-    # 同名多行时优先保留「有原图注」的行（如 infobox 空图注 vs 正文原图注）。
+    # 同名多行时选择图注主题与章节最贴合的一行；同分保持来源顺序。
     placement_by_name: dict[str, dict[str, Any]] = {}
     for row in placements:
         key = _normalize_wiki_filename(str(row.get("fileName") or ""))
         if not key:
             continue
         existing = placement_by_name.get(key)
-        if existing is None or (
-            not str(existing.get("caption") or "").strip()
-            and str(row.get("caption") or "").strip()
-        ):
-            placement_by_name[key] = row
+        placement_by_name[key] = (
+            row if existing is None else dict(_prefer_homepage_placement(existing, row))
+        )
     def _placement_for(image: dict[str, Any]) -> dict[str, Any]:
         key = _asset_wiki_filename(image)
         if key:

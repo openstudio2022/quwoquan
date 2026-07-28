@@ -93,7 +93,9 @@ def test_catalog_with_runtime_evidence_confirms_target(monkeypatch: pytest.Monke
     qualification.prepare_execution_qualification(EXECUTION_ID)
     _write_source_catalog(root)
 
-    result = qualification.finalize_execution_qualification(EXECUTION_ID)
+    result = qualification.finalize_execution_qualification(
+        EXECUTION_ID, publishable_names={"测试实体甲"}
+    )
 
     assert result.passed
     payload = json.loads(result.path.read_text(encoding="utf-8"))
@@ -106,10 +108,92 @@ def test_unqualified_catalog_blocks_target_with_typed_issue(monkeypatch: pytest.
     qualification.prepare_execution_qualification(EXECUTION_ID)
     _write_source_catalog(root, source_kind="untrusted")
 
-    result = qualification.finalize_execution_qualification(EXECUTION_ID)
+    result = qualification.finalize_execution_qualification(
+        EXECUTION_ID, publishable_names={"测试实体甲"}
+    )
 
     assert not result.passed
     assert result.issues[0].code.value == "DATA.SOURCE.PRIMARY_AUTHORITY_MISSING"
     payload = json.loads(result.path.read_text(encoding="utf-8"))
     assert payload["targets"][0]["status"] == "blocked"
     assert payload["issues"][0]["stage"] == "source_gate"
+
+
+def _install_oversampled_execution(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """候选池含两个实体，只有测试实体甲拿到来源目录。"""
+    spec = _spec()
+    spec["scope"]["coverageTargets"].append(
+        {
+            "name": "测试实体乙",
+            "entityType": "地点/景区",
+            "geoTagRef": "Topic/地理/行政区/中国/test-region-a/舟山市/定海区",
+            "aliases": [],
+        }
+    )
+    root = tmp_path / EXECUTION_ID
+    root.mkdir(parents=True)
+    monkeypatch.setattr(qualification, "execution_root", lambda _execution_id: root)
+    monkeypatch.setattr(qualification.store, "load_spec", lambda _execution_id: spec)
+    return root
+
+
+def test_discarded_candidate_source_gap_does_not_block_publish(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """过采丢弃对象缺来源属于预期事实：留档但不阻断准出集合发布。"""
+    root = _install_oversampled_execution(monkeypatch, tmp_path)
+    qualification.prepare_execution_qualification(EXECUTION_ID)
+    _write_source_catalog(root)
+
+    result = qualification.finalize_execution_qualification(
+        EXECUTION_ID, publishable_names={"测试实体甲"}
+    )
+
+    assert result.passed
+    assert result.issues == ()
+    payload = json.loads(result.path.read_text(encoding="utf-8"))
+    statuses = {row["name"]: row["status"] for row in payload["targets"]}
+    assert statuses == {"测试实体甲": "confirmed", "测试实体乙": "blocked"}
+    assert [issue["ref"] for issue in payload["issues"]] == ["测试实体乙"], (
+        "丢弃对象的来源缺口必须留在报告里供审计，只是不参与准出判定"
+    )
+
+
+def test_publishable_object_source_gap_still_blocks_publish(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = _install_oversampled_execution(monkeypatch, tmp_path)
+    qualification.prepare_execution_qualification(EXECUTION_ID)
+    _write_source_catalog(root)
+
+    result = qualification.finalize_execution_qualification(
+        EXECUTION_ID, publishable_names={"测试实体甲", "测试实体乙"}
+    )
+
+    assert not result.passed
+    assert [issue.ref for issue in result.issues] == ["测试实体乙"]
+
+
+def test_empty_publish_set_is_rejected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """空准出集合不得静默通过，否则 publish 会发布出零对象的 release。"""
+    root = _install_execution(monkeypatch, tmp_path)
+    qualification.prepare_execution_qualification(EXECUTION_ID)
+    _write_source_catalog(root)
+
+    with pytest.raises(ValueError, match="at least one publishable object"):
+        qualification.finalize_execution_qualification(EXECUTION_ID, publishable_names=set())
+
+
+def test_publish_set_outside_frozen_targets_is_rejected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = _install_execution(monkeypatch, tmp_path)
+    qualification.prepare_execution_qualification(EXECUTION_ID)
+    _write_source_catalog(root)
+
+    with pytest.raises(ValueError, match="outside the immutable execution targets"):
+        qualification.finalize_execution_qualification(
+            EXECUTION_ID, publishable_names={"测试实体丙"}
+        )

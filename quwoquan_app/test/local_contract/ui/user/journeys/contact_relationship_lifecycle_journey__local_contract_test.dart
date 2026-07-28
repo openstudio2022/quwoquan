@@ -45,11 +45,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.addContact), findsOneWidget);
-    await tester.tap(find.text(UITextConstants.addContact));
+    expect(find.text(ContactText.addContact), findsOneWidget);
+    await tester.tap(find.text(ContactText.addContact));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.contactAlreadyAdded), findsWidgets);
+    expect(find.text(ContactText.contactAlreadyAdded), findsWidgets);
     await tester.pump(const Duration(seconds: 4));
   });
 }

@@ -14,6 +14,7 @@ import 'package:quwoquan_app/core/media/media_playback_failure.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
 import 'package:quwoquan_app/core/platform/video_native_playback_signals.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/services/app_request_wait_controller.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
@@ -23,14 +24,15 @@ import 'package:quwoquan_app/components/media/video/player/video_player_support.
 import 'package:quwoquan_app/components/media/video/player/video_player_surface_builder.dart';
 
 part 'video_player_widget_api.dart';
+part 'video_player_widget_presentation.dart';
 
 class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
     with WidgetsBindingObserver {
   /// Soft cap on concurrent ExoPlayer/MediaCodec instances (OEM hard-decode slots).
   static int _activeControllerCount = 0;
   static const int _maxConcurrentControllers = 2;
-  static const Duration _slotWaitTimeout = Duration(seconds: 8);
   static const Duration _slotRetryInterval = Duration(milliseconds: 250);
+  static const Duration _compactProgressDelay = Duration(milliseconds: 300);
 
   VideoPlayerController? _controller;
   ChewieController? _chewieController;
@@ -55,6 +57,11 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
   VideoPlayerController? _initializingController;
   VideoPlayerController? _disposingController;
   Future<void>? _controllerDisposalFuture;
+  final AppRequestWaitController _initializationWaitController =
+      AppRequestWaitController();
+  Timer? _compactProgressTimer;
+  bool _showCompactProgress = false;
+  bool _isInitializationSlow = false;
 
   VideoPlaybackSession get _playbackSession =>
       widget.playbackSession ?? _ownedPlaybackSession;
@@ -158,6 +165,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
   @override
   void dispose() {
     _invalidateVideoInitialization();
+    _initializationWaitController.dispose();
     _automaticPlaybackSyncGeneration += 1;
     _controllerLifecycleSyncGeneration += 1;
     WidgetsBinding.instance.removeObserver(this);
@@ -168,6 +176,11 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
 
   void _invalidateVideoInitialization() {
     _videoInitGeneration += 1;
+    _initializationWaitController.cancel();
+    _compactProgressTimer?.cancel();
+    _compactProgressTimer = null;
+    _showCompactProgress = false;
+    _isInitializationSlow = false;
   }
 
   Future<void> _disposeActiveControllers({
@@ -285,7 +298,6 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
   }
 
   Future<void> _waitForControllerSlot(int generation) async {
-    final deadline = DateTime.now().add(_slotWaitTimeout);
     while (mounted && generation == _videoInitGeneration) {
       if (_acquireControllerSlot()) {
         final slotLeaseId = _controllerSlotLeaseId;
@@ -296,20 +308,6 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
           await _initializeVideoWithHeldSlot(generation, slotLeaseId);
         } else {
           _releaseControllerSlot(leaseId: slotLeaseId);
-        }
-        return;
-      }
-      if (DateTime.now().isAfter(deadline)) {
-        developer.log(
-          'video init deferred timeout: slot unavailable',
-          name: 'VideoPlayerWidget',
-        );
-        if (mounted && generation == _videoInitGeneration) {
-          _reportPlaybackFailure(
-            MediaPlaybackFailure.fromKind(
-              MediaCandidateFailureKind.controllerSlotTimeout,
-            ),
-          );
         }
         return;
       }
@@ -425,6 +423,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
           _chewieController = chewieController;
           _nativePlaybackSignals = nativePlaybackSignals;
           retainControllerSlot = true;
+          _finishInitializationWait();
           _attachControllerErrorListener(
             controller,
             generation: generation,
@@ -617,6 +616,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
   }
 
   void _reportPlaybackFailure(MediaPlaybackFailure failure) {
+    _finishInitializationWait();
     _playbackSession.markFailure();
     if (failure.shouldNegativeCache) {
       MediaLoadFailureCache.instance.recordTerminalFailure(
@@ -631,6 +631,8 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
       _isInitialized = false;
       _isRetrying = false;
       _playbackFailure = failure;
+      _showCompactProgress = false;
+      _isInitializationSlow = false;
     });
     ref
         .read(pageLifecycleObservabilityProvider)
@@ -755,6 +757,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
   Future<void> _initializeVideo() async {
     final generation = _videoInitGeneration + 1;
     _videoInitGeneration = generation;
+    _beginInitializationWait(generation);
     _qoeReportedForController = false;
     final cachedFailure = MediaLoadFailureCache.instance.activeFailure(
       widget.deliveryReference.cacheIdentity,
@@ -798,6 +801,51 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
       _isDeferredWaitingForSlot = false;
     }
     await _initializeVideoWithHeldSlot(generation, _controllerSlotLeaseId);
+  }
+
+  void _beginInitializationWait(int videoGeneration) {
+    _compactProgressTimer?.cancel();
+    _showCompactProgress = false;
+    _isInitializationSlow = false;
+    _initializationWaitController.start(
+      mode: AppRequestWaitMode.foreground,
+      onSlow: (_) {
+        if (!mounted || videoGeneration != _videoInitGeneration) return;
+        setState(() => _isInitializationSlow = true);
+      },
+      onTimeout: (_) {
+        if (!mounted || videoGeneration != _videoInitGeneration) return;
+        _videoInitGeneration += 1;
+        _compactProgressTimer?.cancel();
+        _compactProgressTimer = null;
+        final slotLeaseId = _controllerSlotLeaseId;
+        _releaseControllerSlot(leaseId: slotLeaseId);
+        unawaited(
+          _disposeActiveControllers(
+            qoeResult: 'failure',
+            qoeFailureCode:
+                MediaCandidateFailureKind.initializationTimeout.name,
+          ),
+        );
+        _reportPlaybackFailure(
+          MediaPlaybackFailure.fromKind(
+            MediaCandidateFailureKind.initializationTimeout,
+          ),
+        );
+      },
+    );
+    _compactProgressTimer = Timer(_compactProgressDelay, () {
+      if (!mounted || videoGeneration != _videoInitGeneration) return;
+      setState(() => _showCompactProgress = true);
+    });
+  }
+
+  void _finishInitializationWait() {
+    _compactProgressTimer?.cancel();
+    _compactProgressTimer = null;
+    _initializationWaitController.complete(
+      _initializationWaitController.generation,
+    );
   }
 
   Future<List<PlayableVideoSource>> _playableSourcesForCandidate(
@@ -845,54 +893,6 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
   Future<bool> _canUseNetworkVideoUri(Uri uri) async {
     // 交付 URI 已在 MediaDeliveryResolver 边界校验为 HTTPS + 注入 origin。
     return uri.scheme.toLowerCase() == 'https' && uri.host.isNotEmpty;
-  }
-
-  Widget _buildVideoPlaceholder() {
-    return VideoPlayerSurfaceBuilder.buildPlaceholder(
-      thumbnailReference: widget.thumbnailReference,
-      autoPlay: widget.autoPlay,
-    );
-  }
-
-  Widget _buildDeferredWidget() {
-    return VideoPlayerSurfaceBuilder.buildDeferred(
-      thumbnailReference: widget.thumbnailReference,
-    );
-  }
-
-  Widget _buildErrorWidget() {
-    final failure =
-        _playbackFailure ??
-        MediaPlaybackFailure.fromKind(MediaCandidateFailureKind.other);
-    return VideoPlayerSurfaceBuilder.buildFailure(
-      failure: failure,
-      thumbnailReference: widget.thumbnailReference,
-      retrying: _isRetrying,
-      onRetry: failure.isRetryable
-          ? () {
-              unawaited(_retryPlayback());
-            }
-          : null,
-    );
-  }
-
-  double get _resolvedAspectRatio {
-    final widgetRatio = widget.aspectRatio;
-    if (widgetRatio != null && widgetRatio > 0) {
-      return widgetRatio;
-    }
-    final controllerRatio = _controller?.value.aspectRatio ?? 0;
-    if (controllerRatio > 0) {
-      return controllerRatio;
-    }
-    return 16 / 9;
-  }
-
-  Widget _buildCenteredVideoFrame(Widget child) {
-    return VideoPlayerSurfaceBuilder.buildCenteredFrame(
-      aspectRatio: _resolvedAspectRatio,
-      child: child,
-    );
   }
 
   @override

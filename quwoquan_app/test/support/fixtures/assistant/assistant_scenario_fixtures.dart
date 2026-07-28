@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 
 import '../../cloud_services/assistant_facets_mock.dart';
 
@@ -199,26 +197,6 @@ AssistantScenarioPack loadAssistantScenarioPack() {
 Future<AssistantScenarioPack> loadAssistantScenarioPackAsync() async {
   final decoded = _loadContractFixtureObject(assistantScenarioFixtureName);
   return AssistantScenarioPack.fromJson(decoded);
-}
-
-AppDataSourceMode expectedRepositoryModeForRuntimeEnv(
-  AssistantScenarioPack pack,
-  String env,
-) {
-  final expected = pack.repositoryExpectations[env];
-  if (expected == 'remote') {
-    return AppDataSourceMode.remote;
-  }
-  return AppDataSourceMode.mock;
-}
-
-AppDataSourceMode expectedRepositoryModeForCurrentRuntimeEnv(
-  AssistantScenarioPack pack,
-) {
-  return expectedRepositoryModeForRuntimeEnv(
-    pack,
-    CloudRuntimeConfig.appRuntimeEnv,
-  );
 }
 
 class ScenarioMockAssistantRepository extends AlphaAssistantFacets {

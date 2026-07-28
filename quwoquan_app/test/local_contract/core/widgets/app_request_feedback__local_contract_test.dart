@@ -7,11 +7,15 @@ void main() {
   testWidgets('慢提示只由一个 liveRegion 语义节点表达', (tester) async {
     await tester.pumpWidget(_host(AppRequestFeedback.page(showSlowHint: true)));
 
-    expect(find.text(UITextConstants.requestWaitSlow), findsOneWidget);
+    expect(find.text(FoundationText.requestWaitSlow), findsOneWidget);
     final semantics = tester.widget<Semantics>(find.byType(Semantics).last);
     expect(semantics.properties.liveRegion, isTrue);
-    expect(semantics.properties.label, UITextConstants.requestWaitSlow);
-    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+    expect(semantics.properties.label, FoundationText.requestWaitSlow);
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('app-request-placeholder-0')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('reduced-motion 下不循环播放 spinner 且布局不消失', (tester) async {
@@ -19,10 +23,11 @@ void main() {
       _host(AppRequestFeedback.section(), disableAnimations: true),
     );
 
-    final indicator = tester.widget<CupertinoActivityIndicator>(
-      find.byType(CupertinoActivityIndicator),
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('app-request-placeholder-0')),
+      findsOneWidget,
     );
-    expect(indicator.animating, isFalse);
     expect(find.byType(AppRequestFeedback), findsOneWidget);
   });
 
@@ -49,8 +54,17 @@ void main() {
       _host(AppRequestFeedback.page(showSlowHint: true, showIndicator: false)),
     );
 
-    expect(find.text(UITextConstants.requestWaitSlow), findsOneWidget);
+    expect(find.text(FoundationText.requestWaitSlow), findsOneWidget);
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
+  });
+
+  testWidgets('inline indicator 在 16px 媒体占位中收缩且不溢出', (tester) async {
+    await tester.pumpWidget(
+      _host(SizedBox.square(dimension: 16, child: AppRequestFeedback.inline())),
+    );
+
+    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
 

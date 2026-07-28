@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -160,7 +161,7 @@ class _ContactSearchResultPageState
             )
             .toList(growable: false);
       });
-      AppToast.show(context, UITextConstants.addContactConfirmedToast);
+      AppToast.show(context, ContactText.addContactConfirmedToast);
       unawaited(
         ref
             .read(journeyEventTrackerProvider)
@@ -215,7 +216,7 @@ class _ContactSearchResultPageState
           },
         ),
         middle: Text(
-          UITextConstants.addContactSearchTitle,
+          ContactText.addContactSearchTitle,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
       ),
@@ -227,7 +228,7 @@ class _ContactSearchResultPageState
               child: AppSearchField(
                 controller: _controller,
                 autofocus: widget.initialQuery.isEmpty,
-                placeholder: UITextConstants.addContactSearchHubPlaceholder,
+                placeholder: ContactText.addContactSearchHubPlaceholder,
                 onChanged: _onChanged,
                 onSubmitted: (value) => unawaited(_runSearch(value)),
               ),
@@ -241,15 +242,17 @@ class _ContactSearchResultPageState
 
   Widget _buildResults(BuildContext context) {
     if (_loading && _results.isEmpty) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     if (_rawError case final error?) {
       return AppPageErrorState(
-        semantic: runtimeErrorSemantic(
-          context,
-          error: error,
-          category: UiErrorCategory.pageLoad,
-          scope: UiErrorScope.page,
+        semantic: ensureRetryUiErrorSemantic(
+          runtimeErrorSemantic(
+            context,
+            error: error,
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+          ),
         ),
         onAction: (action) async {
           if (action.type == UiErrorActionType.retry) {
@@ -259,10 +262,10 @@ class _ContactSearchResultPageState
       );
     }
     if (_query.trim().isEmpty) {
-      return _Hint(text: UITextConstants.addContactSearchEmptyPrompt);
+      return _Hint(text: ContactText.addContactSearchEmptyPrompt);
     }
     if (_results.isEmpty) {
-      return _Hint(text: UITextConstants.addContactSearchNoResult);
+      return _Hint(text: ContactText.addContactSearchNoResult);
     }
     return ListView.builder(
       itemCount: _results.length,

@@ -255,6 +255,7 @@ def _write_homepage_author_evidence(
     entity: str,
     outcome: "AgentRunOutcome",
     draft_meta: Mapping[str, Any],
+    source_failure: Mapping[str, Any] | None = None,
 ) -> None:
     """Mint controller evidence from one finished Cursor author run.
 
@@ -262,6 +263,10 @@ def _write_homepage_author_evidence(
     Agent-authored prose: they bind that completed run to the exact file and
     deterministic output checks so later stages can replay the proof without
     trusting a conversational status message.
+
+    When ``source_failure`` is provided, the Agent applied the typed failure
+    protocol (``failure.json``) and left ``page.md`` as a placeholder; evidence
+    binds that refusal instead of requiring a non-placeholder draft.
     """
     from content.execution.production_contracts import (
         build_agent_result_envelope,
@@ -278,8 +283,11 @@ def _write_homepage_author_evidence(
     page_path = draft_dir / "page.md"
     prompt_path = draft_dir / "prompt.md"
     packet_path = draft_dir / "author_job_packet.json"
+    failure_path = draft_dir / "failure.json"
     if not page_path.is_file() or not prompt_path.is_file() or not packet_path.is_file():
         raise ValueError("homepage author evidence requires page.md, prompt.md, and author_job_packet.json")
+    if source_failure is not None and not failure_path.is_file():
+        raise ValueError("homepage author evidence source_failure requires 4.draft/failure.json")
     packet = read_json(packet_path)
     object_ref = entity_ref(domain, etype, entity)
     if not outcome.succeeded:
@@ -289,31 +297,71 @@ def _write_homepage_author_evidence(
     model = str(draft_meta.get("model") or ctx.model or "").strip()
     prompt_sha = str(draft_meta.get("promptSha256") or "").strip()
     draft_sha = sha256_file(page_path)
-    checks = [
-        {
-            "name": "non_placeholder_page",
-            "passed": not is_placeholder(page_path.read_text(encoding="utf-8")),
-            "ref": "4.draft/page.md",
-        },
-        {
-            "name": "draft_hash_matches_metadata",
-            "passed": str(draft_meta.get("draftSha256") or "") == draft_sha,
-            "expected": str(draft_meta.get("draftSha256") or ""),
-            "actual": draft_sha,
-        },
-        {
-            "name": "agent_run_bound",
-            "passed": bool(run_id and provider and model and prompt_sha),
-            "runId": run_id,
-        },
-        {
-            "name": "author_packet_matches_object",
-            "passed": (
-                str(packet.get("executionId") or "") == ctx.execution_id
-                and str(packet.get("objectRef") or "") == object_ref
-            ),
-        },
-    ]
+    if source_failure is not None:
+        failure_sha = sha256_file(failure_path)
+        checks = [
+            {
+                "name": "failure_protocol_applied",
+                "passed": True,
+                "ref": "4.draft/failure.json",
+                "failureKind": str(source_failure.get("failureKind") or ""),
+            },
+            {
+                "name": "agent_run_bound",
+                "passed": bool(run_id and provider and model and prompt_sha),
+                "runId": run_id,
+            },
+            {
+                "name": "author_packet_matches_object",
+                "passed": (
+                    str(packet.get("executionId") or "") == ctx.execution_id
+                    and str(packet.get("objectRef") or "") == object_ref
+                ),
+            },
+        ]
+        envelope_files = [
+            {
+                "path": "failure.json",
+                "sha256": failure_sha,
+                "role": "homepage_source_failure",
+            },
+            {
+                "path": "page.md",
+                "sha256": draft_sha,
+                "role": "homepage_draft_placeholder",
+            },
+        ]
+        output_hash = failure_sha
+    else:
+        checks = [
+            {
+                "name": "non_placeholder_page",
+                "passed": not is_placeholder(page_path.read_text(encoding="utf-8")),
+                "ref": "4.draft/page.md",
+            },
+            {
+                "name": "draft_hash_matches_metadata",
+                "passed": str(draft_meta.get("draftSha256") or "") == draft_sha,
+                "expected": str(draft_meta.get("draftSha256") or ""),
+                "actual": draft_sha,
+            },
+            {
+                "name": "agent_run_bound",
+                "passed": bool(run_id and provider and model and prompt_sha),
+                "runId": run_id,
+            },
+            {
+                "name": "author_packet_matches_object",
+                "passed": (
+                    str(packet.get("executionId") or "") == ctx.execution_id
+                    and str(packet.get("objectRef") or "") == object_ref
+                ),
+            },
+        ]
+        envelope_files = [
+            {"path": "page.md", "sha256": draft_sha, "role": "homepage_draft"}
+        ]
+        output_hash = draft_sha
     issues = [
         str(check.get("name") or "check")
         for check in checks
@@ -332,7 +380,7 @@ def _write_homepage_author_evidence(
         gate_id="homepage_author_output",
         decision="passed" if not issues else "failed",
         input_hash=prompt_sha,
-        output_hash=draft_sha,
+        output_hash=output_hash,
         issues=issues,
     )
     envelope = build_agent_result_envelope(
@@ -342,7 +390,7 @@ def _write_homepage_author_evidence(
             "ref": object_ref,
             "stage": "author",
         },
-        files=[{"path": "page.md", "sha256": draft_sha, "role": "homepage_draft"}],
+        files=envelope_files,
         gates=[gate],
         provider=provider,
         model=model,

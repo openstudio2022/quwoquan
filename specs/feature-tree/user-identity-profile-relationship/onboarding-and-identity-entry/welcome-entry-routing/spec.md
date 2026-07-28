@@ -43,6 +43,8 @@
 ### REQ-003 强入口登录门关闭回安全态、成功到目标态
 
 - 欢迎页、首页底栏、/create、/chat、/profile 相关登录门统一复用 safeLoginDismissFallback 与 AuthGateReason 契约。
+- `/login` 根步骤关闭遵守宿主 dismiss policy；手机号、OTP、授权与绑定等内部步骤优先返回上一登录步骤，Android 系统返回与顶部返回保持同一状态迁移。
+- 清理 pending continuation 只发生在根步骤最终关闭；内部返回不得误清理，成功后由原目标表面消费 continuation。
 
 ## 4. 契约引用
 

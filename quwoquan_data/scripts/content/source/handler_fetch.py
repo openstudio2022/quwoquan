@@ -12,22 +12,18 @@ from core.data_issue import (
 )
 from core.paths import execution_source_unit_dir
 from content.post.article.evidence_text import clean_source_markdown, score_source_markdown
-from governance.coverage.entity_extract import entity_ref as build_entity_ref
 from content.source.source_unit import (
     find_source_unit_raw_snapshot,
-    resolve_entity_object_dir,
     write_source_unit,
 )
 from content.source.source_inputs import (
-    curated_homepage_media_for_entity,
-    curated_images_for_entity,
     manual_body_note,
     source_frontmatter,
 )
 from content.source.fetch_payload import fetch_source_payload
 from content.source.handler_fetch_images import prepare_entity_images
 
-from content.source.handler_plan import _curated_sources_for_lanes, _write_download_progress
+from content.source.handler_plan import _write_download_progress
 from content.source.handler_images import (
     _cached_source_quality_if_better,
     _find_source_unit_by_plan_key,
@@ -36,6 +32,7 @@ from content.source.handler_images import (
 )
 from content.source.image_download import _download_source_unit_images
 from content.source.handler_fetch_media import EntityMediaClosureInput, close_entity_media
+from content.source.handler_fetch_setup import prepare_entity_fetch_plan
 from content.source.inline_images import build_inline_image_candidates
 from core.source_fidelity import assess_source_content_fidelity
 from content.source.handler_fetch_contract import (
@@ -46,6 +43,11 @@ from content.source.handler_fetch_contract import (
     requires_factual_compression as _requires_factual_compression,
     require_source_candidate_admission,
     source_fetch_failure_issue as _source_fetch_failure_issue,
+)
+from content.homepage.quality_policy import (
+    homepage_body_char_minimum,
+    homepage_fact_count_minimum,
+    homepage_fact_char_minimum,
 )
 
 
@@ -74,57 +76,33 @@ def _fetch_download_entity(
         entity_count=entity_count,
         message="entity fetch started",
     )
-    # 对象同构目录：来源写成来源单元（编号 + 类目 + assets/），禁对象级散 images/。
-    object_dir = resolve_entity_object_dir(execution_id, entity_id, etype_hint=entity_type)
-    target_ref = build_entity_ref(domain, etype, entity_id)
-    sources = _curated_sources_for_lanes(
-        execution_id,
-        entity_id,
-        entity_type,
-        selected_lanes,
+    plan = prepare_entity_fetch_plan(
+        execution_id=execution_id,
+        entity_id=entity_id,
+        entity_type=entity_type,
+        domain=domain,
+        etype=etype,
+        selected_lanes=selected_lanes,
     )
+    object_dir, target_ref, sources = plan.object_dir, plan.target_ref, plan.sources
     existing_image_source_dirs = _image_lane_source_unit_dirs(object_dir)
     written_source_dirs: set[Path] = set()
     written_rejected_source_dirs: set[Path] = set()
-    # 实体级 imageUrls 全部归属首个（概览类）来源单元，并标注相关性，避免无归属散图。
-    image_lane_selected = selected_lanes is None or "image" in selected_lanes
-    homepage_media_selected = selected_lanes is None or "homepage" in selected_lanes
-    video_lane_selected = selected_lanes is None or "video" in selected_lanes
-    image_work_specs = (
-        curated_images_for_entity(
-            execution_id,
-            entity_id,
-            entity_type,
-            research_lane=None if selected_lanes is None else "image",
-        )
-        if image_lane_selected
-        else []
-    )
-    homepage_media_specs = (
-        curated_homepage_media_for_entity(
-            execution_id,
-            entity_id,
-            entity_type,
-        )
-        if homepage_media_selected
-        else []
-    )
-    video_specs = (
-        curated_images_for_entity(
-            execution_id,
-            entity_id,
-            entity_type,
-            research_lane="video",
-        )
-        if video_lane_selected
-        else []
+    image_lane_selected = plan.image_lane_selected
+    homepage_media_selected = plan.homepage_media_selected
+    video_lane_selected = plan.video_lane_selected
+    sourced_video_candidates = plan.sourced_video_candidates
+    sourced_video_evidence = plan.sourced_video_evidence
+    written_source_dirs.update(
+        evidence_path.parent
+        for evidence_path in sourced_video_evidence
     )
     # Page-owned homepage media are enumerated evidence, not a search pool:
     # process the complete list before applying the independent image-work
     # budget. A page image must end in download, explicit policy exclusion, or
     # a typed hard failure; it must never disappear because an unrelated image
     # work filled a quota first.
-    image_specs = [*homepage_media_specs, *image_work_specs, *video_specs]
+    image_specs = plan.image_specs
     _write_download_progress(
         execution_id,
         status="running",
@@ -136,6 +114,8 @@ def _fetch_download_entity(
         message="entity source plan loaded",
         plannedSources=len(sources),
         plannedImages=len(image_specs),
+        plannedVideos=len(sourced_video_candidates),
+        admittedVideos=len(sourced_video_evidence),
     )
     image_result = prepare_entity_images(
         execution_id=execution_id,
@@ -161,6 +141,9 @@ def _fetch_download_entity(
     required_homepage_media = image_result.required_homepage_media
     required_video_frames = image_result.required_video_frames
     required_images = image_result.required_images
+    if sourced_video_evidence:
+        required_images = max(0, required_images - required_video_frames)
+        required_video_frames = 0
 
     # 同实体源级去重：canonical URL 归一后重复的候选直接 Reject（跨源站消重）。
     seen_canonical_urls: set[str] = set()
@@ -310,6 +293,9 @@ def _fetch_download_entity(
                 source_text=fetched_text or clean_md,
                 entity_id=entity_id,
                 resolved_title=resolved_title,
+                minimum_body_chars=homepage_body_char_minimum(execution_id),
+                minimum_fact_count=homepage_fact_count_minimum(execution_id),
+                minimum_fact_chars=homepage_fact_char_minimum(execution_id),
             )
             homepage_fact_count = homepage_admission.fact_count
             if not homepage_admission.accepted:

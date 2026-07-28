@@ -57,11 +57,16 @@ def write_admitted_sourced_video_unit(
     model_release_status: str,
     property_release_status: str,
     takedown_policy: str,
+    entity_type: str | None = None,
 ) -> Path:
     """Materialize one source unit only when every admission fact passes."""
     if not source_video_path.is_file():
         raise FileNotFoundError(source_video_path)
-    object_dir = resolve_entity_object_dir(execution_id, object_ref)
+    object_dir = resolve_entity_object_dir(
+        execution_id,
+        object_ref,
+        etype_hint=entity_type,
+    )
     source_kind = str(source_unit.get("sourceKind") or "").strip()
     if source_kind not in VIDEO_SOURCE_KINDS:
         raise ValueError(f"unsupported sourced video sourceKind: {source_kind}")
@@ -104,7 +109,10 @@ def write_admitted_sourced_video_unit(
         str(manifest["sourceUnitId"]),
     )
 
-    asset_path = unit_dir / "assets" / "source.mp4"
+    source_suffix = source_video_path.suffix.lower()
+    if source_suffix not in {".mp4", ".webm", ".ogv", ".mov"}:
+        raise ValueError(f"unsupported sourced video extension: {source_suffix}")
+    asset_path = unit_dir / "assets" / f"source{source_suffix}"
     asset_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source_video_path, asset_path)
 
@@ -115,6 +123,7 @@ def write_admitted_sourced_video_unit(
         declared_status=audio_rights_status,
         authorization_proof_url=audio_authorization_proof_url,
     )
+    collected_at = datetime.now(UTC).isoformat()
     media_probe_path = unit_dir / "media" / "probe.json"
     watermark_path = unit_dir / "media" / "watermark_evidence.json"
     audio_path = unit_dir / "rights" / "audio_rights_evidence.json"
@@ -125,6 +134,52 @@ def write_admitted_sourced_video_unit(
         raise ValueError("sourced video watermark/OCR admission blocked")
     if audio["decision"] != "passed":
         raise ValueError("sourced video audio rights admission blocked")
+
+    asset_sha256 = sha256_file(asset_path)
+    content_type = {
+        ".mp4": "video/mp4",
+        ".webm": "video/webm",
+        ".ogv": "video/ogg",
+        ".mov": "video/quicktime",
+    }[source_suffix]
+    _write_json(
+        unit_dir / "assets" / "index.json",
+        {
+            "assets": [
+                {
+                    "sourceAssetId": "source_video_001",
+                    "fileName": asset_path.name,
+                    "url": original_asset_url,
+                    "requestedUrl": original_asset_url,
+                    "normalizedFromUrl": original_asset_url,
+                    "sourceUrl": source_post_url,
+                    "contentType": content_type,
+                    "width": int(media_probe["width"]),
+                    "height": int(media_probe["height"]),
+                    "bytes": asset_path.stat().st_size,
+                    "sha256": asset_sha256,
+                    "license": rights_basis,
+                    "credit": original_creator_name,
+                    "creator": original_creator_name,
+                    "termsUrl": terms_url or "",
+                    "licenseSnapshot": (
+                        f"{rights_basis} recorded by sourced-video admission"
+                    ),
+                    "usageScope": "app_publish",
+                    "collectionPageUrl": source_post_url,
+                    "authorizationProof": authorization_proof_url or "",
+                    "rightsAuditStatus": "verified",
+                    "rightsAuditIssues": [],
+                    "modelReleaseStatus": model_release_status,
+                    "propertyReleaseStatus": property_release_status,
+                    "fetchedAt": collected_at,
+                    "caption": str(source_unit.get("relevance") or ""),
+                    "relevance": str(source_unit.get("relevance") or ""),
+                    "variants": [],
+                }
+            ]
+        },
+    )
 
     rights_path = unit_dir / "rights" / "permission_evidence.json"
     rights = {
@@ -138,7 +193,7 @@ def write_admitted_sourced_video_unit(
         "sourcePostUrl": source_post_url,
         "originalAssetUrl": original_asset_url,
         "audioAuthorizationProofUrl": audio_authorization_proof_url,
-        "collectedAt": datetime.now(UTC).isoformat(),
+        "collectedAt": collected_at,
     }
     _write_json(rights_path, rights)
 
@@ -155,7 +210,7 @@ def write_admitted_sourced_video_unit(
             audio_path,
             execution_id,
         ),
-        sha256=sha256_file(asset_path),
+        sha256=asset_sha256,
         is_original=False,
         original_creator_name=original_creator_name,
         platform=platform,

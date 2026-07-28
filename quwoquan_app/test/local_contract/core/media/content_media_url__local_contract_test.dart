@@ -49,16 +49,16 @@ void main() {
     test('四份独立 endpoint 配置只改变 authority', () {
       final endpointPairs = <({String image, String video})>[
         (
-          image: 'https://alpha-image.quwoquan-env.test:17100',
-          video: 'https://alpha-video.quwoquan-env.test:17100',
+          image: 'https://cdn.alpha.quwoquan.com:17100',
+          video: 'https://cdn.alpha.quwoquan.com:17100',
         ),
         (
-          image: 'https://beta-image.quwoquan-env.test:18100',
-          video: 'https://beta-video.quwoquan-env.test:18100',
+          image: 'https://cdn.beta.quwoquan.com:18100',
+          video: 'https://cdn.beta.quwoquan.com:18100',
         ),
         (
-          image: 'https://gamma-image.quwoquan-env.test:19100',
-          video: 'https://gamma-video.quwoquan-env.test:19100',
+          image: 'https://cdn.gamma.quwoquan.com:19100',
+          video: 'https://cdn.gamma.quwoquan.com:19100',
         ),
         (image: 'https://cdn.quwoquan.com', video: 'https://cdn.quwoquan.com'),
       ];

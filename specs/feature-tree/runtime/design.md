@@ -62,11 +62,11 @@
 ## 5. 关键决策
 
 <a id="dec-001"></a>
-### DEC-001 composition root 显式选择
-- 决策：composition root 显式选择。
-- 理由：runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integration-service 等独立机制 进程；部署边界不形成新的 L1，业务对象与 Vendor SDK 不得穿透。
-- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
-- 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+### DEC-001 四环境 App Remote composition 显式且唯一
+- 决策：alpha/beta/gamma/prod 的 App 统一使用 production Remote composition；环境只选择 runtime package、endpoint、容量和 rollout stage。
+- 理由：runtime 负责装配机制而不拥有业务事实；把环境名映射成 App 内 Mock 会绕过服务、数据 release、媒体与错误恢复主线。
+- 被否决方案：Alpha runner/mock package、Mock/Remote 运行时开关、环境启动器或 UAT 注入 fixture、服务失败后返回本地合成成功。
+- 约束与影响：第一方业务事实只经 canonical release importer 或所属领域公开 command；测试 double 只在 local_contract 测试树，第三方 local substitute 只在服务防腐层。
 - 关联要求：`REQ-001`
 - 关联能力：[`deliver-deploy-prod-pipeline`](./deliver-deploy-prod-pipeline/spec.md)、[`development-workflow-governance`](./development-workflow-governance/spec.md)、[`native-edge-gesture-navigation`](./native-edge-gesture-navigation/spec.md)、[`runtime-agentpack`](./runtime-agentpack/spec.md)、[`runtime-assistant`](./runtime-assistant/spec.md)、[`runtime-client-foundation`](./runtime-client-foundation/spec.md)、[`runtime-codegen`](./runtime-codegen/spec.md)、[`runtime-config`](./runtime-config/spec.md)、[`runtime-context`](./runtime-context/spec.md)、[`runtime-control-plane-foundation`](./runtime-control-plane-foundation/spec.md)、[`runtime-data-engineering`](./runtime-data-engineering/spec.md)、[`runtime-errors`](./runtime-errors/spec.md)、[`runtime-eventstore`](./runtime-eventstore/spec.md)、[`runtime-experiments`](./runtime-experiments/spec.md)、[`runtime-external-integration`](./runtime-external-integration/spec.md)、[`runtime-governance`](./runtime-governance/spec.md)、[`runtime-http`](./runtime-http/spec.md)、[`runtime-interceptor`](./runtime-interceptor/spec.md)、[`runtime-learning`](./runtime-learning/spec.md)、[`runtime-media`](./runtime-media/spec.md)、[`runtime-messaging`](./runtime-messaging/spec.md)、[`runtime-observability`](./runtime-observability/spec.md)、[`runtime-projector`](./runtime-projector/spec.md)、[`runtime-recommendation`](./runtime-recommendation/spec.md)、[`runtime-redis`](./runtime-redis/spec.md)、[`runtime-rpc`](./runtime-rpc/spec.md)、[`runtime-skill`](./runtime-skill/spec.md)、[`runtime-streaming`](./runtime-streaming/spec.md)、[`runtime-test-pyramid`](./runtime-test-pyramid/spec.md)、[`runtime-testinfra`](./runtime-testinfra/spec.md)、[`system-architecture-and-engineering-guide`](./system-architecture-and-engineering-guide/spec.md)
 

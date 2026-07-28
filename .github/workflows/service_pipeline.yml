@@ -251,7 +251,7 @@ jobs:
           python3 quwoquan_ops/cli/prod/collect_mainline_image_descriptors.py \
             --manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" \
             --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/image-descriptors"
-      - name: Finalize deployable release artifact
+      - name: Finalize immutable service component candidate
         run: |
           python3 quwoquan_ops/cli/prod/finalize_mainline_release_artifact.py \
             --artifact-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline" \
@@ -270,7 +270,7 @@ jobs:
           ]
           print(f"max_seconds={max(durations)}")
           PY
-      - name: Require immutable release manifest
+      - name: Require immutable service component manifest
         run: |
           test -s "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" || {
             echo "::error::mainline release artifact is required; local regeneration is forbidden"
@@ -309,7 +309,7 @@ jobs:
             echo "$env autonomous assembly OK"
           done
       - id: release_bundle
-        name: Publish deployable release artifact to GHCR
+        name: Publish immutable service component artifact to GHCR
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
         with:
           context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline

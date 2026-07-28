@@ -45,13 +45,13 @@ PY
 fi
 GAMMA_RUN_ROOT="$QWQ_RUN_ROOT"
 REPORT="${LOCAL_GAMMA_T4_REPORT:-$GAMMA_RUN_ROOT/t4_report.json}"
-GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-$topology_gateway_base_url}"
-PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-$topology_product_ops_base_url}"
-MEDIA_AVATAR_BASE_URL="${LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL:-$topology_media_avatar_base_url}"
-MEDIA_IMAGE_BASE_URL="${LOCAL_GAMMA_MEDIA_IMAGE_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-$topology_media_image_base_url}}"
-MEDIA_VIDEO_BASE_URL="${LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL:-$topology_media_video_base_url}"
-MEDIA_UPLOAD_BASE_URL="${LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL:-$topology_media_upload_base_url}"
-RTC_MEDIA_CONNECTION_URL="${LOCAL_GAMMA_RTC_MEDIA_CONNECTION_URL:-$topology_rtc_media_connection_url}"
+GATEWAY_BASE_URL="$topology_gateway_base_url"
+PRODUCT_OPS_BASE_URL="$topology_product_ops_base_url"
+MEDIA_AVATAR_BASE_URL="$topology_media_avatar_base_url"
+MEDIA_IMAGE_BASE_URL="$topology_media_image_base_url"
+MEDIA_VIDEO_BASE_URL="$topology_media_video_base_url"
+MEDIA_UPLOAD_BASE_URL="$topology_media_upload_base_url"
+RTC_MEDIA_CONNECTION_URL="$topology_rtc_media_connection_url"
 # Local Gamma owns its anonymous session inside the device runtime through the
 # public user-service boundary. Never inherit host credentials: Flutter expands
 # Dart defines into child process arguments, which would expose a bearer token.
@@ -157,7 +157,6 @@ cmd=(
   --env-name "local-gamma"
   --runtime-env "gamma"
   --api-contract-env "gamma"
-  --data-source "remote"
   --platform "$PLATFORM"
   --gateway-base-url "$GATEWAY_BASE_URL"
   --product-ops-base-url "$PRODUCT_OPS_BASE_URL"

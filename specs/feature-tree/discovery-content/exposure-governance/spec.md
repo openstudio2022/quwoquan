@@ -67,6 +67,8 @@
 - 端侧上报抗冲击的能力边界引用（统一通道 / 采样 / 幂等 / 归因，细则归 feed-orchestration-recommendation/feedback-ingestion-sampling）。
 - P0 已实现状态分离、去全量化过滤、端侧统一上报、云侧 FeedbackIngestor 与基础观测；P1/P2 的动态预算、生命周期复活、协同召回和模型容量仍按各自 Story 推进。
 - 作者、标签、话题和 near-dup 频控不会导致空 feed，必须有降级和保底。
+- discovery/recommend 首刷仅因 served/impressed 长期曝光记忆耗尽时，可对同一批真实候选执行一次受控回退；该回退只放宽长期 exposure，不得绕过 explicit negative、隐藏作者/类型、双向 block、safety、published 或 hydration 检查。
+- 当前会话短窗口去重、强负反馈或合规过滤导致无可用候选时不得强行重复下发；必须返回父能力定义的 canonical failure。有效 continuation 的自然末尾不触发 exposure 回退。
 
 ## 6. 契约与依赖
 
@@ -88,6 +90,7 @@
 - THEN 曝光健康 SLI 与 `recommendation_slo.yaml` 同名；P0 emitter 已 measured，P1/P2 无 emitter 告警保持前置标注。
 - THEN 运营干预与违规/下架剔除有审计、过期、回滚和 SLO 口径。
 - THEN `feed-orchestration-recommendation` 只引用 exposure-governance 的能力边界，不再拥有独立曝光预算或生命周期真相源。
+- THEN discovery/recommend 首刷因长期 exposure 耗尽时只放宽 served/impressed 历史，并继续执行 negative/block/safety/published/hydration 硬过滤；continuation end 不做回退。
 
 ## 8. 开放事项
 

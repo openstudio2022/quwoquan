@@ -101,8 +101,8 @@ class AuthorImpactCard extends ConsumerWidget {
       key: AuthorImpactCard.cardKey,
       topDivider: true,
       title: isMine
-          ? UITextConstants.profileImpactTitleMine
-          : UITextConstants.profileImpactTitleOther,
+          ? ContentText.profileImpactTitleMine
+          : ContentText.profileImpactTitleOther,
       footerActionLabel: isMine ? DiscoveryFeedText.intersectionViewAll : null,
       onFooterAction: isMine
           ? () => context.push(AppRoutePaths.myIntersections(filter: 'impact'))
@@ -164,8 +164,8 @@ class AuthorImpactCard extends ConsumerWidget {
       emptyChild: Text(
         key: AuthorImpactCard.emptyKey,
         isMine
-            ? UITextConstants.profileImpactEmptyMine
-            : UITextConstants.profileImpactEmptyOther,
+            ? ContentText.profileImpactEmptyMine
+            : ContentText.profileImpactEmptyOther,
         style: TextStyle(
           fontSize: AppTypography.iosCaption1,
           height: AppSpacing.textLineHeightBody,

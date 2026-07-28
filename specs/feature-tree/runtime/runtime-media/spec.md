@@ -45,6 +45,7 @@
 - 同一逻辑资产在四环境仅 authority 不同
 - 404 负缓存阻止 rebuild 羊群
 - VideoPlayer dispose 不泄漏槽位；槽满可退出失败态
+- 槽位等待、源解析与原生初始化共享 6 秒预算；300ms/3s/6s 反馈与终态一致
 - fixture/seed 媒体字段无环境字面量与 CAS path
 - canonical public video 在每个已启动 target 返回 HTTPS、Range 206 与 video/* MIME；失败会阻断该 target 的 Patrol/UAT
 - player ready 与可恢复/不可恢复失败分别有结构化、无 PII 证据
@@ -60,7 +61,7 @@
 - P1-A previewTrack、缓存 key、帧访问和取消均绑定 asset/version/profile/access policy；缺轨或预览失败退化为时间浮标，不阻断 P0。
 - P1-B HLS/CMAF descriptor、rendition set、codec ladder、segment/keyframe、MIME/CORS/鉴权/cache-control 和平台 capability matrix 独立验收；ABR 关闭或失败时回退 P0。
 - video_playback_qoe 只进入 Ops 强类型遥测，effective_play 只进入 content behavior；两条链路的字段、隐私和推荐消费者互不混用。
-- alpha fixture bundle 在生成时校验其 media canary profile；`v1` 必须保持 ready 资产、版本、125000ms 时长、public slice 与 preview track 的同源描述，Alpha 证据仅标记为 contract-fixture smoke。
+- canonical release media manifest 在生成时校验 media canary profile；ready 资产、版本、时长、public slice 与 preview track 必须同源，Alpha/Beta/Gamma/Prod 证据均绑定 release digest 和真实 Remote media consumer。
 
 <a id="req-003"></a>
 ### REQ-003 统一媒体资产引用、处理状态与群头像交付边界
@@ -92,6 +93,7 @@
 - THEN 同一逻辑资产在四环境仅 authority 不同
 - THEN 404 负缓存阻止 rebuild 羊群
 - THEN VideoPlayer dispose 不泄漏槽位；槽满可退出失败态
+- THEN 槽位等待、源解析与原生初始化共享 6 秒预算，超时后进入可恢复终态且槽位归零
 - THEN fixture/seed 媒体字段无环境字面量与 CAS path
 - THEN canonical public video 在每个已启动 target 返回 HTTPS、Range 206 与 video/* MIME；失败会阻断该 target 的 Patrol/UAT
 - THEN player ready 与可恢复/不可恢复失败分别有结构化、无 PII 证据
@@ -109,7 +111,7 @@
 - THEN P1-A previewTrack、缓存 key、帧访问和取消均绑定 asset/version/profile/access policy；缺轨或预览失败退化为时间浮标，不阻断 P0。
 - THEN P1-B HLS/CMAF descriptor、rendition set、codec ladder、segment/keyframe、MIME/CORS/鉴权/cache-control 和平台 capability matrix 独立验收；ABR 关闭或失败时回退 P0。
 - THEN video_playback_qoe 只进入 Ops 强类型遥测，effective_play 只进入 content behavior；两条链路的字段、隐私和推荐消费者互不混用。
-- THEN alpha fixture bundle 生成会拒绝缺失或状态不匹配的 media canary profile，`v1` 的 asset/version/duration/public slice/preview track 保持同源；该结果不替代 Beta/Gamma Remote UAT。
+- THEN canonical release 生成会拒绝缺失或状态不匹配的 media canary profile，asset/version/duration/public slice/preview track 保持同源；四环境均执行真实 Remote media UAT，不以 fixture smoke 替代。
 
 ## 8. 开放事项
 

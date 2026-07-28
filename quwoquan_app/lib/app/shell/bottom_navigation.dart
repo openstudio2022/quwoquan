@@ -22,7 +22,7 @@ class BottomNavigationWidget extends ConsumerWidget {
     final isDark = themeDark || forceDark;
     final auth = ref.watch(authSessionControllerProvider);
     final profileLabel = auth.status == AuthSessionStatus.guest
-        ? UITextConstants.bottomNavGuestProfile
+        ? FoundationText.bottomNavGuestProfile
         : AppConceptConstants.profile;
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     // 与 [MainAppShell] 主壳底同色，避免 glassSurface + BackdropFilter 的半透明毛玻璃感。

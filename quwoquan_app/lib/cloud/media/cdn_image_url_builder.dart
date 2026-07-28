@@ -44,9 +44,22 @@ class CdnImageUrlBuilder {
   }
 
   static bool _isCdnUrl(String url) {
-    final cdnDomain = CloudRuntimeConfig.cdnDomain;
-    if (cdnDomain.isEmpty) return false;
-    return url.contains(cdnDomain);
+    final candidate = Uri.tryParse(url);
+    if (candidate == null || candidate.host.isEmpty) return false;
+    for (final baseUrl in <String>[
+      CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
+      CloudRuntimeConfig.mediaImageCdnBaseUrl,
+    ]) {
+      final authority = Uri.tryParse(baseUrl);
+      if (authority != null &&
+          authority.host.isNotEmpty &&
+          candidate.scheme == authority.scheme &&
+          candidate.host == authority.host &&
+          candidate.port == authority.port) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static String _appendOssProcess(String url, String process) {

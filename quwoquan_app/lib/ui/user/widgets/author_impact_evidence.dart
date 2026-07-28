@@ -247,8 +247,8 @@ class _AuthorImpactEvidenceSheetState extends State<AuthorImpactEvidenceSheet> {
   Widget build(BuildContext context) {
     final surface = AppColors.iosProfileSurface(context);
     final hint = widget.isMine
-        ? UITextConstants.impactEnumerableHintMine
-        : UITextConstants.impactEnumerableHintOther;
+        ? ObjectHomepageText.impactEnumerableHintMine
+        : ObjectHomepageText.impactEnumerableHintOther;
 
     return SafeArea(
       top: false,
@@ -292,7 +292,7 @@ class _AuthorImpactEvidenceSheetState extends State<AuthorImpactEvidenceSheet> {
               width: double.infinity,
               child: CupertinoButton.filled(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text(UITextConstants.confirm),
+                child: const Text(FoundationText.confirm),
               ),
             ),
           ],
@@ -303,9 +303,9 @@ class _AuthorImpactEvidenceSheetState extends State<AuthorImpactEvidenceSheet> {
 
   Widget _buildBody(BuildContext context) {
     if (_loadingFirst) {
-      return const Padding(
+      return Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
-        child: Center(child: CupertinoActivityIndicator()),
+        child: AppRequestFeedback.section(),
       );
     }
     if (_items.isNotEmpty) {
@@ -370,9 +370,9 @@ class _AuthorImpactEvidenceSheetState extends State<AuthorImpactEvidenceSheet> {
 
   Widget _buildLoadMore(BuildContext context) {
     if (_loadingMore) {
-      return const Padding(
+      return Padding(
         padding: EdgeInsets.symmetric(vertical: 8),
-        child: Center(child: CupertinoActivityIndicator()),
+        child: AppRequestFeedback.section(),
       );
     }
     return Align(
@@ -382,7 +382,7 @@ class _AuthorImpactEvidenceSheetState extends State<AuthorImpactEvidenceSheet> {
         onPressed: _loadMore,
         child: Text(
           _loadMoreFailed
-              ? UITextConstants.tryAgain
+              ? ContentText.tryAgain
               : DiscoveryFeedText.impactEvidenceSheetLoadMore,
           style: TextStyle(fontSize: AppTypography.iosFootnote),
         ),
@@ -442,7 +442,7 @@ class _AuthorImpactEvidenceSheetState extends State<AuthorImpactEvidenceSheet> {
           padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupSm),
           onPressed: _loadFirst,
           child: Text(
-            UITextConstants.retry,
+            FoundationText.retry,
             style: TextStyle(fontSize: AppTypography.iosFootnote),
           ),
         ),
@@ -457,8 +457,8 @@ class _AuthorImpactEvidenceSheetState extends State<AuthorImpactEvidenceSheet> {
         : (widget.item.subtitleText.trim().isNotEmpty
               ? widget.item.subtitleText.trim()
               : (widget.isMine
-                    ? UITextConstants.profileImpactTitleMine
-                    : UITextConstants.profileImpactTitleOther));
+                    ? ContentText.profileImpactTitleMine
+                    : ContentText.profileImpactTitleOther));
     return widget.item.count > 0 ? '$label · ${widget.item.count}' : label;
   }
 }

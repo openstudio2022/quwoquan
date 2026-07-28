@@ -155,7 +155,7 @@ class IntersectionStatementRow extends StatelessWidget {
     );
     final subtitle = item.subtitleText.trim().isNotEmpty
         ? item.subtitleText.trim()
-        : UITextConstants.profileStatementFallbackSubtitle;
+        : ObjectHomepageText.profileStatementFallbackSubtitle;
     final hasSpans = item.spans.isNotEmpty;
     // 头像已由槽②（句内头像）/槽③（对象封面）/传播节点承载时不再渲染 leading 视觉簇，
     // 避免重复；否则继续渲染 leading 簇服务通用消费者。

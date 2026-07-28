@@ -64,7 +64,7 @@ extension _ImageEditorOperationPanelPro on ImageEditorOperationPanel {
         children: [
           SizedBox(height: AppSpacing.sm),
           _buildHslAxisRow(
-            UITextConstants.imageEditorProColorTemp,
+            MediaText.imageEditorProColorTemp,
             wbTemperature,
             gradient: const <Color>[
               AppColors.info,
@@ -75,7 +75,7 @@ extension _ImageEditorOperationPanelPro on ImageEditorOperationPanel {
           ),
           SizedBox(height: AppSpacing.xs),
           _buildHslAxisRow(
-            UITextConstants.imageEditorProTone,
+            MediaText.imageEditorProTone,
             wbTint,
             gradient: const <Color>[
               AppColors.success,
@@ -86,7 +86,7 @@ extension _ImageEditorOperationPanelPro on ImageEditorOperationPanel {
           ),
           CupertinoButton(
             onPressed: onWbAuto,
-            child: Text(UITextConstants.imageEditorProWhiteBalanceAuto),
+            child: Text(MediaText.imageEditorProWhiteBalanceAuto),
           ),
         ],
       ),
@@ -100,7 +100,7 @@ extension _ImageEditorOperationPanelPro on ImageEditorOperationPanel {
         children: [
           SizedBox(height: AppSpacing.sm),
           _buildHslAxisRow(
-            UITextConstants.imageEditorProWhiteLevel,
+            MediaText.imageEditorProWhiteLevel,
             bwWhiteLevel,
             gradient: <Color>[
               AppColors.white.withValues(alpha: 0.08),
@@ -110,7 +110,7 @@ extension _ImageEditorOperationPanelPro on ImageEditorOperationPanel {
           ),
           SizedBox(height: AppSpacing.xs),
           _buildHslAxisRow(
-            UITextConstants.imageEditorProBlackLevel,
+            MediaText.imageEditorProBlackLevel,
             bwBlackLevel,
             gradient: <Color>[
               AppColors.white.withValues(alpha: 0.95),
@@ -149,7 +149,7 @@ extension _ImageEditorOperationPanelPro on ImageEditorOperationPanel {
       _LocalControlButtonItem(
         icon: Icons.add_circle_outline,
         selected: localAddMode,
-        label: UITextConstants.imageEditorProAnchorAdd,
+        label: MediaText.imageEditorProAnchorAdd,
         onTap: onToggleLocalAddMode,
       ),
       _LocalControlButtonItem(
@@ -158,16 +158,16 @@ extension _ImageEditorOperationPanelPro on ImageEditorOperationPanel {
             : Icons.visibility,
         selected: !localShowAllAnchors,
         label: localShowAllAnchors
-            ? UITextConstants.imageEditorProAnchorHide
-            : UITextConstants.imageEditorProAnchorShow,
+            ? MediaText.imageEditorProAnchorHide
+            : MediaText.imageEditorProAnchorShow,
         onTap: onToggleLocalShowAll,
       ),
       _LocalControlButtonItem(
         icon: localRangeVisible ? Icons.radar : Icons.radar_outlined,
         selected: localRangeVisible,
         label: localRangeVisible
-            ? UITextConstants.imageEditorProAnchorRangeHide
-            : UITextConstants.imageEditorProAnchorRangeShow,
+            ? MediaText.imageEditorProAnchorRangeHide
+            : MediaText.imageEditorProAnchorRangeShow,
         onTap: onToggleLocalRangeVisible,
       ),
     ];
@@ -247,14 +247,14 @@ extension _ImageEditorOperationPanelPro on ImageEditorOperationPanel {
           ),
           SizedBox(height: AppSpacing.sm),
           _buildHslAxisRow(
-            UITextConstants.imageEditorProHue,
+            MediaText.imageEditorProHue,
             hue,
             gradient: _buildHslAxisGradient(selectedChannel.color, kHslAxisHue),
             onChanged: (v) => onHslValueChanged(kHslAxisHue, v),
           ),
           SizedBox(height: AppSpacing.xs),
           _buildHslAxisRow(
-            UITextConstants.imageEditorProSaturation,
+            MediaText.imageEditorProSaturation,
             saturation,
             gradient: _buildHslAxisGradient(
               selectedChannel.color,
@@ -264,7 +264,7 @@ extension _ImageEditorOperationPanelPro on ImageEditorOperationPanel {
           ),
           SizedBox(height: AppSpacing.xs),
           _buildHslAxisRow(
-            UITextConstants.imageEditorProLuminance,
+            MediaText.imageEditorProLuminance,
             luminance,
             gradient: _buildHslAxisGradient(
               selectedChannel.color,
@@ -505,16 +505,16 @@ extension _ImageEditorOperationPanelPro on ImageEditorOperationPanel {
         selectedProCategory == kImageEditorProCategoryOverall ||
         selectedProCategory == kImageEditorProCategoryLocal;
     final centerTitle = selectedProCategory == kImageEditorProCategoryHsl
-        ? UITextConstants.imageEditorProTabHsl
+        ? MediaText.imageEditorProTabHsl
         : selectedProCategory == kImageEditorProCategoryBwLevels
-        ? UITextConstants.imageEditorProTabBwLevels
+        ? MediaText.imageEditorProTabBwLevels
         : selectedProCategory == kImageEditorProCategoryLocal
-        ? UITextConstants.imageEditorProTabLocal
+        ? MediaText.imageEditorProTabLocal
         : selectedProCategory == kImageEditorProCategoryCurve
-        ? UITextConstants.imageEditorProCurve
+        ? MediaText.imageEditorProCurve
         : selectedProCategory == kImageEditorProCategoryWhiteBalance
-        ? UITextConstants.imageEditorProWhiteBalance
-        : UITextConstants.imageEditorProAdjustImage;
+        ? MediaText.imageEditorProWhiteBalance
+        : MediaText.imageEditorProAdjustImage;
     final safeIndex = proBaseSelectedIndex.clamp(
       0,
       kImageEditorProBaseEntries.length - 1,

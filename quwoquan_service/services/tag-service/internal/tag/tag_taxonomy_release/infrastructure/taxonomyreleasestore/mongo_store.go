@@ -58,6 +58,42 @@ func (s *Store) Load(ctx context.Context, releaseID string) (model.Release, bool
 	return release, true, nil
 }
 
+// BackfillReleaseKind upgrades a pre-releaseKind immutable record only when
+// every pre-existing identity field matches the current release authority.
+func (s *Store) BackfillReleaseKind(
+	ctx context.Context,
+	releaseID string,
+	sourceOwner string,
+	canonicalDigest string,
+	nodeCount int,
+	releaseKind model.ReleaseKind,
+) error {
+	existing, found, err := s.Load(ctx, releaseID)
+	if err != nil || !found || existing.ReleaseKind != "" {
+		return err
+	}
+	if existing.SourceOwner != strings.TrimSpace(sourceOwner) ||
+		existing.CanonicalDigest != strings.TrimSpace(canonicalDigest) ||
+		existing.NodeCount != nodeCount {
+		return model.ErrDigestConflict
+	}
+	result, err := s.releases.UpdateOne(
+		ctx,
+		bson.M{
+			"_id":         existing.ReleaseID,
+			"releaseKind": bson.M{"$exists": false},
+		},
+		bson.M{"$set": bson.M{"releaseKind": releaseKind}},
+	)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount != 1 {
+		return model.ErrVersionConflict
+	}
+	return nil
+}
+
 func (s *Store) FindByDigest(ctx context.Context, canonicalDigest string) (model.Release, bool, error) {
 	var release model.Release
 	err := s.releases.FindOne(ctx, bson.M{"canonicalDigest": strings.TrimSpace(canonicalDigest)}).Decode(&release)

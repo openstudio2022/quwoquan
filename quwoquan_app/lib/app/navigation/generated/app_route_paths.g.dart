@@ -108,7 +108,7 @@ class AppRoutePaths {
   static const String userProfileSegment = '{username}';
 
   static const String workBrowserPathTemplate = '/works/browser/{workId}';
-  static String workBrowser({required String workId, String? filter, String? source, String? index, String? sourceTheme}) {
+  static String workBrowser({required String workId, String? filter, String? source, String? index, String? sourceTheme, String? openComments, String? commentEntrySource, String? targetCommentId, String? targetParentCommentId, String? targetReplyId, String? replyToCommentId}) {
     return _buildPath(workBrowserPathTemplate, <String, String>{
       'workId': workId,
     }, <String, String?>{
@@ -116,6 +116,12 @@ class AppRoutePaths {
       'source': source,
       'index': index,
       'sourceTheme': sourceTheme,
+      'openComments': openComments,
+      'commentEntrySource': commentEntrySource,
+      'targetCommentId': targetCommentId,
+      'targetParentCommentId': targetParentCommentId,
+      'targetReplyId': targetReplyId,
+      'replyToCommentId': replyToCommentId,
     });
   }
   static const String workBrowserSegment = '{workId}';

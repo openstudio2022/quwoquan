@@ -72,8 +72,8 @@ func TestCollaborativeRecallSource_DisabledReturnsEmpty(t *testing.T) {
 	}, CollaborativeRecallConfig{Enabled: false, QuotaPct: 50})
 
 	candidates, err := src.Recall(context.Background(), RecallRequest{UserID: "u1", Limit: 10})
-	if err != nil {
-		t.Fatal(err)
+	if !IsRecallSkipped(err) {
+		t.Fatalf("disabled source must report not-applicable, got %v", err)
 	}
 	if len(candidates) != 0 {
 		t.Fatalf("disabled collaborative source should return empty, got %d", len(candidates))

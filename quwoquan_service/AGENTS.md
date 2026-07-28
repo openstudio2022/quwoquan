@@ -20,6 +20,7 @@
 - 新增/变更 API、事件、字段、错误码时，要同步评估 app codegen 与 contract tests。
 - 新增 API、消费者、导入器、推荐投影或后台任务必须同步声明 metrics、trace/request id、日志脱敏、SLO、告警阈值、配置来源与回滚策略。
 - 四环境配置必须来自服务内 `config/schema.yaml` 和 `environments/<env>/config.yaml`；稳定资源归服务 `resources/`，环境资源只保存 seed/release/artifact 引用。
+- alpha/beta/gamma/prod 的第一方业务对象只允许由 canonical immutable release importer 激活；环境资源、启动器、T3/UAT 和测试 fixture 不得直写业务存储或进入公开 feed/homepage/profile。基础设施 canary 必须与业务投影物理隔离。
 - 第一方部署基线归服务 `deploy/base`，四环境部署入口归 `environments/<env>/deploy`；Ops 只做跨服务装配与外部 workload，不维护第一方 workload/topology 注册表。
 - 当前阶段未上线：错误领域模型、错误 API 契约、错误存储抽象或临时兼容直接纠正，不保留 shim、fallback 或旧路径兼容。
 

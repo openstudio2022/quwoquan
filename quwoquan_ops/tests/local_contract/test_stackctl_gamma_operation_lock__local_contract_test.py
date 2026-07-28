@@ -643,7 +643,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                 "LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT": "https://minio:19000",
                 "LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE": "/tmp/gamma-ca.crt",
             },
-            host_endpoint="https://gamma-upload.quwoquan-env.test:19000",
+            host_endpoint="https://upload.gamma.quwoquan.com:19000",
         )
         values = {
             "RTC_MEDIA_FIXTURE_CONNECTION_URL": "wss://fixture.local/rtc",

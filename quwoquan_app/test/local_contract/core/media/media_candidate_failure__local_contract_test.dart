@@ -8,10 +8,10 @@ void main() {
         classifyMediaCandidateLoadFailure(
           Exception(
             'ClientException with SocketException: Failed host lookup: '
-            "'alpha-image.quwoquan-env.test'",
+            "'cdn.alpha.quwoquan.com'",
           ),
           candidateUrl:
-              'https://alpha-image.quwoquan-env.test:17100/media/image/s/x.png',
+              'https://cdn.alpha.quwoquan.com:17100/media/image/s/x.png',
         ),
         MediaCandidateFailureKind.dnsNxdomain,
       );

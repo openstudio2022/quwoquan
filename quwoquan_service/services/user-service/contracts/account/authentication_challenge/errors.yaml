@@ -19,8 +19,8 @@ errors:
   dart_const: otpExpired
   go_const: ErrOtpExpired
   user_message:
-    zh: 验证码已过期，请重新获取
-    en: Verification code expired, please request a new one
+    zh: 验证码已失效
+    en: Verification code is no longer valid
 - code: USER.AUTH.otp_mismatch
   kind: AUTH
   reason: otp_mismatch
@@ -32,8 +32,8 @@ errors:
   dart_const: otpMismatch
   go_const: ErrOtpMismatch
   user_message:
-    zh: 验证码错误，请重新输入
-    en: Incorrect verification code, please try again
+    zh: 验证码不正确
+    en: Verification code is incorrect
 - code: USER.AUTH.otp_attempts_exceeded
   kind: AUTH
   reason: otp_attempts_exceeded
@@ -46,8 +46,8 @@ errors:
   dart_const: otpAttemptsExceeded
   go_const: ErrOtpAttemptsExceeded
   user_message:
-    zh: 验证码错误次数过多，请重新获取
-    en: Too many incorrect attempts, please request a new code
+    zh: 尝试次数较多
+    en: Too many attempts
 - code: USER.AUTH.otp_rate_limited
   kind: AUTH
   reason: rate_limited
@@ -60,8 +60,8 @@ errors:
   dart_const: otpRateLimited
   go_const: ErrOtpRateLimited
   user_message:
-    zh: 操作过于频繁，请稍后重试
-    en: Verification code requests are too frequent, please retry later
+    zh: 尝试次数较多
+    en: Too many attempts
 - code: USER.AUTH.otp_provider_failed
   kind: AUTH
   reason: third_party_failure
@@ -73,8 +73,8 @@ errors:
   dart_const: otpProviderFailed
   go_const: ErrOtpProviderFailed
   user_message:
-    zh: 验证码发送失败，请稍后重试
-    en: Failed to send verification code, please retry or use another method
+    zh: 验证码发送失败
+    en: Verification code could not be sent
 - code: USER.AUTH.challenge_consumed
   kind: AUTH
   reason: challenge_consumed
@@ -86,5 +86,5 @@ errors:
   dart_const: challengeConsumed
   go_const: ErrChallengeConsumed
   user_message:
-    zh: 验证码已被使用，请重新获取
-    en: Verification code already used, please request a new one
+    zh: 验证码已失效
+    en: Verification code is no longer valid

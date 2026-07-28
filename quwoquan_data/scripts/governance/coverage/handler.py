@@ -40,6 +40,25 @@ def handle_master_list_stats(args: argparse.Namespace) -> None:
     print(json.dumps(stats, ensure_ascii=False, indent=2))
 
 
+def handle_entity_catalog(args: argparse.Namespace) -> None:
+    from governance.coverage.admin_entity_catalog import (
+        admin_entity_catalog_report,
+    )
+
+    report = admin_entity_catalog_report(provinces=_provinces_arg(args) or None)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    blocking = {
+        "missingTaxonomyPaths": report["missingTaxonomyPaths"],
+        "duplicateCanonicalIdentities": report["duplicateCanonicalIdentities"],
+        "duplicateCanonicalEntityRefs": report["duplicateCanonicalEntityRefs"],
+    }
+    if any(blocking.values()):
+        raise SystemExit(
+            "[governance coverage entity-catalog] GATE_BLOCK: "
+            f"行政实体 catalog 未闭合；{blocking}"
+        )
+
+
 def handle_coverage_discover(args: argparse.Namespace) -> None:
     from pathlib import Path
 
@@ -368,6 +387,9 @@ def handle_coverage_command(args: argparse.Namespace) -> None:
     if command == "master-list-stats":
         handle_master_list_stats(args)
         return
+    if command == "entity-catalog":
+        handle_entity_catalog(args)
+        return
     if command == "discover":
         handle_coverage_discover(args)
         return
@@ -408,6 +430,13 @@ def register_coverage_parser(subparsers: argparse._SubParsersAction) -> None:
     pms = sub.add_parser("master-list-stats", help="全国地点主清单统计（规模/类型/跨省）")
     pms.add_argument("--provinces", help="省份列表（逗号分隔）；缺省=全部")
     pms.set_defaults(handler=handle_master_list_stats)
+
+    pec = sub.add_parser(
+        "entity-catalog",
+        help="全国行政实体 catalog coverage（直接消费 pca + taxonomy）",
+    )
+    pec.add_argument("--provinces", help="省份列表（逗号分隔）；缺省=全国")
+    pec.set_defaults(handler=handle_entity_catalog)
 
     pcd = sub.add_parser(
         "discover",
@@ -465,7 +494,7 @@ def register_coverage_parser(subparsers: argparse._SubParsersAction) -> None:
     pcs.add_argument(
         "--include-master-list",
         action="store_true",
-        help="同时纳入仓内省级主清单",
+        help="同时纳入全国行政实体 catalog 与仓内旅游 POI master list",
     )
     pcs.add_argument(
         "--exhaust-input",

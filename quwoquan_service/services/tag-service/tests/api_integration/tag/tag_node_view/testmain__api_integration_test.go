@@ -15,6 +15,7 @@ import (
 	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/application"
 	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/infrastructure/persistence"
 	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/application/taxonomyrelease"
+	releasemodel "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/domain/taxonomyrelease/model"
 	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/infrastructure/taxonomyreleasestore"
 )
 
@@ -87,6 +88,7 @@ func activateReleaseForSeed(t *testing.T, releaseID string, nodeCount int) {
 		ReleaseID:       releaseID,
 		SourceOwner:     "test",
 		CanonicalDigest: "seed-" + releaseID,
+		ReleaseKind:     releasemodel.ReleaseKindContent,
 		NodeCount:       nodeCount,
 	}); err != nil {
 		t.Fatalf("stage seed release %s: %v", releaseID, err)

@@ -511,14 +511,17 @@ func (h *elasticsearchHarness) handleBulk(
 	defer h.mu.Unlock()
 	for scanner.Scan() {
 		var metadata struct {
-			Index struct {
-				Index string `json:"_index"`
-				ID    string `json:"_id"`
-			} `json:"index"`
+			Index map[string]string `json:"index"`
 		}
 		if err := json.Unmarshal(scanner.Bytes(), &metadata); err != nil ||
 			!scanner.Scan() {
 			writeJSON(writer, http.StatusBadRequest, map[string]any{"error": "invalid bulk"})
+			return
+		}
+		index := metadata.Index["_index"]
+		id := metadata.Index["_id"]
+		if index == "" || id == "" {
+			writeJSON(writer, http.StatusBadRequest, map[string]any{"error": "invalid bulk metadata"})
 			return
 		}
 		var source map[string]any
@@ -526,10 +529,10 @@ func (h *elasticsearchHarness) handleBulk(
 			writeJSON(writer, http.StatusBadRequest, map[string]any{"error": "invalid source"})
 			return
 		}
-		if h.documentsByIndex[metadata.Index.Index] == nil {
-			h.documentsByIndex[metadata.Index.Index] = map[string]map[string]any{}
+		if h.documentsByIndex[index] == nil {
+			h.documentsByIndex[index] = map[string]map[string]any{}
 		}
-		h.documentsByIndex[metadata.Index.Index][metadata.Index.ID] = source
+		h.documentsByIndex[index][id] = source
 		items = append(items, map[string]any{
 			"index": map[string]any{"status": http.StatusCreated},
 		})

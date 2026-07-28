@@ -23,7 +23,6 @@ for path in (DATA_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(path))
 
 from content.execution import recipe  # noqa: E402
-from content.execution import homepage_binding  # noqa: E402
 from content.execution.identity import (  # noqa: E402
     build_execution_id,
     parse_execution_id,
@@ -158,7 +157,6 @@ def test_execute_freezes_generic_runtime_request(monkeypatch, tmp_path: Path) ->
             target_names=["测试实体甲", "测试实体乙"],
             topic=None,
             source_providers=[],
-            homepage_execution_id=None,
             stage="plan-only",
             recover_stage=None,
             recovery_reason=None,
@@ -206,7 +204,6 @@ def test_retry_inherits_the_previous_frozen_target_set(monkeypatch, tmp_path: Pa
             target_names=[],
             topic=None,
             source_providers=[],
-            homepage_execution_id=None,
             stage="plan-only",
             recover_stage=None,
             recovery_reason=None,
@@ -248,7 +245,6 @@ def test_retry_rejects_target_or_count_drift(monkeypatch, tmp_path: Path) -> Non
         "target_names": ["测试实体甲", "测试实体乙"],
         "topic": None,
         "source_providers": [],
-        "homepage_execution_id": None,
         "stage": "plan-only",
         "recover_stage": None,
         "recovery_reason": None,
@@ -296,7 +292,6 @@ def test_plan_only_checks_workspace_before_creating_a_work_package(monkeypatch) 
         quota=1,
         topic=None,
         source_providers=(),
-        homepage_execution_id=None,
         stage="plan-only",
         recover_stage=None,
         recovery_reason=None,
@@ -317,11 +312,16 @@ def test_plan_only_checks_workspace_before_creating_a_work_package(monkeypatch) 
         raise AssertionError("plan-only must reject an active output cleanup")
 
 
-def test_post_execute_requires_explicit_homepage_execution(monkeypatch, tmp_path: Path) -> None:
+def test_post_execute_uses_its_own_frozen_entity_targets(monkeypatch, tmp_path: Path) -> None:
     reference_root = tmp_path / "quwoquan_data/reference/travel/entities/test-region-b"
     reference_root.mkdir(parents=True)
     monkeypatch.setattr(recipe, "REPO_ROOT", tmp_path)
-    monkeypatch.setattr(recipe, "_run_execution", lambda *_args, **_kwargs: None)
+    captured: dict[str, object] = {}
+
+    def _capture(args, **_kwargs) -> None:
+        captured.update(vars(args))
+
+    monkeypatch.setattr(recipe, "_run_execution", _capture)
     args = argparse.Namespace(
         execution_id="20260722--travel-article-supply--test-region-b--pilot-001",
         retry_of=None,
@@ -330,85 +330,17 @@ def test_post_execute_requires_explicit_homepage_execution(monkeypatch, tmp_path
         selector="all",
         count=1,
         quota=1,
+        target_names=["测试实体甲"],
         topic="test-topic-a",
         source_providers=[],
-        homepage_execution_id=None,
         stage="plan-only",
         recover_stage=None,
         recovery_reason=None,
     )
 
-    try:
-        recipe.handle_execute(args)
-    except SystemExit as exc:
-        assert "homepage-execution-id" in str(exc)
-    else:
-        raise AssertionError("post execution without homepage binding must block")
+    recipe.handle_execute(args)
 
-
-def test_post_targets_derive_from_the_published_homepage_closure(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    parent_id = "20260722--travel-homepage-coverage--test-region-b--scale-001"
-    parent_root = tmp_path / parent_id
-    (parent_root / "0.plan").mkdir(parents=True)
-    (parent_root / "0.plan/request.json").write_text(
-        json.dumps(
-            {
-                "familyRef": "content/travel/homepage/homepage",
-                "regionRef": "test-region-b",
-                "selector": "source-ready-priority",
-                "count": 2,
-                "quota": 2,
-                "topic": None,
-                "sourceProviders": [],
-                "homepageExecutionId": None,
-                "targetNames": [],
-            }
-        ),
-        encoding="utf-8",
-    )
-    (parent_root / "publish_ref.json").write_text(
-        json.dumps(
-            {
-                "schema": "quwoquan_data.execution_publish_ref",
-                "executionId": parent_id,
-                "canonicalPublishRoot": "quwoquan_data/publish",
-                "publishedRefs": {
-                    "entities": ["地点/景区/测试实体甲", "地点/景区/测试实体乙"],
-                    "posts": [],
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(homepage_binding, "execution_root", lambda _execution_id: parent_root)
-    monkeypatch.setattr(
-        homepage_binding,
-        "execution_request_path",
-        lambda _execution_id: parent_root / "0.plan/request.json",
-    )
-    monkeypatch.setattr(homepage_binding, "load_execution_manifest", lambda _execution_id: {})
-    monkeypatch.setattr(
-        homepage_binding,
-        "load_frozen_target_set",
-        lambda _execution_id: {
-            "targets": [
-                {"name": "测试实体乙", "entityType": "地点/景区"},
-                {"name": "测试实体甲", "entityType": "地点/景区"},
-            ]
-        },
-    )
-
-    names = homepage_binding.published_homepage_target_names(
-        parent_id,
-        region_ref="test-region-b",
-        count=2,
-        quota=2,
-    )
-
-    assert names == ("测试实体乙", "测试实体甲")
+    assert captured["target_names"] == ("测试实体甲",)
 
 
 def test_homepage_execute_requires_source_ready_selection(monkeypatch, tmp_path: Path) -> None:
@@ -428,7 +360,6 @@ def test_homepage_execute_requires_source_ready_selection(monkeypatch, tmp_path:
         target_names=[],
         topic=None,
         source_providers=[],
-        homepage_execution_id=None,
         stage="plan-only",
         recover_stage=None,
         recovery_reason=None,
@@ -467,7 +398,6 @@ def test_frozen_runtime_request_rejects_unknown_or_unordered_fields() -> None:
         "quota": 1,
         "topic": None,
         "sourceProviders": ["provider-b", "provider-a"],
-        "homepageExecutionId": None,
         "targetNames": [],
     }
     try:
@@ -505,7 +435,6 @@ def test_execute_rejects_a_provider_outside_the_vertical_policy(monkeypatch, tmp
         quota=1,
         topic=None,
         source_providers=["provider-a"],
-        homepage_execution_id=None,
         stage="plan-only",
         recover_stage=None,
         recovery_reason=None,

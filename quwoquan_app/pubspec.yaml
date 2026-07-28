@@ -98,9 +98,6 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  # test target 专用 contract-seeded 替身（08 Mock 隔离：production 依赖图不可达）。
-  quwoquan_cloud_mock:
-    path: packages/quwoquan_cloud_mock
   webview_flutter_platform_interface: ^2.15.1
   flutter_lints: ^6.0.0
   # user_acceptance Patrol（真实设备 / Firebase Test Lab）

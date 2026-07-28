@@ -35,6 +35,7 @@ class AssistantConversationInlineError extends StatelessWidget {
             onDismiss();
             return;
           case UiErrorActionType.login:
+          case UiErrorActionType.openUpdate:
             // 找私助入口自身已受登录门保护，此处不会消费新的登录 continuation。
             return;
         }
@@ -45,14 +46,14 @@ class AssistantConversationInlineError extends StatelessWidget {
   UiErrorSemantic _retrySemantic(BuildContext context) {
     const retryAction = UiErrorAction(
       type: UiErrorActionType.retry,
-      label: UITextConstants.tryAgain,
+      label: ContentText.tryAgain,
     );
     final failure = state.errorFailure;
     if (failure == null) {
       return UiErrorSemantic(
         category: UiErrorCategory.submit,
         scope: UiErrorScope.section,
-        title: UITextConstants.submitNotCompleted,
+        title: ContentText.submitNotCompleted,
         message: state.errorMessage,
         primaryAction: retryAction,
         presentation: UiErrorPresentation.sectionSoftCard,
@@ -76,7 +77,7 @@ class AssistantConversationInlineError extends StatelessWidget {
       category: resolved.category,
       scope: resolved.scope,
       title: resolved.title,
-      message: state.errorMessage,
+      message: resolved.message,
       secondaryMessage: resolved.secondaryMessage,
       primaryAction: resolved.primaryAction ?? retryAction,
       secondaryAction: hasRetry || resolved.primaryAction == null

@@ -1,0 +1,99 @@
+description: 运行实例配置 ACK 与同候选版本漂移投影。
+fields:
+- name: instanceId
+  source: instanceId
+  type: string
+  constraints: [PK]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: environment
+  source: environment
+  type: string
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: cluster
+  source: cluster
+  type: string
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: service
+  source: service
+  type: string
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: releaseManifestDigest
+  source: releaseManifestDigest
+  type: string
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: desiredHash
+  source: desiredHash
+  type: string
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: effectiveHash
+  source: effectiveHash
+  type: string
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: inSync
+  source: inSync
+  type: boolean
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: projection
+types:
+  ConfigInstanceReport:
+    description: 单个实例对当前候选版本和有效配置的 ACK。
+    fields:
+    - {name: id, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: environment, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: cluster, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: service, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: instanceId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: configVersion, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: imageVersion, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: releaseManifestDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: desiredHash, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: effectiveHash, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: inSync, type: boolean, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: source, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: lastError, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+  ConfigInstanceReportSlice:
+    description: 当前候选版本的实例 ACK 与漂移汇总。
+    fields:
+    - {name: items, type: array, constraints: [NOT_NULL], classification: INTERNAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+    - {name: summary, type: object, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: drop, ops_exposure: read}

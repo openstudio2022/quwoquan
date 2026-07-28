@@ -232,13 +232,13 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
       setState(() {
         _entryCountNoticeResolved = true;
         if (diff > 0) {
-          _entryCountNoticeMessage = UITextConstants
+          _entryCountNoticeMessage = ContentText
               .commentEntryCountIncreaseNoticeTemplate
               .replaceFirst('%s', '$diff');
           return;
         }
         if (diff < 0) {
-          _entryCountNoticeMessage = UITextConstants
+          _entryCountNoticeMessage = ContentText
               .commentEntryCountDecreaseNoticeTemplate
               .replaceFirst('%s', '${diff.abs()}');
           return;
@@ -422,8 +422,8 @@ class CommentDetailHeader extends StatelessWidget {
               Expanded(
                 child: Text(
                   commentCount == null
-                      ? UITextConstants.comment
-                      : UITextConstants.commentCountTitleTemplate.replaceFirst(
+                      ? FoundationText.comment
+                      : ContentText.commentCountTitleTemplate.replaceFirst(
                           '%s',
                           '$commentCount',
                         ),

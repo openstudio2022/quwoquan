@@ -8,6 +8,8 @@ import tempfile
 import argparse
 from unittest import mock
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
@@ -16,6 +18,121 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli import provider_conformance_runner
 from quwoquan_ops.cli.lib import external_provider_governance as governance
 from quwoquan_ops.cli.lib import provider_conformance
+
+
+def test_candidate_image_digest_is_derived_from_environment_packages() -> None:
+    commit = "a" * 40
+    service_digest = f"sha256:{'b' * 64}"
+    registry = {"capabilities": [{"service_id": "assistant-service"}]}
+
+    with tempfile.TemporaryDirectory() as temporary:
+        package_root = Path(temporary)
+
+        def package_dir(
+            environment: str,
+            service: str,
+            *,
+            target: str,
+        ) -> Path:
+            assert target == f"{environment}-local"
+            package = package_root / environment / service
+            package.mkdir(parents=True, exist_ok=True)
+            (package / "image.lock").write_text(
+                yaml.safe_dump(
+                    {
+                        "service": service,
+                        "digest": service_digest,
+                        "digestSource": "build-input",
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            (package / "provenance.json").write_text(
+                json.dumps(
+                    {
+                        "service": service,
+                        "environment": environment,
+                        "gitRevision": commit,
+                        "digests": {"sourceTree": service_digest},
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            return package
+
+        with (
+            mock.patch.object(
+                provider_conformance,
+                "service_deployment_package_dir",
+                side_effect=package_dir,
+            ),
+            mock.patch.object(
+                provider_conformance,
+                "_current_commit",
+                return_value=commit,
+            ),
+        ):
+            alpha_digest = provider_conformance.candidate_image_digest(
+                "alpha",
+                registry=registry,
+            )
+            beta_digest = provider_conformance.candidate_image_digest(
+                "beta",
+                registry=registry,
+            )
+
+    assert provider_conformance.SHA256_PATTERN.fullmatch(alpha_digest)
+    assert beta_digest == alpha_digest
+
+
+def test_candidate_image_digest_rejects_inconsistent_provenance() -> None:
+    registry = {"capabilities": [{"service_id": "assistant-service"}]}
+    with tempfile.TemporaryDirectory() as temporary:
+        package = Path(temporary)
+        (package / "image.lock").write_text(
+            yaml.safe_dump(
+                {
+                    "service": "assistant-service",
+                    "digest": f"sha256:{'b' * 64}",
+                    "digestSource": "build-input",
+                }
+            ),
+            encoding="utf-8",
+        )
+        (package / "provenance.json").write_text(
+            json.dumps(
+                {
+                    "service": "assistant-service",
+                    "environment": "alpha",
+                    "gitRevision": "a" * 40,
+                    "digests": "not-a-digest-map",
+                }
+            ),
+            encoding="utf-8",
+        )
+        with (
+            mock.patch.object(
+                provider_conformance,
+                "service_deployment_package_dir",
+                return_value=package,
+            ),
+            mock.patch.object(
+                provider_conformance,
+                "_current_commit",
+                return_value="a" * 40,
+            ),
+        ):
+            try:
+                provider_conformance.candidate_image_digest(
+                    "alpha",
+                    registry=registry,
+                )
+            except ValueError as exc:
+                assert "provenance has no digests" in str(exc)
+            else:
+                raise AssertionError("inconsistent Provider provenance was accepted")
 
 
 def test_runner_emits_evidence_only_from_test_owned_case_results() -> None:
@@ -100,32 +217,37 @@ def test_runner_emits_evidence_only_from_test_owned_case_results() -> None:
             f"sha256:{'1' * 64}"
         )
         try:
-            evidence_path = provider_conformance_runner._execute_cell(
-                argparse.Namespace(
-                    adapter_id="ext.llm.protocol_fixture",
-                    environment="alpha",
-                    layer="local_contract",
-                    execute=True,
-                    data_digest="",
-                    image_digest=f"sha256:{'1' * 64}",
-                    adapter_health_receipt_ref="",
-                    switch_compatibility_receipt_ref="",
-                    callback_drain_receipt_ref="",
-                    last_good_receipt_ref="",
-                    rollback_receipt_ref="",
-                    prod_binding_preflight_receipt_ref="",
-                    prod_adapter_health_receipt_ref="",
-                ),
-                registry=registry,
-                compiled=compiled,
-                sources={
-                    (
-                        "assistant.model.generation",
-                        "ext.llm.protocol_fixture",
-                        "local_contract",
-                    ): source
-                },
-            )
+            with mock.patch.object(
+                provider_conformance_runner.provider_conformance,
+                "candidate_image_digest",
+                return_value=f"sha256:{'1' * 64}",
+            ):
+                evidence_path = provider_conformance_runner._execute_cell(
+                    argparse.Namespace(
+                        adapter_id="ext.llm.protocol_fixture",
+                        environment="alpha",
+                        layer="local_contract",
+                        execute=True,
+                        data_digest="",
+                        image_digest="",
+                        adapter_health_receipt_ref="",
+                        switch_compatibility_receipt_ref="",
+                        callback_drain_receipt_ref="",
+                        last_good_receipt_ref="",
+                        rollback_receipt_ref="",
+                        prod_binding_preflight_receipt_ref="",
+                        prod_adapter_health_receipt_ref="",
+                    ),
+                    registry=registry,
+                    compiled=compiled,
+                    sources={
+                        (
+                            "assistant.model.generation",
+                            "ext.llm.protocol_fixture",
+                            "local_contract",
+                        ): source
+                    },
+                )
             evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
             issues = provider_conformance.validate_evidence(
                 [evidence],
@@ -306,21 +428,26 @@ def test_runner_rejects_stale_image_digest_before_emitting_evidence() -> None:
     os.environ["QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST"] = f"sha256:{'2' * 64}"
     try:
         try:
-            provider_conformance_runner._execute_cell(
-                argparse.Namespace(
-                    adapter_id="ext.llm.protocol_fixture",
-                    environment="alpha",
-                    layer="local_contract",
-                    execute=True,
-                    data_digest="",
-                    image_digest=f"sha256:{'1' * 64}",
-                ),
-                registry={},
-                compiled={},
-                sources={},
-            )
+            with mock.patch.object(
+                provider_conformance_runner.provider_conformance,
+                "candidate_image_digest",
+                return_value=f"sha256:{'2' * 64}",
+            ):
+                provider_conformance_runner._execute_cell(
+                    argparse.Namespace(
+                        adapter_id="ext.llm.protocol_fixture",
+                        environment="alpha",
+                        layer="local_contract",
+                        execute=True,
+                        data_digest="",
+                        image_digest=f"sha256:{'1' * 64}",
+                    ),
+                    registry={},
+                    compiled={},
+                    sources={},
+                )
         except ValueError as exc:
-            assert "does not match the active immutable image" in str(exc)
+            assert "does not match the packaged immutable candidate" in str(exc)
         else:
             raise AssertionError("stale image digest was accepted")
     finally:

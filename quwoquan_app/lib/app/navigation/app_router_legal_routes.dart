@@ -6,7 +6,7 @@ List<GoRoute> _legalDocumentRoutes() => <GoRoute>[
     pageBuilder: (context, state) => CupertinoPage<void>(
       key: state.pageKey,
       child: LegalDocumentPage(
-        title: UITextConstants.userAgreement,
+        title: FoundationText.userAgreement,
         url: AuthLegalConfig.userAgreementUrl,
       ),
     ),
@@ -16,7 +16,7 @@ List<GoRoute> _legalDocumentRoutes() => <GoRoute>[
     pageBuilder: (context, state) => CupertinoPage<void>(
       key: state.pageKey,
       child: LegalDocumentPage(
-        title: UITextConstants.privacyPolicy,
+        title: FoundationText.privacyPolicy,
         url: AuthLegalConfig.privacyPolicyUrl,
       ),
     ),
@@ -26,7 +26,7 @@ List<GoRoute> _legalDocumentRoutes() => <GoRoute>[
     pageBuilder: (context, state) => CupertinoPage<void>(
       key: state.pageKey,
       child: LegalDocumentPage(
-        title: UITextConstants.permissionsStatement,
+        title: FoundationText.permissionsStatement,
         url: AuthLegalConfig.permissionsUrl,
       ),
     ),
@@ -36,7 +36,7 @@ List<GoRoute> _legalDocumentRoutes() => <GoRoute>[
     pageBuilder: (context, state) => CupertinoPage<void>(
       key: state.pageKey,
       child: LegalDocumentPage(
-        title: UITextConstants.thirdPartySdkList,
+        title: FoundationText.thirdPartySdkList,
         url: AuthLegalConfig.thirdPartySdkListUrl,
       ),
     ),

@@ -187,57 +187,19 @@ def _post_exit_issues(ctx: ExecutionContext, refs: list[str]) -> list[str]:
     return list(dict.fromkeys(str(issue) for issue in issues))
 
 
-def _post_review_issue_records(
-    ctx: ExecutionContext,
-    messages: Sequence[str],
-    *,
-    refs: Sequence[str],
-) -> list[DataIssue]:
-    """Decode object review gates; never infer affected refs from message text."""
-    from content.post import object_index as content_object
-
-    records: list[DataIssue] = []
-    for ref in refs:
-        try:
-            gate_path = (
-                content_object.content_object_dir(ctx.execution_id, ref)
-                / "5.review"
-                / "review_gate.json"
-            )
-        except KeyError:
-            gate_path = None
-        if gate_path is None or not gate_path.is_file():
-            continue
-        envelope = read_json(gate_path)
-        payload = envelope.get("payload") or envelope
-        if payload.get("passed") is not False:
-            continue
-        for raw_issue in payload.get("issues") or []:
-            if isinstance(raw_issue, Mapping):
-                records.append(DataIssue.from_dict(raw_issue))
-            else:
-                records.append(data_issue(
-                    DataIssueCode.QUALITY_FAILED,
-                    stage=DataIssueStage.POST_REVIEW,
-                    ref=ref,
-                    recovery=DataRecoveryAction.REWIND_COMPOSE,
-                    message=str(raw_issue),
-                ))
-    if records:
-        return records
-    return data_issues(
-        DataIssueCode.QUALITY_FAILED,
-        stage=DataIssueStage.POST_REVIEW,
-        messages=messages,
-        recovery=DataRecoveryAction.REWIND_COMPOSE,
-    )
-
 def _run_post_review(ctx: ExecutionContext) -> StageResult:
-    from content.execution.recovery.post_recovery import _content_plan_base_draft_shortfall_refs, _post_review_retry_refs, _release_base_draft_shortfall_refs
+    from content.execution.identity import parse_execution_id
+    from content.execution.recovery.post_recovery import _content_plan_base_draft_shortfall_refs, _release_base_draft_shortfall_refs
     from content.post.handler import PostStageRequest, handle_post
     from content.post import object_index as content_object
     from content.post.article.base_draft import load_base_draft_ledger, save_base_draft_ledger
     from content.execution.handoff import build_execution_reducer_gate, write_execution_reducer_gate
+    from content.execution.post_review_closure import (
+        indexed_post_targets,
+        resolve_post_review_closure,
+        write_post_review_closure,
+    )
+
     # 物化 batch 级 base_draft_ledger 落盘：纯图（image-only）批次不认领单一底稿、
     # assignments 合法为空，但 release_integrity 要求 ledger 文件存在且 schema 正确。
     # 幂等：文章批次的 assignments 已在底稿认领时写入，此处只保证文件落盘，不改内容。
@@ -267,28 +229,45 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
         )
     refs = content_object.iter_content_refs(ctx.execution_id)
     active_refs = list(refs)
-    preflight_short_refs = _content_plan_base_draft_shortfall_refs(ctx, active_refs)
-    if preflight_short_refs:
+    object_targets = indexed_post_targets(ctx.execution_id)
+    object_issues: dict[str, list[str]] = {ref: [] for ref in active_refs}
+
+    def add_issues(ref: str, messages: Sequence[object]) -> None:
+        bucket = object_issues[ref]
+        for raw in messages:
+            message = str(raw).strip()
+            if message and message not in bucket:
+                bucket.append(message)
+
+    try:
+        active_ref_types = _content_ref_types(ctx, active_refs)
+    except ValueError as exc:
         return StageResult(
             ExecutionStage.POST_REVIEW,
             AUTO,
             StageStatus.FAILED,
-            "content_plan preflight found frozen refs below base draft gate",
-            fallback_stage=ExecutionStage.CONTENT_PLAN,
-            issue_records=[
-                data_issue(
-                    DataIssueCode.SOURCE_RETAINED_SHORTFALL,
-                    stage=DataIssueStage.CONTENT_PLAN,
-                    ref=ref,
-                    recovery=DataRecoveryAction.REWIND_DOWNLOAD,
-                    message="baseDraftText effective length below release gate",
-                )
-                for ref in preflight_short_refs
-            ],
+            f"post_review content object contract invalid: {exc}",
+            fallback_stage=ExecutionStage.POST_COMPOSE,
+            issue_records=data_issues(
+                DataIssueCode.CONTRACT_INVALID,
+                stage=DataIssueStage.POST_REVIEW,
+                messages=[str(exc)],
+                recovery=DataRecoveryAction.STOP,
+            ),
         )
-    all_green = bool(active_refs)
+    carrier = next(
+        iter(active_ref_types),
+        parse_execution_id(ctx.execution_id).content_type.value,
+    )
+    preflight_short_refs = _content_plan_base_draft_shortfall_refs(ctx, active_refs)
+    for ref in preflight_short_refs:
+        add_issues(ref, ["baseDraftText effective length below content_plan gate"])
+    reviewable_refs = [
+        ref for ref in active_refs if ref not in set(preflight_short_refs)
+    ]
+    all_green = bool(reviewable_refs)
     stale_review_refs: list[str] = []
-    for ref in refs:
+    for ref in reviewable_refs:
         gate_path = (
             content_object.content_object_dir(ctx.execution_id, ref)
             / "5.review"
@@ -306,130 +285,153 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
         if _review_gate_is_stale(ctx, ref, gate_path):
             all_green = False
             stale_review_refs.append(ref)
-    initial_issues: list[str] = []
-    initial_issue_records: list[DataIssue] = []
-    review_refs = active_refs
+    review_refs = reviewable_refs
     if all_green:
         # review gate 已绿时本分支跳过 handle_post 的 _stage_review，而 media_check
         # 正是在 _stage_review 内产出。纯图（image-only）内容对象的 review 在叶子阶段已
         # 通过，会直接走到此处，导致发布门因缺 media_check envelope 失败。这里幂等补跑
         # 图像安全体检（CV：人脸/水印/OCR/去重），保证发布门有真实 media_check 证据。
         from content.source.media.check import check_images
-        check_images(ctx.execution_id, list(active_refs), allow_needs_review=True)
-        from content.execution.controller.post_independent_review import (
-            run_post_independent_reviews,
-        )
 
-        initial_issues.extend(_materialize_reviewed_refs(ctx, active_refs))
-        initial_issues.extend(_post_exit_issues(ctx, active_refs))
-        independent_records = run_post_independent_reviews(ctx, active_refs)
-        initial_issue_records.extend(independent_records)
-        initial_issues.extend(str(issue) for issue in independent_records)
-        release_short_refs = _release_base_draft_shortfall_refs(
-            ctx,
-            active_refs=active_refs,
-        )
-        if release_short_refs:
-            initial_issues.extend(
-                f"{ref}: baseDraftText below release gate"
-                for ref in release_short_refs
-            )
-        if not initial_issues:
-            return StageResult(
-                ExecutionStage.POST_REVIEW,
-                AUTO,
-                StageStatus.DONE,
-                "existing review + materialized packages still pass current gates",
-            )
-        initial_issue_records.extend(
-            _post_review_issue_records(
-                ctx,
-                initial_issues,
-                refs=active_refs,
-            )
-        )
-        matched_refs, _issue_map = _post_review_retry_refs(ctx, initial_issue_records)
-        if not matched_refs:
-            return StageResult(
-                ExecutionStage.POST_REVIEW,
-                AUTO,
-                StageStatus.FAILED,
-                "发布门未过但无法映射到对象级 ref:\n  - " + "\n  - ".join(initial_issues[:10]),
-                fallback_stage=ExecutionStage.POST_COMPOSE,
-                issue_records=initial_issue_records,
-            )
-        review_refs = [ref for ref in matched_refs if ref in active_refs]
+        check_images(ctx.execution_id, list(reviewable_refs), allow_needs_review=True)
     elif stale_review_refs:
         review_refs = sorted(set(stale_review_refs))
-    # 控制器路径必须拿到全部 per-ref review gate 再走 ReAct 修复链；
-    # allow_partial=False 会在任一 ref 失败时 SystemExit，绕过回退重写机制。
-    handle_post(
-        PostStageRequest(
-            execution_id=ctx.execution_id,
-            content_type=ContentType(
-                next(iter(_content_ref_types(ctx, review_refs)))
-            ),
-            stage=PostStage.REVIEW,
-            refs=tuple(review_refs),
-            allow_partial=True,
-            materialize=True,
+    if review_refs and not all_green:
+        # 控制器路径必须拿到全部 per-ref review gate 再做对象级处置；
+        # allow_partial=False 会在任一 ref 失败时 SystemExit，绕过 quota closure。
+        handle_post(
+            PostStageRequest(
+                execution_id=ctx.execution_id,
+                content_type=ContentType(
+                    next(iter(_content_ref_types(ctx, review_refs)))
+                ),
+                stage=PostStage.REVIEW,
+                refs=tuple(review_refs),
+                allow_partial=True,
+                materialize=True,
+            )
         )
-    )
     from content.execution.controller.post_independent_review import (
         run_post_independent_reviews,
     )
 
-    issues = _materialize_reviewed_refs(ctx, active_refs)
-    issues.extend(_post_exit_issues(ctx, active_refs))
-    independent_records = run_post_independent_reviews(ctx, active_refs)
-    issues.extend(str(issue) for issue in independent_records)
+    for ref in reviewable_refs:
+        add_issues(ref, _materialize_reviewed_refs(ctx, [ref]))
+        add_issues(ref, _post_exit_issues(ctx, [ref]))
+    independent_records = run_post_independent_reviews(ctx, reviewable_refs)
+    for issue in independent_records:
+        if issue.ref and issue.ref in object_issues:
+            add_issues(issue.ref, [issue])
+        else:
+            for ref in reviewable_refs:
+                add_issues(ref, [issue])
     release_short_refs = _release_base_draft_shortfall_refs(
         ctx,
-        active_refs=active_refs,
+        active_refs=reviewable_refs,
     )
-    if release_short_refs:
-        issues.extend(
-            f"{ref}: baseDraftText below release gate"
-            for ref in release_short_refs
-        )
-    for ref in refs:
+    for ref in release_short_refs:
+        add_issues(ref, ["baseDraftText below release gate"])
+    for ref in reviewable_refs:
         gate_path = (
             content_object.content_object_dir(ctx.execution_id, ref)
             / "5.review"
             / "review_gate.json"
         )
         if not gate_path.is_file():
-            issues.append(f"{ref}: review_gate.json missing")
+            add_issues(ref, ["review_gate.json missing"])
             continue
         envelope = read_json(gate_path)
         payload = envelope.get("payload") or envelope
         if payload.get("passed") is not True:
             ref_issues = [str(item) for item in (payload.get("issues") or [])]
-            issues.append(
-                f"{ref}: review_gate failed"
+            add_issues(
+                ref,
+                [
+                    "review_gate failed"
                 + (": " + "; ".join(ref_issues[:5]) if ref_issues else "")
+                ],
             )
-    active_ref_types = _content_ref_types(ctx, active_refs)
+
+    # Reducer只消费仍 qualified 的 article，并把每个 reducer finding 归属到
+    # affectedRefs。处置后重算，直到剩余 publishable closure 自身通过。
     article_refs = set(active_ref_types.get("article") or [])
-    refs_payload = _batch_reducer_payload(ctx, refs=article_refs) if article_refs else []
-    execution_gate = build_execution_reducer_gate(refs_payload) if refs_payload else {
-        "schema": "quwoquan_data.execution_reducer_gate",
-        "passed": not article_refs,
-        "issues": [] if not article_refs else ["batchReducer: no draft payloads available after post_review"],
-        "affectedRefs": [],
-        "sourceReuse": {},
-        "intentDistribution": {},
-        "imageCoverage": {},
+    reducer_candidates = {
+        ref for ref in article_refs if not object_issues[ref]
     }
+    execution_gate = build_execution_reducer_gate(
+        _batch_reducer_payload(ctx, refs=reducer_candidates)
+    )
+    while execution_gate.get("passed") is False and reducer_candidates:
+        affected = {
+            str(ref)
+            for ref in execution_gate.get("affectedRefs") or []
+            if str(ref) in reducer_candidates
+        }
+        if not affected:
+            affected = set(reducer_candidates)
+        reducer_messages = [
+            str(issue) for issue in execution_gate.get("issues") or []
+        ] or ["batch reducer failed without an issue"]
+        for ref in affected:
+            add_issues(ref, reducer_messages)
+        reducer_candidates.difference_update(affected)
+        execution_gate = build_execution_reducer_gate(
+            _batch_reducer_payload(ctx, refs=reducer_candidates)
+        )
     write_execution_reducer_gate(ctx.execution_id, execution_gate)
-    if execution_gate.get("passed") is False:
-        issues.extend([str(issue) for issue in (execution_gate.get("issues") or [])])
-    if issues:
-        fb = _aggregate_review_fallback(ctx, refs=set(active_refs)) or ExecutionStage.POST_COMPOSE
-        issue_records = list(independent_records)
-        issue_records.extend(_post_review_issue_records(ctx, issues, refs=active_refs))
-        return StageResult(ExecutionStage.POST_REVIEW, AUTO, StageStatus.FAILED,
-                           "发布门未过:\n  - " + "\n  - ".join(issues[:10]),
-                           fallback_stage=fb,
-                           issue_records=issue_records)
-    return StageResult(ExecutionStage.POST_REVIEW, AUTO, StageStatus.DONE, "review + materialize approved，发布门通过")
+
+    closure = resolve_post_review_closure(
+        ctx.execution_id,
+        carrier=carrier,
+        object_targets=object_targets,
+        object_issues=object_issues,
+    )
+    write_post_review_closure(closure)
+    if closure.passed:
+        return StageResult(
+            ExecutionStage.POST_REVIEW,
+            AUTO,
+            StageStatus.DONE,
+            "post_review quota met "
+            f"(qualified={closure.qualified_count}/{closure.approved_quota}, "
+            f"discarded={len(closure.discarded)})",
+        )
+
+    issue_records = list(independent_records)
+    for row in closure.discarded:
+        issue_records.extend(
+            data_issue(
+                DataIssueCode.QUALITY_FAILED,
+                stage=DataIssueStage.POST_REVIEW,
+                ref=row.object_ref,
+                recovery=DataRecoveryAction.REWIND_COMPOSE,
+                message=message,
+            )
+            for message in row.issues
+        )
+    if not issue_records:
+        issue_records.append(
+            data_issue(
+                DataIssueCode.SOURCE_RETAINED_SHORTFALL,
+                stage=DataIssueStage.POST_REVIEW,
+                recovery=DataRecoveryAction.REWIND_COMPOSE,
+                message="post_review has no qualified content objects",
+            )
+        )
+    discarded_refs = {row.object_ref for row in closure.discarded}
+    fallback = (
+        ExecutionStage.CONTENT_PLAN
+        if discarded_refs.intersection(preflight_short_refs)
+        else _aggregate_review_fallback(ctx, refs=discarded_refs)
+        or ExecutionStage.POST_COMPOSE
+    )
+    return StageResult(
+        ExecutionStage.POST_REVIEW,
+        AUTO,
+        StageStatus.FAILED,
+        "post_review quota shortfall "
+        f"(qualified={closure.qualified_count}/{closure.approved_quota}, "
+        f"discarded={len(closure.discarded)})",
+        fallback_stage=fallback,
+        issue_records=issue_records,
+    )

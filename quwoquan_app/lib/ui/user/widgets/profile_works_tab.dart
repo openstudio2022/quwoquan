@@ -29,6 +29,7 @@ class ProfileWorksTab extends ConsumerStatefulWidget {
     this.inlineScroll = false,
     this.secondaryTabBarKey,
     this.onSecondaryHorizontalDragEnd,
+    this.suppressFailure = false,
   });
 
   final ProfileMode mode;
@@ -37,6 +38,7 @@ class ProfileWorksTab extends ConsumerStatefulWidget {
   final bool inlineScroll;
   final GlobalKey? secondaryTabBarKey;
   final GestureDragEndCallback? onSecondaryHorizontalDragEnd;
+  final bool suppressFailure;
 
   @override
   ConsumerState<ProfileWorksTab> createState() => _ProfileWorksTabState();
@@ -54,7 +56,19 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
     final filtered = state.creations
         .where((post) => _matchesCreationFilter(post, state.activeSubTab))
         .toList(growable: false);
-    final isLoading = state.isLoading && state.creations.isEmpty;
+    final isLoading = state.isWorksLoading && state.creations.isEmpty;
+    final blockingFailure = state.creations.isEmpty ? state.worksFailure : null;
+    final retainedFailure = state.creations.isNotEmpty
+        ? state.worksFailure
+        : null;
+    final failureSemantic = state.worksFailure == null
+        ? null
+        : runtimeErrorSemantic(
+            context,
+            error: state.worksFailure!,
+            category: UiErrorCategory.sectionLoad,
+            scope: UiErrorScope.section,
+          );
 
     if (widget.inlineScroll) {
       return Column(
@@ -66,10 +80,15 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
             totalCount: state.creations.length,
           ),
           if (isLoading)
-            Padding(
-              padding: EdgeInsets.symmetric(vertical: AppSpacing.interGroupXl),
-              child: Center(child: CupertinoActivityIndicator()),
+            AppRequestFeedback.section(showSlowHint: state.isWorksSlow)
+          else if (blockingFailure != null && !widget.suppressFailure)
+            AppSectionErrorState(
+              semantic: failureSemantic!,
+              onAction: (action) =>
+                  _handleFailureAction(context, notifier, action),
             )
+          else if (blockingFailure != null)
+            const SizedBox.shrink()
           else if (filtered.isEmpty)
             Padding(
               padding: EdgeInsets.symmetric(vertical: AppSpacing.interGroupXl),
@@ -81,40 +100,54 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
               ),
             )
           else
-            GestureDetector(
-              key: const ValueKey<String>('profile-works-grid'),
-              behavior: HitTestBehavior.translucent,
-              onHorizontalDragEnd: widget.onSecondaryHorizontalDragEnd,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.feedContentHorizontal(context),
-                  0,
-                  AppSpacing.feedContentHorizontal(context),
-                  AppSpacing.interGroupLg,
-                ),
-                child: GridView.builder(
-                  shrinkWrap: true,
-                  primary: false,
-                  padding: EdgeInsets.zero,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: AppSpacing.responsiveGridColumns(context),
-                    mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
-                    crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
-                    mainAxisExtent: _inlineGridMainAxisExtent(context),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                if (retainedFailure != null && !widget.suppressFailure)
+                  AppTransientErrorNotice(
+                    semantic: failureSemantic!,
+                    onAction: (action) =>
+                        _handleFailureAction(context, notifier, action),
                   ),
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) {
-                    final post = filtered[index];
-                    return _WorksPostCard(
-                      post: post,
-                      isDark: widget.isDark,
-                      onTap: () => _onPostTap(context, post),
-                      onHorizontalDragEnd: widget.onSecondaryHorizontalDragEnd,
-                    );
-                  },
+                GestureDetector(
+                  key: const ValueKey<String>('profile-works-grid'),
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragEnd: widget.onSecondaryHorizontalDragEnd,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.feedContentHorizontal(context),
+                      0,
+                      AppSpacing.feedContentHorizontal(context),
+                      AppSpacing.interGroupLg,
+                    ),
+                    child: GridView.builder(
+                      shrinkWrap: true,
+                      primary: false,
+                      padding: EdgeInsets.zero,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: AppSpacing.responsiveGridColumns(
+                          context,
+                        ),
+                        mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
+                        crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
+                        mainAxisExtent: _inlineGridMainAxisExtent(context),
+                      ),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final post = filtered[index];
+                        return _WorksPostCard(
+                          post: post,
+                          isDark: widget.isDark,
+                          onTap: () => _onPostTap(context, post),
+                          onHorizontalDragEnd:
+                              widget.onSecondaryHorizontalDragEnd,
+                        );
+                      },
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
         ],
       );
@@ -129,7 +162,15 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         ),
         Expanded(
           child: isLoading
-              ? Center(child: CupertinoActivityIndicator())
+              ? AppRequestFeedback.section(showSlowHint: state.isWorksSlow)
+              : blockingFailure != null && !widget.suppressFailure
+              ? AppSectionErrorState(
+                  semantic: failureSemantic!,
+                  onAction: (action) =>
+                      _handleFailureAction(context, notifier, action),
+                )
+              : blockingFailure != null
+              ? const SizedBox.shrink()
               : filtered.isEmpty
               ? Center(
                   child: _buildEmptyState(
@@ -175,6 +216,35 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         ),
       ],
     );
+  }
+
+  Future<void> _handleFailureAction(
+    BuildContext context,
+    ProfileNotifier notifier,
+    UiErrorAction action,
+  ) async {
+    if (action.type == UiErrorActionType.retry ||
+        action.type == UiErrorActionType.resubmit) {
+      await notifier.reloadWorks();
+      return;
+    }
+    if (action.type == UiErrorActionType.login) {
+      await requireLogin(
+        ref,
+        context,
+        AuthGateReason.generic,
+        redirect: GoRouterState.of(context).uri.toString(),
+        dismissFallback: AppRoutePaths.home,
+      );
+      return;
+    }
+    if (action.type == UiErrorActionType.dismiss) {
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go(AppRoutePaths.home);
+      }
+    }
   }
 
   double _inlineGridMainAxisExtent(BuildContext context) {
@@ -287,20 +357,20 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
     switch (filter) {
       case CreationSubTab.image:
         return isMine
-            ? UITextConstants.profileCreationEmptyImageMine
-            : UITextConstants.profileCreationEmptyImageOther;
+            ? ProfileText.profileCreationEmptyImageMine
+            : ProfileText.profileCreationEmptyImageOther;
       case CreationSubTab.video:
         return isMine
-            ? UITextConstants.profileCreationEmptyVideoMine
-            : UITextConstants.profileCreationEmptyVideoOther;
+            ? ProfileText.profileCreationEmptyVideoMine
+            : ProfileText.profileCreationEmptyVideoOther;
       case CreationSubTab.article:
         return isMine
-            ? UITextConstants.profileCreationEmptyTextMine
-            : UITextConstants.profileCreationEmptyTextOther;
+            ? ProfileText.profileCreationEmptyTextMine
+            : ProfileText.profileCreationEmptyTextOther;
       case CreationSubTab.all:
         return isMine
-            ? UITextConstants.profileCreationEmptyAllMine
-            : UITextConstants.profileCreationEmptyAllOther;
+            ? ProfileText.profileCreationEmptyAllMine
+            : ProfileText.profileCreationEmptyAllOther;
     }
   }
 
@@ -405,7 +475,7 @@ class _WorksPostCard extends ConsumerWidget {
     final body = post.normalizedBody;
     if (title.isNotEmpty) return title;
     if (body.isNotEmpty) return body;
-    return UITextConstants.profileTabCreations;
+    return ProfileText.profileTabCreations;
   }
 
   String get _supportingText {
@@ -463,7 +533,7 @@ class _WorksPostCard extends ConsumerWidget {
             child: Text(
               post.displayName.isNotEmpty
                   ? post.displayName
-                  : UITextConstants.profileTabCreations,
+                  : ProfileText.profileTabCreations,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: metaTextStyle.copyWith(fontWeight: AppTypography.regular),

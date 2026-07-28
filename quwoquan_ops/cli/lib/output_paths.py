@@ -314,6 +314,14 @@ def portal_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
     )
 
 
+def web_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
+    return deployment_target_path(
+        deployment_target_for_env(env_name, target=target),
+        "packages",
+        "public-web",
+    )
+
+
 def deployment_render_dir(
     env_name: str,
     *,

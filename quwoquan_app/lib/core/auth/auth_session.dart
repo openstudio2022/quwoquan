@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
@@ -16,7 +17,9 @@ import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/media/app_image_cache_controller.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart'
-    show accountSessionLifecycleCommandWriterProvider;
+    show
+        accountSessionLifecycleCommandWriterProvider,
+        accountSessionLoginCommandWriterProvider;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -33,6 +36,20 @@ String deriveDeviceActorId(String installId) {
   }
   final digest = sha256.convert(utf8.encode('qwq-device-actor-v1:$trimmed'));
   return digest.toString().substring(0, 32);
+}
+
+/// 为匿名会话 bootstrap 派生不可逆、安装级稳定的设备指纹。
+///
+/// App 不读取硬件唯一标识；服务端只收到独立 salt 的 SHA-256 摘要。该值仅用于
+/// `LoginAnonymous` 幂等复用，不能作为凭证，也不能替代服务端签发的 bearer。
+String deriveAnonymousDeviceFingerprintHash(String installId) {
+  final trimmed = installId.trim();
+  if (trimmed.isEmpty) {
+    return '';
+  }
+  return sha256
+      .convert(utf8.encode('qwq-anonymous-device-v1:$trimmed'))
+      .toString();
 }
 
 void _syncDeviceActorId(String installId) {
@@ -78,6 +95,7 @@ class AuthSessionState {
     this.activeSubAccountId = '',
     this.accountState = '',
     this.identityOrigin = '',
+    this.trustedGuestSession = false,
     this.installId = '',
     this.rememberedLoginMethod = AuthRememberedLoginMethod.unknown,
     this.rememberedLoginMaskedIdentifier = '',
@@ -98,6 +116,7 @@ class AuthSessionState {
   final String activeSubAccountId;
   final String accountState;
   final String identityOrigin;
+  final bool trustedGuestSession;
   final String installId;
   final AuthRememberedLoginMethod rememberedLoginMethod;
   final String rememberedLoginMaskedIdentifier;
@@ -106,10 +125,21 @@ class AuthSessionState {
   final bool rememberedNicknameCustomized;
   final String? errorMessage;
 
+  bool get isAnonymousSession => trustedGuestSession;
+
+  /// 已由服务端签发、可供 transport 使用的可信会话。
+  ///
+  /// 匿名会话也满足该条件，但仍保持 [isGuest]，不能绕过显式登录门。
+  bool get hasTrustedSession =>
+      accessToken.trim().isNotEmpty &&
+      refreshToken.trim().isNotEmpty &&
+      ownerId.trim().isNotEmpty &&
+      activeSubAccountId.trim().isNotEmpty;
+
   bool get isAuthenticated =>
       status == AuthSessionStatus.authenticated &&
-      accessToken.isNotEmpty &&
-      ownerId.isNotEmpty;
+      hasTrustedSession &&
+      !isAnonymousSession;
 
   bool get isGuest => status == AuthSessionStatus.guest;
 
@@ -125,6 +155,7 @@ class AuthSessionState {
     String? activeSubAccountId,
     String? accountState,
     String? identityOrigin,
+    bool? trustedGuestSession,
     String? installId,
     AuthRememberedLoginMethod? rememberedLoginMethod,
     String? rememberedLoginMaskedIdentifier,
@@ -142,6 +173,7 @@ class AuthSessionState {
       activeSubAccountId: activeSubAccountId ?? this.activeSubAccountId,
       accountState: accountState ?? this.accountState,
       identityOrigin: identityOrigin ?? this.identityOrigin,
+      trustedGuestSession: trustedGuestSession ?? this.trustedGuestSession,
       installId: installId ?? this.installId,
       rememberedLoginMethod:
           rememberedLoginMethod ?? this.rememberedLoginMethod,
@@ -166,6 +198,7 @@ class StoredAuthSession {
     required this.activeSubAccountId,
     required this.accountState,
     required this.identityOrigin,
+    this.trustedGuestSession = false,
     required this.installId,
     this.lastRefreshAtEpochMs = 0,
     this.lastForegroundAuthCheckAtEpochMs = 0,
@@ -175,6 +208,7 @@ class StoredAuthSession {
     this.rememberedDisplayName = '',
     this.rememberedAvatarUrl = '',
     this.rememberedNicknameCustomized = false,
+    this.rememberedRefreshToken = '',
     this.quickLoginExpiresAtEpochMs = 0,
     this.sessionRememberTtlSeconds = kDefaultSessionRememberTtlSeconds,
     required this.manualLoggedOut,
@@ -187,6 +221,7 @@ class StoredAuthSession {
   final String activeSubAccountId;
   final String accountState;
   final String identityOrigin;
+  final bool trustedGuestSession;
   final String installId;
   final int lastRefreshAtEpochMs;
   final int lastForegroundAuthCheckAtEpochMs;
@@ -202,6 +237,12 @@ class StoredAuthSession {
   final String rememberedAvatarUrl;
   final bool rememberedNicknameCustomized;
 
+  /// 软退出后保留的显式账号 refresh token。
+  ///
+  /// 它与当前活跃 transport 会话的 [refreshToken] 分槽保存，避免可信游客会话覆盖
+  /// 返回账号的快速登录凭证。
+  final String rememberedRefreshToken;
+
   /// 软退出后快速登录凭证的过期时间戳（epoch ms）。0 表示未设置（非软退出态）。
   final int quickLoginExpiresAtEpochMs;
 
@@ -216,7 +257,7 @@ class StoredAuthSession {
   /// `quickLoginExpiresAtEpochMs == 0` 表示旧数据/未显式写入过期戳，
   /// 此时按 `lastRefreshAt + ttl` 兜底，避免既往用户回归即失效。
   bool get hasValidQuickLoginCredential {
-    if (refreshToken.trim().isEmpty) {
+    if (quickLoginRefreshToken.isEmpty) {
       return false;
     }
     final nowMs = DateTime.now().millisecondsSinceEpoch;
@@ -228,6 +269,25 @@ class StoredAuthSession {
     }
     return true;
   }
+
+  String get quickLoginRefreshToken {
+    final remembered = rememberedRefreshToken.trim();
+    if (remembered.isNotEmpty) {
+      return remembered;
+    }
+    if (manualLoggedOut && accessToken.trim().isEmpty) {
+      return refreshToken.trim();
+    }
+    return '';
+  }
+
+  bool get hasCompleteActiveSession =>
+      accessToken.trim().isNotEmpty &&
+      refreshToken.trim().isNotEmpty &&
+      ownerId.trim().isNotEmpty &&
+      activeSubAccountId.trim().isNotEmpty;
+
+  bool get isAnonymousSession => trustedGuestSession;
 }
 
 class AuthSessionStore {
@@ -239,10 +299,12 @@ class AuthSessionStore {
 
   static const _accessTokenKey = 'auth.access_token';
   static const _refreshTokenKey = 'auth.refresh_token';
+  static const _rememberedRefreshTokenKey = 'auth.remembered_refresh_token';
   static const _ownerIdKey = 'auth.owner_id';
   static const _activeSubAccountIdKey = 'auth.active_sub_account_id';
   static const _accountStateKey = 'auth.account_state';
   static const _identityOriginKey = 'auth.identity_origin';
+  static const _trustedGuestSessionKey = 'auth.trusted_guest_session';
   static const _installIdKey = 'auth.install_id';
   static const _lastRefreshAtKey = 'auth.last_refresh_at_epoch_ms';
   static const _lastForegroundAuthCheckAtKey =
@@ -268,13 +330,38 @@ class AuthSessionStore {
   Future<StoredAuthSession> read() async {
     final prefs = await _prefsFactory();
     final installId = await _ensureInstallId(prefs);
+    final accessToken = await _secureStorage.read(key: _accessTokenKey) ?? '';
+    var refreshToken = await _secureStorage.read(key: _refreshTokenKey) ?? '';
+    var rememberedRefreshToken =
+        await _secureStorage.read(key: _rememberedRefreshTokenKey) ?? '';
+    final manualLoggedOut = prefs.getBool(_manualLoggedOutKey) ?? false;
+    final accountState = prefs.getString(_accountStateKey) ?? '';
+    final identityOrigin = prefs.getString(_identityOriginKey) ?? '';
+    final hasLegacyQuickLoginCredential =
+        manualLoggedOut &&
+        accessToken.trim().isEmpty &&
+        refreshToken.trim().isNotEmpty &&
+        rememberedRefreshToken.trim().isEmpty &&
+        accountState.trim() != 'anonymous';
+    if (hasLegacyQuickLoginCredential) {
+      rememberedRefreshToken = refreshToken;
+      refreshToken = '';
+      await _secureStorage.write(
+        key: _rememberedRefreshTokenKey,
+        value: rememberedRefreshToken,
+      );
+      await _secureStorage.delete(key: _refreshTokenKey);
+    }
     return StoredAuthSession(
-      accessToken: await _secureStorage.read(key: _accessTokenKey) ?? '',
-      refreshToken: await _secureStorage.read(key: _refreshTokenKey) ?? '',
+      accessToken: accessToken,
+      refreshToken: refreshToken,
       ownerId: prefs.getString(_ownerIdKey) ?? '',
       activeSubAccountId: prefs.getString(_activeSubAccountIdKey) ?? '',
-      accountState: prefs.getString(_accountStateKey) ?? '',
-      identityOrigin: prefs.getString(_identityOriginKey) ?? '',
+      accountState: accountState,
+      identityOrigin: identityOrigin,
+      trustedGuestSession:
+          prefs.getBool(_trustedGuestSessionKey) ??
+          accountState.trim() == 'anonymous',
       installId: installId,
       lastRefreshAtEpochMs: prefs.getInt(_lastRefreshAtKey) ?? 0,
       lastForegroundAuthCheckAtEpochMs:
@@ -290,7 +377,8 @@ class AuthSessionStore {
       rememberedAvatarUrl: prefs.getString(_rememberedAvatarUrlKey) ?? '',
       rememberedNicknameCustomized:
           prefs.get(_rememberedNicknameCustomizedKey) == true,
-      manualLoggedOut: prefs.getBool(_manualLoggedOutKey) ?? false,
+      rememberedRefreshToken: rememberedRefreshToken,
+      manualLoggedOut: manualLoggedOut,
       launchPromptDismissed: prefs.getBool(_launchPromptDismissedKey) ?? false,
       quickLoginExpiresAtEpochMs: prefs.getInt(_quickLoginExpiresAtKey) ?? 0,
       sessionRememberTtlSeconds:
@@ -306,6 +394,10 @@ class AuthSessionStore {
     String? rememberedLoginMaskedIdentifier,
     String? rememberedLoginIdentifier,
   }) async {
+    // `anonymous` 只由可信游客 bootstrap 显式传入；正式登录即便延续
+    // identityOrigin=anonymous_device 也使用真实登录方式或 unknown，不靠响应字段猜测。
+    final trustedGuestSession =
+        rememberedLoginMethod == AuthRememberedLoginMethod.anonymous;
     final prefs = await _prefsFactory();
     final activeSub = _activeSubAccountIdFromResult(result);
     final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
@@ -323,6 +415,10 @@ class AuthSessionStore {
     final normalizedAvatarUrl = result.accountHint?.avatarUrl.trim() ?? '';
     final normalizedNicknameCustomized =
         result.accountHint?.nicknameCustomized ?? false;
+    if (trustedGuestSession) {
+      // 先降权再替换 token；进程若中途退出，也不能把匿名 bearer 恢复成显式登录态。
+      await prefs.setBool(_trustedGuestSessionKey, true);
+    }
     await _secureStorage.write(key: _accessTokenKey, value: result.accessToken);
     await _secureStorage.write(
       key: _refreshTokenKey,
@@ -332,50 +428,60 @@ class AuthSessionStore {
     await prefs.setString(_activeSubAccountIdKey, activeSub);
     await prefs.setString(_accountStateKey, result.accountState);
     await prefs.setString(_identityOriginKey, result.identityOrigin);
+    if (!trustedGuestSession) {
+      // 正式 grant 全部落盘后再升权，崩溃窗口保持游客语义。
+      await prefs.setBool(_trustedGuestSessionKey, false);
+    }
     await prefs.setInt(_lastRefreshAtKey, nowEpochMs);
     await prefs.setInt(_lastForegroundAuthCheckAtKey, nowEpochMs);
-    await prefs.setString(
-      _rememberedLoginMethodKey,
-      normalizedRememberedMethod.name,
-    );
-    await prefs.setString(
-      _rememberedLoginMaskedIdentifierKey,
-      normalizedRememberedMaskedIdentifier,
-    );
-    // 仅手机号验证码登录持有可复用的完整号；其他方式登录清除残留完整号，避免错配。
-    final normalizedFullIdentifier =
-        normalizedRememberedMethod == AuthRememberedLoginMethod.phoneOtp
-        ? (rememberedLoginIdentifier ?? '').trim()
-        : '';
-    if (normalizedFullIdentifier.isNotEmpty) {
-      await _secureStorage.write(
-        key: _rememberedLoginIdentifierKey,
-        value: normalizedFullIdentifier,
+    if (!trustedGuestSession) {
+      await prefs.setString(
+        _rememberedLoginMethodKey,
+        normalizedRememberedMethod.name,
       );
-    } else {
-      await _secureStorage.delete(key: _rememberedLoginIdentifierKey);
+      await prefs.setString(
+        _rememberedLoginMaskedIdentifierKey,
+        normalizedRememberedMaskedIdentifier,
+      );
+      // 仅手机号验证码登录持有可复用的完整号；其他方式登录清除残留完整号，避免错配。
+      final normalizedFullIdentifier =
+          normalizedRememberedMethod == AuthRememberedLoginMethod.phoneOtp
+          ? (rememberedLoginIdentifier ?? '').trim()
+          : '';
+      if (normalizedFullIdentifier.isNotEmpty) {
+        await _secureStorage.write(
+          key: _rememberedLoginIdentifierKey,
+          value: normalizedFullIdentifier,
+        );
+      } else {
+        await _secureStorage.delete(key: _rememberedLoginIdentifierKey);
+      }
+      await _secureStorage.delete(key: _rememberedRefreshTokenKey);
+      await prefs.setString(_rememberedDisplayNameKey, normalizedDisplayName);
+      await prefs.setString(_rememberedAvatarUrlKey, normalizedAvatarUrl);
+      await prefs.setBool(
+        _rememberedNicknameCustomizedKey,
+        normalizedNicknameCustomized,
+      );
+      await prefs.setBool(_manualLoggedOutKey, false);
+      await prefs.setBool(_launchPromptDismissedKey, false);
+      // 全新显式登录是活跃会话，清除任何残留的软退出过期戳。
+      await prefs.remove(_quickLoginExpiresAtKey);
     }
-    await prefs.setString(_rememberedDisplayNameKey, normalizedDisplayName);
-    await prefs.setString(_rememberedAvatarUrlKey, normalizedAvatarUrl);
-    await prefs.setBool(
-      _rememberedNicknameCustomizedKey,
-      normalizedNicknameCustomized,
-    );
-    await prefs.setBool(_manualLoggedOutKey, false);
-    await prefs.setBool(_launchPromptDismissedKey, false);
     // 缓存云端下发的快速登录有效期（缺省/<=0 用默认 30 天兜底），软退出时据此推算过期戳。
     await prefs.setInt(
       _sessionRememberTtlKey,
       _normalizedRememberTtl(result.sessionRememberTtlSeconds),
     );
-    // 全新登录是活跃会话，清除任何残留的软退出过期戳。
-    await prefs.remove(_quickLoginExpiresAtKey);
     await _ensureInstallId(prefs);
   }
 
   Future<void> saveRefreshGrant(TokenRefreshGrant result) async {
     final prefs = await _prefsFactory();
     final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
+    final isAnonymousSession =
+        prefs.getBool(_trustedGuestSessionKey) ??
+        (prefs.getString(_accountStateKey) ?? '').trim() == 'anonymous';
     await _secureStorage.write(key: _accessTokenKey, value: result.accessToken);
     await _secureStorage.write(
       key: _refreshTokenKey,
@@ -383,14 +489,16 @@ class AuthSessionStore {
     );
     await prefs.setInt(_lastRefreshAtKey, nowEpochMs);
     await prefs.setInt(_lastForegroundAuthCheckAtKey, nowEpochMs);
-    await prefs.setBool(_manualLoggedOutKey, false);
-    await prefs.setBool(_launchPromptDismissedKey, false);
     await prefs.setInt(
       _sessionRememberTtlKey,
       _normalizedRememberTtl(result.sessionRememberTtlSeconds),
     );
-    // 刷新成功代表会话仍活跃，清除残留的软退出过期戳；沿用登录时缓存的快速登录 TTL。
-    await prefs.remove(_quickLoginExpiresAtKey);
+    if (!isAnonymousSession) {
+      await prefs.setBool(_manualLoggedOutKey, false);
+      await prefs.setBool(_launchPromptDismissedKey, false);
+      // 显式会话刷新成功代表会话仍活跃，清除残留的软退出过期戳。
+      await prefs.remove(_quickLoginExpiresAtKey);
+    }
     await _ensureInstallId(prefs);
   }
 
@@ -431,15 +539,23 @@ class AuthSessionStore {
     await prefs.setString(_activeSubAccountIdKey, subAccountId.trim());
   }
 
-  /// 软退出：保留快速登录凭证（refreshToken / 账号摘要），仅失效当前活跃会话。
+  /// 软退出：把显式账号 refresh token 移入 remembered 槽，仅失效当前活跃会话。
   ///
   /// 个人设备（手机/iPad）上，用户主动退出后仍希望"有效期内免验证码快速登录"。
-  /// 因此这里只删除 accessToken，保留 refreshToken / ownerId / identityOrigin /
-  /// remembered* 摘要，并写入快速登录过期时间戳（now + 有效期）。
+  /// 因此删除活跃 access/refresh，保留 remembered refresh 与账号摘要，并写入
+  /// 快速登录过期时间戳（now + 有效期）。
   /// 不调用远端吊销由调用方（settings）保证。
   Future<void> softLogout() async {
     final prefs = await _prefsFactory();
+    final refreshToken = await _secureStorage.read(key: _refreshTokenKey) ?? '';
+    if (refreshToken.trim().isNotEmpty) {
+      await _secureStorage.write(
+        key: _rememberedRefreshTokenKey,
+        value: refreshToken,
+      );
+    }
     await _secureStorage.delete(key: _accessTokenKey);
+    await _secureStorage.delete(key: _refreshTokenKey);
     final ttlSeconds =
         prefs.getInt(_sessionRememberTtlKey) ??
         kDefaultSessionRememberTtlSeconds;
@@ -455,18 +571,33 @@ class AuthSessionStore {
     final prefs = await _prefsFactory();
     final rememberedAvatarUrl =
         prefs.getString(_rememberedAvatarUrlKey)?.trim() ?? '';
+    final activeSessionIsAnonymous =
+        prefs.getBool(_trustedGuestSessionKey) ??
+        (prefs.getString(_accountStateKey) ?? '').trim() == 'anonymous';
+    final rememberedRefreshToken =
+        await _secureStorage.read(key: _rememberedRefreshTokenKey) ?? '';
+    final preserveRememberedExplicitCredential =
+        !manualLogout &&
+        activeSessionIsAnonymous &&
+        rememberedRefreshToken.trim().isNotEmpty;
     await _secureStorage.delete(key: _accessTokenKey);
     await _secureStorage.delete(key: _refreshTokenKey);
-    // 彻底退出清除本机完整手机号，避免他人沿用快速重登。
-    await _secureStorage.delete(key: _rememberedLoginIdentifierKey);
+    if (!preserveRememberedExplicitCredential) {
+      await _secureStorage.delete(key: _rememberedRefreshTokenKey);
+      // 彻底退出或显式会话失效时清除本机完整手机号。
+      await _secureStorage.delete(key: _rememberedLoginIdentifierKey);
+    }
     await prefs.remove(_ownerIdKey);
     await prefs.remove(_activeSubAccountIdKey);
     await prefs.remove(_accountStateKey);
     await prefs.remove(_identityOriginKey);
+    await prefs.remove(_trustedGuestSessionKey);
     await prefs.remove(_lastRefreshAtKey);
     await prefs.remove(_lastForegroundAuthCheckAtKey);
-    await prefs.remove(_quickLoginExpiresAtKey);
-    await prefs.remove(_sessionRememberTtlKey);
+    if (!preserveRememberedExplicitCredential) {
+      await prefs.remove(_quickLoginExpiresAtKey);
+      await prefs.remove(_sessionRememberTtlKey);
+    }
     if (manualLogout) {
       await prefs.remove(_rememberedLoginMethodKey);
       await prefs.remove(_rememberedLoginMaskedIdentifierKey);
@@ -556,11 +687,11 @@ class AuthSessionStore {
 class ProviderBackedCloudAuthTokenProvider implements CloudAuthTokenProvider {
   const ProviderBackedCloudAuthTokenProvider(this._readAccessToken);
 
-  final String Function() _readAccessToken;
+  final FutureOr<String?> Function() _readAccessToken;
 
   @override
   Future<String?> getAccessToken() async {
-    final token = _readAccessToken().trim();
+    final token = (await _readAccessToken())?.trim() ?? '';
     return token.isEmpty ? null : token;
   }
 }

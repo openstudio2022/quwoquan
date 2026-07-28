@@ -31,6 +31,9 @@ def homepage_base_draft_admission(
     source_text: str,
     entity_id: str,
     resolved_title: str,
+    minimum_body_chars: int,
+    minimum_fact_count: int,
+    minimum_fact_chars: int,
 ) -> HomepageBaseDraftAdmission:
     """Apply the sole homepage base-draft admission contract after fetch."""
     from content.homepage.homepage_text import homepage_base_draft_readiness
@@ -48,6 +51,9 @@ def homepage_base_draft_admission(
         source_text,
         entity_name=entity_id,
         aliases=(authority_title,) if authority_title else (),
+        minimum_body_chars=minimum_body_chars,
+        minimum_fact_count=minimum_fact_count,
+        minimum_fact_chars=minimum_fact_chars,
     )
     fact_count = int(readiness.get("factCount") or 0)
     if bool(readiness.get("ready")):

@@ -20,10 +20,10 @@ void main() {
     test('失败 status bar 使用 chatVoicePendingRetry 与 retry 按钮', () {
       final source = _chatConversationSource();
       expect(source, contains('ChatText.chatVoicePendingRetry'));
-      expect(source, contains('UITextConstants.retry'));
+      expect(source, contains('FoundationText.retry'));
       expect(source, contains('chatSendOutboxProvider'));
       final failedBarSection = source.split('_buildVoiceSendStatusBar').last;
-      expect(failedBarSection, isNot(contains('UITextConstants.gotIt')));
+      expect(failedBarSection, isNot(contains('ContentText.gotIt')));
     });
   });
 

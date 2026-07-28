@@ -1,0 +1,467 @@
+package com.quwoquan.quwoquan_app;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
+import android.view.WindowInsetsController;
+import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import org.json.JSONObject;
+
+/**
+ * Flutter Engine 之前的唯一 Android 启动 gate。
+ *
+ * <p>正常分支只进入 MainActivity；确认的同制品启动致命异常直接停留在原生恢复页。
+ */
+public final class StartupGateActivity extends Activity {
+  private static final String STARTUP_TAG = "QWQStartup";
+  static final String EXTRA_GATE_PASSED = "quwoquan.startup.GATE_PASSED";
+  private static final String STATE_MAIN_HANDOFF_STARTED =
+      "quwoquan.startup.MAIN_HANDOFF_STARTED";
+
+  private final Handler mainHandler = new Handler(Looper.getMainLooper());
+  private final ExecutorService versionExecutor =
+      Executors.newSingleThreadExecutor(
+          runnable -> {
+            Thread thread = new Thread(runnable, "qwq-native-recovery-version");
+            thread.setDaemon(true);
+            return thread;
+          });
+  private volatile boolean recoveryVersionCheckInFlight;
+  private boolean recoveryVersionRefreshPending;
+  private boolean recoveryExternalOpenInFlight;
+  private TextView recoveryTitle;
+  private TextView recoveryMessage;
+  private Button recoveryPrimary;
+  private Button recoveryWeb;
+  private boolean mainHandoffStarted;
+  private boolean normalStaticFrameDrawn;
+
+  @Override
+  protected void onCreate(Bundle savedInstanceState) {
+    StartupProcessClock.initialize();
+    super.onCreate(savedInstanceState);
+    mainHandoffStarted =
+        savedInstanceState != null
+            && savedInstanceState.getBoolean(STATE_MAIN_HANDOFF_STARTED, false);
+    if (mainHandoffStarted) {
+      // The Main handoff was already committed before a configuration/process
+      // recreation. Finishing this transient gate prevents a second handoff.
+      finish();
+      return;
+    }
+    StartupHealthStore.promoteConfirmedPlatformStartupCrash(this);
+    if (!StartupHealthStore.shouldRecoverConfirmedStartupFatal(this)) {
+      if (!isTaskRoot()) {
+        // Repeated launcher taps and restored tasks must reuse the existing
+        // MainActivity. Do not replay the native static frame or reopen a
+        // startup-health attempt for an already-running task.
+        Log.i(STARTUP_TAG, "android_gate_warm_task_handoff");
+        startFlutterMainActivity();
+        return;
+      }
+      StartupHealthStore.markCurrentArtifactStarting(this);
+      showNativeLaunchFrameThenStartFlutter();
+      return;
+    }
+    Log.w(STARTUP_TAG, "android_native_startup_gate_recovery");
+    if (!StartupHealthStore.enqueueConfirmedStartupFatal(this)) {
+      Log.w(STARTUP_TAG, "android_native_startup_failure_queue_write_failed");
+    }
+    showNativeStartupRecovery();
+  }
+
+  @Override
+  protected void onResume() {
+    super.onResume();
+    if (recoveryVersionRefreshPending
+        && recoveryTitle != null
+        && recoveryMessage != null
+        && recoveryPrimary != null
+        && recoveryWeb != null) {
+      recoveryVersionRefreshPending = false;
+      checkNativeRecoveryVersion(
+          recoveryTitle, recoveryMessage, recoveryPrimary, recoveryWeb);
+    }
+  }
+
+  @Override
+  protected void onDestroy() {
+    mainHandler.removeCallbacksAndMessages(null);
+    recoveryTitle = null;
+    recoveryMessage = null;
+    recoveryPrimary = null;
+    recoveryWeb = null;
+    versionExecutor.shutdownNow();
+    super.onDestroy();
+  }
+
+  private void startFlutterMainActivity() {
+    if (mainHandoffStarted || isFinishing()) {
+      return;
+    }
+    mainHandoffStarted = true;
+    Intent incoming = getIntent();
+    Intent main = new Intent(this, MainActivity.class);
+    main.setAction(incoming.getAction());
+    main.setData(incoming.getData());
+    main.putExtras(incoming);
+    main.putExtra(EXTRA_GATE_PASSED, true);
+    main.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+    if (incoming.getCategories() != null) {
+      for (String category : incoming.getCategories()) {
+        main.addCategory(category);
+      }
+    }
+    Log.i(STARTUP_TAG, "android_gate_main_handoff");
+    startActivity(main);
+    suppressFlutterHandoffTransition();
+    finish();
+  }
+
+  private void showNativeLaunchFrameThenStartFlutter() {
+    final FrameLayout staticFrame = new FrameLayout(this);
+    staticFrame.setBackgroundResource(R.drawable.launch_background);
+    setContentView(staticFrame);
+    ViewTreeObserver.OnDrawListener startAfterFirstDraw =
+        new ViewTreeObserver.OnDrawListener() {
+          @Override
+          public void onDraw() {
+            if (normalStaticFrameDrawn) {
+              return;
+            }
+            normalStaticFrameDrawn = true;
+            Log.i(STARTUP_TAG, "android_gate_static_frame_drawn");
+            // ViewTreeObserver forbids listener removal during its own
+            // dispatch. Post cleanup and the Main handoff so this first
+            // static frame can complete without crashing Android 12+.
+            mainHandler.post(
+                () -> {
+                  if (staticFrame.getViewTreeObserver().isAlive()) {
+                    staticFrame.getViewTreeObserver().removeOnDrawListener(this);
+                  }
+                  startFlutterMainActivity();
+                });
+          }
+        };
+    staticFrame.getViewTreeObserver().addOnDrawListener(startAfterFirstDraw);
+    // A vendor compositor must not be able to trap startup indefinitely by
+    // suppressing OnDraw. The fallback still leaves the static resource as the
+    // only native brand surface and never creates a Flutter Engine in Gate.
+    mainHandler.postDelayed(
+        () -> {
+          if (!normalStaticFrameDrawn) {
+            normalStaticFrameDrawn = true;
+            if (staticFrame.getViewTreeObserver().isAlive()) {
+              staticFrame.getViewTreeObserver().removeOnDrawListener(startAfterFirstDraw);
+            }
+            Log.w(STARTUP_TAG, "android_gate_static_frame_draw_timeout");
+            startFlutterMainActivity();
+          }
+        },
+        500L);
+  }
+
+  @Override
+  protected void onSaveInstanceState(Bundle outState) {
+    outState.putBoolean(STATE_MAIN_HANDOFF_STARTED, mainHandoffStarted);
+    super.onSaveInstanceState(outState);
+  }
+
+  @SuppressWarnings("deprecation")
+  private void suppressFlutterHandoffTransition() {
+    if (Build.VERSION.SDK_INT >= 34) {
+      overrideActivityTransition(OVERRIDE_TRANSITION_OPEN, 0, 0);
+      return;
+    }
+    overridePendingTransition(0, 0);
+  }
+
+  private void showNativeStartupRecovery() {
+    final int backgroundColor = Color.rgb(247, 247, 252);
+    styleNativeRecoverySystemBars(backgroundColor);
+
+    FrameLayout recovery = new FrameLayout(this);
+    recovery.setBackgroundColor(backgroundColor);
+
+    LinearLayout content = new LinearLayout(this);
+    content.setOrientation(LinearLayout.VERTICAL);
+    content.setGravity(Gravity.CENTER_HORIZONTAL);
+    content.setPadding(dp(24), 0, dp(24), 0);
+    content.setTranslationY(getResources().getDisplayMetrics().heightPixels * 0.05f);
+
+    TextView title = new TextView(this);
+    title.setText("应用暂时无法启动");
+    title.setTextColor(Color.rgb(17, 19, 24));
+    title.setTextSize(28);
+    title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+    title.setGravity(Gravity.CENTER);
+    content.addView(
+        title,
+        new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+
+    TextView message = new TextView(this);
+    message.setText("正在检查可用版本");
+    message.setTextColor(Color.rgb(107, 112, 124));
+    message.setTextSize(17);
+    message.setGravity(Gravity.CENTER);
+    LinearLayout.LayoutParams messageLayout =
+        new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
+    messageLayout.topMargin = dp(16);
+    content.addView(message, messageLayout);
+
+    Button primary = new Button(this);
+    configureRecoveryButton(primary, "正在检查…", true, false);
+    LinearLayout.LayoutParams primaryLayout =
+        new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+    primaryLayout.topMargin = dp(28);
+    content.addView(primary, primaryLayout);
+
+    Button web = new Button(this);
+    configureRecoveryButton(web, "使用网页版", false, true);
+    web.setOnClickListener(
+        ignored ->
+            openRecoveryTarget(
+                BuildConfig.QWQ_PUBLIC_WEB_URL, "", "网页暂时无法打开，请稍后再试"));
+    LinearLayout.LayoutParams webLayout =
+        new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+    webLayout.topMargin = dp(12);
+    content.addView(web, webLayout);
+
+    FrameLayout.LayoutParams contentLayout =
+        new FrameLayout.LayoutParams(dp(328), ViewGroup.LayoutParams.WRAP_CONTENT);
+    contentLayout.gravity = Gravity.CENTER;
+    recovery.addView(content, contentLayout);
+    setContentView(recovery);
+    recoveryTitle = title;
+    recoveryMessage = message;
+    recoveryPrimary = primary;
+    recoveryWeb = web;
+    checkNativeRecoveryVersion(title, message, primary, web);
+  }
+
+  private void styleNativeRecoverySystemBars(int backgroundColor) {
+    getWindow().getDecorView().setBackgroundColor(backgroundColor);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      WindowInsetsController controller = getWindow().getInsetsController();
+      if (controller != null) {
+        controller.setSystemBarsAppearance(
+            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
+      }
+    }
+    applyVersionSpecificNativeRecoverySystemBarStyle(backgroundColor);
+  }
+
+  @SuppressWarnings("deprecation")
+  private void applyVersionSpecificNativeRecoverySystemBarStyle(int backgroundColor) {
+    if (Build.VERSION.SDK_INT < 35) {
+      getWindow().setStatusBarColor(backgroundColor);
+      getWindow().setNavigationBarColor(backgroundColor);
+    }
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+      getWindow()
+          .getDecorView()
+          .setSystemUiVisibility(
+              View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                  | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+    }
+  }
+
+  private void checkNativeRecoveryVersion(
+      TextView title, TextView message, Button primary, Button web) {
+    if (recoveryVersionCheckInFlight) {
+      return;
+    }
+    recoveryVersionCheckInFlight = true;
+    versionExecutor.execute(
+        () -> {
+          HttpURLConnection connection = null;
+          try {
+            String base = BuildConfig.QWQ_RECOVERY_BASE_URL.replaceAll("/+$", "");
+            if (!TrustedRecoveryUrls.isTrusted(base)) {
+              throw new IllegalStateException("recovery base URL rejected");
+            }
+            URL endpoint =
+                new URL(
+                    base
+                        + "/ops/app-recovery/version?platform=android&appVersion="
+                        + URLEncoder.encode(
+                            BuildConfig.VERSION_NAME, StandardCharsets.UTF_8.name())
+                        + "&buildNumber="
+                        + BuildConfig.VERSION_CODE);
+            connection = (HttpURLConnection) endpoint.openConnection();
+            connection.setConnectTimeout(1500);
+            connection.setReadTimeout(1500);
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setUseCaches(false);
+            if (connection.getResponseCode() < 200
+                || connection.getResponseCode() >= 300) {
+              throw new IllegalStateException("version service unavailable");
+            }
+            JSONObject payload = new JSONObject(readLimitedResponse(connection));
+            if (payload.length() != 4) {
+              throw new IllegalStateException("version response field mismatch");
+            }
+            int latestBuild = Integer.parseInt(payload.getString("latestBuild"));
+            String updateUrl = payload.getString("updateUrl");
+            String recoveryUrl = payload.getString("recoveryUrl");
+            if (!TrustedRecoveryUrls.isTrusted(recoveryUrl)
+                || (latestBuild > BuildConfig.VERSION_CODE
+                    && !TrustedRecoveryUrls.isTrusted(updateUrl))) {
+              throw new IllegalStateException("version response url rejected");
+            }
+            mainHandler.post(
+                () -> {
+                  if (!canUpdateRecoveryUi()) {
+                    return;
+                  }
+                  if (latestBuild > BuildConfig.VERSION_CODE) {
+                    title.setText("当前版本需要更新");
+                    message.setText("更新后即可正常启动");
+                    configureRecoveryButton(primary, "前往更新", true, true);
+                    primary.setOnClickListener(
+                        ignored ->
+                            openRecoveryTarget(
+                                updateUrl,
+                                recoveryUrl,
+                                "暂时无法打开更新页面，请稍后再试",
+                                true));
+                    web.setVisibility(View.VISIBLE);
+                    return;
+                  }
+                  title.setText("当前已是最新版本");
+                  message.setText("请使用网页版继续");
+                  configureRecoveryButton(primary, "使用网页版", true, true);
+                  primary.setOnClickListener(
+                      ignored ->
+                          openRecoveryTarget(
+                              BuildConfig.QWQ_PUBLIC_WEB_URL,
+                              recoveryUrl,
+                              "网页暂时无法打开，请稍后再试"));
+                  web.setVisibility(View.GONE);
+                });
+          } catch (Exception ignored) {
+            mainHandler.post(
+                () -> {
+                  if (!canUpdateRecoveryUi()) {
+                    return;
+                  }
+                  title.setText("应用暂时无法启动");
+                  message.setText("请使用网页版继续");
+                  configureRecoveryButton(primary, "使用网页版", true, true);
+                  primary.setOnClickListener(
+                      view ->
+                          openRecoveryTarget(
+                              BuildConfig.QWQ_PUBLIC_WEB_URL,
+                              "",
+                              "网页暂时无法打开，请稍后再试"));
+                  web.setVisibility(View.GONE);
+                });
+          } finally {
+            recoveryVersionCheckInFlight = false;
+            if (connection != null) {
+              connection.disconnect();
+            }
+          }
+        });
+  }
+
+  private boolean canUpdateRecoveryUi() {
+    return !isFinishing() && (Build.VERSION.SDK_INT < 17 || !isDestroyed());
+  }
+
+  private String readLimitedResponse(HttpURLConnection connection) throws Exception {
+    try (InputStream input = connection.getInputStream();
+        ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+      byte[] buffer = new byte[4096];
+      int read;
+      while ((read = input.read(buffer)) >= 0) {
+        if (output.size() + read > 65536) {
+          throw new IllegalStateException("version response too large");
+        }
+        output.write(buffer, 0, read);
+      }
+      return output.toString(StandardCharsets.UTF_8.name());
+    }
+  }
+
+  private void configureRecoveryButton(
+      Button button, String label, boolean filled, boolean enabled) {
+    button.setText(label);
+    button.setTextSize(17);
+    button.setAllCaps(false);
+    button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    button.setEnabled(enabled);
+    button.setTextColor(
+        enabled
+            ? (filled ? Color.WHITE : Color.rgb(8, 123, 255))
+            : Color.rgb(107, 112, 124));
+    GradientDrawable background = new GradientDrawable();
+    background.setCornerRadius(dp(24));
+    if (filled) {
+      background.setColor(
+          enabled ? Color.rgb(8, 123, 255) : Color.rgb(233, 237, 245));
+    } else {
+      background.setColor(Color.TRANSPARENT);
+      background.setStroke(dp(1), Color.rgb(8, 123, 255));
+    }
+    button.setBackground(background);
+  }
+
+  private void openRecoveryTarget(
+      String target, String fallback, String failureMessage) {
+    openRecoveryTarget(target, fallback, failureMessage, false);
+  }
+
+  private void openRecoveryTarget(
+      String target,
+      String fallback,
+      String failureMessage,
+      boolean recheckVersionOnReturn) {
+    if (recoveryExternalOpenInFlight) {
+      return;
+    }
+    recoveryExternalOpenInFlight = true;
+    boolean opened = TrustedRecoveryUrls.open(this, target, STARTUP_TAG);
+    if (!opened && fallback != null && !fallback.isEmpty()) {
+      opened = TrustedRecoveryUrls.open(this, fallback, STARTUP_TAG);
+    }
+    if (!opened) {
+      Toast.makeText(this, failureMessage, Toast.LENGTH_SHORT).show();
+    } else if (recheckVersionOnReturn) {
+      recoveryVersionRefreshPending = true;
+    }
+    recoveryExternalOpenInFlight = false;
+  }
+
+  private int dp(int value) {
+    return Math.round(value * getResources().getDisplayMetrics().density);
+  }
+}

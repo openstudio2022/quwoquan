@@ -68,7 +68,7 @@ func (p *RecommendFeatureProjector) EnsureIndexes(ctx context.Context) error {
 		"userFeatures.searchTermHeat":          "",
 		"userFeatures.searchTermUpdatedAt":     "",
 	}}); err != nil {
-		return fmt.Errorf("remove legacy embedded search intent: %w", err)
+		return fmt.Errorf("remove retired embedded search intent: %w", err)
 	}
 	return nil
 }

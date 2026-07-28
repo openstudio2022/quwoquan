@@ -13,7 +13,7 @@ import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_f
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/infrastructure/local/content/filter_catalog/verified_filter_catalog_store.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -55,7 +55,7 @@ void main() {
 
     await tester.pumpWidget(_editor(imageFile, repository));
     await tester.pump(const Duration(milliseconds: 250));
-    await tester.tap(find.text(UITextConstants.imageEditorFilter));
+    await tester.tap(find.text(MediaText.imageEditorFilter));
     await tester.pump();
 
     expect(
@@ -86,7 +86,7 @@ void main() {
 
       await tester.pumpWidget(_editor(imageFile, repository));
       await tester.pump(const Duration(milliseconds: 250));
-      await tester.tap(find.text(UITextConstants.imageEditorFilter));
+      await tester.tap(find.text(MediaText.imageEditorFilter));
       await tester.pumpAndSettle();
 
       expect(
@@ -96,11 +96,11 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.imageEditorFilterLoadFailed),
+        find.text(MediaText.imageEditorFilterLoadFailed),
         findsOneWidget,
       );
 
-      await tester.tap(find.text(UITextConstants.tryAgain));
+      await tester.tap(find.text(ContentText.tryAgain));
       await tester.pumpAndSettle();
 
       expect(attempts, 2);

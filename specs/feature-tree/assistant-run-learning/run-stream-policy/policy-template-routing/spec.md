@@ -34,7 +34,7 @@
 
 - 策略变更必须版本化；域路由规则必须可灰度发布。
 - `assistant-default` 的非 alpha 发布必须来自镜像内不可变 artifact：artifact 必须声明 command identity、canonical digest、默认模板、路由规则、learning-context allowlist 与 cohort assignment。publisher 必须在写入前校验 digest 和完整 schema，不得补写默认值，也不得从环境 seed、`cmd/api` 启动路径或静态 fallback 隐式创建 release/rollout。
-- beta、gamma、prod 必须经运行配置显式指向 release 与 rollout artifact，并由受控的 `assistant-policy-publish` Job 执行幂等 stage/activate；同一 publisher 还必须作为服务 init container 成功完成，API 才能接收真实 Run。alpha 继续使用 contract mock，不能进入 production 二进制或发布链路。发布报告仅可包含 policy/version/cohort/revision/digest 等 metadata，不能输出 prompt 内容。
+- alpha、beta、gamma、prod 必须经运行配置显式指向 release 与 rollout artifact，并由受控的 `assistant-policy-publish` Job 执行幂等 stage/activate；同一 publisher 还必须作为服务 init container 成功完成，API 才能接收真实 Run。Alpha 可在服务防腐层绑定登记的模型 sandbox/local substitute，但 App、策略发布链和第一方业务结果不得使用 contract mock。发布报告仅可包含 policy/version/cohort/revision/digest 等 metadata，不能输出 prompt 内容。
 
 <a id="req-003"></a>
 ### REQ-003 未命中策略时必须走可解释的默认模板

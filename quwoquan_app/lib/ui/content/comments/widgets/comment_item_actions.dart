@@ -18,19 +18,19 @@ Future<void> showCommentItemActionsSheet(
         items: [
           AppActionSheetItem(
             value: _CommentItemAction.copy,
-            label: UITextConstants.commentCopyAction,
+            label: ContentText.commentCopyAction,
             icon: CupertinoIcons.doc_on_doc,
           ),
           if (comment.canReport)
             AppActionSheetItem(
               value: _CommentItemAction.report,
-              label: UITextConstants.commentReportAction,
+              label: ContentText.commentReportAction,
               icon: CupertinoIcons.flag,
             ),
           if (comment.canDelete)
             AppActionSheetItem(
               value: _CommentItemAction.delete,
-              label: UITextConstants.commentDeleteAction,
+              label: ContentText.commentDeleteAction,
               icon: CupertinoIcons.trash,
               isDestructive: true,
             ),
@@ -43,7 +43,7 @@ Future<void> showCommentItemActionsSheet(
     case _CommentItemAction.copy:
       await Clipboard.setData(ClipboardData(text: comment.content));
       if (!context.mounted) return;
-      AppToast.show(context, UITextConstants.commentCopiedToast);
+      AppToast.show(context, ContentText.commentCopiedToast);
     case _CommentItemAction.report:
       await _reportComment(context, ref, comment);
     case _CommentItemAction.delete:
@@ -122,7 +122,7 @@ Future<void> _submitCommentReport(
       },
     );
     if (!context.mounted) return;
-    AppToast.show(context, UITextConstants.reportSubmittedViewProgress);
+    AppToast.show(context, ContentText.reportSubmittedViewProgress);
   } catch (error) {
     await journeyTracker.trackAction(
       journey: 'content_report',
@@ -165,17 +165,17 @@ Future<bool> _confirmCommentDelete(BuildContext context) async {
   final confirmed = await showAppCupertinoDialog<bool>(
     context: context,
     builder: (dialogContext) => CupertinoAlertDialog(
-      title: const Text(UITextConstants.commentDeleteConfirmTitle),
-      content: const Text(UITextConstants.commentDeleteConfirmMessage),
+      title: const Text(ContentText.commentDeleteConfirmTitle),
+      content: const Text(ContentText.commentDeleteConfirmMessage),
       actions: [
         CupertinoDialogAction(
           onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text(UITextConstants.cancel),
+          child: const Text(FoundationText.cancel),
         ),
         CupertinoDialogAction(
           isDestructiveAction: true,
           onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text(UITextConstants.commentDeleteAction),
+          child: const Text(ContentText.commentDeleteAction),
         ),
       ],
     ),

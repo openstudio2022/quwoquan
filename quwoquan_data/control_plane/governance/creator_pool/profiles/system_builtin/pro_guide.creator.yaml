@@ -4,7 +4,6 @@ authorId: builtin_travel_pro_guide
 isSystemBuiltin: true
 displayName: 讲解员小周
 userHandle: guide_zhou
-avatarObjectKey: cold_start/creators/pro_guide/avatar.jpg
 headline: 偏文化导览、博物馆展览和古迹寻访的讲解型作者
 bio: 擅长把动线、讲解点和停留时间拆清楚，避免把文化点写成空泛感慨。
 creatorArchetype: pro_guide

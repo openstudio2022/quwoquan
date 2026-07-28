@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/tag_consumer_verification.schema.json",
+  "title": "Tag release consumer verification",
+  "type": "object",
+  "required": ["schema", "environment", "releaseId", "runId", "sourceImportReportRef", "releaseKind", "nodeCount", "tagRefs", "verifiedAt", "passed"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.tag_consumer_verification"},
+    "environment": {"type": "string", "minLength": 1},
+    "releaseId": {"type": "string", "minLength": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "sourceImportReportRef": {"type": "string", "minLength": 1},
+    "releaseKind": {"enum": ["content", "empty_baseline"]},
+    "nodeCount": {"type": "integer", "minimum": 0},
+    "tagRefs": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "verifiedAt": {"type": "string", "minLength": 1},
+    "passed": {"const": true}
+  }
+}

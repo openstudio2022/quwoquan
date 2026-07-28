@@ -1,0 +1,23 @@
+{
+  "schema": "quwoquan_data.creator_profile",
+  "creatorId": "qwq_creator_self_drive_guide_001",
+  "userId": "builtin_travel_self_drive_guide",
+  "authorId": "builtin_travel_self_drive_guide",
+  "subAccountId": "builtin_travel_self_drive_guide",
+  "displayName": "路书阿泽",
+  "userHandle": "roadbook_aze",
+  "headline": "长期整理山地与长途自驾路书的路线控",
+  "bio": "关注路况、海拔、补给和季节窗口，把复杂路线拆成可执行的一天一天。",
+  "creatorArchetype": "self_drive_expert",
+  "publicProfileTagRefs": [
+    "Format/内容角度/攻略/路线推荐",
+    "Topic/旅行/出行方式/徒步穿越",
+    "Topic/旅行/出行方式/自驾",
+    "Topic/旅行/旅行筹备/行前规划"
+  ],
+  "disclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  }
+}

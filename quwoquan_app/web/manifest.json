@@ -1,12 +1,14 @@
 {
     "name": "趣我圈",
     "short_name": "趣我圈",
-    "start_url": ".",
+    "id": "/",
+    "start_url": "/",
+    "scope": "/",
     "display": "standalone",
-    "background_color": "#0A84FF",
-    "theme_color": "#0A84FF",
+    "background_color": "#F6F8FC",
+    "theme_color": "#F6F8FC",
     "description": "遇见同趣，绽放热爱",
-    "orientation": "portrait-primary",
+    "categories": ["social", "lifestyle"],
     "prefer_related_applications": false,
     "icons": [
         {

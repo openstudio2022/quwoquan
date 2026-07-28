@@ -64,7 +64,7 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
 
     Widget listContent;
     if (membersState.isLoading) {
-      listContent = const Center(child: CupertinoActivityIndicator());
+      listContent = AppRequestFeedback.section();
     } else if (membersState.error case final error?) {
       listContent = AppPageErrorState(
         semantic: runtimeErrorSemantic(

@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-014
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012
 import 'dart:async';
 import 'dart:io';
 
@@ -7,6 +9,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/media/media_candidate_failure.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/media/media_load_failure_cache.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -25,10 +29,10 @@ void main() {
   final delivery =
       MediaDeliveryResolver(
         MediaEndpointConfig(
-          avatarBaseUrl: 'https://alpha-avatar.quwoquan-env.test:17100',
-          imageBaseUrl: 'https://alpha-image.quwoquan-env.test:17100',
-          videoBaseUrl: 'https://alpha-video.quwoquan-env.test:17100',
-          attachmentBaseUrl: 'https://alpha-image.quwoquan-env.test:17100',
+          avatarBaseUrl: 'https://cdn.alpha.quwoquan.com:17100',
+          imageBaseUrl: 'https://cdn.alpha.quwoquan.com:17100',
+          videoBaseUrl: 'https://cdn.alpha.quwoquan.com:17100',
+          attachmentBaseUrl: 'https://cdn.alpha.quwoquan.com:17100',
         ),
       ).resolve(
         'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
@@ -260,6 +264,77 @@ void main() {
       find.byKey(const ValueKey<String>('video-player-ready')),
       findsNothing,
     );
+  });
+
+  testWidgets('视频初始化共用 6 秒预算并按 300ms/3s/6s 进入唯一终态', (tester) async {
+    VideoPlayerWidget.debugResetControllerSlots();
+    final previousPlatform = VideoPlayerPlatform.instance;
+    final fakePlatform = FakeVideoPlayerPlatform()
+      ..initializeCompleter = Completer<void>();
+    VideoPlayerPlatform.instance = fakePlatform;
+    addTearDown(() {
+      VideoPlayerPlatform.instance = previousPlatform;
+      VideoPlayerWidget.debugResetControllerSlots();
+    });
+    final container = ProviderContainer(
+      overrides: [
+        mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
+      ],
+    );
+    addTearDown(container.dispose);
+    MediaCandidateFailureKind? reportedFailure;
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: ScreenUtilInit(
+          designSize: const Size(390, 844),
+          builder: (_, _) => CupertinoApp(
+            home: SizedBox(
+              width: 390,
+              height: 220,
+              child: VideoPlayerWidget(
+                deliveryReference: delivery,
+                initialize: true,
+                autoPlay: true,
+                onPlaybackFailed: (failure) {
+                  reportedFailure = failure.kind;
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pump();
+
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    expect(VideoPlayerWidget.debugActiveControllerCount, 1);
+
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+    expect(find.text(FoundationText.requestWaitSlow), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 2700));
+    expect(find.text(FoundationText.requestWaitSlow), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 3));
+    expect(reportedFailure, MediaCandidateFailureKind.initializationTimeout);
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+    expect(find.text(FoundationText.requestWaitSlow), findsNothing);
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    expect(VideoPlayerWidget.debugActiveControllerCount, 0);
+
+    fakePlatform.initializeCompleter!.complete();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pump();
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
   });
 
   test('VideoPlayerWidget API 仅暴露 deliveryReference', () {

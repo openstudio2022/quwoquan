@@ -174,9 +174,9 @@ final class RtcCallEntryPresenter {
         RtcErrorCode.notMutual.defaultMessage,
       RtcCallEntryUnavailableReason.missingConversationContext ||
       RtcCallEntryUnavailableReason.missingCircleContext =>
-        UITextConstants.callContextUnavailable,
+        CallText.callContextUnavailable,
       RtcCallEntryUnavailableReason.noParticipants =>
-        UITextConstants.callNoContacts,
+        CallText.callNoContacts,
       RtcCallEntryUnavailableReason.participantLimitExceeded =>
         RtcErrorCode.callFull.defaultMessage,
     };
@@ -185,11 +185,11 @@ final class RtcCallEntryPresenter {
       semantic: UiErrorSemantic(
         category: UiErrorCategory.submit,
         scope: UiErrorScope.global,
-        title: UITextConstants.callEntryUnavailableTitle,
+        title: CallText.callEntryUnavailableTitle,
         message: message,
         primaryAction: const UiErrorAction(
           type: UiErrorActionType.dismiss,
-          label: UITextConstants.confirm,
+          label: FoundationText.confirm,
         ),
         dismissible: true,
         presentation: UiErrorPresentation.actionDialog,
@@ -216,11 +216,11 @@ final class RtcCallEntryPresenter {
       semantic: UiErrorSemantic(
         category: UiErrorCategory.submit,
         scope: UiErrorScope.global,
-        title: UITextConstants.callEntryUnavailableTitle,
+        title: CallText.callEntryUnavailableTitle,
         message: RtcErrorCode.internalError.defaultMessage,
         primaryAction: const UiErrorAction(
           type: UiErrorActionType.dismiss,
-          label: UITextConstants.confirm,
+          label: FoundationText.confirm,
         ),
         dismissible: true,
         presentation: UiErrorPresentation.actionDialog,

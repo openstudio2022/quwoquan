@@ -15,7 +15,7 @@
 - tagRef 发布物。
 - canonical entity 与 entityRef。
 - relationEdge 候选事实。
-- seed manifest 与环境数据隔离。
+- canonical publish、immutable release、环境 activation receipt 与数据隔离。
 
 ### Out of Scope
 
@@ -44,8 +44,8 @@
 <a id="req-001"></a>
 ### REQ-001 数据工程同源输入验收
 
-- tagRef、canonicalEntityId、entityRef、relationEdge 有明确发布物或 fixture 来源。
-- alpha/beta/gamma/prod 数据策略不漂移。
+- tagRef、canonicalEntityId、entityRef、relationEdge、creator/avatar 与 post media 均有 canonical publish/release 来源。
+- alpha/beta/gamma/prod 只激活 immutable release，数据策略不漂移且无环境 fixture/self-seed 旁路。
 - 对象主页网络可引用同一数据工程输入构建交集、推荐和小艺上下文。
 
 <a id="req-002"></a>
@@ -53,8 +53,9 @@
 
 - 标签真相源为数据工程 `control_plane/governance/taxonomy`；`publish/tags` 仅保存发布对象实际引用的 consumer snapshot，不得恢复扁平枚举或复制整棵 taxonomy。
 - 实体归一产物必须能映射到运行时 `canonicalEntityId`。
-- seed manifest 必须区分 alpha、beta、gamma、prod 数据策略。
+- immutable release 保持环境无关，同一 digest 由 alpha、beta、gamma、prod 产生独立 activation/import/rollback receipt。
 - 新增数据发布物必须提供可执行 schema 校验或 canonical contract fixture，且失败时不得进入发布包。
+- 第一方 App 可见业务数据禁止由 T3/UAT、API 脚本、数据库脚本或环境 bootstrap 创建；基础设施灰度探针不得进入业务 query/projection。
 - 单元/合约测试只写 tempfile 临时根，pytest 不得向仓内根或 `QWQ_OUTPUT_ROOT` 落盘（conftest 落盘隔离门）。
 
 ## 6. 契约与依赖
@@ -70,8 +71,8 @@
 
 - GIVEN 执行“数据工程同源输入验收”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“数据工程同源输入验收”对应动作。
-- THEN tagRef、canonicalEntityId、entityRef、relationEdge 有明确发布物或 fixture 来源。
-- THEN alpha/beta/gamma/prod 数据策略不漂移。
+- THEN tagRef、canonicalEntityId、entityRef、relationEdge、creator/avatar 与 post media 均有 canonical publish/release 来源。
+- THEN 同一 release digest 在 alpha/beta/gamma/prod 产生独立 activation/import/API/media/rollback receipt，且无 fixture/self-seed 旁路。
 - THEN 对象主页网络可引用同一数据工程输入构建交集、推荐和小艺上下文。
 
 ## 8. 开放事项
@@ -80,7 +81,7 @@
 ### OPEN-001 数据工程同源输入验收
 
 - 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：tagRef、canonicalEntityId、entityRef、relationEdge 有明确发布物或 fixture 来源。
-- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前尚缺同一 release 对 tag、creator/avatar、entity homepage、article/image/video 与 public media slice 的完整闭包及四环境 activation/rollback/readback receipt；环境 fixture 和直接 seed 仍可形成伪业务数据。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 覆盖 release/import/API/media/App readback。

@@ -15,6 +15,7 @@ import (
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
+	"quwoquan_service/runtime/controlplane"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
@@ -77,6 +78,13 @@ func main() {
 		log.Fatalf("entity-service config load failed: %v", err)
 	}
 	normalizeDefaults(&cfg)
+	controlplane.StartReleaseConfigAttestation(
+		"entity-service",
+		getenvOrDefault("APP_ENV", "alpha"),
+		strings.TrimSpace(os.Getenv("CONFIG_ROOT")),
+		strings.TrimSpace(os.Getenv("CONFIG_VERSION")),
+		strings.TrimSpace(os.Getenv("IMAGE_VERSION")),
+	)
 
 	ctx := context.Background()
 

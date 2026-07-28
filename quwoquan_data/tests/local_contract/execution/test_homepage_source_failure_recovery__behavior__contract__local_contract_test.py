@@ -72,10 +72,45 @@ def test_source_failure_is_typed_and_rewinds_before_another_author_attempt(
 
     monkeypatch.setattr(checkpoints, "_entity_homepages_per_target", lambda _ctx: 1)
     monkeypatch.setattr(homepage_authoring, "_homepages_done", lambda _ctx: (False, ["page missing"]))
+    # 配额门：候选池已耗尽仍达不到配额，来源不匹配才升级为 source 回退。
+    monkeypatch.setattr(
+        homepage_authoring,
+        "homepage_quota_verdict",
+        lambda _ctx: homepage_authoring.HomepageQuotaVerdict(
+            approved_quota=1,
+            qualified_refs=(),
+            discarded={f"地点/自然景观/{entity}": ("page missing",)},
+        ),
+    )
     result = checkpoints._checkpoint_build_homepage(ctx)
     assert result.status == "failed"
     assert result.fallback_stage == "download_plan"
     assert "source_entity_mismatch" in result.issues[0]
+
+
+def test_source_failure_does_not_rewind_once_the_quota_is_met(tmp_path, monkeypatch):
+    """过采吸收：配额已满时，个别对象的来源不匹配只是丢弃，不回退 source。"""
+    entity = "南雁荡山"
+    ctx = SimpleNamespace(execution_id="execution")
+    monkeypatch.setattr(checkpoints, "_entity_homepages_per_target", lambda _ctx: 1)
+    monkeypatch.setattr(homepage_authoring, "_homepages_done", lambda _ctx: (False, ["page missing"]))
+    monkeypatch.setattr(
+        homepage_authoring,
+        "homepage_quota_verdict",
+        lambda _ctx: homepage_authoring.HomepageQuotaVerdict(
+            approved_quota=1,
+            qualified_refs=("地点/自然景观/雁荡山",),
+            discarded={f"地点/自然景观/{entity}": ("source_entity_mismatch",)},
+        ),
+    )
+
+    def _unexpected(_ctx):
+        raise AssertionError("quota met; source failures must not be inspected")
+
+    monkeypatch.setattr(download_unresolved, "_homepage_source_failure_entities", _unexpected)
+    result = checkpoints._checkpoint_build_homepage(ctx)
+    assert result.status == "done"
+    assert "1/1" in result.message
 
 
 def test_homepage_only_freshness_ignores_disabled_article_and_image_plans(

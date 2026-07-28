@@ -35,33 +35,33 @@ class SearchResultTabSpec {
   static const List<SearchResultTabSpec> fixedTabs = <SearchResultTabSpec>[
     SearchResultTabSpec(
       id: SearchResultTabIds.xiaoqu,
-      label: UITextConstants.searchXiaoquTab,
-      description: UITextConstants.searchXiaoquTabDescription,
+      label: SearchText.searchXiaoquTab,
+      description: SearchText.searchXiaoquTabDescription,
     ),
     SearchResultTabSpec(
       id: SearchResultTabIds.all,
-      label: UITextConstants.searchAllTab,
-      description: UITextConstants.searchAllTabDescription,
+      label: SearchText.searchAllTab,
+      description: SearchText.searchAllTabDescription,
     ),
     SearchResultTabSpec(
       id: SearchResultTabIds.intersection,
-      label: UITextConstants.searchIntersectionTab,
-      description: UITextConstants.searchIntersectionTabDescription,
+      label: SearchText.searchIntersectionTab,
+      description: SearchText.searchIntersectionTabDescription,
     ),
     SearchResultTabSpec(
       id: SearchResultTabIds.image,
-      label: UITextConstants.searchImageTab,
-      description: UITextConstants.searchImageTabDescription,
+      label: SearchText.searchImageTab,
+      description: SearchText.searchImageTabDescription,
     ),
     SearchResultTabSpec(
       id: SearchResultTabIds.video,
-      label: UITextConstants.searchVideoTab,
-      description: UITextConstants.searchVideoTabDescription,
+      label: SearchText.searchVideoTab,
+      description: SearchText.searchVideoTabDescription,
     ),
     SearchResultTabSpec(
       id: SearchResultTabIds.article,
-      label: UITextConstants.searchArticleTab,
-      description: UITextConstants.searchArticleTabDescription,
+      label: SearchText.searchArticleTab,
+      description: SearchText.searchArticleTabDescription,
     ),
   ];
 

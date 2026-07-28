@@ -2,11 +2,12 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage/home
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show CloudOperationCancellationSignal;
-import 'package:quwoquan_cloud_mock/src/entity/alpha_homepage_facets.dart';
+
+import 'repository_mock_reexports.dart';
 
 /// local_contract 与 widget 测试使用的 App DTO 投影壳。
 ///
-/// 所有 Homepage 状态和 fixture 解析由 [AlphaHomepageFacet]（mock package）持有；
+/// 所有 Homepage 状态和场景解析由 [AlphaHomepageFacet] 对象替身持有；
 /// 此类只允许测试覆写窄 port 行为，不能回放生产 mock 数据。
 class AlphaHomepageTestRepository extends HomepageFacetProjectionAdapter {
   AlphaHomepageTestRepository({AlphaHomepageFacet? facet})

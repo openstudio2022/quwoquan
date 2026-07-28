@@ -61,15 +61,16 @@ void main() {
 
     expect(find.byType(AppSectionErrorState), findsOneWidget);
     expect(find.byType(AppSectionErrorCard), findsNothing);
-    expect(find.text(UITextConstants.commentLoadFailedTitle), findsOneWidget);
-    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+    expect(find.text(SearchText.recoveryReloadLaterMessage), findsOneWidget);
+    expect(find.text(SearchText.reload), findsOneWidget);
 
     comments.failure = null;
-    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.tap(find.text(SearchText.reload));
     await tester.pumpAndSettle();
 
     expect(find.byType(AppSectionErrorState), findsNothing);
-    expect(find.text(UITextConstants.noComment), findsOneWidget);
+    expect(find.text(ContentText.noComment), findsOneWidget);
   });
 
   testWidgets('评论弹层首屏失败不把未知总数误写成零评论', (tester) async {
@@ -91,11 +92,9 @@ void main() {
     await tester.tap(find.text('open-error-comments'));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.comment), findsOneWidget);
+    expect(find.text(FoundationText.comment), findsOneWidget);
     expect(
-      find.text(
-        UITextConstants.commentCountTitleTemplate.replaceFirst('%s', '0'),
-      ),
+      find.text(ContentText.commentCountTitleTemplate.replaceFirst('%s', '0')),
       findsNothing,
     );
     expect(find.byType(AppSectionErrorState), findsOneWidget);
@@ -271,10 +270,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final hot = find.bySemanticsLabel(UITextConstants.commentSortHot).first;
-    final latest = find
-        .bySemanticsLabel(UITextConstants.commentSortLatest)
-        .first;
+    final hot = find.bySemanticsLabel(ContentText.commentSortHot).first;
+    final latest = find.bySemanticsLabel(ContentText.commentSortLatest).first;
     expect(tester.getSize(hot).height, greaterThanOrEqualTo(44));
     expect(tester.getSize(latest).height, greaterThanOrEqualTo(44));
     expect(
@@ -282,15 +279,12 @@ void main() {
       isTrue,
     );
     expect(
-      find.bySemanticsLabel(UITextConstants.commentMoreActions),
+      find.bySemanticsLabel(ContentText.commentMoreActions),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.commentPinnedBadge), findsOneWidget);
-    expect(find.text(UITextConstants.commentAuthorLikedBadge), findsOneWidget);
-    expect(
-      find.text(UITextConstants.commentRelationFriendBadge),
-      findsOneWidget,
-    );
+    expect(find.text(ContentText.commentPinnedBadge), findsOneWidget);
+    expect(find.text(ContentText.commentAuthorLikedBadge), findsOneWidget);
+    expect(find.text(ContentText.commentRelationFriendBadge), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

@@ -27,10 +27,13 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_list_page_semantics.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/user/pages/my_intersection_inbox_page.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_timeline.dart';
+
+import '../../../../support/cloud_services/behavior_repository_double.dart';
 
 TextSpan _spanByText(RichText richText, String text) {
   TextSpan? result;
@@ -208,18 +211,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     // 交集/打动已收敛到 nav center compact switch；body 不再重复一级 segmented。
-    expect(find.text(UITextConstants.profileTabIntersection), findsOneWidget);
-    expect(find.text(UITextConstants.profileTabImpact), findsOneWidget);
+    expect(find.text(ProfileText.profileTabIntersection), findsOneWidget);
+    expect(find.text(ProfileText.profileTabImpact), findsOneWidget);
     expect(
       tester
-          .widget<Text>(find.text(UITextConstants.profileTabIntersection))
+          .widget<Text>(find.text(ProfileText.profileTabIntersection))
           .style
           ?.fontWeight,
       AppTypography.regular,
     );
     expect(
       tester
-          .widget<Text>(find.text(UITextConstants.profileTabImpact))
+          .widget<Text>(find.text(ProfileText.profileTabImpact))
           .style
           ?.fontWeight,
       AppTypography.regular,
@@ -235,7 +238,7 @@ void main() {
     );
     expect(find.text('今天 1条'), findsOneWidget);
     expect(find.text('你和林清越等4位用户都关注「黄金投资圈」'), findsOneWidget);
-    expect(find.text(UITextConstants.follow), findsNothing);
+    expect(find.text(FoundationText.follow), findsNothing);
     expect(repo.visitedDimension, '');
     expect(repo.requestedFilter, 'fact');
 
@@ -286,9 +289,9 @@ void main() {
     // 长按交集条目触发负反馈入口 → action sheet 出现「不感兴趣」。
     await tester.longPress(find.text('你和林清越等4位用户都关注「黄金投资圈」'));
     await tester.pumpAndSettle();
-    expect(find.text(UITextConstants.notInterested), findsOneWidget);
+    expect(find.text(ContentText.notInterested), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.notInterested));
+    await tester.tap(find.text(ContentText.notInterested));
     await tester.pumpAndSettle();
 
     // 负反馈事件端云同源：intersection_feedback + subjectId(=coolKey actionTargetId) +
@@ -349,14 +352,14 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+    expect(find.byType(AppRequestFeedback), findsOneWidget);
     expect(find.byType(IntersectionTimelineEmptyState), findsNothing);
 
     repo.complete();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    expect(find.byType(AppRequestFeedback), findsNothing);
     expect(find.byType(IntersectionTimelineEmptyState), findsOneWidget);
     expect(repo.visitCount, 1);
   });
@@ -456,8 +459,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text(UITextConstants.profileTabIntersection), findsOneWidget);
-    expect(find.text(UITextConstants.profileTabImpact), findsOneWidget);
+    expect(find.text(ProfileText.profileTabIntersection), findsOneWidget);
+    expect(find.text(ProfileText.profileTabImpact), findsOneWidget);
     expect(find.text(DiscoveryFeedText.impactFilterRecords), findsOneWidget);
     expect(
       find.text(DiscoveryFeedText.impactFilterDiscussions),
@@ -484,12 +487,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
-    expect(
-      find.text(UITextConstants.objectIntersectionsUnavailableTitle),
-      findsOneWidget,
-    );
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.tap(find.text(SearchText.reload));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 

@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import pytest
 
+from content.post.fidelity import (
+    commercial_article_near_copy_gate,
+    commercial_article_sources_near_copy_gate,
+)
 
 from support.content_plan_source_reject_fixtures import *  # noqa: F401,F403
 
@@ -355,14 +359,79 @@ def test_base_draft_extraction_drops_advertorial_insurance_noise():
     assert "张公桥和上中顺" in body
     assert "从成都自驾2h" in body
 
-def test_factual_reference_only_enforces_base_draft_fidelity_gate():
-    """产品裁定 full light-edit：factual_reference_only 同样受底稿贴合度门约束。"""
-    off_base = base_draft_fidelity_issues(
-        "完全独立组织的正文，只复述可核验事实。",
-        "普通网页的原始叙述和作者表达。",
+def test_factual_reference_only_uses_typed_near_copy_gate_not_adaptation_fidelity():
+    article = "完全独立组织的正文，只复述可核验事实，并重写结构与表达。"
+    source = "普通网页的原始叙述和作者表达，不允许近似复制。"
+
+    assert base_draft_fidelity_issues(
+        article,
+        source,
+        source_use_mode="factual_reference_only",
+    ) == []
+    gate = commercial_article_near_copy_gate(
+        article,
+        source,
         source_use_mode="factual_reference_only",
     )
-    assert off_base
+    assert gate.passed is True
+    assert gate.issues == ()
+
+
+def test_factual_reference_only_near_copy_gate_blocks_exact_commercial_rewrite():
+    source = (
+        "清晨从东门进入景区，沿湖岸步道向北走，先经过长桥，再到观景台等待日出。"
+        "旺季需要提前预约，现场排队时间较长，建议避开上午十点后的客流高峰。"
+        "返程可从南门离开，公共交通末班时间应以当天官方公告为准。"
+    )
+    article = (
+        "# 实用指南\n\n"
+        "清晨从东门进入景区，沿湖岸步道向北走，先经过长桥，再到观景台等待日出。"
+        "旺季需要提前预约，现场排队时间较长，建议避开上午十点后的客流高峰。"
+        "返程可从南门离开，公共交通末班时间应以当天官方公告为准。"
+    )
+
+    gate = commercial_article_near_copy_gate(
+        article,
+        source,
+        source_use_mode="factual_reference_only",
+    )
+
+    assert gate.passed is False
+    assert gate.article_containment_ratio > 0.9
+    assert gate.exact_run_sample
+    assert all("factual_reference_only" in issue for issue in gate.issues)
+
+
+def test_factual_reference_only_near_copy_gate_allows_independent_fact_synthesis():
+    gate = commercial_article_near_copy_gate(
+        "完全独立组织的正文，只复述可核验事实。",
+        (
+            "景区开放信息显示东门可入园，湖岸设有步道。"
+            "票务页面还提示旺季游客应提前完成预约。"
+        ),
+        source_use_mode="factual_reference_only",
+    )
+
+    assert gate.passed is True
+    assert gate.issues == ()
+
+
+def test_multi_source_near_copy_gate_checks_each_factual_source_unit():
+    copied_source = (
+        "沿湖步道从东门延伸到长桥，旺季应提前预约并预留排队时间。"
+        "午后客流最密集，返程公共交通应以当天官方公告为准。"
+    ) * 2
+    gate = commercial_article_sources_near_copy_gate(
+        copied_source,
+        (
+            ("内部授权底稿可按合同改编。", "licensed_adaptation"),
+            (copied_source, "factual_reference_only"),
+        ),
+    )
+
+    assert gate.passed is False
+    assert gate.source_use_mode == "factual_reference_only"
+    assert gate.article_containment_ratio == 1.0
 
 def test_base_draft_fidelity_ignores_platform_ads_when_body_retained():
     base = """

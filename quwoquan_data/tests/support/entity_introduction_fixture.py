@@ -151,9 +151,9 @@ def _first_paragraph_summary(lead: str) -> str:
     return ""
 
 
-def _asset_url(asset: Mapping[str, Any], media_base_url: str) -> str:
+def _asset_url(asset: Mapping[str, Any], media_image_base_url: str) -> str:
     object_key = str(asset.get("objectKey") or "").strip()
-    base = media_base_url.strip().rstrip("/")
+    base = media_image_base_url.strip().rstrip("/")
     if base and object_key:
         return f"{base}/{object_key.lstrip('/')}"
     return str(asset.get("cdnUrl") or "").strip()
@@ -163,7 +163,7 @@ def project_entity_introduction(
     entity_dir: Path,
     entity_ref: str,
     *,
-    media_base_url: str = "",
+    media_image_base_url: str = "",
 ) -> tuple[dict[str, Any] | None, list[str]]:
     """把单个 publish 实体投影为 fixture homepage 条目；返回 (条目, issues)。"""
     issues: list[str] = []
@@ -193,7 +193,7 @@ def project_entity_introduction(
         asset_id = str(raw.get("assetId") or "").strip()
         if not asset_id:
             continue
-        url = _asset_url(raw, media_base_url)
+        url = _asset_url(raw, media_image_base_url)
         if not url:
             issues.append(
                 f"{entity_ref}: 资产 {asset_id} 无 objectKey/cdnUrl 可映射 URL（publish 树未 materialize？）"
@@ -350,7 +350,7 @@ def handle_entity_introduction(args: argparse.Namespace) -> None:
         entry, issues = project_entity_introduction(
             entities_root / ref,
             ref,
-            media_base_url=args.media_base_url or "",
+            media_image_base_url=args.media_image_base_url or "",
         )
         all_issues.extend(issues)
         if entry is not None:
@@ -389,7 +389,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pe.add_argument("--entity", help="实体相对路径（如 地点/景区/乐山大佛），逗号分隔；缺省转换全部")
     pe.add_argument("--entities-root", help="实体根目录（默认 publish/entities）")
     pe.add_argument("--scenarios", help=f"目标 scenarios fixture（默认 {DEFAULT_SCENARIOS_PATH}）")
-    pe.add_argument("--media-base-url", default="", help="资产 objectKey → URL 的 media base（缺省用 manifest cdnUrl）")
+    pe.add_argument("--media-image-base-url", default="", help="资产 objectKey → URL 的 mediaImage role（缺省用 manifest cdnUrl）")
     pe.add_argument("--strict", action="store_true", help="任何资产/类型 issue 都拒绝写入")
     pe.add_argument("--dry-run", action="store_true", help="只打印将写入的条目，不改 fixture")
     pe.set_defaults(handler=handle_entity_introduction)

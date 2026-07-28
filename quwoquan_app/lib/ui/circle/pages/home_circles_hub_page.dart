@@ -524,12 +524,12 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
   Widget build(BuildContext context) {
     final isDark = ref.watch(effectiveIsDarkProvider);
     if (_isBootstrapping) {
-      return const Material(
+      return Material(
         type: MaterialType.transparency,
         child: SafeArea(
           top: false,
           bottom: false,
-          child: Center(child: CupertinoActivityIndicator()),
+          child: AppRequestFeedback.section(),
         ),
       );
     }
@@ -540,7 +540,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
           top: false,
           bottom: false,
           child: AppPageErrorState(
-            semantic: _pageErrorSemantic!,
+            semantic: ensureRetryUiErrorSemantic(_pageErrorSemantic!),
             onAction: (action) async {
               if (action.type == UiErrorActionType.retry ||
                   action.type == UiErrorActionType.resubmit) {
@@ -749,7 +749,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
                               ),
                               child: Center(
                                 child: isLoadingMore
-                                    ? const CupertinoActivityIndicator()
+                                    ? AppRequestFeedback.inline()
                                     : const SizedBox.shrink(),
                               ),
                             ),

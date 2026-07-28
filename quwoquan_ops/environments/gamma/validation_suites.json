@@ -20,12 +20,12 @@
       "uiJourneys": [],
       "deviceMatrix": {
         "envs": [
-          "alpha",
           "beta"
         ],
         "requireAllPlatforms": false,
         "matrixKinds": [
-          "assistant"
+          "assistant",
+          "app-core-readback"
         ]
       }
     },
@@ -51,7 +51,8 @@
         "matrixKinds": [
           "assistant",
           "chat-avatar",
-          "environment-smoke"
+          "environment-smoke",
+          "app-core-readback"
         ]
       }
     },
@@ -95,6 +96,7 @@
           "assistant",
           "chat-avatar",
           "environment-smoke",
+          "app-core-readback",
           "media-publication",
           "user-profile",
           "account-closure"
@@ -141,6 +143,7 @@
           "assistant",
           "chat-avatar",
           "environment-smoke",
+          "app-core-readback",
           "media-publication",
           "user-profile",
           "account-closure"

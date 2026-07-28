@@ -56,7 +56,7 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
         isBound: true,
       );
       _trackPhoneAction('carrier_phone_bind', 'succeeded');
-      AppToast.show(context, UITextConstants.editProfilePhoneBindSuccess);
+      AppToast.show(context, ProfileText.editProfilePhoneBindSuccess);
       Navigator.of(context).pop(credential);
     } catch (error) {
       if (!mounted) {
@@ -119,7 +119,7 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
         isBound: true,
       );
       _trackPhoneAction('otp_phone_bind', 'succeeded');
-      AppToast.show(context, UITextConstants.editProfilePhoneBindSuccess);
+      AppToast.show(context, ProfileText.editProfilePhoneBindSuccess);
       Navigator.of(context).pop(credential);
     } catch (error) {
       if (!mounted) {
@@ -143,7 +143,7 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
       semantic: UiErrorSemantic(
         category: resolved.category,
         scope: resolved.scope,
-        title: UITextConstants.editProfilePhoneBindFailedTitle,
+        title: ProfileText.editProfilePhoneBindFailedTitle,
         message: resolved.message,
         secondaryMessage: resolved.secondaryMessage,
         primaryAction: resolved.primaryAction,
@@ -185,7 +185,7 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         middle: Text(
-          UITextConstants.editProfilePhoneTitle,
+          ProfileText.editProfilePhoneTitle,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
       ),
@@ -196,7 +196,7 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
             SizedBox(height: AppSpacing.oneHundred),
             Center(
               child: Text(
-                '${UITextConstants.editProfilePhoneBoundPrefix}: ${credential.displayLabel}',
+                '${ProfileText.editProfilePhoneBoundPrefix}: ${credential.displayLabel}',
                 style: TextStyle(
                   fontSize: AppTypography.iosTitle3,
                   color: AppColors.iosLabel(context),
@@ -206,7 +206,7 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
             ),
             SizedBox(height: AppSpacing.containerMd),
             Text(
-              UITextConstants.editProfilePhoneBoundHint,
+              ProfileText.editProfilePhoneBoundHint,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: AppTypography.iosBody,
@@ -216,8 +216,8 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
           ] else ...<Widget>[
             ProfileIosActionButton(
               label: _oneTapAvailable
-                  ? UITextConstants.editProfilePhoneOneTapBind
-                  : UITextConstants.editProfilePhoneOneTapUnavailable,
+                  ? ProfileText.editProfilePhoneOneTapBind
+                  : ProfileText.editProfilePhoneOneTapUnavailable,
               style: ProfileIosActionStyle.filled,
               height: AppSpacing.buttonHeightLg,
               onPressed: _oneTapAvailable && !_busy ? _bindOneTap : null,
@@ -226,7 +226,7 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
             CupertinoTextField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
-              placeholder: UITextConstants.editProfilePhoneInputPlaceholder,
+              placeholder: ProfileText.editProfilePhoneInputPlaceholder,
               padding: EdgeInsets.all(AppSpacing.containerMd),
               decoration: _inputDecoration(context),
             ),
@@ -237,14 +237,14 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
                   child: CupertinoTextField(
                     controller: _otpController,
                     keyboardType: TextInputType.number,
-                    placeholder: UITextConstants.editProfileOtpInputPlaceholder,
+                    placeholder: ProfileText.editProfileOtpInputPlaceholder,
                     padding: EdgeInsets.all(AppSpacing.containerMd),
                     decoration: _inputDecoration(context),
                   ),
                 ),
                 SizedBox(width: AppSpacing.containerSm),
                 ProfileIosActionButton(
-                  label: UITextConstants.editProfileSendOtp,
+                  label: ProfileText.editProfileSendOtp,
                   expand: false,
                   height: AppSpacing.buttonHeightLg,
                   onPressed: _busy ? null : _sendOtp,
@@ -253,7 +253,7 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
             ),
             SizedBox(height: AppSpacing.containerMd),
             ProfileIosActionButton(
-              label: UITextConstants.editProfileBindNow,
+              label: ProfileText.editProfileBindNow,
               style: ProfileIosActionStyle.filled,
               height: AppSpacing.buttonHeightLg,
               onPressed: _busy ? null : _bindOtp,

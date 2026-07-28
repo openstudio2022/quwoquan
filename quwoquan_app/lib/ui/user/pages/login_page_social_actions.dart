@@ -22,7 +22,7 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
         accountHint: _presentation.accountHint,
         carrierHint: _presentation.carrierHint,
         phoneOtpState: _presentation.phoneOtpState,
-        message: UITextConstants.loginQuickLoginUnavailableHint,
+        message: FoundationText.loginQuickLoginUnavailableHint,
         primaryAction: _presentation.primaryAction,
         primaryProvider: _presentation.primaryProvider,
         quickLoginPhone: _presentation.quickLoginPhone,
@@ -106,13 +106,13 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
   String _socialCapabilityMessage(NativeAuthAvailability availability) {
     return switch (availability) {
       NativeAuthAvailability.notConfigured =>
-        UITextConstants.loginSocialNotConfigured,
+        FoundationText.loginSocialNotConfigured,
       NativeAuthAvailability.clientNotInstalled =>
-        UITextConstants.loginSocialClientNotInstalled,
+        FoundationText.loginSocialClientNotInstalled,
       NativeAuthAvailability.probeTimeout =>
-        UITextConstants.loginSocialProbeTimeout,
+        FoundationText.loginSocialProbeTimeout,
       NativeAuthAvailability.sdkUnavailable =>
-        UITextConstants.loginSocialSdkUnavailable,
+        FoundationText.loginSocialSdkUnavailable,
       NativeAuthAvailability.unsupportedPlatform ||
       NativeAuthAvailability.available => '',
     };
@@ -179,7 +179,7 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
     final capability = _socialMethodAvailability[method];
     if (capability == null || !capability.isAvailable) {
       final message = capability == null
-          ? UITextConstants.loginSocialProbeTimeout
+          ? FoundationText.loginSocialProbeTimeout
           : _socialCapabilityMessage(capability.availability);
       _setSocialMethodFeedback(message);
       _trackLoginEvent(

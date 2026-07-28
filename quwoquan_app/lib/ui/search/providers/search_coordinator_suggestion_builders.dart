@@ -112,31 +112,31 @@ extension SearchCoordinatorSuggestionBuilders on SearchCoordinator {
       NetworkSearchSuggestion(
         query: query,
         title: query,
-        subtitle: UITextConstants.searchAllResults,
+        subtitle: SearchText.searchAllResults,
         initialTabId: 'all',
       ),
       NetworkSearchSuggestion(
         query: query,
         title: UITextConstants.searchQueryIntersection(query),
-        subtitle: UITextConstants.searchBestConnections,
+        subtitle: SearchText.searchBestConnections,
         initialTabId: 'intersection',
       ),
       NetworkSearchSuggestion(
         query: query,
         title: UITextConstants.searchQueryImages(query),
-        subtitle: UITextConstants.searchOnlyImages,
+        subtitle: SearchText.searchOnlyImages,
         initialTabId: 'image',
       ),
       NetworkSearchSuggestion(
         query: query,
         title: UITextConstants.searchQueryVideos(query),
-        subtitle: UITextConstants.searchOnlyVideos,
+        subtitle: SearchText.searchOnlyVideos,
         initialTabId: 'video',
       ),
       NetworkSearchSuggestion(
         query: query,
         title: UITextConstants.searchQueryArticles(query),
-        subtitle: UITextConstants.searchOnlyArticles,
+        subtitle: SearchText.searchOnlyArticles,
         initialTabId: 'article',
       ),
     ];

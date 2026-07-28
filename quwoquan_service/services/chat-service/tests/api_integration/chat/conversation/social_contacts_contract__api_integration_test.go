@@ -93,6 +93,7 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/chat/contacts?limit=10", nil)
 	req.Header.Set("X-Client-User-Id", "viewer_1")
+	req.Header.Set("X-Client-Sub-Account-Id", "viewer_1")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -150,6 +151,7 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 			nil,
 		)
 		req.Header.Set("X-Client-User-Id", "viewer_1")
+		req.Header.Set("X-Client-Sub-Account-Id", "viewer_1")
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -267,6 +269,7 @@ func TestListContacts_FiltersBlockedContacts(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/chat/contacts?limit=10", nil)
 	req.Header.Set("X-Client-User-Id", "viewer_1")
+	req.Header.Set("X-Client-Sub-Account-Id", "viewer_1")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 

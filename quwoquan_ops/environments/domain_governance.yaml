@@ -1,0 +1,200 @@
+{
+  "schema": "quwoquan.domain-governance",
+  "registrableDomain": "quwoquan.com",
+  "endpointRegistry": [
+    {
+      "name": "public-api",
+      "role": "api",
+      "classification": "first-party-api",
+      "source": "environment-topology",
+      "owner": "platform-runtime",
+      "exposure": "public",
+      "consumers": ["app", "web", "ops", "ci"]
+    },
+    {
+      "name": "realtime-signaling",
+      "role": "realtime",
+      "classification": "first-party-websocket",
+      "source": "environment-topology",
+      "owner": "realtime",
+      "exposure": "public",
+      "consumers": ["app", "web", "ci"]
+    },
+    {
+      "name": "rtc-signaling",
+      "role": "rtc",
+      "classification": "first-party-websocket",
+      "source": "environment-topology",
+      "owner": "rtc",
+      "exposure": "public",
+      "consumers": ["app", "ci"]
+    },
+    {
+      "name": "product-ops",
+      "role": "productOps",
+      "classification": "first-party-ops-api",
+      "source": "environment-topology",
+      "owner": "product-ops",
+      "exposure": "public",
+      "consumers": ["ops-portal", "ci"]
+    },
+    {
+      "name": "public-web",
+      "role": "publicWeb",
+      "classification": "first-party-web",
+      "source": "environment-topology",
+      "owner": "app-web",
+      "exposure": "public",
+      "consumers": ["browser", "share-links", "oauth"]
+    },
+    {
+      "name": "app-download",
+      "role": "appDownload",
+      "classification": "first-party-distribution",
+      "source": "environment-topology",
+      "owner": "app-release",
+      "exposure": "public",
+      "consumers": ["browser", "release-ci"]
+    },
+    {
+      "name": "legal",
+      "role": "legal",
+      "classification": "first-party-legal",
+      "source": "environment-topology",
+      "owner": "legal-static",
+      "exposure": "public",
+      "consumers": ["app", "browser", "ci"]
+    },
+    {
+      "name": "media-avatar",
+      "role": "mediaAvatar",
+      "classification": "first-party-media-read",
+      "source": "environment-topology",
+      "owner": "media-delivery",
+      "exposure": "public",
+      "consumers": ["app", "web", "chat"]
+    },
+    {
+      "name": "media-image",
+      "role": "mediaImage",
+      "classification": "first-party-media-read",
+      "source": "environment-topology",
+      "owner": "media-delivery",
+      "exposure": "public",
+      "consumers": ["app", "web", "data-release"]
+    },
+    {
+      "name": "media-video",
+      "role": "mediaVideo",
+      "classification": "first-party-media-read",
+      "source": "environment-topology",
+      "owner": "media-delivery",
+      "exposure": "public",
+      "consumers": ["app", "web", "data-release"]
+    },
+    {
+      "name": "media-upload",
+      "role": "mediaUpload",
+      "classification": "first-party-media-write",
+      "source": "environment-topology",
+      "owner": "media-delivery",
+      "exposure": "public",
+      "consumers": ["app", "web", "ci"]
+    }
+  ],
+  "urlClassRegistry": [
+    {
+      "classification": "derived-deep-link",
+      "owner": "app-navigation",
+      "source": "publicWeb role plus route metadata",
+      "baseRole": "publicWeb",
+      "consumers": ["android-app-links", "ios-universal-links", "share-links"]
+    },
+    {
+      "classification": "oauth-callback",
+      "owner": "identity-integrations",
+      "source": "publicWeb role plus provider callback metadata",
+      "baseRole": "publicWeb",
+      "consumers": ["wechat", "commercial-auth", "web"]
+    },
+    {
+      "classification": "east-west-upstream",
+      "owner": "service-runtime",
+      "source": "environment workload serviceDiscovery and environment config",
+      "baseRole": "",
+      "consumers": ["service-to-service", "data-importers", "ops"]
+    },
+    {
+      "classification": "third-party",
+      "owner": "provider-governance",
+      "source": "service contracts external_bindings.yaml",
+      "baseRole": "",
+      "consumers": ["service-adapters", "app-native-provider-bridges"]
+    },
+    {
+      "classification": "test-only",
+      "owner": "test-runtime",
+      "source": "runner arguments projected from topology or reserved .invalid fixtures",
+      "baseRole": "",
+      "consumers": ["local-contract", "api-integration", "user-acceptance"]
+    }
+  ],
+  "dnsProvider": {
+    "kind": "cloudflare",
+    "apiTokenEnv": "QWQ_DNS_API_TOKEN",
+    "zoneIdEnv": "QWQ_DNS_ZONE_ID"
+  },
+  "nonProdAddressEnv": "QWQ_NONPROD_PUBLIC_IPV4",
+  "nonProdIpv6AddressEnv": "QWQ_NONPROD_PUBLIC_IPV6",
+  "prodAddressEnv": "QWQ_PROD_PUBLIC_IPV4",
+  "prodIpv6AddressEnv": "QWQ_PROD_PUBLIC_IPV6",
+  "acmeChallengeAuthority": {
+    "mode": "scoped-dns-api-token",
+    "requiredNamePrefix": "_acme-challenge",
+    "forbidProductionZoneMutation": true
+  },
+  "nonProdMailGuard": {
+    "nullMx": ".",
+    "spf": "v=spf1 -all"
+  },
+  "caa": [
+    {"flags": 0, "tag": "issue", "value": "letsencrypt.org"},
+    {"flags": 0, "tag": "issuewild", "value": "letsencrypt.org"},
+    {"flags": 0, "tag": "iodef", "value": "mailto:security@quwoquan.com"}
+  ],
+  "tlsProfiles": {
+    "acme-dns01-alpha": {
+      "target": "alpha-local",
+      "apex": "alpha.quwoquan.com",
+      "wildcard": "*.alpha.quwoquan.com"
+    },
+    "acme-dns01-beta": {
+      "target": "beta-local",
+      "apex": "beta.quwoquan.com",
+      "wildcard": "*.beta.quwoquan.com"
+    },
+    "acme-dns01-gamma": {
+      "target": "gamma-local",
+      "apex": "gamma.quwoquan.com",
+      "wildcard": "*.gamma.quwoquan.com"
+    },
+    "acme-dns01-sim": {
+      "target": "prod-sim",
+      "apex": "sim.quwoquan.com",
+      "wildcard": "*.sim.quwoquan.com"
+    },
+    "public-ca-prod": {
+      "target": "prod-hosted",
+      "apex": "quwoquan.com",
+      "wildcard": "*.quwoquan.com",
+      "certificateAutomation": "external"
+    }
+  },
+  "acme": {
+    "client": "lego",
+    "dnsProvider": "cloudflare",
+    "accountEmailEnv": "QWQ_ACME_ACCOUNT_EMAIL",
+    "directory": "https://acme-v02.api.letsencrypt.org/directory",
+    "renewBeforeDays": 30
+  }
+}

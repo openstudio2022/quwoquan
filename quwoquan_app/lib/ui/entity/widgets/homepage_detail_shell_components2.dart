@@ -167,7 +167,7 @@ class _HomepageRelatedCircleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = group.name.trim().isNotEmpty
         ? group.name.trim()
-        : UITextConstants.objectTabRelatedCircles;
+        : ObjectHomepageText.objectTabRelatedCircles;
     final linkedTitle = (group.linkedHomepageTitle ?? '').trim();
     final reason = linkedTitle.isNotEmpty
         ? HomepageDetailText.relatedGroupReasonFor(linkedTitle)
@@ -293,8 +293,8 @@ class _HomepageBottomActionBar extends StatelessWidget {
           onPressed: enabled ? onPressed : null,
           child: Text(
             enabled
-                ? UITextConstants.homepageAttachPublishEnabled
-                : UITextConstants.homepageAttachPublishDisabled,
+                ? ObjectHomepageText.homepageAttachPublishEnabled
+                : ObjectHomepageText.homepageAttachPublishDisabled,
           ),
         ),
       ),
@@ -350,16 +350,16 @@ enum _HomepageMoreAction { share, claim, maintain, report }
 String _contentTypeLabel(String contentType) {
   switch (contentType.trim()) {
     case 'article':
-      return UITextConstants.homepageContentTypeArticle;
+      return ObjectHomepageText.homepageContentTypeArticle;
     case 'video':
-      return UITextConstants.homepageContentTypeVideo;
+      return ObjectHomepageText.homepageContentTypeVideo;
     case 'image':
-      return UITextConstants.homepageContentTypeImage;
+      return ObjectHomepageText.homepageContentTypeImage;
     case 'review':
-      return UITextConstants.homepageContentTypeOpinion;
+      return ObjectHomepageText.homepageContentTypeOpinion;
     case 'question':
-      return UITextConstants.homepageContentTypeQuestion;
+      return ObjectHomepageText.homepageContentTypeQuestion;
     default:
-      return UITextConstants.homepageContentTypeDefault;
+      return ObjectHomepageText.homepageContentTypeDefault;
   }
 }

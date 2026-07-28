@@ -65,7 +65,7 @@ class SectionChat extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  UITextConstants.circleChatEntryTitle,
+                  CommunityText.circleChatEntryTitle,
                   style: TextStyle(
                     fontSize: AppTypography.lg,
                     fontWeight: AppTypography.semiBold,
@@ -74,7 +74,7 @@ class SectionChat extends StatelessWidget {
                 ),
                 SizedBox(height: AppSpacing.xs),
                 Text(
-                  UITextConstants.circleChatEntrySubtitle,
+                  CommunityText.circleChatEntrySubtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -107,7 +107,7 @@ class SectionChat extends StatelessWidget {
       ),
       child: Center(
         child: Text(
-          UITextConstants.circleNoChatEnabled,
+          CommunityText.circleNoChatEnabled,
           style: TextStyle(fontSize: AppTypography.base, color: fgSecondary),
         ),
       ),

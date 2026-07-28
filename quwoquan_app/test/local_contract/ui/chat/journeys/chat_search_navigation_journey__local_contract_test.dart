@@ -22,7 +22,7 @@ import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
 import '../../../../support/fixtures/chat/chat_mock_seed_refs.dart';

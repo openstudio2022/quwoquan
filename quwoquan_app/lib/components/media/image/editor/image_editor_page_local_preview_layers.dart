@@ -205,7 +205,7 @@ extension _ImageEditorPageLocalPreviewLayers on _ImageEditorPageState {
                     minimumSize: Size.zero,
                     onPressed: _copySelectedLocalAnchor,
                     child: Text(
-                      UITextConstants.imageEditorProAnchorCopy,
+                      MediaText.imageEditorProAnchorCopy,
                       style: TextStyle(color: AppColors.black),
                     ),
                   ),
@@ -219,7 +219,7 @@ extension _ImageEditorPageLocalPreviewLayers on _ImageEditorPageState {
                     minimumSize: Size.zero,
                     onPressed: _deleteSelectedLocalAnchor,
                     child: Text(
-                      UITextConstants.imageEditorProAnchorDelete,
+                      MediaText.imageEditorProAnchorDelete,
                       style: TextStyle(color: AppColors.black),
                     ),
                   ),

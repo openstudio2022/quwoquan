@@ -17,9 +17,8 @@ from core import paths
 from core.paths import execution_root, release_root
 from content.post.article.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS, base_draft_readiness
 from core.content_source_registry import homepage_source_can_seed_base_draft
-from core.media_asset_url import build_release_media_manifest
 from core.tree_integrity import tree_integrity_stats
-from core.release_layout import object_closure_digest, payload_file, payload_root
+from core.release_layout import object_closure_digest, payload_file
 from content.release.environment.consistency import scan_release_contract
 from governance.coverage.license import (
     rights_audit_status_recorded,
@@ -450,24 +449,18 @@ def _release_v3_integrity(release_id: str, root: Path) -> dict[str, Any]:
         if sample_refs != refs[kind]:
             issues.append(f"{release_id}: sample_bundle.json {kind} differs from desired_state")
 
-    expected_media = build_release_media_manifest(
-        release_id=release_id,
-        post_refs=refs["posts"],
-        entity_refs=refs["entities"],
-        object_root=payload_file(root, "objects"),
-        media_root=payload_root(root),
-    )
-    for message in expected_media["issues"]:
-        issues.append(f"{release_id}: release media closure invalid: {message}")
     media = _json(payload_file(root, "media_manifest.json"))
     actual_assets = media.get("assets")
     if not isinstance(actual_assets, list):
         issues.append(f"{release_id}: media_manifest.assets must be an array")
     else:
         stats["assetCount"] = len(actual_assets)
-        if actual_assets != expected_media["assets"]:
+    consistency = scan_release_contract(contract, release_root=root)
+    for issue in consistency["blockingIssues"]:
+        code = str(issue.get("code") or "")
+        if code.startswith("release_media"):
             issues.append(
-                f"{release_id}: media_manifest must exactly cover desired object CAS closure"
+                f"{release_id}: {code}: {issue.get('ref')} {issue.get('message')}"
             )
 
     return {

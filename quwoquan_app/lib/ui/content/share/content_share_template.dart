@@ -132,7 +132,7 @@ class ContentShareTemplateBuilder {
       shareSummary: tagSummary,
       coverUrl: shareSeed.coverUrl,
       actions: const <ContentShareAction>[
-        ContentShareAction(id: 'copy_link', label: UITextConstants.copyLink),
+        ContentShareAction(id: 'copy_link', label: FoundationText.copyLink),
         ContentShareAction(
           id: 'save_poster',
           label: ChatText.shareActionSavePoster,
@@ -186,7 +186,7 @@ class ContentShareTemplateBuilder {
         return _ShareSeed(
           title: _clip(
             title,
-            fallback: UITextConstants.shareSeedWorkFallbackTitle,
+            fallback: ContentText.shareSeedWorkFallbackTitle,
           ),
           summary: _clip(body, maxLength: 48),
           coverUrl: cover,

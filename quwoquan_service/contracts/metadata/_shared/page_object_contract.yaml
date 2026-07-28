@@ -311,7 +311,9 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.assistant.personal_conversation, lifecycle: [enter, exit, turn_submit, stream_failure] }
     entry_widget: PersonalAssistantConversationPage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
+    route_registration_evidence:
+      - lib/app/navigation/app_router.dart
+      - lib/app/navigation/app_router_chat_routes.dart
 
   - page_id: chat.detail
     source_path: lib/ui/chat/pages/chat_conversation_page.dart
@@ -329,7 +331,7 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.chat.conversation, lifecycle: [enter, exit, message_send, failure] }
     entry_widget: ChatConversationPage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
+    route_registration_evidence: [lib/app/navigation/app_router_chat_routes.dart]
 
   - page_id: chat.home
     source_path: lib/ui/chat/pages/chat_page.dart
@@ -385,7 +387,7 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.chat.settings, lifecycle: [enter, exit, update, failure] }
     entry_widget: ChatSettingsPage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
+    route_registration_evidence: [lib/app/navigation/app_router_chat_routes.dart]
 
   - page_id: chat.announcement
     source_path: lib/ui/chat/pages/chat_announcement_page.dart
@@ -403,7 +405,7 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.chat.announcement, lifecycle: [enter, exit, publish, failure] }
     entry_widget: ChatAnnouncementPage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
+    route_registration_evidence: [lib/app/navigation/app_router_chat_routes.dart]
 
   - page_id: chat.group_admins
     source_path: lib/ui/chat/pages/group_admins_page.dart
@@ -419,7 +421,7 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.chat.group_admins, lifecycle: [enter, exit, submit, failure] }
     entry_widget: GroupAdminsPage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
+    route_registration_evidence: [lib/app/navigation/app_router_chat_routes.dart]
 
   - page_id: chat.group_manage
     source_path: lib/ui/chat/pages/group_manage_page.dart
@@ -437,7 +439,7 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.chat.group_manage, lifecycle: [enter, exit, update, failure] }
     entry_widget: GroupManagePage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
+    route_registration_evidence: [lib/app/navigation/app_router_chat_routes.dart]
 
   - page_id: chat.member_search
     source_path: lib/ui/chat/pages/group_member_search_page.dart
@@ -453,7 +455,7 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.chat.member_search, lifecycle: [enter, exit, search, failure] }
     entry_widget: GroupMemberSearchPage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
+    route_registration_evidence: [lib/app/navigation/app_router_chat_routes.dart]
 
   - page_id: chat.start_group
     source_path: lib/ui/chat/pages/start_group_chat_page.dart
@@ -474,7 +476,9 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.chat.start_group, lifecycle: [enter, exit, submit, failure] }
     entry_widget: StartGroupChatPage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
+    route_registration_evidence:
+      - lib/app/navigation/app_router.dart
+      - lib/app/navigation/app_router_chat_routes.dart
 
   - page_id: chat.transfer_ownership
     source_path: lib/ui/chat/pages/transfer_ownership_page.dart
@@ -490,7 +494,7 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.chat.transfer_ownership, lifecycle: [enter, exit, submit, failure] }
     entry_widget: TransferOwnershipPage
-    route_registration_evidence: [lib/app/navigation/app_router.dart]
+    route_registration_evidence: [lib/app/navigation/app_router_chat_routes.dart]
 
   - page_id: circle.detail
     source_path: lib/ui/circle/pages/circle_detail_page.dart
@@ -1491,16 +1495,16 @@ pages:
     surface_ids: [login]
     experience_owner: user
     data_owners: [user]
-    # 登录页真实操作聚合是 AccountSession（六路登录）与 AuthenticationChallenge
-    # （OTP/一键 hint）；user_account 仅承载登录结果投影。
-    object_ids: [user.account_session, user.authentication_challenge, user.user_account]
+    # 登录页真实操作聚合是 AccountSession（登录结果）、AuthenticationChallenge
+    # （OTP/一键 hint）与 CredentialBinding（社交首登手机号绑定）；user_account 仅承载登录结果投影。
+    object_ids: [user.account_session, user.authentication_challenge, user.credential_binding, user.user_account]
     query_slices:
       - user.user_account.projection.auth_login_result
       - user.user_account.projection.one_tap_login_hint
-    typed_presentation: [AuthLoginResultDto, OneTapLoginHintDto]
+    typed_presentation: [FederatedLoginOutcome, OtpChallengeIssueResult, OneTapLoginHint]
     auth_requirement: public
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.user.login, lifecycle: [enter, exit, login_success, login_failure] }
+    telemetry_descriptor: { event_namespace: page.user.login, lifecycle: [enter, state_change, consent, otp_send, otp_verify, social_authorization, phone_binding, exit, login_success, login_failure] }
     entry_widget: LoginPage
     route_registration_evidence: [lib/app/navigation/app_router.dart]
 

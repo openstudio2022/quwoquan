@@ -1,12 +1,14 @@
 package releaseimport_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	runtimemedia "quwoquan_service/runtime/media"
 	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport"
 )
 
@@ -25,7 +27,7 @@ func fixturePublish(t *testing.T) string {
 	root := t.TempDir()
 	// 两篇文章
 	writeFile(t, filepath.Join(root, "posts/article/体验/甲居藏寨体验/1/manifest.json"),
-		`{"contentType":"article","authorId":"builtin_travel_blogger","creatorProfileId":"qwq_creator_travel_blogger_001","creatorArchetype":"travel_blogger","creatorProfileVersion":"1.0.0","creatorDisclosure":{"type":"platform_virtual_creator","displayText":"平台虚拟创作者","visible":true},"experienceClaimMode":"editorial_synthesis","authorQualitySignals":{"qualityScore":0.85,"fatigueScore":0.2,"riskTier":"low"},"entityRefs":["地点/景区/甲居藏寨"],"normalizedEntityRefs":["entity:景区:甲居藏寨"],"tagRefs":["Topic/旅行"],"intersectionHints":[{"dimension":"content","source":"entityRef","tagRefs":[],"actionType":"view_object","actionTargetId":"entity:景区:甲居藏寨"},{"dimension":"interest","source":"tagRef","tagRefs":["Topic/旅行"],"actionType":"join","actionTargetId":"Topic/旅行"}],"template":"journal","generatorModel":"agent/x","articleMarkdownDigest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","publishTitle":"甲居藏寨体验","publishAngle":"体验","publishSeq":1,"sourceTaskId":"旅行/环线/川西环线/川西大环线自驾","createdAt":"2026-05-01T00:00:00Z","updatedAt":"2026-05-03T00:00:00Z","publishedAt":"2026-05-04T00:00:00Z","articleAssetManifest":{"schema":"article-asset-manifest","markdownDialect":"qwq-rich-md","articleMarkdownDigest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","documentSha256":"sha256:1111111111111111111111111111111111111111111111111111111111111111","assetManifestSha256":"sha256:2222222222222222222222222222222222222222222222222222222222222222","documentVersionSha256":"sha256:3333333333333333333333333333333333333333333333333333333333333333","assets":[{"assetId":"cover","objectKey":"media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg","cdnUrl":"https://img.example.com/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg","sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}}`)
+		`{"contentType":"article","authorId":"builtin_travel_blogger","creatorProfileId":"qwq_creator_travel_blogger_001","creatorArchetype":"travel_blogger","creatorProfileVersion":"1.0.0","creatorDisclosure":{"type":"platform_virtual_creator","displayText":"平台虚拟创作者","visible":true},"experienceClaimMode":"editorial_synthesis","authorQualitySignals":{"qualityScore":0.85,"fatigueScore":0.2,"riskTier":"low"},"entityRefs":["地点/景区/甲居藏寨"],"normalizedEntityRefs":["entity:景区:甲居藏寨"],"tagRefs":["Topic/旅行"],"intersectionHints":[{"dimension":"content","source":"entityRef","tagRefs":[],"actionType":"view_object","actionTargetId":"entity:景区:甲居藏寨"},{"dimension":"interest","source":"tagRef","tagRefs":["Topic/旅行"],"actionType":"join","actionTargetId":"Topic/旅行"}],"template":"journal","generatorModel":"agent/x","articleMarkdownDigest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","publishTitle":"甲居藏寨体验","publishAngle":"体验","publishSeq":1,"sourceTaskId":"旅行/环线/川西环线/川西大环线自驾","createdAt":"2026-05-01T00:00:00Z","updatedAt":"2026-05-03T00:00:00Z","publishedAt":"2026-05-04T00:00:00Z","articleAssetManifest":{"schema":"article-asset-manifest","markdownDialect":"qwq-rich-md","articleMarkdownDigest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","documentSha256":"sha256:1111111111111111111111111111111111111111111111111111111111111111","assetManifestSha256":"sha256:2222222222222222222222222222222222222222222222222222222222222222","documentVersionSha256":"sha256:3333333333333333333333333333333333333333333333333333333333333333","assets":[{"assetId":"cover","cdnUrl":"https://img.example.com/media/cover.jpg","sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}}`)
 	writeFile(t, filepath.Join(root, "posts/article/体验/甲居藏寨体验/1/article.md"), "# 甲居藏寨体验\n正文\n")
 	writeFile(t, filepath.Join(root, "posts/article/攻略/色达攻略/1/manifest.json"),
 		`{"contentType":"article","entityRefs":["地点/景区/色达"],"tagRefs":[],"publishTitle":"色达攻略","publishAngle":"攻略","publishSeq":1,"createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z","publishedAt":"2026-04-02T00:00:00Z"}`)
@@ -35,7 +37,7 @@ func fixturePublish(t *testing.T) string {
 		`{"label":"甲居藏寨","domain":"地点","type":"景区","tagRefs":["Entity/地点/景区"],"conditionProfile":{"regions":["高原","山地"],"seasons":["夏","秋"],"altitudeMeters":3500},"sourceTaskId":"旅行/环线/川西环线/川西大环线自驾"}`)
 	writeFile(t, filepath.Join(root, "entities/地点/景区/甲居藏寨/page.md"), "# 甲居藏寨\n")
 	writeFile(t, filepath.Join(root, "entities/地点/景区/甲居藏寨/asset.refs.json"),
-		`{"assets":[{"assetId":"甲居藏寨_homepage_detail","objectKey":"media/objects/sha256/bb/bb/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png","cdnUrl":"https://img.example.com/media/objects/sha256/bb/bb/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png","sha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}`)
+		`{"assets":[{"assetId":"甲居藏寨_homepage_detail","cdnUrl":"https://img.example.com/media/homepage.png","sha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}`)
 	writeFile(t, filepath.Join(root, "entities/地点/景区/色达/_entity.json"),
 		`{"label":"色达","domain":"地点","type":"景区","tagRefs":[]}`)
 	return root
@@ -50,7 +52,6 @@ func imageManifestWithRights(status, issuesJSON, license, termsURL string) strin
 		"assets":[{
 			"assetId":"image_1",
 			"kind":"image",
-			"objectKey":"media/objects/sha256/cc/cc/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.jpg",
 			"sha256":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 			"sourceCollectionId":"collection:morning-mist",
 			"creator":"photographer-a",
@@ -122,6 +123,66 @@ func TestLoadPostsFull(t *testing.T) {
 	}
 	if p.ArticleAssetManifest.DocumentVersionSha256 == "" {
 		t.Fatalf("documentVersionSha256 not loaded: %+v", p.ArticleAssetManifest)
+	}
+}
+
+func TestLoadVideoPreservesSourceAttribution(t *testing.T) {
+	root := t.TempDir()
+	writeFile(
+		t,
+		filepath.Join(root, "posts/video/体验/西湖荷花/1/manifest.json"),
+		`{
+			"contentType":"video",
+			"entityRefs":["地点/景区/杭州西湖"],
+			"tagRefs":[],
+			"publishTitle":"西湖荷花",
+			"publishAngle":"体验",
+			"publishSeq":1,
+			"publishedAt":"2026-07-28T05:39:06Z",
+			"assets":[
+				{
+					"assetId":"video-1",
+					"kind":"video",
+					"sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					"rightsAuditStatus":"verified",
+					"rightsAuditIssues":[],
+					"posterAssetId":"poster-1"
+				},
+				{
+					"assetId":"poster-1",
+					"kind":"image",
+					"role":"cover",
+					"sha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+					"rightsAuditStatus":"verified",
+					"rightsAuditIssues":[]
+				}
+			],
+			"sourceAttribution":{
+				"isOriginal":false,
+				"originalCreatorName":"Liuxingy",
+				"platform":"Wikimedia Commons",
+				"sourcePostUrl":"https://commons.wikimedia.org/wiki/File:west-lake.webm",
+				"attributionText":"Liuxingy — CC BY-SA 4.0",
+				"rightsBasis":"CC BY-SA 4.0",
+				"publicationAdmission":"commercial_release"
+			}
+		}`,
+	)
+
+	posts, err := LoadPosts(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(posts) != 1 {
+		t.Fatalf("want one video post, got %d", len(posts))
+	}
+	attribution, ok := posts[0].SourceAttribution.(map[string]any)
+	if !ok {
+		t.Fatalf("sourceAttribution not preserved: %#v", posts[0].SourceAttribution)
+	}
+	if attribution["originalCreatorName"] != "Liuxingy" ||
+		attribution["publicationAdmission"] != "commercial_release" {
+		t.Fatalf("sourceAttribution drifted: %#v", attribution)
 	}
 }
 
@@ -354,8 +415,7 @@ func TestLoadManifestOnlyImagePost(t *testing.T) {
 		"assets":[{
 			"assetId":"image_1",
 			"kind":"image",
-			"objectKey":"media/objects/sha256/cc/cc/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.jpg",
-			"cdnUrl":"https://img.example.com/media/objects/sha256/cc/cc/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.jpg",
+			"cdnUrl":"https://img.example.com/media/image-1.jpg",
 			"sha256":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 			"mimeType":"image/jpeg",
 			"sourceCollectionId":"flickr:album:jiuzhaigou-morning",
@@ -394,7 +454,7 @@ func TestLoadManifestOnlyImagePost(t *testing.T) {
 	}
 }
 
-func TestLoadManifestOnlyImagePostAllowsUnverifiedRightsWithAuditIssue(t *testing.T) {
+func TestLoadManifestOnlyImagePostRejectsUnverifiedRightsWithAuditIssue(t *testing.T) {
 	root := t.TempDir()
 	writeFile(
 		t,
@@ -402,12 +462,11 @@ func TestLoadManifestOnlyImagePostAllowsUnverifiedRightsWithAuditIssue(t *testin
 		imageManifestWithRights("unverified", `["license evidence pending"]`, "", ""),
 	)
 
-	posts, err := LoadPosts(root, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(posts) != 1 || posts[0].Assets[0].RightsAuditStatus != "unverified" {
-		t.Fatalf("unverified audit label was not retained: %+v", posts)
+	if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(
+		err.Error(),
+		"cannot enter an immutable release",
+	) {
+		t.Fatalf("unverified image must fail closed, got %v", err)
 	}
 }
 
@@ -419,7 +478,7 @@ func TestLoadManifestOnlyImagePostRejectsUnverifiedRightsWithoutIssue(t *testing
 		imageManifestWithRights("unverified", `[]`, "", ""),
 	)
 
-	if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(err.Error(), "missing audit issues") {
+	if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(err.Error(), "cannot enter an immutable release") {
 		t.Fatalf("unverified image without audit issue must fail, got %v", err)
 	}
 }
@@ -434,6 +493,34 @@ func TestLoadManifestOnlyImagePostRejectsVerifiedRightsWithoutProof(t *testing.T
 
 	if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(err.Error(), "missing license or proof") {
 		t.Fatalf("verified image without proof must fail, got %v", err)
+	}
+}
+
+func TestLoadPostRejectsPrivateObjectKey(t *testing.T) {
+	root := t.TempDir()
+	manifest := imageManifestWithRights(
+		"verified",
+		`[]`,
+		"CC BY 4.0",
+		"https://creativecommons.org/licenses/by/4.0/",
+	)
+	manifest = strings.Replace(
+		manifest,
+		`"assetId":"image_1",`,
+		`"assetId":"image_1","objectKey":"media/objects/sha256/cc/cc/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.jpg",`,
+		1,
+	)
+	writeFile(
+		t,
+		filepath.Join(root, "posts/image/摄影/晨雾/1/manifest.json"),
+		manifest,
+	)
+
+	if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(
+		err.Error(),
+		"must not expose private objectKey",
+	) {
+		t.Fatalf("private objectKey must fail closed, got %v", err)
 	}
 }
 
@@ -452,8 +539,9 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 		"assets":[{
 			"assetId":"clip",
 			"kind":"video",
-			"objectKey":"media/objects/sha256/dd/dd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.mp4",
 			"sha256":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+			"rightsAuditStatus":"verified",
+			"rightsAuditIssues":[],
 			"mimeType":"video/mp4",
 			"posterAssetId":"poster",
 			"coverStrategy":"manual",
@@ -465,8 +553,9 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 			"assetId":"poster",
 			"kind":"image",
 			"role":"cover",
-			"objectKey":"media/objects/sha256/ee/ee/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.webp",
 			"sha256":"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+			"rightsAuditStatus":"verified",
+			"rightsAuditIssues":[],
 			"mimeType":"image/webp",
 			"width":1080,
 			"height":1920
@@ -484,7 +573,36 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 	if post.ContentType != "video" || len(post.Assets) != 2 {
 		t.Fatalf("video manifest not loaded: %+v", post)
 	}
-	if err := BindPostAssetURLs(posts, "https://video.example.com/media"); err != nil {
+	releaseAssets := map[string]ReleaseMediaAsset{
+		"clip": {
+			AssetID: "clip", Kind: "video", Version: 1, ContentType: "video/mp4",
+			PublicSliceKey: runtimemedia.BuildContentMediaPublicSliceKey(
+				"video", "clip", 1, "video/mp4",
+			),
+			SHA256:             "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+			Bytes:              1,
+			OwnerRefs:          []string{"posts/video/旅行/雪山视频/1"},
+			RightsSnapshotRefs: []string{"objects/posts/video/旅行/雪山视频/1/rights_snapshots/video.json"},
+		},
+		"poster": {
+			AssetID: "poster", Kind: "image", Version: 1, ContentType: "image/webp",
+			PublicSliceKey: runtimemedia.BuildContentMediaPublicSliceKey(
+				"image", "poster", 1, "image/webp",
+			),
+			SHA256:             "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+			Bytes:              1,
+			OwnerRefs:          []string{"posts/video/旅行/雪山视频/1"},
+			RightsSnapshotRefs: []string{"objects/posts/video/旅行/雪山视频/1/rights_snapshots/poster.json"},
+		},
+	}
+	if err := BindPostAssetURLs(
+		posts,
+		releaseAssets,
+		runtimemedia.MediaDeliveryBases{
+			Image: "https://image.example.com",
+			Video: "https://video.example.com",
+		},
+	); err != nil {
 		t.Fatal(err)
 	}
 	post = posts[0]
@@ -492,6 +610,13 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 	poster := post.Assets[1]
 	if asset.ThumbnailURL != poster.CDNURL || asset.CoverURL != poster.CDNURL {
 		t.Fatalf("video cover fields not loaded: %+v", asset)
+	}
+	if asset.ObjectKey != "" || poster.ObjectKey != "" ||
+		!strings.HasPrefix(asset.CDNURL, "https://video.example.com/") ||
+		!strings.HasPrefix(poster.CDNURL, "https://image.example.com/") ||
+		!strings.Contains(asset.CDNURL, "/media/video/s/asset/clip/v1/source.mp4") ||
+		!strings.Contains(poster.CDNURL, "/media/image/s/asset/poster/v1/source.webp") {
+		t.Fatalf("importer must consume public slices without retaining CAS keys: %+v %+v", asset, poster)
 	}
 	if asset.CoverStrategy != "manual" || asset.CoverFrameTimeMs != 0 || asset.DurationMs != 12000 {
 		t.Fatalf("video cover strategy/duration wrong: %+v", asset)
@@ -513,6 +638,14 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 	if media.MediaItems[0]["coverFrameTimeMs"] != int64(0) {
 		t.Fatalf("media item must preserve first-frame coverFrameTimeMs=0: %+v", media.MediaItems[0])
 	}
+	publicPayload, err := json.Marshal(media)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(publicPayload), "objectKey") ||
+		strings.Contains(string(publicPayload), "objects/sha256") {
+		t.Fatalf("public post media fields leaked private CAS identity: %s", publicPayload)
+	}
 }
 
 func TestBindPostAssetURLsRejectsAmbiguousBaseURL(t *testing.T) {
@@ -530,15 +663,168 @@ func TestBindPostAssetURLsRejectsAmbiguousBaseURL(t *testing.T) {
 		"https://media.example.com/root?token=secret",
 		"https://media.example.com/root#fragment",
 	} {
-		if err := BindPostAssetURLs(posts, base); err == nil {
+		if err := BindPostAssetURLs(
+			posts,
+			nil,
+			runtimemedia.MediaDeliveryBases{Image: base},
+		); err == nil {
 			t.Fatalf("ambiguous media base %q must fail closed", base)
 		}
 	}
 }
 
 func TestBindPostAssetURLsAllowsEmptyBaselineWithoutMediaBase(t *testing.T) {
-	if err := BindPostAssetURLs(nil, ""); err != nil {
+	if err := BindPostAssetURLs(nil, nil, runtimemedia.MediaDeliveryBases{}); err != nil {
 		t.Fatalf("empty baseline must not require a media base: %v", err)
+	}
+}
+
+func TestBindPostAssetURLsRejectsIdentityOwnerAndRightsDrift(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*AssetManifestItem, *ReleaseMediaAsset)
+	}{
+		{
+			name: "kind",
+			mutate: func(asset *AssetManifestItem, _ *ReleaseMediaAsset) {
+				asset.Kind = "video"
+			},
+		},
+		{
+			name: "sha256",
+			mutate: func(asset *AssetManifestItem, _ *ReleaseMediaAsset) {
+				asset.Sha256 = "sha256:" + strings.Repeat("b", 64)
+			},
+		},
+		{
+			name: "owner",
+			mutate: func(_ *AssetManifestItem, authority *ReleaseMediaAsset) {
+				authority.OwnerRefs = []string{"posts/image/旅行/其他/1"}
+			},
+		},
+		{
+			name: "rights",
+			mutate: func(_ *AssetManifestItem, authority *ReleaseMediaAsset) {
+				authority.RightsSnapshotRefs =
+					[]string{"objects/posts/image/旅行/其他/1/rights_snapshots/image.json"}
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			asset := AssetManifestItem{
+				AssetID: "cover",
+				Kind:    "image",
+				Sha256:  "sha256:" + strings.Repeat("a", 64),
+			}
+			authority := ReleaseMediaAsset{
+				AssetID:     "cover",
+				Kind:        "image",
+				Version:     1,
+				ContentType: "image/jpeg",
+				PublicSliceKey: runtimemedia.BuildContentMediaPublicSliceKey(
+					"image", "cover", 1, "image/jpeg",
+				),
+				SHA256:    "sha256:" + strings.Repeat("a", 64),
+				Bytes:     1,
+				OwnerRefs: []string{"posts/image/旅行/封面/1"},
+				RightsSnapshotRefs: []string{
+					"objects/posts/image/旅行/封面/1/rights_snapshots/image.json",
+				},
+			}
+			test.mutate(&asset, &authority)
+			err := BindPostAssetURLs(
+				[]PostDoc{{
+					PostRef: "posts/image/旅行/封面/1",
+					Assets:  []AssetManifestItem{asset},
+				}},
+				map[string]ReleaseMediaAsset{"cover": authority},
+				runtimemedia.MediaDeliveryBases{Image: "https://image.example.com"},
+			)
+			if err == nil {
+				t.Fatalf("%s drift must fail closed", test.name)
+			}
+		})
+	}
+}
+
+func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t *testing.T) {
+	releaseRoot := t.TempDir()
+	path := filepath.Join(releaseRoot, "payload/media_manifest.json")
+	validDocument := `{
+		"schema":"quwoquan_data.release_media_manifest",
+		"releaseId":"release-a",
+		"sourceOwner":"qwq_data",
+		"assets":[{
+			"assetId":"杭州西湖_cover_三潭印月",
+			"kind":"image",
+			"version":1,
+			"contentType":"image/jpeg",
+			"publicSliceKey":"` + runtimemedia.BuildContentMediaPublicSliceKey(
+		"image", "杭州西湖_cover_三潭印月", 1, "image/jpeg",
+	) + `",
+			"sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			"bytes":12,
+			"ownerRefs":["posts/image/画报/杭州西湖/1"],
+			"rightsSnapshotRefs":["objects/posts/image/画报/杭州西湖/1/rights_snapshots/a.json"]
+		}],
+		"issues":[],
+		"counts":{"assets":1,"issues":0}
+	}`
+	writeFile(t, path, validDocument)
+	assets, err := LoadReleaseMediaAssets(releaseRoot, "release-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(assets) != 1 || strings.Contains(assets["杭州西湖_cover_三潭印月"].PublicSliceKey, "objects/") {
+		t.Fatalf("release media authority not loaded: %+v", assets)
+	}
+	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-b"); err == nil {
+		t.Fatal("release media manifest with a mismatched releaseId must fail closed")
+	}
+
+	privateDocument := []byte(strings.Replace(
+		validDocument,
+		`"publicSliceKey":`,
+		`"objectKey":"media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg","publicSliceKey":`,
+		1,
+	))
+	if err := os.WriteFile(path, privateDocument, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-a"); err == nil {
+		t.Fatal("release media manifest exposing objectKey must fail closed")
+	}
+
+	var duplicateDocument map[string]any
+	if err := json.Unmarshal([]byte(validDocument), &duplicateDocument); err != nil {
+		t.Fatal(err)
+	}
+	rows := duplicateDocument["assets"].([]any)
+	duplicate := make(map[string]any, len(rows[0].(map[string]any)))
+	for key, value := range rows[0].(map[string]any) {
+		duplicate[key] = value
+	}
+	duplicate["assetId"] = "other-asset"
+	duplicateDocument["assets"] = append(rows, duplicate)
+	duplicateDocument["counts"].(map[string]any)["assets"] = float64(2)
+	raw, err := json.Marshal(duplicateDocument)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-a"); err == nil {
+		t.Fatal("two assets sharing one public slice must fail closed")
+	}
+
+	kindDrift := strings.Replace(validDocument, `"kind":"image"`, `"kind":"video"`, 1)
+	if err := os.WriteFile(path, []byte(kindDrift), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-a"); err == nil {
+		t.Fatal("MediaAsset kind/contentType drift must fail closed")
 	}
 }
 

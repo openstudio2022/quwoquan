@@ -8,7 +8,7 @@
 
 ## 1. 用户价值
 
-作为开发、测试或运维角色，我希望建立“搜索引擎 -> 公开 HTML 内容页 -> PC 精美内容浏览 -> 轻社交/搜索 -> 安装 App 转化”的公开内容 Web 入口闭环。Web PC 是公开内容和搜索引擎引流入口，不是完整 App 复制品，从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
+作为无法进入原生应用或从站外访问的用户，我希望在官方 Web 中完成登录、浏览、互动和发布等核心任务，并获得与设备匹配的可信安装入口，从而不因原生故障中断使用，也不下载第三方或不可安装的软件包。
 
 ## 2. 范围与非目标
 
@@ -20,13 +20,14 @@
 - public HTML 服务最小闭环（post/circle/user/entity_homepage 四类对象的可索引 HTML envelope）。
 - robots.txt、分类型 sitemap.xml、canonical、OG/Twitter card、JSON-LD、noindex 权限过滤。
 - open / s/{token} 智能中转页 UA 分流合同与安装转化埋点。
-- PC 内容优先体验与安装转化规格。
-- 通用官网下载页自动识别 iOS、Android/鸿蒙或桌面；Android 从趣我圈官方 HTTPS CDN 下载已签名 APK，iOS 只进入 App Store。
+- 响应式 Web/PWA 的登录、会话恢复、首页、圈子、搜索、详情、主页、发布、互动、聊天以及浏览器能力允许的通话、推送降级。
+- 顶部安装横幅与通用官网下载页按可信平台提示推荐内容；Android 从趣我圈官方 HTTPS CDN 下载已签名 APK，公众 iOS 使用可添加到主屏幕的 PWA。
+- Alpha、Beta、Gamma、Prod 分别使用 `alpha.quwoquan.com`、`beta.quwoquan.com`、`gamma.quwoquan.com`、`quwoquan.com`，页面和静态资源均以 UTF-8 响应；浏览器 API 统一走同源 `/api` 反代，不以 User-Agent 或其他请求头切换产品入口。
 
 ### Out of Scope
 
-- 完整 PC masonry 首页实现。
-- 创作、私信、RTC 的桌面化实现。
+- 原生 CallKit、系统级后台通话或绕过浏览器权限模型的能力。
+- 公众 iOS IPA、静默安装、第三方应用商店和长期 Token URL 传递。
 
 ## 3. 行为要求
 
@@ -66,8 +67,11 @@
 - URL path 结构来自 `quwoquan_service/contracts/metadata/_shared/link_templates.yaml`，禁止 Web 层手写第二套 `/post/...`。
 - Markdown parser 已禁止任意 HTML；renderer 仍必须对全部文本做 HTML escape。
 - 下载地址走 `CloudRuntimeConfig` + `--dart-define`，禁止组件硬编码（rule R28）。
-- 官网下载页和客户端恢复页必须读取同一 `app_release` 发布事实；User-Agent 只决定平台入口，是否最新只由显式 `platform + appVersion + buildNumber` 查询决定。
+- 官网下载页和客户端恢复页必须读取同一 `app_release` 发布事实；显式选择优先于 Client Hint 和 User-Agent，平台识别只决定推荐内容，是否最新只由显式 `platform + appVersion + buildNumber` 查询决定。
 - Android 下载不得指向第三方应用商店或可变同名 APK；正式 APK 必须经生产签名、包名、Build、证书摘要和 SHA-256 门禁后发布到不可变官方 CDN 对象。
+- Android 二进制下载只能由用户明确点击触发；iOS 安装动作只展示 Safari“添加到主屏幕”指引，standalone 模式隐藏安装横幅。
+- Web 首屏必须声明 `lang="zh-CN"`、首部 UTF-8 charset、系统中文字体回退栈；HTML 响应必须使用 `text/html; charset=utf-8`，正文不得套用 icon font。
+- Web 启动等待超时不得生成致命恢复事实或“重试”页面；只有捕获到的不可恢复异常才能进入恢复状态机。
 
 ## 4. 契约引用
 
@@ -115,7 +119,9 @@
 
 - GIVEN 用户在手机 Web 或 PC Web 浏览任一对象公开页。
 - WHEN 用户触发安装/下载/扫码入口。
-- THEN 手机 Web 直接下载并兜底；PC Web 提供多平台安装入口 + 扫码 + 分享到手机/微信。
+- THEN Android 手机 Web 明确点击后下载正式签名 APK。
+- THEN iOS 手机 Web 展示 PWA 安装指引。
+- THEN PC Web 并列提供 Android 下载和 iOS PWA 指引。
 - THEN 下载地址来自 CloudRuntimeConfig，不硬编码。
 
 ## 6. 依赖
@@ -152,3 +158,12 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：安装转化组件测试覆盖手机/PC 两形态与下载地址注入。
 - 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-004"></a>
+### OPEN-004 完整 Web 与四环境公网证据
+
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：仓内已有响应式 Flutter Web 主 Shell 和核心业务路由，但尚缺四环境 DNS/TLS、真实同源 API、Safari/Android 浏览器、PWA 安装、Web Push/RTC 与完整业务矩阵的公网证据。
+- 完成判定：Alpha/Beta/Gamma/Prod 分别通过 UTF-8、登录、浏览、发布、互动、聊天、PWA 安装、Android 下载横幅和同源 API 的 `api_integration` 与 `user_acceptance`；缺项必须保留明确降级，不得宣称完整等价。

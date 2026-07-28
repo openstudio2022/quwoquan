@@ -9,7 +9,7 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
@@ -73,7 +73,7 @@ void main() {
       // 池真相源：home_feed_core.featuredFeedPostIds（与云侧 rm_premium_pool
       // 物化集合、alpha runner adapter 同判定）；数据工程直供兜底。
       final rawPool =
-          alphaFixtureSeedReader.contentSeedSet(
+          objectScenarioSeedReader.contentSeedSet(
                 'home_feed_core',
               )?['featuredFeedPostIds']
               as List?;

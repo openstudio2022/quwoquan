@@ -10,7 +10,9 @@ import (
 
 	confighttp "quwoquan_service/control-plane/platform-ops/internal/ops/platform_ops/config_snapshot/adapters/inbound/http/config_layer"
 	configapp "quwoquan_service/control-plane/platform-ops/internal/ops/platform_ops/config_snapshot/application/platform_ops/config_layer"
+	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/controlplane"
+	"quwoquan_service/runtime/operation"
 )
 
 // seedSnapshotRepo 构造仓库模式的最小配置树：
@@ -109,6 +111,46 @@ func TestConfigSnapshotResolveUsesReleasePackageOverrides(t *testing.T) {
 	handler.ServeHTTP(missingEnv, httptest.NewRequest(http.MethodGet, "/control-plane/platform/configs/resolve", nil))
 	if missingEnv.Code != http.StatusBadRequest {
 		t.Fatalf("resolve without env status=%d want 400", missingEnv.Code)
+	}
+}
+
+func TestInstanceResolveBindsServiceAndEnvironmentToMachinePrincipal(t *testing.T) {
+	handler := newSnapshotHandler(t, seedSnapshotRepo(t))
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/control-plane/platform/configs/resolve-for-instance?env=gamma&service=content-service",
+		nil,
+	)
+	request = request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
+		Claims: rtauth.Claims{Roles: []string{"service"}},
+		Actor:  operation.ActorContext{AccountID: "service:content-service@gamma"},
+	}))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("machine resolve status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	for _, query := range []string{
+		"env=prod&service=content-service",
+		"env=gamma&service=other-service",
+	} {
+		t.Run(query, func(t *testing.T) {
+			forged := httptest.NewRequest(
+				http.MethodGet,
+				"/control-plane/platform/configs/resolve-for-instance?"+query,
+				nil,
+			)
+			forged = forged.WithContext(rtauth.WithPrincipal(forged.Context(), rtauth.Principal{
+				Claims: rtauth.Claims{Roles: []string{"service"}},
+				Actor:  operation.ActorContext{AccountID: "service:content-service@gamma"},
+			}))
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, forged)
+			if response.Code == http.StatusOK {
+				t.Fatalf("forged machine scope must be rejected: %s", response.Body.String())
+			}
+		})
 	}
 }
 

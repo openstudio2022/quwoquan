@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -85,7 +86,7 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
         return;
       }
       setState(() => _localAddState = ContactAddState.added);
-      AppToast.show(context, UITextConstants.addContactConfirmedToast);
+      AppToast.show(context, ContactText.addContactConfirmedToast);
       unawaited(
         ref
             .read(journeyEventTrackerProvider)
@@ -127,13 +128,13 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
   String get _sourceLabel {
     switch (widget.source) {
       case 'scan':
-        return UITextConstants.addContactConfirmSourceScan;
+        return ContactText.addContactConfirmSourceScan;
       case 'phone':
-        return UITextConstants.addContactConfirmSourcePhone;
+        return ContactText.addContactConfirmSourcePhone;
       case 'search':
-        return UITextConstants.addContactConfirmSourceSearch;
+        return ContactText.addContactConfirmSourceSearch;
       case 'qr':
-        return UITextConstants.addContactConfirmSourceQr;
+        return ContactText.addContactConfirmSourceQr;
       default:
         return '';
     }
@@ -157,7 +158,7 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
           },
         ),
         middle: Text(
-          UITextConstants.addContactSheetTitle,
+          ContactText.addContactSheetTitle,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
       ),
@@ -180,7 +181,7 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
             );
           }
           if (!snapshot.hasData) {
-            return const Center(child: CupertinoActivityIndicator());
+            return AppRequestFeedback.section();
           }
           return _buildBody(context, snapshot.data!);
         },
@@ -223,7 +224,7 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
             if (handle.isNotEmpty) ...<Widget>[
               SizedBox(height: AppSpacing.intraGroupXs),
               Text(
-                '${UITextConstants.editProfileQuwoquanIdLabel}: $handle',
+                '${ProfileText.editProfileQuwoquanIdLabel}: $handle',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: AppTypography.iosFootnote,
@@ -328,10 +329,10 @@ class _PrimaryButton extends StatelessWidget {
     final isAdded = addState == ContactAddState.added;
     final isSelf = addState == ContactAddState.isSelf;
     final label = switch (addState) {
-      ContactAddState.added => UITextConstants.contactAlreadyAdded,
-      ContactAddState.canFollowBack => UITextConstants.contactAddBack,
-      ContactAddState.isSelf => UITextConstants.contactAlreadyAdded,
-      _ => UITextConstants.addContactSheetTitle,
+      ContactAddState.added => ContactText.contactAlreadyAdded,
+      ContactAddState.canFollowBack => ContactText.contactAddBack,
+      ContactAddState.isSelf => ContactText.contactAlreadyAdded,
+      _ => ContactText.addContactSheetTitle,
     };
     return SizedBox(
       width: double.infinity,
@@ -342,7 +343,7 @@ class _PrimaryButton extends StatelessWidget {
             : AppColors.iosAccent(context),
         onPressed: (isAdded || isSelf || pending) ? null : onAdd,
         child: pending
-            ? const CupertinoActivityIndicator()
+            ? AppRequestFeedback.inline()
             : Text(
                 label,
                 style: TextStyle(

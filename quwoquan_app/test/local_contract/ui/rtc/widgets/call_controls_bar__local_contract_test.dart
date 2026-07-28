@@ -61,8 +61,8 @@ void main() {
       expect(find.byIcon(CupertinoIcons.mic), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.video_camera), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.switch_camera), findsOneWidget);
-      expect(find.text(UITextConstants.callShareScreen), findsOneWidget);
-      expect(find.text(UITextConstants.callLockControls), findsOneWidget);
+      expect(find.text(CallText.callShareScreen), findsOneWidget);
+      expect(find.text(CallText.callLockControls), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.person_add), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.speaker_1), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.phone_down_fill), findsOneWidget);
@@ -85,14 +85,14 @@ void main() {
       await tester.pumpWidget(_buildBar());
       await tester.pump();
 
-      expect(find.text(UITextConstants.callHangup), findsOneWidget);
+      expect(find.text(CallText.callHangup), findsOneWidget);
     });
 
     testWidgets('静音按钮默认显示 "静音"', (tester) async {
       await tester.pumpWidget(_buildBar());
       await tester.pump();
 
-      expect(find.text(UITextConstants.callMute), findsOneWidget);
+      expect(find.text(CallText.callMute), findsOneWidget);
     });
   });
 
@@ -127,7 +127,7 @@ void main() {
       await tester.pump();
 
       expect(find.byIcon(CupertinoIcons.switch_camera), findsOneWidget);
-      expect(find.text(UITextConstants.callFlipCamera), findsOneWidget);
+      expect(find.text(CallText.callFlipCamera), findsOneWidget);
     });
 
     testWidgets('屏幕共享入口调用 provider start/stop', (tester) async {
@@ -136,7 +136,7 @@ void main() {
         _buildBar(callSessionNotifier: () => startNotifier),
       );
       await tester.pump();
-      await tester.tap(find.text(UITextConstants.callShareScreen));
+      await tester.tap(find.text(CallText.callShareScreen));
       await tester.pump();
       expect(startNotifier.startCount, 1);
 
@@ -146,7 +146,7 @@ void main() {
         _buildBar(callSessionNotifier: () => stopNotifier),
       );
       await tester.pump();
-      await tester.tap(find.text(UITextConstants.callStopScreenSharing));
+      await tester.tap(find.text(CallText.callStopScreenSharing));
       await tester.pump();
       expect(stopNotifier.stopCount, 1);
     });
@@ -161,13 +161,13 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text(UITextConstants.callUnlockControls), findsOneWidget);
-      expect(find.text(UITextConstants.callHangup), findsNothing);
-      expect(find.text(UITextConstants.callMute), findsNothing);
-      expect(find.text(UITextConstants.callInvite), findsNothing);
-      expect(find.text(UITextConstants.callShareScreen), findsNothing);
+      expect(find.text(CallText.callUnlockControls), findsOneWidget);
+      expect(find.text(CallText.callHangup), findsNothing);
+      expect(find.text(CallText.callMute), findsNothing);
+      expect(find.text(CallText.callInvite), findsNothing);
+      expect(find.text(CallText.callShareScreen), findsNothing);
 
-      await tester.tap(find.text(UITextConstants.callUnlockControls));
+      await tester.tap(find.text(CallText.callUnlockControls));
       await tester.pump();
       expect(toggleCount, 1);
     });
@@ -201,7 +201,7 @@ void main() {
       await tester.pumpWidget(_buildBar(callType: CallType.audio));
       await tester.pump();
 
-      expect(find.text(UITextConstants.callEnableVideo), findsNothing);
+      expect(find.text(CallText.callEnableVideo), findsNothing);
     });
   });
 }

@@ -60,7 +60,7 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
               borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
             ),
             child: Text(
-              '$label ${UITextConstants.noData}',
+              '$label ${CommunityText.noData}',
               style: TextStyle(
                 fontSize: AppTypography.iosSubheadline,
                 color: fgSecondary,
@@ -94,7 +94,7 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
           final title = entry.title;
           final body = entry.bodyText;
           final authorName = entry.authorDisplayName.isEmpty
-              ? UITextConstants.unknownUser
+              ? FoundationText.unknownUser
               : entry.authorDisplayName;
           final coverUrl = entry.coverUrl;
           final avatarUrl = entry.authorAvatarUrl;

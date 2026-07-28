@@ -140,7 +140,11 @@ Offset resolveBackwardVisualReplayCanonicalPoint({
   final visualX = (-pageWidth + 2 * pageWidth * visualProgress)
       .clamp(-pageWidth, maxVisualX)
       .toDouble();
-  return Offset(visualX, localPagePoint.dy);
+  // The semantic drag can leave the page vertically while a finger settles at
+  // the edge. The forward-isomorphic calculation must stay on the same side
+  // of that edge; otherwise its angle changes sign and the moving sheet jumps.
+  final visualY = localPagePoint.dy.clamp(0.0, pageHeight).toDouble();
+  return Offset(visualX, visualY);
 }
 
 Offset resolveBackwardForwardCanonicalPoint({

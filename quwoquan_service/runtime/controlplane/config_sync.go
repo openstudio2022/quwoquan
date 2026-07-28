@@ -21,22 +21,72 @@ type RateLimitSetter interface {
 }
 
 type ConfigSyncLoopOptions struct {
-	BaseURL       string
-	ServiceName   string
-	AppEnv        string
-	ClusterName   string
-	ConfigRoot    string
-	ConfigVersion string
-	ImageVersion  string
-	InstanceID    string
-	HotStore      *HotConfigStore
-	RateLimiter   RateLimitSetter
+	BaseURL               string
+	ServiceName           string
+	AppEnv                string
+	ClusterName           string
+	ConfigRoot            string
+	ConfigVersion         string
+	ImageVersion          string
+	ReleaseManifestDigest string
+	InstanceID            string
+	HotStore              *HotConfigStore
+	RateLimiter           RateLimitSetter
+}
+
+// StartReleaseConfigAttestation 启动已在本进程完成 config load + validation 后的
+// 配置 ACK。无 HotStore 的服务只允许用它证明不可热更的发布包配置已在启动期读取；
+// 需要热配置的服务必须传入 HotStore，由 Apply 的结果作为 effectiveHash。
+func StartReleaseConfigAttestation(
+	serviceName string,
+	appEnv string,
+	configRoot string,
+	configVersion string,
+	imageVersion string,
+) {
+	instanceID := strings.TrimSpace(os.Getenv("SERVICE_INSTANCE_ID"))
+	if instanceID == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			panic("controlplane config ACK instance identity: " + err.Error())
+		}
+		instanceID = strings.TrimSpace(hostname)
+	}
+	baseURL := strings.TrimSpace(os.Getenv("PLATFORM_OPS_BASE_URL"))
+	if baseURL == "" {
+		if isProductionConfigSyncEnvironment(appEnv) {
+			panic("controlplane config ACK requires PLATFORM_OPS_BASE_URL in prod")
+		}
+		log.Printf(
+			"WARN: controlplane config ACK disabled: PLATFORM_OPS_BASE_URL is empty (service=%s env=%s)",
+			serviceName,
+			appEnv,
+		)
+		return
+	}
+	go RunConfigSyncLoop(ConfigSyncLoopOptions{
+		BaseURL:               baseURL,
+		ServiceName:           serviceName,
+		AppEnv:                appEnv,
+		ClusterName:           strings.TrimSpace(os.Getenv("CLUSTER_NAME")),
+		ConfigRoot:            configRoot,
+		ConfigVersion:         configVersion,
+		ImageVersion:          imageVersion,
+		ReleaseManifestDigest: strings.TrimSpace(os.Getenv("RELEASE_MANIFEST_DIGEST")),
+		InstanceID:            instanceID,
+	})
 }
 
 func RunConfigSyncLoop(opts ConfigSyncLoopOptions) {
 	baseURL := strings.TrimSpace(opts.BaseURL)
 	if baseURL == "" {
+		if isProductionConfigSyncEnvironment(opts.AppEnv) {
+			panic("controlplane config sync requires PLATFORM_OPS_BASE_URL in prod")
+		}
 		return
+	}
+	if strings.TrimSpace(opts.ClusterName) == "" {
+		opts.ClusterName = strings.TrimSpace(opts.AppEnv) + "-control-a"
 	}
 
 	authorization, err := newConfigSyncServiceAuthorization(opts)
@@ -121,17 +171,18 @@ func RunConfigSyncLoop(opts ConfigSyncLoopOptions) {
 		applyRuntimeSettings()
 
 		report := InstanceConfigReport{
-			ID:            opts.InstanceID,
-			Environment:   opts.AppEnv,
-			Cluster:       opts.ClusterName,
-			Service:       opts.ServiceName,
-			InstanceID:    opts.InstanceID,
-			ConfigVersion: opts.ConfigVersion,
-			ImageVersion:  opts.ImageVersion,
-			DesiredHash:   response.DesiredHash,
-			EffectiveHash: effectiveHash,
-			InSync:        response.DesiredHash == effectiveHash,
-			Source:        source,
+			ID:                    opts.InstanceID,
+			Environment:           opts.AppEnv,
+			Cluster:               opts.ClusterName,
+			Service:               opts.ServiceName,
+			InstanceID:            opts.InstanceID,
+			ConfigVersion:         opts.ConfigVersion,
+			ImageVersion:          opts.ImageVersion,
+			ReleaseManifestDigest: opts.ReleaseManifestDigest,
+			DesiredHash:           response.DesiredHash,
+			EffectiveHash:         effectiveHash,
+			InSync:                response.DesiredHash == effectiveHash,
+			Source:                source,
 		}
 		if report.ID == "" {
 			report.ID = opts.ServiceName

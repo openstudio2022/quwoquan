@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/errors/app_user_recovery.dart';
+import 'package:quwoquan_app/core/errors/ui_error_models.dart';
 import 'package:quwoquan_app/core/media/media_candidate_failure.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
@@ -76,6 +77,7 @@ class MediaPlaybackFailure {
         MediaCandidateFailureKind.http5xx,
         MediaCandidateFailureKind.networkUnavailable,
         MediaCandidateFailureKind.controllerSlotTimeout,
+        MediaCandidateFailureKind.initializationTimeout,
         MediaCandidateFailureKind.noPlayableSource,
         MediaCandidateFailureKind.certificateVerifyFailed,
         MediaCandidateFailureKind.handshakeTerminated,
@@ -98,6 +100,19 @@ class MediaPlaybackFailure {
       MediaCandidateFailureKind.decoderInitialization =>
         VideoPlaybackUserScene.unsupported,
       _ => VideoPlaybackUserScene.temporary,
+    };
+  }
+
+  AppUserRecoveryGroup get userRecoveryGroup {
+    return switch (kind) {
+      MediaCandidateFailureKind.networkUnavailable =>
+        AppUserRecoveryGroup.connectNetwork,
+      MediaCandidateFailureKind.http404 ||
+      MediaCandidateFailureKind.http4xx ||
+      MediaCandidateFailureKind.decoderInitialization ||
+      MediaCandidateFailureKind.noPlayableSource =>
+        AppUserRecoveryGroup.contentUnavailable,
+      _ => AppUserRecoveryGroup.reloadLater,
     };
   }
 
@@ -162,7 +177,8 @@ class MediaPlaybackFailure {
   }
 
   bool get isRetryable =>
-      recoveryDecision.action == RuntimeRecoveryAction.retry;
+      userRecoveryGroup == AppUserRecoveryGroup.connectNetwork ||
+      userRecoveryGroup == AppUserRecoveryGroup.reloadLater;
 
   bool get shouldNegativeCache {
     return kind == MediaCandidateFailureKind.http404 ||
@@ -170,25 +186,11 @@ class MediaPlaybackFailure {
   }
 
   VideoPlaybackCopy get copy {
-    return switch (userScene) {
-      VideoPlaybackUserScene.network => const VideoPlaybackCopy(
-        title: UITextConstants.videoPlaybackNetworkTitle,
-      ),
-      VideoPlaybackUserScene.temporary => const VideoPlaybackCopy(
-        title: UITextConstants.videoPlaybackTemporaryTitle,
-      ),
-      VideoPlaybackUserScene.busy => const VideoPlaybackCopy(
-        title: UITextConstants.videoPlaybackTemporaryTitle,
-      ),
-      VideoPlaybackUserScene.unavailable => const VideoPlaybackCopy(
-        title: UITextConstants.videoPlaybackUnavailableTitle,
-        message: UITextConstants.videoPlaybackUnavailableMessage,
-      ),
-      VideoPlaybackUserScene.unsupported => const VideoPlaybackCopy(
-        title: UITextConstants.videoPlaybackUnsupportedTitle,
-        message: UITextConstants.videoPlaybackUnsupportedMessage,
-      ),
-    };
+    final recoveryCopy = AppUserRecoveryContract.copyFor(userRecoveryGroup);
+    return VideoPlaybackCopy(
+      title: recoveryCopy.title,
+      message: recoveryCopy.message,
+    );
   }
 
   RuntimeFailureKind get _runtimeFailureKind {

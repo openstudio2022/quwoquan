@@ -11,6 +11,10 @@ from typing import Any, Iterable, Mapping
 from core.control_types import TargetSelector
 from core.io import read_json
 from content.source.contracts import QualifiedHomepageSource
+from governance.coverage.admin_entity_catalog import (
+    ADMIN_REGION_REFERENCE_PATH,
+    admin_entity_partitions,
+)
 
 # 主清单 leaf → coverageTarget 契约字段透传集（task_spec.schema.json coverageTargets 同口径）。
 _MASTER_LIST_LIST_FIELDS = ("geoTagRefs", "typeTagRefs", "aliases")
@@ -53,6 +57,9 @@ def load_partitions(path: Path) -> list[dict[str, Any]]:
         if not partitions:
             raise ValueError(f"{path}: 主清单文件未发现任何区县分组（districts/leaves）")
         return partitions
+    if path.resolve() == ADMIN_REGION_REFERENCE_PATH.resolve():
+        # 全国行政实体无需物化 3000+ YAML；直接消费 pca + taxonomy 的只读投影。
+        return admin_entity_partitions(pca_path=path)
     data = read_json(path)
     rows = data.get("partitions") if isinstance(data, dict) else []
     if not isinstance(rows, list):

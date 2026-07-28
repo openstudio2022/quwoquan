@@ -3,10 +3,13 @@ part of 'homepage_status_report_page.dart';
 class _HomepageStatusReportPageState
     extends ConsumerState<HomepageStatusReportPage> {
   static const List<(String, String)> _reasons = <(String, String)>[
-    ('offline', UITextConstants.homepageStatusReportReasonOffline),
-    ('incorrect_info', UITextConstants.homepageStatusReportReasonIncorrectInfo),
-    ('duplicate_entry', UITextConstants.homepageStatusReportReasonDuplicate),
-    ('inactive', UITextConstants.homepageStatusReportReasonInactive),
+    ('offline', ObjectHomepageText.homepageStatusReportReasonOffline),
+    (
+      'incorrect_info',
+      ObjectHomepageText.homepageStatusReportReasonIncorrectInfo,
+    ),
+    ('duplicate_entry', ObjectHomepageText.homepageStatusReportReasonDuplicate),
+    ('inactive', ObjectHomepageText.homepageStatusReportReasonInactive),
   ];
 
   final TextEditingController _descriptionController = TextEditingController();
@@ -57,12 +60,12 @@ class _HomepageStatusReportPageState
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     if (_pageErrorSemantic != null && !_isLoading) {
       return IosSelectionPageScaffold(
-        title: UITextConstants.homepageStatusReportAction,
+        title: ObjectHomepageText.homepageStatusReportAction,
         onBack: _handleCloseRequest,
         leadingStyle: IosSelectionHeaderLeadingStyle.close,
         backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
         body: AppPageErrorState(
-          semantic: _pageErrorSemantic!,
+          semantic: ensureRetryUiErrorSemantic(_pageErrorSemantic!),
           onAction: _handlePageErrorAction,
         ),
       );
@@ -70,7 +73,7 @@ class _HomepageStatusReportPageState
     final canSubmit =
         !_isLoading && !_isSubmitting && (_detail?.status ?? '') != 'offline';
     return IosSelectionPageScaffold(
-      title: UITextConstants.homepageStatusReportAction,
+      title: ObjectHomepageText.homepageStatusReportAction,
       onBack: _handleCloseRequest,
       leadingStyle: IosSelectionHeaderLeadingStyle.close,
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
@@ -83,10 +86,10 @@ class _HomepageStatusReportPageState
         ),
         children: <Widget>[
           if (_isLoading)
-            const Center(child: CupertinoActivityIndicator())
+            AppRequestFeedback.section()
           else ...<Widget>[
             const IosSelectionSectionHeader(
-              title: UITextConstants.homepageFormOverviewSection,
+              title: ObjectHomepageText.homepageFormOverviewSection,
               padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
             ),
             IosSelectionSection(
@@ -97,7 +100,7 @@ class _HomepageStatusReportPageState
                   children: <Widget>[
                     Text(
                       _detail?.title ??
-                          UITextConstants.homepageClaimHomepageFallback,
+                          ObjectHomepageText.homepageClaimHomepageFallback,
                       style: const TextStyle(
                         fontSize: AppTypography.iosTitle3,
                         fontWeight: AppTypography.semiBold,
@@ -106,9 +109,9 @@ class _HomepageStatusReportPageState
                     SizedBox(height: AppSpacing.intraGroupXs),
                     Text(
                       (_detail?.status ?? '') == 'offline'
-                          ? UITextConstants
+                          ? ObjectHomepageText
                                 .homepageStatusReportOfflineDescription
-                          : UITextConstants.homepageStatusReportDescription,
+                          : ObjectHomepageText.homepageStatusReportDescription,
                       style: TextStyle(
                         fontSize: AppTypography.iosFootnote,
                         color: AppColors.iosSecondaryLabel(context),
@@ -127,7 +130,7 @@ class _HomepageStatusReportPageState
             ),
             SizedBox(height: AppSpacing.containerSm),
             const IosSelectionSectionHeader(
-              title: UITextConstants.homepageStatusReportReasonSection,
+              title: ObjectHomepageText.homepageStatusReportReasonSection,
               padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
             ),
             IosSelectionSection(
@@ -142,7 +145,7 @@ class _HomepageStatusReportPageState
                       AppSpacing.intraGroupXs,
                     ),
                     child: Text(
-                      UITextConstants.homepageStatusReportSelectReason,
+                      ObjectHomepageText.homepageStatusReportSelectReason,
                       style: TextStyle(
                         fontSize: AppTypography.iosCaption1,
                         color: AppColors.iosSecondaryLabel(context),
@@ -197,11 +200,12 @@ class _HomepageStatusReportPageState
                     indent: AppSpacing.containerMd,
                   ),
                   IosSelectionFormFieldRow(
-                    label: UITextConstants.homepageStatusReportDescriptionLabel,
+                    label:
+                        ObjectHomepageText.homepageStatusReportDescriptionLabel,
                     child: IosSelectionTextField(
                       controller: _descriptionController,
                       enabled: canSubmit,
-                      placeholder: UITextConstants
+                      placeholder: ObjectHomepageText
                           .homepageStatusReportDescriptionPlaceholder,
                       maxLines: 4,
                     ),
@@ -214,8 +218,8 @@ class _HomepageStatusReportPageState
       ),
       bottomBar: IosSelectionBottomBar(
         confirmLabel: (_detail?.status ?? '') == 'offline'
-            ? UITextConstants.homepageStatusReportAlreadyOffline
-            : UITextConstants.homepageStatusReportSubmit,
+            ? ObjectHomepageText.homepageStatusReportAlreadyOffline
+            : ObjectHomepageText.homepageStatusReportSubmit,
         confirmEnabled: canSubmit,
         confirmLoading: _isSubmitting,
         onConfirm: _submit,
@@ -295,17 +299,17 @@ class _HomepageStatusReportPageState
     final discardChanges = await showAppCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
-        title: const Text(UITextConstants.unsavedChangesTitle),
-        content: const Text(UITextConstants.unsavedChangesMessage),
+        title: const Text(CreationText.unsavedChangesTitle),
+        content: const Text(CreationText.unsavedChangesMessage),
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text(UITextConstants.continueEditing),
+            child: const Text(CreationText.continueEditing),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text(UITextConstants.discard),
+            child: const Text(CreationText.discard),
           ),
         ],
       ),
@@ -361,7 +365,7 @@ class _HomepageStatusReportPageState
     if (_reason.isEmpty) {
       setState(() {
         _reasonValidationMessage =
-            UITextConstants.homepageStatusReportReasonRequired;
+            ObjectHomepageText.homepageStatusReportReasonRequired;
       });
       return;
     }
@@ -394,7 +398,7 @@ class _HomepageStatusReportPageState
       if (!mounted) {
         return;
       }
-      AppToast.show(context, UITextConstants.homepageStatusReportSubmitted);
+      AppToast.show(context, ObjectHomepageText.homepageStatusReportSubmitted);
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) {

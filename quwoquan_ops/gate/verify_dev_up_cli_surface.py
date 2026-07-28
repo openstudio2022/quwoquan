@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -59,47 +60,47 @@ def main() -> int:
 
     topology = load_environment_topology()
     alpha_android = resolve_app_endpoint_overrides("alpha", "android_physical", topology=topology)
-    if alpha_android["gatewayBaseUrl"] != "https://localhost:17000":
-        issues.append("alpha android local device must map gateway to plain localhost HTTPS transport")
-    if alpha_android.get("legalBaseUrl") != "https://localhost:17000/legal":
-        issues.append("alpha android local device must map legal-static to gateway /legal")
-    if alpha_android["mediaImageBaseUrl"] != "https://localhost:17100":
-        issues.append("alpha android local device must map media to plain localhost HTTPS transport")
+    if alpha_android["gatewayBaseUrl"] != "https://api.alpha.quwoquan.com:17000":
+        issues.append("alpha Android must keep the canonical public API authority")
+    if alpha_android.get("legalBaseUrl") != "https://alpha.quwoquan.com:17000/legal":
+        issues.append("alpha Android must keep the canonical public legal authority")
+    if alpha_android["mediaImageBaseUrl"] != "https://cdn.alpha.quwoquan.com:17100/media/image":
+        issues.append("alpha Android must keep the canonical public CDN role path")
     beta_android = resolve_app_endpoint_overrides("beta", "android_emulator", topology=topology)
-    if beta_android["gatewayBaseUrl"] != "https://beta-api.localhost:18000":
-        issues.append("beta android local device must map gateway to distinct localhost HTTPS transport")
-    if beta_android.get("legalBaseUrl") != "https://beta-api.localhost:18000/legal":
-        issues.append("beta android local device must map legal-static to gateway /legal")
-    if beta_android["mediaImageBaseUrl"] != "https://beta-image.localhost:18100":
-        issues.append("beta android local device must map media to beta media port")
+    if beta_android["gatewayBaseUrl"] != "https://api.beta.quwoquan.com:18000":
+        issues.append("beta Android must keep the canonical public API authority")
+    if beta_android.get("legalBaseUrl") != "https://beta.quwoquan.com:18000/legal":
+        issues.append("beta Android must keep the canonical public legal authority")
+    if beta_android["mediaImageBaseUrl"] != "https://cdn.beta.quwoquan.com:18100/media/image":
+        issues.append("beta Android must keep the canonical public CDN role path")
     gamma_android = resolve_app_endpoint_overrides("gamma", "android_physical", topology=topology)
-    if gamma_android["gatewayBaseUrl"] != "https://gamma-api.localhost:19000":
-        issues.append("gamma android local device must map gateway to local-gamma loopback transport")
-    if gamma_android.get("legalBaseUrl") != "https://gamma-api.localhost:19000/legal":
-        issues.append("gamma android local device must map legal-static to gateway /legal")
-    if gamma_android["mediaImageBaseUrl"] != "https://gamma-image.localhost:19100":
-        issues.append("gamma android local device must map media to local-gamma media port")
+    if gamma_android["gatewayBaseUrl"] != "https://api.gamma.quwoquan.com:19000":
+        issues.append("gamma Android must keep the canonical public API authority")
+    if gamma_android.get("legalBaseUrl") != "https://gamma.quwoquan.com:19000/legal":
+        issues.append("gamma Android must keep the canonical public legal authority")
+    if gamma_android["mediaImageBaseUrl"] != "https://cdn.gamma.quwoquan.com:19100/media/image":
+        issues.append("gamma Android must keep the canonical public CDN role path")
     prod_sim_android = resolve_app_endpoint_overrides("prod-sim", "android_physical", topology=topology)
-    if prod_sim_android["gatewayBaseUrl"] != "https://prod-api.localhost:20000":
-        issues.append("prod-sim android local device must map gateway to prod-sim loopback transport")
-    if prod_sim_android.get("legalBaseUrl") != "https://prod-api.localhost:20000/legal":
-        issues.append("prod-sim android local device must map legal-static to prod-sim gateway /legal")
-    if prod_sim_android["mediaImageBaseUrl"] != "https://prod-image.localhost:20100":
-        issues.append("prod-sim android local device must map media to prod-sim media port")
+    if prod_sim_android["gatewayBaseUrl"] != "https://api.sim.quwoquan.com:20000":
+        issues.append("prod-sim Android must keep the canonical public API authority")
+    if prod_sim_android.get("legalBaseUrl") != "https://sim.quwoquan.com:20000/legal":
+        issues.append("prod-sim Android must keep the canonical public legal authority")
+    if prod_sim_android["mediaImageBaseUrl"] != "https://cdn.sim.quwoquan.com:20100/media/image":
+        issues.append("prod-sim Android must keep the canonical public CDN role path")
     prod_hosted = resolve_app_endpoint_overrides("prod", "android_physical", topology=topology)
     if prod_hosted["gatewayBaseUrl"] != "https://api.quwoquan.com":
         issues.append("prod android launch must keep canonical api.quwoquan.com gateway")
     if prod_hosted.get("legalBaseUrl") != "https://quwoquan.com/legal":
         issues.append("prod android launch must keep canonical legal base")
-    if prod_hosted["mediaImageBaseUrl"] != "https://cdn.quwoquan.com":
+    if prod_hosted["mediaImageBaseUrl"] != "https://cdn.quwoquan.com/media/image":
         issues.append("prod android launch must keep canonical cdn.quwoquan.com media image base")
     if prod_hosted.get("mediaUploadBaseUrl") != "https://upload.quwoquan.com":
         issues.append("prod android launch must keep canonical upload.quwoquan.com media upload base")
     gamma_web = resolve_app_endpoint_overrides("gamma", "web", topology=topology)
-    if gamma_web["gatewayBaseUrl"] != "https://gamma-api.quwoquan-env.test:19000":
+    if gamma_web["gatewayBaseUrl"] != "https://api.gamma.quwoquan.com:19000":
         issues.append("gamma web must map gateway to secure gamma env domain")
-    if gamma_web.get("legalBaseUrl") != "https://gamma-api.quwoquan-env.test:19000/legal":
-        issues.append("gamma web must map legal-static to gateway /legal")
+    if gamma_web.get("legalBaseUrl") != "https://gamma.quwoquan.com:19000/legal":
+        issues.append("gamma web must keep canonical public legal authority")
 
     build_gradle = (ROOT / "quwoquan_app/android/app/build.gradle.kts").read_text(
         encoding="utf-8"
@@ -165,98 +166,63 @@ def main() -> int:
     if "current" in gamma_observability_logs.parts or "current" in run_root("gamma").parts:
         issues.append("local run paths must use an immutable runId, never current")
 
-    if "QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED" not in build_gradle:
-        issues.append("android debug build must require explicit local CA when launcher marks it required")
-    if (
-        'File(deploymentWorkRoot, "alpha-local/certificates/root.crt")'
-        not in build_gradle
+    for token in (
+        "QWQ_ANDROID_LOCAL_ENV_CA",
+        "local_env_debug_root",
+        "verifyAndroidLocalAlphaCaSource",
     ):
-        issues.append(
-            "android alpha debug CA must use the same root.crt that signs the alpha TLS proxy leaf"
-        )
-    if "alpha-local/certificates/tls/ca/root.crt" in build_gradle:
-        issues.append(
-            "android alpha debug CA must not use the retired tls/ca/root.crt path"
-        )
-    if (
-        "verifyAndroidLocalAlphaCaSource" not in build_gradle
-        or "packaged local_env_debug_root.crt must exactly equal" not in build_gradle
-    ):
-        issues.append(
-            "android alpha build must verify the packaged raw CA equals the TLS proxy signing root"
-        )
+        if token in build_gradle:
+            issues.append(f"android build must use system public CA only; retired token: {token}")
     if "tasks.withType<FlutterTask>()" not in build_gradle:
         issues.append("android debug build must patch FlutterTask dart-defines for plain flutter run")
-    if "alphaLocalTransportDartDefineKeys" not in build_gradle:
+    if "verifyAndroidLocalLauncherContract" not in build_gradle:
         issues.append(
-            "android alpha plain flutter run must declare transport dart-define keys for force overwrite"
+            "android debug/profile must fail-closed unless start_app_instance/run.sh leases the device"
         )
-    if "shouldForceTransport" not in build_gradle:
+    if "requireCompleteRuntimeDartDefines" not in build_gradle:
         issues.append(
-            "android alpha plain flutter run must force-overwrite gateway/media localhost dart-defines"
+            "android FlutterTask must require complete runtime dart-defines from the canonical launcher"
         )
-    if "existingKeys.add(key)" in build_gradle and "shouldForceTransport" not in build_gradle:
+    if 'runtimeEnvironment in setOf("alpha", "beta", "gamma", "prod")' not in build_gradle:
         issues.append(
-            "android alpha mergeAlphaLocalDartDefines must not remain fill-only for transport URLs"
+            "android debug/profile launcher contract must accept all four QWQ_APP_RUNTIME_ENV values"
         )
-    if 'loadRuntimePackageDartDefines("alpha")' not in build_gradle:
-        issues.append("plain android flutter run must derive alpha endpoints from the app runtime package")
-    if "alphaLocalTransportDartDefineKeys.forEach" not in build_gradle:
-        issues.append("plain android flutter run must project every alpha transport endpoint")
-    if "rewriteAlphaLocalTransport(getValue(key))" not in build_gradle:
-        issues.append("plain android flutter run must rewrite alpha transport hosts to localhost")
+    if "QWQ_CONSUMER_LEASE_ACQUIRED" not in build_gradle or "QWQ_ANDROID_LOCAL_PORTS" not in build_gradle:
+        issues.append(
+            "android debug/profile must require consumer lease and adb reverse ports from the launcher"
+        )
+    for retired in (
+        "alphaLocalTransportDartDefineKeys",
+        "shouldForceTransport",
+        "mergeAlphaLocalDartDefines",
+        "prepareAndroidLocalAlphaStack",
+        "prepareAndroidLocalAdbReverse",
+        'loadRuntimePackageDartDefines("alpha")',
+    ):
+        if retired in build_gradle:
+            issues.append(
+                "android debug build must not auto-assemble alpha transport for bare flutter run; "
+                f"retired helper still present: {retired}"
+            )
     duplicate_alpha_transport_urls = (
         "https://localhost:17000",
         "https://localhost:17100",
     )
     if any(url in build_gradle for url in duplicate_alpha_transport_urls):
         issues.append(
-            "plain android flutter run must not duplicate alpha ports outside the runtime package"
+            "android debug build must not hardcode alpha localhost transport URLs"
         )
-    if "prepareAndroidLocalAlphaStack" not in build_gradle:
-        issues.append("plain android flutter run must prepare alpha local stack before debug resource generation")
-    if 'environment("QWQ_ALPHA_LOCAL_PUBLIC_HOST_SETUP", "skip")' not in build_gradle:
-        issues.append("plain android flutter run must start alpha stack in HTTPS localhost transport mode")
-    if "prepareAndroidLocalAdbReverse" not in build_gradle or '"reverse",' not in build_gradle:
-        issues.append("plain android flutter run must prepare adb reverse for local gateway/media ports")
-    android_debug_network = (
-        ROOT / "quwoquan_app/android/app/src/debug/res/xml/beta_debug_network_security_config.xml"
-    ).read_text(encoding="utf-8")
-    android_profile_network = (
-        ROOT / "quwoquan_app/android/app/src/profile/res/xml/beta_debug_network_security_config.xml"
-    ).read_text(encoding="utf-8")
     android_debug_manifest = (
         ROOT / "quwoquan_app/android/app/src/debug/AndroidManifest.xml"
     ).read_text(encoding="utf-8")
     android_profile_manifest = (
         ROOT / "quwoquan_app/android/app/src/profile/AndroidManifest.xml"
     ).read_text(encoding="utf-8")
-    app_bootstrap = (ROOT / "quwoquan_app/lib/app_bootstrap.dart").read_text(
-        encoding="utf-8"
-    )
-    platform_local_https_trust = (
-        ROOT / "quwoquan_app/lib/core/platform/local_dev_https_trust_io.dart"
-    ).read_text(encoding="utf-8")
     main_activity = (
         ROOT / "quwoquan_app/android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java"
     ).read_text(encoding="utf-8")
-    if 'cleartextTrafficPermitted="true"' in android_debug_network + android_profile_network:
-        issues.append("android local network security config must not permit cleartext HTTP")
     if 'android:usesCleartextTraffic="true"' in android_debug_manifest + android_profile_manifest:
         issues.append("android debug/profile manifests must not permit cleartext HTTP")
-    if "LocalDevHttpsTrust.installForCurrentRuntime()" not in app_bootstrap:
-        issues.append("app bootstrap must install Dart local HTTPS trust before media/cache clients start")
-    if "_installLocalDevHttpsTrustAfterFirstFrame" in app_bootstrap:
-        issues.append("app bootstrap must not defer Dart local HTTPS trust until after the first frame")
-    if "source: 'local_dev_https_trust'" in app_bootstrap:
-        issues.append(
-            "app bootstrap must fail-fast on local HTTPS trust install errors (no swallow/log-only)"
-        )
-    if (
-        "_installLocalDevHttpsTrustBeforeMediaClients()" not in app_bootstrap
-        or "authNetworkPrerequisites:" not in app_bootstrap
-    ):
-        issues.append("app bootstrap must pass local HTTPS trust as auth network prerequisites before media clients")
     image_cache_controller = (
         ROOT / "quwoquan_app/lib/core/media/app_image_cache_controller.dart"
     ).read_text(encoding="utf-8")
@@ -278,96 +244,70 @@ def main() -> int:
         issues.append(
             "Native trusted HTTP file service must bind HttpClient to SecurityContext.defaultContext"
         )
-    if (
-        "SecurityContext.defaultContext.setTrustedCertificatesBytes"
-        not in platform_local_https_trust
-    ):
-        issues.append("Dart local HTTPS trust must add the packaged CA to SecurityContext.defaultContext")
-    if "appRuntimeEnv == 'prod'" in platform_local_https_trust:
-        issues.append(
-            "Dart local HTTPS trust must not hardcode APP_RUNTIME_ENV==prod; use runtime bases plane"
-        )
-    if "isLocalHttpsTransportBase" not in platform_local_https_trust:
-        issues.append(
-            "Dart local HTTPS trust must decide install from local HTTPS transport bases"
-        )
-    if "placeholderSubjectMarker" not in platform_local_https_trust:
-        issues.append("Dart local HTTPS trust must reject placeholder local CA certificates")
-    if "badCertificateCallback" in platform_local_https_trust:
-        issues.append("Dart local HTTPS trust must not bypass certificate validation")
-    if "localEnvDebugRootCertificate" not in main_activity:
-        issues.append("Android MainActivity must expose packaged local_env_debug_root to Dart HttpClient")
-    if "export QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED=1" not in alpha_run:
-        issues.append("alpha run.sh must require Android local debug CA when preparing local device launch")
+    if "localEnvDebugRootCertificate" in main_activity:
+        issues.append("Android MainActivity must not expose a private trust root")
     if "--legal-base-url" not in alpha_run:
         issues.append("alpha run.sh must pass legal-static base URL with app env dart-defines")
-    if "export QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED=1" not in beta_manual:
-        issues.append("beta manual launcher must require Android local debug CA for Android devices")
     if (
-        "prepare_android_local_tls" not in app_instance_launcher
+        "prepare_android_reverse" not in app_instance_launcher
         or "enable_android_adb_reverse" not in app_instance_launcher
-        or "local_target_android_debug_ca_cert" not in app_instance_launcher
     ):
         issues.append(
-            "shared app-instance launcher must derive Android adb reverse and local CA from dev_up topology helpers"
+            "shared app-instance launcher must prepare adb reverse without rewriting authorities"
         )
-    alpha_script = (ROOT / "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh").read_text(
+    alpha_script = (ROOT / "quwoquan_ops/cli/alpha/content_release_runtime.py").read_text(
         encoding="utf-8"
     )
-    if 'TLS_ROOT_CERT="$TLS_CA_DIR/root.crt"' not in alpha_script:
-        issues.append(
-            "alpha TLS proxy must expose alpha-local/certificates/root.crt as its signing root"
-        )
-    if "quwoquan_ops/cli/lib/tls_reverse_proxy.py" not in alpha_script:
-        issues.append("alpha local stack must use repo-owned TLS reverse proxy")
-    if "quwoquan_ops/cli/legal_static.py\" package --env alpha" not in alpha_script:
-        issues.append("alpha local stack must build legal-static before serving /legal")
-    if '"/legal/user-agreement"' not in alpha_script:
+    if 'certificate_export_dir(TARGET) / "root.crt"' in alpha_script:
+        issues.append("alpha Remote content-release must not export a private Caddy root")
+    if '"legal-static"' not in alpha_script:
+        issues.append("alpha Remote content-release must package legal-static before serving /legal")
+    if '"  handle /legal/* {"' not in alpha_script:
         issues.append("alpha local stack must health-check legal-static stable URL")
-    if "stop_alpha_reserved_listeners" not in alpha_script or "lsof -nP -tiTCP" not in alpha_script:
-        issues.append("alpha local stack must clear repo-owned stale listeners on reserved ports before startup")
-    if "docker.io/library/caddy" in alpha_script:
-        issues.append("alpha local stack must not depend on external Caddy image for flutter run")
-    if "ensure_public_hosts_mapping" not in alpha_script:
-        issues.append("alpha local stack must manage quwoquan-env.test loopback DNS before app launch")
-    if "security add-trusted-cert" not in alpha_script:
-        issues.append("alpha local stack must trust the local root CA for host/iOS simulator HTTPS")
-    if "macos_login_keychain_trust_is_current" not in alpha_script:
-        issues.append("alpha local stack must idempotently skip repeated macOS login keychain trust writes")
-    if "QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST" not in alpha_script:
-        issues.append("alpha local stack must allow skipping macOS login keychain trust for iOS simulator builds")
-    if (
-        "quwoquan_ops/cli/lib/local_target_tls.py" not in alpha_script
-        or "install-ios-simulator-ca" not in alpha_script
-        or "--simulator-udid" not in alpha_script
-    ):
-        issues.append(
-            "alpha local stack must delegate explicit Simulator CA installation to local_target_tls.py"
-        )
-    if "IP.2 = 10.0.2.2" not in alpha_script:
-        issues.append("alpha local TLS certificate must include Android emulator host 10.0.2.2 as an IP SAN")
-    if "--resolve" in alpha_script:
-        issues.append("alpha local stack health checks must use real public DNS, not curl --resolve")
-    if "curl -k" in alpha_script:
-        issues.append("alpha local stack health checks must not bypass TLS trust with curl -k")
+    if "quwoquan_cloud_mock" in alpha_script or "test_fixtures" in alpha_script:
+        issues.append("alpha Remote content-release must not reference App mocks or fixtures")
     ios_project = (
         ROOT / "quwoquan_app/ios/Runner.xcodeproj/project.pbxproj"
     ).read_text(encoding="utf-8")
-    ios_prepare_alpha = (
-        ROOT / "quwoquan_app/scripts/ios/prepare_alpha_local_https.sh"
+    ios_prepare_defines = (
+        ROOT / "quwoquan_app/scripts/ios/prepare_dart_defines.sh"
     ).read_text(encoding="utf-8")
-    if "Prepare Alpha HTTPS Local Plane" not in ios_project:
-        issues.append("plain iOS flutter run must prepare alpha HTTPS local plane before Flutter build")
-    if "../scripts/ios/prepare_alpha_local_https.sh" not in ios_project:
-        issues.append("iOS Runner project must call the alpha HTTPS prepare script")
-    if "QWQ_IOS_LOCAL_AUTO_PREPARE" not in ios_prepare_alpha:
-        issues.append("iOS alpha prepare script must expose an explicit opt-out")
-    if "start_alpha_mock_stack.sh\" up" not in ios_prepare_alpha:
-        issues.append("iOS alpha prepare script must start the alpha HTTPS stack")
-    if "QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST=skip" not in ios_prepare_alpha:
-        issues.append("iOS alpha prepare script must skip macOS login keychain trust to avoid repeated password prompts")
-    if "legal_static_deployment_package_dir(self.runtime_env)" not in mock_public_plane:
-        issues.append("alpha mock public plane must resolve legal-static deployment packages through output_paths")
+    stackctl_source = STACKCTL.read_text(encoding="utf-8")
+    if (
+        "Prepare Alpha HTTPS Local Plane" in ios_project
+        or "Bundle Local HTTPS Trust Root" in ios_project
+    ):
+        issues.append("iOS project must rely on system public CA without trust injection phases")
+    if (
+        "build_launcher_handoff.py" not in ios_prepare_defines
+        or '--target alpha-local' not in ios_prepare_defines
+        or '--launch-mode canonical_launcher' not in ios_prepare_defines
+    ):
+        issues.append(
+            "plain iOS Simulator Debug must consume the canonical Alpha launcher handoff"
+        )
+    if (
+        '${CONFIGURATION:-}" == "Debug"' not in ios_prepare_defines
+        or "outside direct iOS Simulator Debug" not in ios_prepare_defines
+    ):
+        issues.append(
+            "iOS direct Alpha fallback must stay limited to Simulator Debug"
+        )
+    if (
+        "export FLUTTER_TARGET=" not in ios_prepare_defines
+        or "lib/main_prod.dart" not in ios_prepare_defines
+    ):
+        issues.append(
+            "plain iOS Simulator Debug must compile the canonical production entrypoint"
+        )
+    if "PROVIDER_CONFORMANCE_EVIDENCE_ENVIRONMENTS" not in stackctl_source:
+        issues.append(
+            "stackctl must keep provider-conformance argparse choices local (no eager PyYAML import)"
+        )
+    if "def _provider_conformance_runner(" not in stackctl_source:
+        issues.append(
+            "stackctl must lazy-import provider_conformance_runner for Xcode/alpha up"
+        )
     if "utf8.decode(response.bodyBytes)" not in legal_document_remote:
         issues.append("legal document page must decode response bytes as UTF-8")
     if "loadHtmlString(html, baseUrl: uri.toString())" not in legal_document_page:
@@ -415,7 +355,15 @@ def main() -> int:
             issues.append(f"{label} must declare UTF-8 for extensionless legal documents")
     if prod_plane_renderer.count('handle /legal/manifest.json {') != 2:
         issues.append("prod renderer must preserve JSON content type for both legal route surfaces")
-    if prod_plane_renderer.count('Content-Type "text/html; charset=utf-8"') != 2:
+    prod_legal_blocks = re.findall(
+        r"handle /legal/\* \{.*?\n\\t\}",
+        prod_plane_renderer,
+        re.DOTALL,
+    )
+    if len(prod_legal_blocks) != 2 or any(
+        'Content-Type "text/html; charset=utf-8"' not in block
+        for block in prod_legal_blocks
+    ):
         issues.append("prod renderer must declare UTF-8 for both extensionless legal route surfaces")
     if prod_plane_renderer.count(
         "@api_user path /auth* /owner* /user* /me /me/*"

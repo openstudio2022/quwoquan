@@ -81,8 +81,8 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
                 ),
                 icon: liked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
                 label: liked
-                    ? UITextConstants.profileInteractionCommentLiked
-                    : UITextConstants.profileInteractionLikeComment,
+                    ? ProfileText.profileInteractionCommentLiked
+                    : ProfileText.profileInteractionLikeComment,
                 active: liked,
                 busy: busy,
                 isDark: widget.isDark,
@@ -94,7 +94,7 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
                   'profile-interaction-reply-${item.activityId}',
                 ),
                 icon: CupertinoIcons.arrowshape_turn_up_left,
-                label: UITextConstants.profileInteractionReplyComment,
+                label: ProfileText.profileInteractionReplyComment,
                 isDark: widget.isDark,
                 onPressed: () => _openCommentReplyDetail(context, item),
               ),
@@ -123,8 +123,8 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
                     ? CupertinoIcons.heart_fill
                     : CupertinoIcons.heart,
                 label: thanked
-                    ? UITextConstants.profileInteractionThanked
-                    : UITextConstants.profileInteractionThank,
+                    ? ProfileText.profileInteractionThanked
+                    : ProfileText.profileInteractionThank,
                 active: thanked,
                 isDark: widget.isDark,
                 onPressed: thanked ? null : () => _markThanked(item),
@@ -137,7 +137,7 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
                 icon: dmSent
                     ? CupertinoIcons.checkmark_alt
                     : CupertinoIcons.paperplane,
-                label: UITextConstants.profileDirectMessage,
+                label: ProfileText.profileDirectMessage,
                 active: dmSent,
                 busy: dmBusy,
                 isDark: widget.isDark,
@@ -165,7 +165,7 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
   ) {
     final route = _commentActivityRoute(item, replyToComment: true);
     if (route == null) {
-      AppToast.show(context, UITextConstants.profileCommentOriginalUnavailable);
+      AppToast.show(context, ContentText.profileCommentOriginalUnavailable);
       return;
     }
     _trackCommentActivityDeeplink(item, postId: item.previewObjectId.trim());
@@ -249,7 +249,7 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
     setState(() => _thankedActivityIds.add(item.activityId));
     AppToast.show(
       context,
-      UITextConstants.profileInteractionThanksAcknowledged,
+      ProfileText.profileInteractionThanksAcknowledged,
     );
   }
 
@@ -281,7 +281,7 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
             ChatSendMessageCommand(
               conversationId: conversationId,
               type: 'text',
-              content: UITextConstants.profileInteractionThanksLikeMessage,
+              content: ProfileText.profileInteractionThanksLikeMessage,
               senderDisplayNameSnapshot: activeContext.displayName,
               senderAvatarUrlSnapshot: activeContext.avatarUrl,
               personaContextVersion: activeContext.contextVersion > 0
@@ -299,7 +299,7 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
       });
       AppToast.show(
         context,
-        UITextConstants.profileInteractionDirectMessageSent,
+        ProfileText.profileInteractionDirectMessageSent,
       );
     } catch (error, stackTrace) {
       FlutterError.reportError(
@@ -314,7 +314,7 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
         setState(() => _directMessageInFlight.remove(item.activityId));
         AppToast.show(
           context,
-          UITextConstants.profileInteractionDirectMessageFailed,
+          ProfileText.profileInteractionDirectMessageFailed,
         );
       }
     }

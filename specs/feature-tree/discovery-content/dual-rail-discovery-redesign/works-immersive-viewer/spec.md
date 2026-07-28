@@ -76,8 +76,8 @@
 <a id="req-009"></a>
 ### REQ-009 图片适配不得改变文章翻页引擎边界
 
-- `components/pageflip/**` 与 `ui/content/article_reader/pageflip/**` 是文章翻页唯一实现边界。本 Story 不抽取新 DeckHost、painter、partition 或通用纹理类型，也不得为了图片适配改写文章 `Stack`、BACK replacement、诊断或同步 `completeAnimation` 时序。
-- 文章既有 BACK 允许由当前静态页、上一页正面 replacement、当前页 bottom clip 与上一页 moving sheet 合成；这些是同一物理翻页的材质区域，不得被复制成额外 moving sheet。文章和图片在任意帧都只能出现一个 moving leaf、一条 seam/fold 与一条 free edge。
+- `components/pageflip/**` 与 `ui/content/article_reader/pageflip/**` 是文章翻页唯一实现边界。本 Story 不抽取新 DeckHost、painter、partition 或通用纹理类型，也不得为了图片适配另建文章翻页主线、诊断坐标链或改写同步 `completeAnimation` 时序。
+- 文章 portrait BACK 使用 Route-B：L0 为完整的 current/right underlay；L1 为唯一的 previous moving leaf，并在同一个 `Positioned + Transform.rotate + ClipPath` surface 中按 `ArticlePageBackwardLeafFrame` 切分 recto/front 与 verso/back。禁止 previous-front page-space replacement、独立 front/back 平面或额外 moving sheet。文章和图片在任意帧都只能出现一个 moving leaf、一条 seam/fold 与一条 free edge。
 - 图片 moving sheet 每帧只绘制一张完整页面 front 或 back 材质。禁止两个纹理子页重叠、对子纹理使用 `FractionallySizedBox` 压缩、重复完整纹理起点，或以黑色/舞台底色填补本应由背面材质覆盖的区域。
 - release 完成时，媒体适配层必须与文章一样强制应用 animation plan 最后一帧，再同步 `completeAnimation` 和 page index；动态 bottom 与目标静态页须同源。图片加载状态继续冻结到落平后的首个静态帧，随后才应用排队状态。
 - 禁止：精品字样、媒体类型标识（图片/视频/文章）、页码（如 1/6）、常驻筛选 Tab。
@@ -101,6 +101,21 @@
 ### REQ-012 Markdown 实体标签进入实体主页
 
 - Markdown 实体标签必须生成可访问链接，并导航到对应实体主页。
+
+<a id="req-013"></a>
+### REQ-013 视频准备在 6 秒内进入可恢复终态
+
+- 解码槽位等待、媒体源解析与原生播放器初始化共享一个 6 秒总预算；切集、返回、取消和 dispose 必须释放 controller 与槽位。
+- 等待时保留同源封面、返回与更多操作；300ms 后显示媒体区域内紧凑进度，3 秒显示“还在加载，请稍候”，6 秒切换到唯一恢复组错误且不保留动画。
+- 可恢复播放故障进入 `reloadLater` 并提供“重新加载”；明确不支持播放进入 `contentUnavailable` 并提供“返回”。单个视频失败只替换媒体区域，不遮挡作品浏览器。
+
+<a id="req-014"></a>
+### REQ-014 文章阅读器运营闭环与远端恢复
+
+- 文章阅读器必须通过 product-ops catalog 记录 `enter`、`dwell`、`exit`、`error` 与 `recovery`；`dwell` 为 10% 采样，其余 lifecycle 事件全量采样。
+- `error` 与 `recovery` 必须记录 metadata canonical `errorCode` 和 `recoveryAction`；`objectId` 只能进入 raw 明细，禁止进入 Prometheus label 或小时聚合维度。
+- product-ops 必须从同一 catalog 提供 enter latency、lifecycle outcome 与 sampled dwell 指标，SLS 小时聚合、SLO 和告警必须消费这些同源事件。
+- WorkBrowser 直达读取与文章详情 hydration 遇到 transient typed `RuntimeFailure` 时，必须展示可执行 Retry；Retry 只能重放同一 typed Remote reader，成功后恢复 canonical 内容，不得回退至 fixture、发现流或伪成功。
 
 ## 4. 契约引用
 
@@ -196,6 +211,22 @@
 - WHEN 用户激活该链接。
 - THEN 浏览器导航到对应实体主页，并保持无效目标的安全降级。
 
+<a id="gwt-012"></a>
+### GWT-012 视频等待与失败只占媒体区域
+
+- GIVEN 用户在作品浏览器打开一个视频，播放器槽位、源解析或初始化持续等待。
+- WHEN 等待达到 300ms、3 秒和 6 秒，或用户切集、返回与取消。
+- THEN 同源封面保留，等待反馈按统一时间点变化，最迟 6 秒进入成功或恢复组错误终态。
+- AND 旧 controller 不复活、槽位归零，重新加载或返回动作真实可用，作品列表仍可浏览。
+
+<a id="gwt-013"></a>
+### GWT-013 文章阅读器事件与 transient Remote 恢复
+
+- GIVEN 用户进入文章阅读器，并发生停留、退出、详情 hydration 失败或 Retry。
+- WHEN App 上报 lifecycle 事件或用户执行 Retry。
+- THEN 每个事件均通过生成的 product-ops payload 进入同一 catalog；error/recovery 带 canonical error/recovery 语义，SLS/Prometheus/告警不引入对象级高基数维度。
+- AND transient typed Remote 失败后的 Retry 成功恢复 canonical 内容，且不会回退至 Mock、发现流或空白成功状态。
+
 ## 6. 依赖
 
 - 前置要求：[`dual-rail-discovery-redesign`](../spec.md) 的范围、要求与 SIT。
@@ -284,15 +315,6 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：widget 测试断言默认纸张与垂类映射。
 - 完成判定：`GWT-009` 对应行为满足且真实测试 `spec_ref` 有效。
-
-<a id="open-010"></a>
-### OPEN-010 翻书动画纸张材质同源
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：pageflip 视觉/contract 测试断言 paperTexture 被正反面消费。
-- 完成判定：`GWT-010` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-011"></a>
 ### OPEN-011 Markdown 实体标签进入实体主页

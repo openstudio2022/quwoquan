@@ -32,8 +32,10 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         ProfileUpdateProposalView,
         ProfileUpdateSnapshot,
         UpdateUserProfileCommand;
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock_tag.dart'
+import '../../../../support/cloud_services/repository_mock_reexports.dart'
     show AlphaTagFacet;
+
+import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
 
 /// T28 旅程：我的主页 → 编辑资料 → 修改昵称 → 保存 → 返回 → 验证主页展示新昵称
 class _EditProfileMockRepository implements ProfileQuery, ProfileEditQuery {
@@ -284,9 +286,12 @@ class _ProfileEditJourneyEntryState
                   onPressed: () async {
                     await context.push('/profile/edit');
                     if (!mounted) return;
-                    setState(() => _profile = _load());
+                    final refreshedProfile = _load();
+                    setState(() {
+                      _profile = refreshedProfile;
+                    });
                   },
-                  child: const Text(UITextConstants.profileEditLabel),
+                  child: const Text(ProfileText.profileEditLabel),
                 ),
               ],
             );
@@ -373,6 +378,11 @@ void main() {
           profileCommandWriterProvider.overrideWithValue(
             _EditProfileCommandWriter(mockRepo),
           ),
+          relationshipCapabilityRepositoryProvider.overrideWithValue(
+            relationshipCapabilityRepositoryFrom(
+              const TestRelationshipCapabilityQuery.mutual(),
+            ),
+          ),
           tagCatalogQueryProvider.overrideWithValue(
             AlphaTagFacet(
               taxonomyReleaseId:
@@ -423,17 +433,17 @@ void main() {
       await tester.pumpWidget(app);
       await _pumpFrames(tester, count: 20);
 
-      final editProfileAction = find.text(UITextConstants.profileEditLabel);
+      final editProfileAction = find.text(ProfileText.profileEditLabel);
       expect(editProfileAction, findsOneWidget);
       await tester.tap(editProfileAction.first);
       await _pumpFrames(tester, count: 10);
 
-      expect(find.text(UITextConstants.editProfile), findsOneWidget);
+      expect(find.text(SettingsText.editProfile), findsOneWidget);
       final navTitleBottom = tester
-          .getBottomLeft(find.text(UITextConstants.editProfile))
+          .getBottomLeft(find.text(SettingsText.editProfile))
           .dy;
       final coverTop = tester
-          .getTopLeft(find.text(UITextConstants.editProfileCoverLabel))
+          .getTopLeft(find.text(ProfileText.editProfileCoverLabel))
           .dy;
       expect(
         coverTop,
@@ -447,17 +457,17 @@ void main() {
       );
 
       final orderedLabels = <String>[
-        UITextConstants.editProfileCoverLabel,
-        UITextConstants.editProfileAvatarLabel,
-        UITextConstants.editProfileNicknameLabel,
-        UITextConstants.editProfileGenderLabel,
-        UITextConstants.editProfileBirthdayLabel,
-        UITextConstants.editProfileRegionLabel,
-        UITextConstants.editProfilePhoneLabel,
-        UITextConstants.editProfileQuwoquanIdLabel,
-        UITextConstants.editProfileQrCodeLabel,
-        UITextConstants.editProfileBioLabel,
-        UITextConstants.editProfileTagsLabel,
+        ProfileText.editProfileCoverLabel,
+        ProfileText.editProfileAvatarLabel,
+        ProfileText.editProfileNicknameLabel,
+        ProfileText.editProfileGenderLabel,
+        ProfileText.editProfileBirthdayLabel,
+        ProfileText.editProfileRegionLabel,
+        ProfileText.editProfilePhoneLabel,
+        ProfileText.editProfileQuwoquanIdLabel,
+        ProfileText.editProfileQrCodeLabel,
+        ProfileText.editProfileBioLabel,
+        ProfileText.editProfileTagsLabel,
       ];
       var previousTop = -1.0;
       for (final label in orderedLabels) {
@@ -483,17 +493,17 @@ void main() {
         reason: '媒体行缩略图必须保持稳定正方形槽位，避免右侧宽度漂移',
       );
       expect(
-        find.text(UITextConstants.editProfileFillCtaValue),
+        find.text(ProfileText.editProfileFillCtaValue),
         findsAtLeastNWidgets(1),
         reason: '未填写资料应使用可行动的中性补全提示',
       );
       expect(
-        find.text(UITextConstants.editProfileSelectCtaValue),
+        find.text(ProfileText.editProfileSelectCtaValue),
         findsAtLeastNWidgets(1),
         reason: '选择型空值应以简短好处提示用户补充',
       );
       expect(
-        find.text(UITextConstants.editProfileGenderUnsetValue),
+        find.text(ProfileText.editProfileGenderUnsetValue),
         findsAtLeastNWidgets(1),
         reason: '未设置性别时不应默认显示为不展示',
       );
@@ -503,19 +513,19 @@ void main() {
         reason: '趣我圈号行只展示系统分配的号，不显示额外图标',
       );
 
-      await tester.tap(find.text(UITextConstants.editProfileGenderLabel).first);
+      await tester.tap(find.text(ProfileText.editProfileGenderLabel).first);
       await _pumpFrames(tester, count: 8);
-      expect(find.text(UITextConstants.editProfileGenderMale), findsWidgets);
-      expect(find.text(UITextConstants.editProfileGenderFemale), findsWidgets);
+      expect(find.text(ProfileText.editProfileGenderMale), findsWidgets);
+      expect(find.text(ProfileText.editProfileGenderFemale), findsWidgets);
       expect(find.byIcon(CupertinoIcons.person_2), findsNothing);
       await tester.tap(
-        find.text(UITextConstants.editProfileGenderUnspecified).last,
+        find.text(ProfileText.editProfileGenderUnspecified).last,
       );
       await _pumpFrames(tester, count: 8);
 
-      await tester.tap(find.text(UITextConstants.editProfileRegionLabel).first);
+      await tester.tap(find.text(ProfileText.editProfileRegionLabel).first);
       await _pumpFrames(tester, count: 8);
-      expect(find.text(UITextConstants.editProfileRegionTitle), findsOneWidget);
+      expect(find.text(ProfileText.editProfileRegionTitle), findsOneWidget);
       expect(find.text('广东'), findsOneWidget);
       await tester.tap(find.text('广东'));
       await _pumpFrames(tester, count: 8);
@@ -539,7 +549,7 @@ void main() {
         find.byKey(const ValueKey<String>('edit-profile-nickname-row')),
       );
       await _pumpFrames(tester, count: 8);
-      expect(find.text(UITextConstants.editProfileNicknameLabel), findsWidgets);
+      expect(find.text(ProfileText.editProfileNicknameLabel), findsWidgets);
       await tester.enterText(
         find.byType(CupertinoTextField).first,
         newNickname,

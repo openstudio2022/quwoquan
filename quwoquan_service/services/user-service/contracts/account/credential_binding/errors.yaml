@@ -19,8 +19,8 @@ errors:
   dart_const: credentialConflict
   go_const: ErrCredentialConflict
   user_message:
-    zh: 该账号已被其他用户绑定
-    en: This account is already linked to another user
+    zh: 这个手机号已绑定其他账号
+    en: This phone number is linked to another account
 - code: USER.AUTH.last_credential
   kind: AUTH
   reason: constraint_violation

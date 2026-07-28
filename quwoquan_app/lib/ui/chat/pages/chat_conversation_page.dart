@@ -262,7 +262,7 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
           _SearchAnchorBanner(sourceQuery: anchor.sourceQuery, isDark: isDark),
         Expanded(
           child: messageState.isLoading && displayMessages.isEmpty
-              ? const Center(child: CupertinoActivityIndicator())
+              ? AppRequestFeedback.section()
               : messageState.error != null && displayMessages.isEmpty
               ? AppPageErrorState(
                   semantic: runtimeErrorSemantic(

@@ -123,9 +123,9 @@ void main() {
       ),
     );
 
-    expect(find.text(UITextConstants.publishTasksTitle), findsOneWidget);
+    expect(find.text(CreationText.publishTasksTitle), findsOneWidget);
     expect(
-      find.text(UITextConstants.publishTaskRetryWaitingStatus),
+      find.text(CreationText.publishTaskRetryWaitingStatus),
       findsOneWidget,
     );
     expect(

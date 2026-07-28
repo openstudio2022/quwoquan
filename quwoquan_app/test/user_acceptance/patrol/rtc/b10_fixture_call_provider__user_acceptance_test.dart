@@ -33,7 +33,7 @@ void main() {
         await $(
           find.byType(IncomingCallPage),
         ).waitUntilVisible(timeout: const Duration(seconds: 30));
-        await $(find.text(UITextConstants.callAccept)).tap();
+        await $(find.text(CallText.callAccept)).tap();
         await _grantMediaPermissions($);
       }
 
@@ -45,7 +45,7 @@ void main() {
 
       if (_role == 'caller') {
         await $.pump(const Duration(seconds: 5));
-        await $(find.text(UITextConstants.callHangup)).tap();
+        await $(find.text(CallText.callHangup)).tap();
       }
 
       final deadline = DateTime.now().add(const Duration(seconds: 60));

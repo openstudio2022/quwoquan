@@ -11,8 +11,11 @@ import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart'
+    show runtimeFailureFromError;
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 final assistantHalfSheetPersonalizationProvider = FutureProvider.autoDispose
     .family<AssistantHalfSheetPersonalization, AssistantOpenContext>((
@@ -188,6 +191,30 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
     });
   }
 
+  Future<void> _handlePersonalizationErrorAction(UiErrorAction action) async {
+    switch (action.type) {
+      case UiErrorActionType.retry:
+      case UiErrorActionType.resubmit:
+        ref.invalidate(
+          assistantHalfSheetPersonalizationProvider(widget.openContext),
+        );
+        return;
+      case UiErrorActionType.openSettings:
+        _closeAndPush(AppRoutePaths.assistantSkills);
+        return;
+      case UiErrorActionType.login:
+        _closeAndPush(
+          AppRoutePaths.login(redirect: AppRoutePaths.assistantPersonal),
+        );
+        return;
+      case UiErrorActionType.openUpdate:
+        return;
+      case UiErrorActionType.dismiss:
+        Navigator.of(context).pop();
+        return;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
@@ -229,9 +256,27 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
         personalization?.suggestionLines ?? const <String>[];
     final suggestedActions =
         personalization?.suggestedActions ?? const <SuggestedAction>[];
-    final errorMessage = personalizationAsync.hasError
-        ? runtimeErrorDisplayMessage(personalizationAsync.error!).trim()
-        : '';
+    final personalizationError = personalizationAsync.hasError
+        ? personalizationAsync.error
+        : null;
+    final personalizationFailure = personalizationError == null
+        ? null
+        : runtimeFailureFromError(personalizationError);
+    final permissionRequired =
+        personalizationFailure?.kind == RuntimeFailureKind.permission;
+    final errorSemantic = personalizationError == null
+        ? null
+        : runtimeErrorSemantic(
+            context,
+            error: personalizationError,
+            category: permissionRequired
+                ? UiErrorCategory.permissionRequired
+                : UiErrorCategory.sectionLoad,
+            scope: UiErrorScope.section,
+            allowOpenSettings: permissionRequired,
+            presentation: UiErrorPresentation.transientNotice,
+            sourceSurfaceId: AppUiSurfaces.assistantHalfSheet.id,
+          );
 
     return Container(
       decoration: BoxDecoration(
@@ -295,17 +340,12 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
                   ),
                 ),
               ),
-            if (errorMessage.isNotEmpty) ...[
+            if (errorSemantic != null) ...[
               SizedBox(height: intraSm),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: containerMd),
-                child: Text(
-                  errorMessage,
-                  style: TextStyle(
-                    fontSize: AppTypography.sm,
-                    color: fgSecondary,
-                  ),
-                ),
+              AppTransientErrorNotice(
+                margin: EdgeInsets.symmetric(horizontal: containerMd),
+                semantic: errorSemantic,
+                onAction: _handlePersonalizationErrorAction,
               ),
             ],
             if (showLoadingSkeleton) ...[

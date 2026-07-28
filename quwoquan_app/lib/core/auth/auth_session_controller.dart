@@ -6,8 +6,14 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   static const Duration _startupRestoreReadBudget = Duration(seconds: 2);
 
   bool _restoreStarted = false;
+  Future<void>? _restoreInFlight;
+  Future<bool>? _anonymousBootstrapInFlight;
   Future<bool>? _refreshInFlight;
   void Function()? _cancelPendingStartupRestore;
+  Object? _lastTrustedSessionFailure;
+  StackTrace? _lastTrustedSessionFailureStack;
+  int _explicitLoginGeneration = 0;
+  Future<void> _sessionMutationTail = Future<void>.value();
 
   AuthSessionStore get _store => ref.read(authSessionStoreProvider);
 
@@ -22,66 +28,178 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     return const AuthSessionState.restoring();
   }
 
-  Future<void> restore() async {
+  Future<void> restore() {
+    final inFlight = _restoreInFlight;
+    if (inFlight != null) {
+      return inFlight;
+    }
+    late final Future<void> restore;
+    restore = _performRestore().whenComplete(() {
+      if (identical(_restoreInFlight, restore)) {
+        _restoreInFlight = null;
+      }
+    });
+    _restoreInFlight = restore;
+    return restore;
+  }
+
+  Future<void> _performRestore() async {
     try {
       final stored = await _readStoredSessionWithinStartupBudget();
       _syncDeviceActorId(stored.installId);
       if (!ref.mounted) {
         return;
       }
-      if (stored.accessToken.isNotEmpty &&
-          stored.refreshToken.isNotEmpty &&
-          stored.ownerId.isNotEmpty) {
-        final authenticatedState = AuthSessionState(
-          status: AuthSessionStatus.authenticated,
-          accessToken: stored.accessToken,
-          refreshToken: stored.refreshToken,
-          ownerId: stored.ownerId,
-          activeSubAccountId: stored.activeSubAccountId,
-          accountState: stored.accountState,
-          identityOrigin: stored.identityOrigin,
-          installId: stored.installId,
-          rememberedLoginMethod: stored.rememberedLoginMethod,
-          rememberedLoginMaskedIdentifier:
-              stored.rememberedLoginMaskedIdentifier,
-          rememberedDisplayName: stored.rememberedDisplayName,
-          rememberedAvatarUrl: stored.rememberedAvatarUrl,
-          rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
-        );
-        state = authenticatedState;
+      if (stored.hasCompleteActiveSession) {
+        state = _stateFromStoredSession(stored);
         if (_shouldRefreshDuringRestore(stored)) {
           await refreshSessionIfNeeded(force: true);
         }
         return;
       }
-      state = AuthSessionState(
-        status: AuthSessionStatus.guest,
-        promptReason: stored.launchPromptDismissed
-            ? null
-            : stored.manualLoggedOut
-            ? AuthPromptReason.manualLoggedOut
-            : AuthPromptReason.firstRun,
-        installId: stored.installId,
-        rememberedLoginMethod: stored.rememberedLoginMethod,
-        rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
-        rememberedDisplayName: stored.rememberedDisplayName,
-        rememberedAvatarUrl: stored.rememberedAvatarUrl,
-        rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
-      );
-    } catch (e) {
+      state = _guestStateFromStored(stored);
+      await ensureTrustedGuestSession(knownStored: stored);
+    } catch (error, stackTrace) {
+      _rememberTrustedSessionFailure(error, stackTrace);
       if (!ref.mounted) {
         return;
       }
       state = AuthSessionState(
         status: AuthSessionStatus.guest,
         promptReason: AuthPromptReason.sessionExpired,
+        installId: state.installId,
         rememberedLoginMethod: state.rememberedLoginMethod,
         rememberedLoginMaskedIdentifier: state.rememberedLoginMaskedIdentifier,
         rememberedDisplayName: state.rememberedDisplayName,
         rememberedAvatarUrl: state.rememberedAvatarUrl,
         rememberedNicknameCustomized: state.rememberedNicknameCustomized,
-        errorMessage: runtimeErrorDisplayMessage(e),
+        errorMessage: runtimeErrorDisplayMessage(error),
       );
+    }
+  }
+
+  /// 为普通 Remote 请求提供可信 bearer。
+  ///
+  /// 安全启动面不等待该 Future；业务请求会等待既有 session restore 或一次
+  /// `LoginAnonymous`。bootstrap 失败会把同一结构化错误交给请求链，而不是退回裸
+  /// `X-Client-Device-Actor-Id` 后得到伪成功空列表。
+  Future<String?> accessTokenForRequest() async {
+    final restore = _restoreInFlight;
+    if (restore != null) {
+      await restore;
+    }
+    if (state.hasTrustedSession) {
+      return state.accessToken;
+    }
+    final previousFailure = _takeTrustedSessionFailure();
+    if (previousFailure != null) {
+      Error.throwWithStackTrace(previousFailure.$1, previousFailure.$2);
+    }
+    try {
+      await ensureTrustedGuestSession();
+    } catch (_) {
+      // 本次请求已经直接收到 bootstrap 原始异常，避免下一请求再次消费同一失败。
+      _takeTrustedSessionFailure();
+      rethrow;
+    }
+    final token = state.accessToken.trim();
+    if (!state.hasTrustedSession || token.isEmpty) {
+      throw StateError('trusted guest session bootstrap produced no session');
+    }
+    return token;
+  }
+
+  /// 首次安装、会话清理或匿名 token 失效后的单飞 bootstrap。
+  Future<bool> ensureTrustedGuestSession({StoredAuthSession? knownStored}) {
+    if (state.hasTrustedSession) {
+      return Future<bool>.value(true);
+    }
+    final inFlight = _anonymousBootstrapInFlight;
+    if (inFlight != null) {
+      return inFlight;
+    }
+    _lastTrustedSessionFailure = null;
+    _lastTrustedSessionFailureStack = null;
+    late final Future<bool> bootstrap;
+    bootstrap = _performTrustedGuestBootstrap(knownStored: knownStored)
+        .whenComplete(() {
+          if (identical(_anonymousBootstrapInFlight, bootstrap)) {
+            _anonymousBootstrapInFlight = null;
+          }
+        });
+    _anonymousBootstrapInFlight = bootstrap;
+    return bootstrap;
+  }
+
+  Future<bool> _performTrustedGuestBootstrap({
+    StoredAuthSession? knownStored,
+  }) async {
+    try {
+      final stored = knownStored ?? await _store.read();
+      _syncDeviceActorId(stored.installId);
+      if (!ref.mounted) {
+        return false;
+      }
+      if (stored.hasCompleteActiveSession) {
+        state = _stateFromStoredSession(stored);
+        return true;
+      }
+      final installId = stored.installId.trim();
+      final fingerprint = deriveAnonymousDeviceFingerprintHash(installId);
+      if (installId.isEmpty || fingerprint.isEmpty) {
+        throw StateError('anonymous bootstrap requires install identity');
+      }
+      final explicitLoginGeneration = _explicitLoginGeneration;
+      final result = await ref
+          .read(accountSessionLoginCommandWriterProvider)
+          .loginAnonymous(
+            LoginAnonymousCommand(
+              installId: installId,
+              deviceFingerprintHash: fingerprint,
+              platform: CloudRequestHeaders.platform(),
+              appVersion: CloudRequestHeaders.appVersion,
+            ),
+          );
+      _validateAnonymousGrant(result);
+      return _runSessionMutation<bool>(() async {
+        if (_explicitLoginGeneration != explicitLoginGeneration ||
+            state.isAuthenticated) {
+          return state.hasTrustedSession;
+        }
+        await _store.saveLoginGrant(
+          result,
+          rememberedLoginMethod: AuthRememberedLoginMethod.anonymous,
+        );
+        final persisted = await _store.read();
+        _syncDeviceActorId(persisted.installId);
+        if (!ref.mounted) {
+          return false;
+        }
+        if (_explicitLoginGeneration != explicitLoginGeneration ||
+            state.isAuthenticated) {
+          return state.hasTrustedSession;
+        }
+        state = _trustedGuestStateFromStored(persisted);
+        return true;
+      });
+    } catch (error, stackTrace) {
+      _rememberTrustedSessionFailure(error, stackTrace);
+      if (ref.mounted && !state.isAuthenticated) {
+        state = state.copyWith(
+          status: AuthSessionStatus.guest,
+          errorMessage: () => runtimeErrorDisplayMessage(error),
+        );
+      }
+      rethrow;
+    }
+  }
+
+  void _validateAnonymousGrant(AuthSessionGrant result) {
+    if (result.accessToken.trim().isEmpty ||
+        result.refreshToken.trim().isEmpty ||
+        result.ownerId.trim().isEmpty ||
+        (result.activeSub?.subAccountId.trim() ?? '').isEmpty) {
+      throw StateError('anonymous login returned an incomplete session grant');
     }
   }
 
@@ -143,27 +261,32 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   }
 
   Future<void> applyLoginGrant(AuthSessionGrant result) async {
-    await _store.saveLoginGrant(result);
-    final stored = await _store.read();
-    _syncDeviceActorId(stored.installId);
-    if (!ref.mounted) {
-      return;
-    }
-    state = AuthSessionState(
-      status: AuthSessionStatus.authenticated,
-      accessToken: stored.accessToken,
-      refreshToken: stored.refreshToken,
-      ownerId: stored.ownerId,
-      activeSubAccountId: stored.activeSubAccountId,
-      accountState: stored.accountState,
-      identityOrigin: stored.identityOrigin,
-      installId: stored.installId,
-      rememberedLoginMethod: stored.rememberedLoginMethod,
-      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
-      rememberedDisplayName: stored.rememberedDisplayName,
-      rememberedAvatarUrl: stored.rememberedAvatarUrl,
-      rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
-    );
+    _explicitLoginGeneration += 1;
+    await _runSessionMutation<void>(() async {
+      await _store.saveLoginGrant(result);
+      final stored = await _store.read();
+      _syncDeviceActorId(stored.installId);
+      if (!ref.mounted) {
+        return;
+      }
+      state = _stateFromStoredSession(stored);
+    });
+  }
+
+  Future<void> applyTrustedGuestGrant(AuthSessionGrant result) async {
+    _validateAnonymousGrant(result);
+    await _runSessionMutation<void>(() async {
+      await _store.saveLoginGrant(
+        result,
+        rememberedLoginMethod: AuthRememberedLoginMethod.anonymous,
+      );
+      final stored = await _store.read();
+      _syncDeviceActorId(stored.installId);
+      if (!ref.mounted) {
+        return;
+      }
+      state = _trustedGuestStateFromStored(stored);
+    });
   }
 
   Future<void> applyRememberedLoginGrant(
@@ -172,32 +295,21 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     String? rememberedLoginMaskedIdentifier,
     String? rememberedLoginIdentifier,
   }) async {
-    await _store.saveLoginGrant(
-      result,
-      rememberedLoginMethod: rememberedLoginMethod,
-      rememberedLoginMaskedIdentifier: rememberedLoginMaskedIdentifier,
-      rememberedLoginIdentifier: rememberedLoginIdentifier,
-    );
-    final stored = await _store.read();
-    _syncDeviceActorId(stored.installId);
-    if (!ref.mounted) {
-      return;
-    }
-    state = AuthSessionState(
-      status: AuthSessionStatus.authenticated,
-      accessToken: stored.accessToken,
-      refreshToken: stored.refreshToken,
-      ownerId: stored.ownerId,
-      activeSubAccountId: stored.activeSubAccountId,
-      accountState: stored.accountState,
-      identityOrigin: stored.identityOrigin,
-      installId: stored.installId,
-      rememberedLoginMethod: stored.rememberedLoginMethod,
-      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
-      rememberedDisplayName: stored.rememberedDisplayName,
-      rememberedAvatarUrl: stored.rememberedAvatarUrl,
-      rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
-    );
+    _explicitLoginGeneration += 1;
+    await _runSessionMutation<void>(() async {
+      await _store.saveLoginGrant(
+        result,
+        rememberedLoginMethod: rememberedLoginMethod,
+        rememberedLoginMaskedIdentifier: rememberedLoginMaskedIdentifier,
+        rememberedLoginIdentifier: rememberedLoginIdentifier,
+      );
+      final stored = await _store.read();
+      _syncDeviceActorId(stored.installId);
+      if (!ref.mounted) {
+        return;
+      }
+      state = _authenticatedStateFromStored(stored);
+    });
   }
 
   Future<void> applyRefreshGrant(TokenRefreshGrant result) async {
@@ -214,7 +326,9 @@ class AuthSessionController extends Notifier<AuthSessionState> {
       return;
     }
     state = AuthSessionState(
-      status: AuthSessionStatus.authenticated,
+      status: current.isGuest
+          ? AuthSessionStatus.guest
+          : AuthSessionStatus.authenticated,
       accessToken: accessToken,
       refreshToken: refreshToken,
       ownerId: current.ownerId.isNotEmpty ? current.ownerId : stored.ownerId,
@@ -227,6 +341,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
       identityOrigin: current.identityOrigin.isNotEmpty
           ? current.identityOrigin
           : stored.identityOrigin,
+      trustedGuestSession: current.isAnonymousSession,
       installId: stored.installId,
       rememberedLoginMethod: stored.rememberedLoginMethod,
       rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
@@ -241,7 +356,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     Future<void>? abortTrigger,
   }) async {
     final current = state;
-    if (!current.isAuthenticated || current.refreshToken.trim().isEmpty) {
+    if (!current.hasTrustedSession || current.refreshToken.trim().isEmpty) {
       return false;
     }
     if (!force && _refreshInFlight != null) {
@@ -277,16 +392,9 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     if (!ref.mounted) {
       return;
     }
-    state = AuthSessionState(
-      status: AuthSessionStatus.guest,
-      promptReason: reason,
-      installId: stored.installId,
-      rememberedLoginMethod: stored.rememberedLoginMethod,
-      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
-      rememberedDisplayName: stored.rememberedDisplayName,
-      rememberedAvatarUrl: stored.rememberedAvatarUrl,
-      rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
-    );
+    state = stored.hasCompleteActiveSession
+        ? _trustedGuestStateFromStored(stored, promptReason: reason)
+        : _guestStateFromStored(stored, promptReason: reason);
   }
 
   /// 软退出（默认）：仅失效当前活跃会话，保留快速登录凭证与账号摘要。
@@ -411,7 +519,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   Future<bool> _performRefresh({Future<void>? abortTrigger}) async {
     final current = state;
     final refreshToken = current.refreshToken.trim();
-    if (!current.isAuthenticated || refreshToken.isEmpty) {
+    if (!current.hasTrustedSession || refreshToken.isEmpty) {
       return false;
     }
     try {
@@ -533,6 +641,121 @@ class AuthSessionController extends Notifier<AuthSessionState> {
         stackTrace: stackTrace,
       );
     }
+  }
+
+  AuthSessionState _stateFromStoredSession(StoredAuthSession stored) {
+    if (stored.isAnonymousSession) {
+      return _trustedGuestStateFromStored(stored);
+    }
+    return _authenticatedStateFromStored(stored);
+  }
+
+  AuthSessionState _authenticatedStateFromStored(StoredAuthSession stored) {
+    return AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: stored.accessToken,
+      refreshToken: stored.refreshToken,
+      ownerId: stored.ownerId,
+      activeSubAccountId: stored.activeSubAccountId,
+      accountState: stored.accountState,
+      identityOrigin: stored.identityOrigin,
+      installId: stored.installId,
+      rememberedLoginMethod: stored.rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
+      rememberedDisplayName: stored.rememberedDisplayName,
+      rememberedAvatarUrl: stored.rememberedAvatarUrl,
+      rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
+    );
+  }
+
+  AuthSessionState _trustedGuestStateFromStored(
+    StoredAuthSession stored, {
+    AuthPromptReason? promptReason,
+  }) {
+    return AuthSessionState(
+      status: AuthSessionStatus.guest,
+      promptReason: promptReason ?? _guestPromptReason(stored),
+      accessToken: stored.accessToken,
+      refreshToken: stored.refreshToken,
+      ownerId: stored.ownerId,
+      activeSubAccountId: stored.activeSubAccountId,
+      accountState: stored.accountState,
+      identityOrigin: stored.identityOrigin,
+      trustedGuestSession: stored.isAnonymousSession,
+      installId: stored.installId,
+      rememberedLoginMethod: stored.rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
+      rememberedDisplayName: stored.rememberedDisplayName,
+      rememberedAvatarUrl: stored.rememberedAvatarUrl,
+      rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
+    );
+  }
+
+  AuthSessionState _guestStateFromStored(
+    StoredAuthSession stored, {
+    AuthPromptReason? promptReason,
+  }) {
+    return AuthSessionState(
+      status: AuthSessionStatus.guest,
+      promptReason: promptReason ?? _guestPromptReason(stored),
+      installId: stored.installId,
+      rememberedLoginMethod: stored.rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
+      rememberedDisplayName: stored.rememberedDisplayName,
+      rememberedAvatarUrl: stored.rememberedAvatarUrl,
+      rememberedNicknameCustomized: stored.rememberedNicknameCustomized,
+    );
+  }
+
+  AuthPromptReason? _guestPromptReason(StoredAuthSession stored) {
+    if (stored.launchPromptDismissed) {
+      return null;
+    }
+    return stored.manualLoggedOut
+        ? AuthPromptReason.manualLoggedOut
+        : AuthPromptReason.firstRun;
+  }
+
+  Future<T> _runSessionMutation<T>(Future<T> Function() mutation) {
+    final result = Completer<T>();
+    final previous = _sessionMutationTail;
+    _sessionMutationTail = () async {
+      try {
+        await previous;
+      } catch (_) {
+        // 前一项失败不能永久锁死会话持久化队列。
+      }
+      try {
+        result.complete(await mutation());
+      } catch (error, stackTrace) {
+        result.completeError(error, stackTrace);
+      }
+    }();
+    return result.future;
+  }
+
+  void _rememberTrustedSessionFailure(Object error, StackTrace stackTrace) {
+    _lastTrustedSessionFailure = error;
+    _lastTrustedSessionFailureStack = stackTrace;
+    final cloudErrorCode = error is CloudException ? error.code?.trim() : null;
+    final code = cloudErrorCode == null || cloudErrorCode.isEmpty
+        ? error.runtimeType.toString()
+        : cloudErrorCode;
+    developer.log(
+      'trusted guest session unavailable code=$code',
+      name: 'AuthSessionController',
+    );
+  }
+
+  (Object, StackTrace)? _takeTrustedSessionFailure() {
+    final error = _lastTrustedSessionFailure;
+    if (error == null) {
+      return null;
+    }
+    final stackTrace = _lastTrustedSessionFailureStack ?? StackTrace.current;
+    _lastTrustedSessionFailure = null;
+    _lastTrustedSessionFailureStack = null;
+    return (error, stackTrace);
   }
 
   bool _shouldRefreshDuringRestore(StoredAuthSession stored) {

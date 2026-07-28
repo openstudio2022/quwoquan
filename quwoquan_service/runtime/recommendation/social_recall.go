@@ -2,6 +2,8 @@ package recommendation
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 )
 
@@ -59,8 +61,10 @@ func (s *SocialRecallSource) Recall(ctx context.Context, req RecallRequest) ([]C
 		friendLimit = 5
 	}
 
-	friendContent, err := s.socialProvider.GetFriendInteractedContent(ctx, req.UserID, friendLimit)
-	if err != nil {
+	var recallErrs []error
+	friendContent, friendContentErr := s.socialProvider.GetFriendInteractedContent(ctx, req.UserID, friendLimit)
+	if friendContentErr != nil {
+		recallErrs = append(recallErrs, fmt.Errorf("friend interaction recall: %w", friendContentErr))
 		friendContent = nil
 	}
 
@@ -73,11 +77,16 @@ func (s *SocialRecallSource) Recall(ctx context.Context, req RecallRequest) ([]C
 				friendCandidates[i].RecallPath = "social_friend"
 			}
 			candidates = append(candidates, friendCandidates...)
+		} else {
+			recallErrs = append(recallErrs, fmt.Errorf("friend candidate hydration: %w", err))
 		}
 	}
 
 	if len(candidates) < limit {
-		circleIDs, _ := s.socialProvider.GetUserCircleIDs(ctx, req.UserID)
+		circleIDs, circleErr := s.socialProvider.GetUserCircleIDs(ctx, req.UserID)
+		if circleErr != nil {
+			recallErrs = append(recallErrs, fmt.Errorf("circle membership recall: %w", circleErr))
+		}
 		if len(circleIDs) > 0 {
 			remaining := limit - len(candidates)
 			circleCandidates, err := s.candidateDB.GetCircleHotContent(ctx, circleIDs, remaining, s.maxAge)
@@ -93,6 +102,8 @@ func (s *SocialRecallSource) Recall(ctx context.Context, req RecallRequest) ([]C
 					circleCandidates[i].RecallPath = "social_circle"
 					candidates = append(candidates, circleCandidates[i])
 				}
+			} else {
+				recallErrs = append(recallErrs, fmt.Errorf("circle candidate recall: %w", err))
 			}
 		}
 	}
@@ -105,5 +116,5 @@ func (s *SocialRecallSource) Recall(ctx context.Context, req RecallRequest) ([]C
 	if len(candidates) > limit {
 		candidates = candidates[:limit]
 	}
-	return candidates, nil
+	return candidates, errors.Join(recallErrs...)
 }

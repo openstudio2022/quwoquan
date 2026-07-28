@@ -12,121 +12,121 @@ String _footprintTypeLabel(String type) =>
 String _contentLabelForKey(String labelKey) {
   switch (labelKey) {
     case 'discovery_rail_moment':
-      return UITextConstants.discoveryRailMoment;
+      return DiscoveryText.discoveryRailMoment;
     case 'discovery_rail_work':
-      return UITextConstants.discoveryRailWorks;
+      return DiscoveryText.discoveryRailWorks;
     case 'creation_filter_all':
-      return UITextConstants.creationFilterAll;
+      return DiscoveryText.creationFilterAll;
     case 'creation_filter_moment':
-      return UITextConstants.creationFilterMoment;
+      return DiscoveryText.creationFilterMoment;
     case 'creation_filter_work':
-      return UITextConstants.creationFilterWork;
+      return DiscoveryText.creationFilterWork;
     case 'profile_tab_creations':
-      return UITextConstants.profileTabCreations;
+      return ProfileText.profileTabCreations;
     case 'profile_tab_interaction':
-      return UITextConstants.profileTabInteraction;
+      return ProfileText.profileTabInteraction;
     case 'profile_tab_footprint':
-      return UITextConstants.profileTabFootprint;
+      return ProfileText.profileTabFootprint;
     case 'profile_tab_lifestyle':
-      return UITextConstants.profileTabLifestyle;
+      return ProfileText.profileTabLifestyle;
     case 'homepage_tab_record':
-      return UITextConstants.objectTabRecord;
+      return ObjectHomepageText.objectTabRecord;
     case 'homepage_tab_discussion':
-      return UITextConstants.objectTabDiscussion;
+      return ObjectHomepageText.objectTabDiscussion;
     case 'homepage_tab_related_circles':
-      return UITextConstants.objectTabRelatedCircles;
+      return ObjectHomepageText.objectTabRelatedCircles;
     case 'homepage_sub_all':
-      return UITextConstants.creationSubAll;
+      return ProfileText.creationSubAll;
     case 'homepage_sub_image':
-      return UITextConstants.creationSubImage;
+      return ProfileText.creationSubImage;
     case 'homepage_sub_video':
-      return UITextConstants.creationSubVideo;
+      return ProfileText.creationSubVideo;
     case 'homepage_sub_opinion':
-      return UITextConstants.homepageSubOpinion;
+      return ObjectHomepageText.homepageSubOpinion;
     case 'homepage_sub_question':
-      return UITextConstants.homepageSubQuestion;
+      return ObjectHomepageText.homepageSubQuestion;
     case 'homepage_sub_campus_life':
-      return UITextConstants.homepageSubCampusLife;
+      return ObjectHomepageText.homepageSubCampusLife;
     case 'circle_tab_record':
-      return UITextConstants.objectTabRecord;
+      return ObjectHomepageText.objectTabRecord;
     case 'circle_tab_discussion':
-      return UITextConstants.objectTabDiscussion;
+      return ObjectHomepageText.objectTabDiscussion;
     case 'circle_tab_members':
-      return UITextConstants.objectTabMembers;
+      return ObjectHomepageText.objectTabMembers;
     case 'circle_section_works':
-      return UITextConstants.circleWorksTab;
+      return CommunityText.circleWorksTab;
     case 'circle_section_members':
-      return UITextConstants.objectTabMembers;
+      return ObjectHomepageText.objectTabMembers;
     case 'circle_section_chat':
-      return UITextConstants.circleGroups;
+      return CommunityText.circleGroups;
     case 'circle_section_storage':
-      return UITextConstants.circleAssetsTab;
+      return CommunityText.circleAssetsTab;
     case 'lifestyle_sub_footprint':
-      return UITextConstants.lifestyleSubFootprint;
+      return ProfileText.lifestyleSubFootprint;
     case 'lifestyle_sub_soul':
-      return UITextConstants.lifestyleSubSoul;
+      return ProfileText.lifestyleSubSoul;
     case 'lifestyle_sub_taste':
-      return UITextConstants.lifestyleSubTaste;
+      return ProfileText.lifestyleSubTaste;
     case 'lifestyle_sub_private':
-      return UITextConstants.lifestyleSubPrivate;
+      return ProfileText.lifestyleSubPrivate;
     case 'creation_sub_all':
-      return UITextConstants.creationSubAll;
+      return ProfileText.creationSubAll;
     case 'creation_sub_micro':
-      return UITextConstants.creationSubMicro;
+      return ProfileText.creationSubMicro;
     case 'creation_sub_image':
-      return UITextConstants.creationSubImage;
+      return ProfileText.creationSubImage;
     case 'creation_sub_video':
-      return UITextConstants.creationSubVideo;
+      return ProfileText.creationSubVideo;
     case 'creation_sub_article':
-      return UITextConstants.creationSubArticle;
+      return ProfileText.creationSubArticle;
     case 'creation_sub_text':
-      return UITextConstants.creationSubText;
+      return ProfileText.creationSubText;
     case 'interaction_sub_all':
-      return UITextConstants.interactionSubAll;
+      return ProfileText.interactionSubAll;
     case 'interaction_sub_likes':
-      return UITextConstants.interactionSubLikes;
+      return ProfileText.interactionSubLikes;
     case 'interaction_sub_comments':
-      return UITextConstants.interactionSubComments;
+      return ProfileText.interactionSubComments;
     case 'interaction_sub_shares':
-      return UITextConstants.interactionSubShares;
+      return ProfileText.interactionSubShares;
     case 'interaction_sub_views':
-      return UITextConstants.interactionSubViews;
+      return ProfileText.interactionSubViews;
     case 'work_format_all':
-      return UITextConstants.workFormatFilterAll;
+      return DiscoveryText.workFormatFilterAll;
     case 'work_format_image':
-      return UITextConstants.workFormatFilterImage;
+      return DiscoveryText.workFormatFilterImage;
     case 'work_format_video':
-      return UITextConstants.workFormatFilterVideo;
+      return DiscoveryText.workFormatFilterVideo;
     case 'work_format_article':
-      return UITextConstants.workFormatFilterArticle;
+      return DiscoveryText.workFormatFilterArticle;
     case 'article_paper_theme_system':
-      return UITextConstants.articlePaperThemeSystem;
+      return DiscoveryText.articlePaperThemeSystem;
     case 'article_paper_theme_dark_paper':
-      return UITextConstants.articlePaperThemeDarkPaper;
+      return DiscoveryText.articlePaperThemeDarkPaper;
     case 'article_paper_theme_cool_gray':
-      return UITextConstants.articlePaperThemeCoolGray;
+      return DiscoveryText.articlePaperThemeCoolGray;
     case 'article_paper_theme_warm_black':
-      return UITextConstants.articlePaperThemeWarmBlack;
+      return DiscoveryText.articlePaperThemeWarmBlack;
     case 'article_paper_theme_ink_green':
-      return UITextConstants.articlePaperThemeInkGreen;
+      return DiscoveryText.articlePaperThemeInkGreen;
     case 'article_paper_theme_deep_brown':
-      return UITextConstants.articlePaperThemeDeepBrown;
+      return DiscoveryText.articlePaperThemeDeepBrown;
     case 'share_template_moment_title':
-      return UITextConstants.shareTemplateMomentTitle;
+      return MediaText.shareTemplateMomentTitle;
     case 'share_template_moment_subtitle':
-      return UITextConstants.shareTemplateMomentSubtitle;
+      return MediaText.shareTemplateMomentSubtitle;
     case 'share_template_work_title':
-      return UITextConstants.shareTemplateWorkTitle;
+      return MediaText.shareTemplateWorkTitle;
     case 'share_template_work_subtitle':
-      return UITextConstants.shareTemplateWorkSubtitle;
+      return MediaText.shareTemplateWorkSubtitle;
     case 'tab_photo':
-      return UITextConstants.discoveryTabPhoto;
+      return DiscoveryText.discoveryTabPhoto;
     case 'tab_video':
-      return UITextConstants.discoveryTabVideo;
+      return DiscoveryText.discoveryTabVideo;
     case 'tab_moment':
-      return UITextConstants.discoveryTabMoment;
+      return DiscoveryText.discoveryTabMoment;
     case 'tab_article':
-      return UITextConstants.discoveryTabArticle;
+      return DiscoveryText.discoveryTabArticle;
     default:
       return labelKey;
   }

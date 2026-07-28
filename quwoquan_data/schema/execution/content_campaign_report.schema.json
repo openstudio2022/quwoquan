@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/content_campaign_report.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "rootExecutionId",
+    "status",
+    "phase",
+    "planDigest",
+    "gitCommitSha",
+    "sourceDigest",
+    "entityCatalogDigest",
+    "lanes",
+    "failure",
+    "startedAt",
+    "updatedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "quwoquan_data.content_campaign_report" },
+    "rootExecutionId": { "type": "string", "minLength": 1 },
+    "status": {
+      "enum": ["awaiting_submissions", "running", "succeeded", "blocked"]
+    },
+    "phase": {
+      "enum": [
+        "submission",
+        "freeze",
+        "clone",
+        "review",
+        "quota_barrier",
+        "publish",
+        "cleanup",
+        "completed"
+      ]
+    },
+    "planDigest": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+    "gitCommitSha": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{40,64}$"
+    },
+    "sourceDigest": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "entityCatalogDigest": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "lanes": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": { "$ref": "#/$defs/lane" },
+        "article": { "$ref": "#/$defs/lane" },
+        "image": { "$ref": "#/$defs/lane" },
+        "video": { "$ref": "#/$defs/lane" }
+      }
+    },
+    "failure": { "type": ["string", "null"] },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "lane": {
+      "type": "object",
+      "required": [
+        "executionId",
+        "status",
+        "phase",
+        "reviewReturnCode",
+        "publishReturnCode",
+        "cloneRef",
+        "cloneCommitSha",
+        "cloneSourceDigest",
+        "cloneDetached",
+        "cleanupStatus",
+        "approvedQuota",
+        "qualifiedCount",
+        "finalizedCount",
+        "error"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "executionId": { "type": "string", "minLength": 1 },
+        "status": {
+          "enum": [
+            "pending",
+            "clone_ready",
+            "reviewed",
+            "review_qualified",
+            "published",
+            "finalized",
+            "blocked"
+          ]
+        },
+        "phase": {
+          "enum": ["submission", "clone", "review", "publish"]
+        },
+        "reviewReturnCode": { "type": ["integer", "null"] },
+        "publishReturnCode": { "type": ["integer", "null"] },
+        "cloneRef": { "type": ["string", "null"], "minLength": 1 },
+        "cloneCommitSha": {
+          "type": ["string", "null"],
+          "pattern": "^[a-f0-9]{40,64}$"
+        },
+        "cloneSourceDigest": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "cloneDetached": { "type": ["boolean", "null"] },
+        "cleanupStatus": {
+          "enum": ["not_created", "pending", "cleaned", "failed"]
+        },
+        "approvedQuota": { "type": ["integer", "null"], "minimum": 1 },
+        "qualifiedCount": { "type": ["integer", "null"], "minimum": 0 },
+        "finalizedCount": { "type": ["integer", "null"], "minimum": 0 },
+        "error": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

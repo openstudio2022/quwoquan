@@ -86,7 +86,7 @@ void main() {
       );
 
       expect(actions.map((action) => action.label), <String>[
-        UITextConstants.mediaPickerOneTapMovie,
+        MediaText.mediaPickerOneTapMovie,
         '下一步(4)',
       ]);
       expect(
@@ -98,7 +98,7 @@ void main() {
       );
       expect(
         actions.map((action) => action.label),
-        contains(UITextConstants.mediaPickerOneTapMovie),
+        contains(MediaText.mediaPickerOneTapMovie),
       );
     });
 
@@ -110,7 +110,7 @@ void main() {
 
       expect(actions, hasLength(2));
       expect(actions.every((action) => !action.enabled), isTrue);
-      expect(actions.first.label, UITextConstants.mediaPickerOneTapMovie);
+      expect(actions.first.label, MediaText.mediaPickerOneTapMovie);
       expect(actions.last.label, '下一步(0)');
     });
 
@@ -145,7 +145,7 @@ void main() {
       expect(actions.single.action, CreateMediaPickerBottomAction.nextStep);
       expect(actions.single.label, '下一步(1)');
       expect(actions.single.label, isNot(contains('完成')));
-      expect(actions.single.label, isNot(UITextConstants.mediaPickerEditImage));
+      expect(actions.single.label, isNot(MediaText.mediaPickerEditImage));
     });
 
     testWidgets('相册下拉展示目录并切换当前图片集合，图片模式过滤视频', (tester) async {
@@ -163,20 +163,20 @@ void main() {
       await tester.pumpWidget(_pickerApp(service: service));
       await _pumpMediaPickerFrame(tester);
 
-      expect(find.text(UITextConstants.mediaPickerCategoryAll), findsNothing);
-      expect(find.text(UITextConstants.mediaPickerCategoryPhoto), findsNothing);
-      expect(find.text(UITextConstants.mediaPickerCategoryLive), findsNothing);
+      expect(find.text(MediaText.mediaPickerCategoryAll), findsNothing);
+      expect(find.text(MediaText.mediaPickerCategoryPhoto), findsNothing);
+      expect(find.text(MediaText.mediaPickerCategoryLive), findsNothing);
       expect(
-        find.text(UITextConstants.mediaPickerCategoryFullscreen),
+        find.text(MediaText.mediaPickerCategoryFullscreen),
         findsNothing,
       );
       expect(
         find.byKey(const ValueKey<String>('media-picker-camera-tile')),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.mediaPickerOneTapMovie), findsOneWidget);
+      expect(find.text(MediaText.mediaPickerOneTapMovie), findsOneWidget);
       expect(
-        find.text(UITextConstants.mediaPickerVideoCameraEntry),
+        find.text(MediaText.mediaPickerVideoCameraEntry),
         findsNothing,
       );
       expect(
@@ -184,7 +184,7 @@ void main() {
         findsNothing,
       );
 
-      await tester.tap(find.text(UITextConstants.mediaPickerPhotoTitle));
+      await tester.tap(find.text(MediaText.mediaPickerPhotoTitle));
       await _pumpMediaPickerFrame(tester);
 
       // 相册改为顶部锚定下滑浮层（替代贴底 modal sheet），不再展示「选择相册」标题。
@@ -193,7 +193,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.mediaPickerAlbumSelectionTitle),
+        find.text(MediaText.mediaPickerAlbumSelectionTitle),
         findsNothing,
       );
       expect(
@@ -243,7 +243,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.text(UITextConstants.mediaPickerPhotoTitle));
+      await tester.tap(find.text(MediaText.mediaPickerPhotoTitle));
       await _pumpMediaPickerFrame(tester);
 
       expect(find.text('相机 (1)'), findsOneWidget);
@@ -282,10 +282,10 @@ void main() {
       await tester.pumpWidget(_pickerApp(service: service));
       await _pumpMediaPickerFrame(tester);
 
-      await tester.tap(find.text(UITextConstants.mediaPickerPhotoTitle));
+      await tester.tap(find.text(MediaText.mediaPickerPhotoTitle));
       await _pumpMediaPickerFrame(tester);
 
-      final allLabel = '${UITextConstants.mediaPickerAlbumAllPhotos} (2)';
+      final allLabel = '${MediaText.mediaPickerAlbumAllPhotos} (2)';
       // isAll 相册统一显示为「全部照片」，且即使图片数最少也置顶。
       expect(find.text(allLabel), findsOneWidget);
       final allTop = tester.getTopLeft(find.text(allLabel)).dy;
@@ -407,7 +407,7 @@ void main() {
       await _pumpMediaPickerFrame(tester);
 
       final title = tester.widget<Text>(
-        find.text(UITextConstants.mediaPickerPhotoTitle),
+        find.text(MediaText.mediaPickerPhotoTitle),
       );
       expect(
         title.style?.color,
@@ -461,7 +461,7 @@ void main() {
       );
       await _pumpMediaPickerFrame(tester);
 
-      await tester.tap(find.text(UITextConstants.mediaPickerPhotoTitle));
+      await tester.tap(find.text(MediaText.mediaPickerPhotoTitle));
       await _pumpMediaPickerFrame(tester);
 
       // 浮层强制深色：相册行文案颜色取深色前景。
@@ -747,7 +747,7 @@ void main() {
       final oneTapButtonWhenSingle = tester.widget<CupertinoButton>(
         find.widgetWithText(
           CupertinoButton,
-          UITextConstants.mediaPickerOneTapMovie,
+          MediaText.mediaPickerOneTapMovie,
         ),
       );
       expect(oneTapButtonWhenSingle.onPressed, isNull);
@@ -764,10 +764,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text(UITextConstants.mediaPickerOneTapMovieOriginal),
+        find.text(MediaText.mediaPickerOneTapMovieOriginal),
         findsOneWidget,
       );
-      await tester.tap(find.text(UITextConstants.mediaPickerNextStep));
+      await tester.tap(find.text(MediaText.mediaPickerNextStep));
       await tester.pumpAndSettle();
 
       expect(composer.images, isEmpty);
@@ -829,9 +829,9 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(
-        find.text(UITextConstants.mediaPickerOneTapMovieGentleMotion),
+        find.text(MediaText.mediaPickerOneTapMovieGentleMotion),
       );
-      await tester.tap(find.text(UITextConstants.mediaPickerNextStep));
+      await tester.tap(find.text(MediaText.mediaPickerNextStep));
       await tester.pumpAndSettle();
 
       expect(picked, isNotNull);
@@ -841,7 +841,7 @@ void main() {
       expect(picked!.items.every((item) => item.isImage), isTrue);
       expect(picked!.oneTapMovieEffectId, 'gentle_motion');
       expect(
-        find.text(UITextConstants.mediaPickerOneTapMovieUnavailable),
+        find.text(MediaText.mediaPickerOneTapMovieUnavailable),
         findsNothing,
       );
     });

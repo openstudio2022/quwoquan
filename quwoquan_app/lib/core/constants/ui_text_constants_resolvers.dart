@@ -12,19 +12,19 @@ String _objectIntroSourcePlatform(String sourceKind) =>
 String _homeChannelMoodCopy(String moodCopyKey) {
   switch (moodCopyKey) {
     case 'home_mood_following':
-      return UITextConstants.homeMoodFollowing;
+      return DiscoveryText.homeMoodFollowing;
     case 'home_mood_recommend':
-      return UITextConstants.homeMoodRecommend;
+      return DiscoveryText.homeMoodRecommend;
     case 'home_mood_campus':
-      return UITextConstants.homeMoodCampus;
+      return DiscoveryText.homeMoodCampus;
     case 'home_mood_travel':
-      return UITextConstants.homeMoodTravel;
+      return DiscoveryText.homeMoodTravel;
     case 'home_mood_photography':
-      return UITextConstants.homeMoodPhotography;
+      return DiscoveryText.homeMoodPhotography;
     case 'home_mood_tech':
-      return UITextConstants.homeMoodTech;
+      return DiscoveryText.homeMoodTech;
     case 'home_mood_car':
-      return UITextConstants.homeMoodCar;
+      return DiscoveryText.homeMoodCar;
     default:
       return '';
   }
@@ -33,57 +33,57 @@ String _homeChannelMoodCopy(String moodCopyKey) {
 String _homeChannelLabel(String labelKey) {
   switch (labelKey) {
     case 'home_tab_following':
-      return UITextConstants.homeTabFollowing;
+      return DiscoveryText.homeTabFollowing;
     case 'home_tab_recommend':
-      return UITextConstants.homeTabRecommended;
+      return DiscoveryText.homeTabRecommended;
     case 'home_tab_campus':
-      return UITextConstants.circleScenarioCampus;
+      return DiscoveryText.circleScenarioCampus;
     case 'home_tab_travel':
-      return UITextConstants.homeTabTravel;
+      return DiscoveryText.homeTabTravel;
     case 'home_tab_photography':
-      return UITextConstants.homeTabPhotography;
+      return DiscoveryText.homeTabPhotography;
     case 'home_tab_tech':
-      return UITextConstants.homeTabTech;
+      return DiscoveryText.homeTabTech;
     case 'home_tab_car':
-      return UITextConstants.homeTabCarFriends;
+      return DiscoveryText.homeTabCarFriends;
     default:
-      return UITextConstants.homeTabRecommended;
+      return DiscoveryText.homeTabRecommended;
   }
 }
 
 String _homeObjectActionLabel(String actionType) {
   switch (actionType) {
     case 'follow':
-      return UITextConstants.homeObjectActionFollow;
+      return DiscoveryText.homeObjectActionFollow;
     case 'join':
-      return UITextConstants.homeObjectActionJoin;
+      return DiscoveryText.homeObjectActionJoin;
     case 'add_contact':
-      return UITextConstants.homeObjectActionAddContact;
+      return DiscoveryText.homeObjectActionAddContact;
     case 'view':
-      return UITextConstants.homeObjectActionView;
+      return DiscoveryText.homeObjectActionView;
     default:
-      return UITextConstants.homeObjectActionView;
+      return DiscoveryText.homeObjectActionView;
   }
 }
 
 String _homeObjectSharedCount(int count) {
   if (count <= 0) return '';
-  return '$count${UITextConstants.homeObjectSharedCountSuffix}';
+  return '$count${DiscoveryText.homeObjectSharedCountSuffix}';
 }
 
 String _webPcPrimaryLabel(String routeName) {
   switch (routeName) {
     case 'home':
-      return UITextConstants.webPcPrimaryHome;
+      return DiscoveryText.webPcPrimaryHome;
     case 'featured':
-      return UITextConstants.webPcPrimaryFeatured;
+      return DiscoveryText.webPcPrimaryFeatured;
     case 'create':
-      return UITextConstants.webPcPrimaryCreate;
+      return DiscoveryText.webPcPrimaryCreate;
     case 'chat':
       return ChatText.webPcPrimaryMessages;
     case 'profile':
-      return UITextConstants.webPcPrimaryProfile;
+      return DiscoveryText.webPcPrimaryProfile;
     default:
-      return UITextConstants.webPcPrimaryHome;
+      return DiscoveryText.webPcPrimaryHome;
   }
 }

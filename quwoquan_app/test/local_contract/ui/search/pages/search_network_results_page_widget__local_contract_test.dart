@@ -13,13 +13,12 @@ import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.da
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/ui/search/models/search_result_tab_spec.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 import '../../../../support/recording_app_telemetry_recorder.dart';
 
@@ -64,7 +63,6 @@ Widget _buildApp({
 }) {
   return ProviderScope(
     overrides: [
-      appDataSourceModeProvider.overrideWith(_MockModeNotifier.new),
       circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
       searchFeedbackCommandWriterProvider.overrideWithValue(
         AlphaSearchFeedbackWriter(),
@@ -86,7 +84,6 @@ Widget _buildAppWithSearchRepository({
 }) {
   return ProviderScope(
     overrides: [
-      appDataSourceModeProvider.overrideWith(_MockModeNotifier.new),
       circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
       searchRepositoryProvider.overrideWithValue(repository),
       searchFeedbackCommandWriterProvider.overrideWithValue(
@@ -105,11 +102,6 @@ Widget _buildAppWithSearchRepository({
       home: SearchNetworkResultsPage(launchContext: launchContext),
     ),
   );
-}
-
-final class _MockModeNotifier extends AppDataSourceModeNotifier {
-  @override
-  AppDataSourceMode build() => AppDataSourceMode.mock;
 }
 
 void main() {
@@ -346,7 +338,7 @@ void main() {
     expect(find.text('没有找到“不存在的词条”的结果'), findsOneWidget);
     expect(find.text('试试缩短关键词、检查错别字，或搜索更宽泛的对象。'), findsOneWidget);
     expect(find.text('调整关键词'), findsOneWidget);
-    expect(find.text(UITextConstants.searchRelatedTitle), findsOneWidget);
+    expect(find.text(SearchText.searchRelatedTitle), findsOneWidget);
     expect(find.text('摄影'), findsOneWidget);
 
     await tester.tap(find.text('调整关键词'));
@@ -643,7 +635,7 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
 
     // 不再本地合成"假搜索摘要当成功"；页面进入既有结构化错误态。
-    expect(find.text(UITextConstants.searchUnavailableTitle), findsOneWidget);
+    expect(find.text(SearchText.searchUnavailableTitle), findsOneWidget);
     expect(find.textContaining('已为“露营”整理公开线索摘要'), findsNothing);
   });
 
@@ -683,7 +675,7 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.searchPartialGroupFailed), findsOneWidget);
+    expect(find.text(SearchText.recoveryReloadLaterMessage), findsOneWidget);
     expect(find.text('街头摄影'), findsWidgets);
   });
 
@@ -702,7 +694,7 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.searchPartialGroupFailed), findsOneWidget);
+    expect(find.text(SearchText.recoveryReloadLaterMessage), findsOneWidget);
   });
 
   testWidgets('失效内容留在搜索页并上报 typed degrade 反馈', (tester) async {
@@ -736,7 +728,7 @@ void main() {
     await _pumpUntil(
       tester,
       condition: () => find
-          .text(UITextConstants.searchResultUnavailableTitle)
+          .text(SearchText.searchResultUnavailableTitle)
           .evaluate()
           .isNotEmpty,
     );

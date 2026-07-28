@@ -137,10 +137,12 @@ class AppTelemetryPayload {
     });
   }
 
-  factory AppTelemetryPayload.operationResult({required String operationId, required String result, int? durationMs, String? failReasonCode, String? recoveryAction, String? requestId, String? traceId}) {
+  factory AppTelemetryPayload.operationResult({required String operationId, required String result, String? surfaceId, bool? hasCache, int? durationMs, String? failReasonCode, String? recoveryAction, String? requestId, String? traceId}) {
     return AppTelemetryPayload._('operation_result', 'event', <String, Object?>{
       'operationId': operationId,
       'result': result,
+      if (surfaceId != null) 'surfaceId': surfaceId,
+      if (hasCache != null) 'hasCache': hasCache,
       if (durationMs != null) 'durationMs': durationMs,
       if (failReasonCode != null) 'failReasonCode': failReasonCode,
       if (recoveryAction != null) 'recoveryAction': recoveryAction,
@@ -175,6 +177,60 @@ class AppTelemetryPayload {
       if (recoveryAction != null) 'recoveryAction': recoveryAction,
       if (requestId != null) 'requestId': requestId,
       if (traceId != null) 'traceId': traceId,
+    });
+  }
+
+  factory AppTelemetryPayload.articleReaderEnter({required String surfaceId, required String objectType, required String objectId, required int durationMs, required String result}) {
+    return AppTelemetryPayload._('article_reader_enter', 'event', <String, Object?>{
+      'surfaceId': surfaceId,
+      'objectType': objectType,
+      'objectId': objectId,
+      'durationMs': durationMs,
+      'result': result,
+    });
+  }
+
+  factory AppTelemetryPayload.articleReaderDwell({required String surfaceId, required String objectType, required String objectId, required int durationMs, required String result}) {
+    return AppTelemetryPayload._('article_reader_dwell', 'event', <String, Object?>{
+      'surfaceId': surfaceId,
+      'objectType': objectType,
+      'objectId': objectId,
+      'durationMs': durationMs,
+      'result': result,
+    });
+  }
+
+  factory AppTelemetryPayload.articleReaderExit({required String surfaceId, required String objectType, required String objectId, required int durationMs, required String result}) {
+    return AppTelemetryPayload._('article_reader_exit', 'event', <String, Object?>{
+      'surfaceId': surfaceId,
+      'objectType': objectType,
+      'objectId': objectId,
+      'durationMs': durationMs,
+      'result': result,
+    });
+  }
+
+  factory AppTelemetryPayload.articleReaderError({required String surfaceId, required String objectType, required String objectId, required String errorCode, required String recoveryAction, required String result, int? durationMs}) {
+    return AppTelemetryPayload._('article_reader_error', 'event', <String, Object?>{
+      'surfaceId': surfaceId,
+      'objectType': objectType,
+      'objectId': objectId,
+      'errorCode': errorCode,
+      'recoveryAction': recoveryAction,
+      'result': result,
+      if (durationMs != null) 'durationMs': durationMs,
+    });
+  }
+
+  factory AppTelemetryPayload.articleReaderRecovery({required String surfaceId, required String objectType, required String objectId, required String recoveryAction, required String result, int? durationMs, String? errorCode}) {
+    return AppTelemetryPayload._('article_reader_recovery', 'event', <String, Object?>{
+      'surfaceId': surfaceId,
+      'objectType': objectType,
+      'objectId': objectId,
+      'recoveryAction': recoveryAction,
+      'result': result,
+      if (durationMs != null) 'durationMs': durationMs,
+      if (errorCode != null) 'errorCode': errorCode,
     });
   }
 
@@ -325,9 +381,14 @@ abstract final class AppTelemetryCatalog {
     'product_action': AppTelemetryEventDefinition(eventType: 'product_action', logType: 'event', requiredExtensions: <String>{'journey', 'action'}, optionalExtensions: <String>{'surfaceId', 'objectType', 'objectId', 'reasonId', 'targetType', 'targetId', 'environment', 'durationMs', 'result', 'failReasonCode', 'recoveryAction', 'requestId', 'traceId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'chat_interaction_outcome': AppTelemetryEventDefinition(eventType: 'chat_interaction_outcome', logType: 'event', requiredExtensions: <String>{'chatAction', 'chatOutcome'}, optionalExtensions: <String>{'chatSource', 'mentionScope', 'governanceAction', 'watermarkResult', 'memberCountBucket', 'unreadCountBucket', 'surfaceId', 'durationMs', 'failReasonCode', 'recoveryAction'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'performance_sample': AppTelemetryEventDefinition(eventType: 'performance_sample', logType: 'event', requiredExtensions: <String>{'operationId', 'durationMs'}, optionalExtensions: <String>{'result', 'failReasonCode', 'recoveryAction', 'requestId', 'traceId'}, normalSampleRate: 0.1, slowThresholdMs: 0, internalPriority: 'normal'),
-    'operation_result': AppTelemetryEventDefinition(eventType: 'operation_result', logType: 'event', requiredExtensions: <String>{'operationId', 'result'}, optionalExtensions: <String>{'durationMs', 'failReasonCode', 'recoveryAction', 'requestId', 'traceId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'operation_result': AppTelemetryEventDefinition(eventType: 'operation_result', logType: 'event', requiredExtensions: <String>{'operationId', 'result'}, optionalExtensions: <String>{'surfaceId', 'hasCache', 'durationMs', 'failReasonCode', 'recoveryAction', 'requestId', 'traceId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'filter_catalog_load': AppTelemetryEventDefinition(eventType: 'filter_catalog_load', logType: 'event', requiredExtensions: <String>{'catalogSource', 'releaseIdHash', 'digestMatch', 'cacheAgeBucket', 'result'}, optionalExtensions: <String>{'durationMs', 'failReasonCode'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'content_publication': AppTelemetryEventDefinition(eventType: 'content_publication', logType: 'event', requiredExtensions: <String>{'publicationStage', 'contentType', 'objectState', 'surfaceId', 'result'}, optionalExtensions: <String>{'durationMs', 'failReasonCode', 'correlationHash', 'backgroundRetryTerminal', 'recoveryAction', 'requestId', 'traceId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'article_reader_enter': AppTelemetryEventDefinition(eventType: 'article_reader_enter', logType: 'event', requiredExtensions: <String>{'surfaceId', 'objectType', 'objectId', 'durationMs', 'result'}, optionalExtensions: <String>{}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'article_reader_dwell': AppTelemetryEventDefinition(eventType: 'article_reader_dwell', logType: 'event', requiredExtensions: <String>{'surfaceId', 'objectType', 'objectId', 'durationMs', 'result'}, optionalExtensions: <String>{}, normalSampleRate: 0.1, slowThresholdMs: 0, internalPriority: 'normal'),
+    'article_reader_exit': AppTelemetryEventDefinition(eventType: 'article_reader_exit', logType: 'event', requiredExtensions: <String>{'surfaceId', 'objectType', 'objectId', 'durationMs', 'result'}, optionalExtensions: <String>{}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'article_reader_error': AppTelemetryEventDefinition(eventType: 'article_reader_error', logType: 'event', requiredExtensions: <String>{'surfaceId', 'objectType', 'objectId', 'errorCode', 'recoveryAction', 'result'}, optionalExtensions: <String>{'durationMs'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'error'),
+    'article_reader_recovery': AppTelemetryEventDefinition(eventType: 'article_reader_recovery', logType: 'event', requiredExtensions: <String>{'surfaceId', 'objectType', 'objectId', 'recoveryAction', 'result'}, optionalExtensions: <String>{'durationMs', 'errorCode'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'video_preview_track_load': AppTelemetryEventDefinition(eventType: 'video_preview_track_load', logType: 'event', requiredExtensions: <String>{'result'}, optionalExtensions: <String>{'durationMs', 'failReasonCode'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'rtc_call_outcome': AppTelemetryEventDefinition(eventType: 'rtc_call_outcome', logType: 'event', requiredExtensions: <String>{'callType', 'result'}, optionalExtensions: <String>{'durationMs', 'failReasonCode', 'participantCount'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'rtc_media_qoe': AppTelemetryEventDefinition(eventType: 'rtc_media_qoe', logType: 'event', requiredExtensions: <String>{'callType', 'result', 'connectTimeMs', 'mediaConnected', 'reconnectCount'}, optionalExtensions: <String>{'disconnectReason', 'networkQuality', 'participantCount', 'failReasonCode'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),

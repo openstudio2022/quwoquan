@@ -35,17 +35,14 @@ void main() {
       await tester.pumpWidget(_wrap(facets));
       await tester.pumpAndSettle();
 
-      expect(
-        find.text(UITextConstants.personaManagementLoadFailedTitle),
-        findsOneWidget,
-      );
+      expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.back), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.xmark), findsNothing);
-      expect(find.text(UITextConstants.back), findsNothing);
-      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+      expect(find.text(ContentText.back), findsNothing);
+      expect(find.text(SearchText.reload), findsOneWidget);
 
       facets.summaryFailure = null;
-      await tester.tap(find.text(UITextConstants.tryAgain));
+      await tester.tap(find.text(SearchText.reload));
       await tester.pumpAndSettle();
 
       expect(facets.summaryLoadCount, 2);
@@ -57,16 +54,13 @@ void main() {
       await tester.pumpWidget(_wrap(facets));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.profileEditLabel).first);
+      await tester.tap(find.text(ProfileText.profileEditLabel).first);
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(CupertinoTextField).at(0), '新主分身');
-      await tester.tap(find.text(UITextConstants.editProfileSaveAction));
+      await tester.tap(find.text(ProfileText.editProfileSaveAction));
       await tester.pumpAndSettle();
 
-      expect(
-        find.text(UITextConstants.personaSyncSuggestionTitle),
-        findsOneWidget,
-      );
+      expect(find.text(ProfileText.personaSyncSuggestionTitle), findsOneWidget);
     });
 
     testWidgets('同步建议可执行应用', (tester) async {
@@ -74,16 +68,16 @@ void main() {
       await tester.pumpWidget(_wrap(facets));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.profileEditLabel).first);
+      await tester.tap(find.text(ProfileText.profileEditLabel).first);
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byType(CupertinoTextField).at(1),
         '13900000000',
       );
-      await tester.tap(find.text(UITextConstants.editProfileSaveAction));
+      await tester.tap(find.text(ProfileText.editProfileSaveAction));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.personaSyncApplyAll));
+      await tester.tap(find.text(ProfileText.personaSyncApplyAll));
       await tester.pumpAndSettle();
 
       expect(facets.syncAppliedCount, 1);
@@ -103,8 +97,8 @@ void main() {
       await tester.pumpWidget(_wrap(TestPersonaFacets(seed: seed)));
       await tester.pumpAndSettle();
 
-      expect(find.text(UITextConstants.personaRetired), findsWidgets);
-      expect(find.text(UITextConstants.personaRetire), findsNothing);
+      expect(find.text(ProfileText.personaRetired), findsWidgets);
+      expect(find.text(ProfileText.personaRetire), findsNothing);
     });
   });
 }

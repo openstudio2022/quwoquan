@@ -70,16 +70,16 @@ class _StartupRecoveryPageState extends State<StartupRecoveryPage>
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.recoveryHorizontalInset,
+              horizontal: RecoverySurfaceSpacing.horizontalInset,
             ),
             child: Align(
               alignment: const Alignment(
                 0,
-                AppSpacing.recoveryVisualCenterAlignment,
+                RecoverySurfaceSpacing.visualCenterAlignment,
               ),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(
-                  maxWidth: AppSpacing.recoveryContentMaxWidth,
+                  maxWidth: RecoverySurfaceSpacing.contentMaxWidth,
                 ),
                 child: Semantics(
                   container: true,
@@ -104,14 +104,14 @@ class _StartupRecoveryPageState extends State<StartupRecoveryPage>
   Future<void> _openUpdate() async {
     final opened = await _controller.openUpdate();
     if (!opened && mounted) {
-      _showTransientMessage(UITextConstants.startupRecoveryUpdateOpenFailed);
+      _showTransientMessage(FoundationText.startupRecoveryUpdateOpenFailed);
     }
   }
 
   Future<void> _openWeb() async {
     final opened = await _controller.openWeb();
     if (!opened && mounted) {
-      _showTransientMessage(UITextConstants.startupRecoveryWebOpenFailed);
+      _showTransientMessage(FoundationText.startupRecoveryWebOpenFailed);
     }
   }
 
@@ -144,7 +144,7 @@ class _RecoveryContent extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         SizedBox(
-          height: AppSpacing.recoveryTitleSlotHeight,
+          height: RecoverySurfaceSpacing.titleSlotHeight,
           child: Center(
             child: _AnimatedRecoveryText(
               key: ValueKey<String>('title-${snapshot.phase.name}'),
@@ -158,9 +158,9 @@ class _RecoveryContent extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: AppSpacing.recoveryTitleSubtitleGap),
+        const SizedBox(height: RecoverySurfaceSpacing.titleSubtitleGap),
         SizedBox(
-          height: AppSpacing.recoverySubtitleSlotHeight,
+          height: RecoverySurfaceSpacing.subtitleSlotHeight,
           child: Center(
             child: _AnimatedRecoveryText(
               key: ValueKey<String>('subtitle-${snapshot.phase.name}'),
@@ -174,9 +174,9 @@ class _RecoveryContent extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: AppSpacing.recoverySubtitleActionGap),
+        const SizedBox(height: RecoverySurfaceSpacing.subtitleActionGap),
         SizedBox(
-          height: AppSpacing.recoveryActionSlotHeight,
+          height: RecoverySurfaceSpacing.actionSlotHeight,
           child: _RecoveryActions(
             snapshot: snapshot,
             openingExternalTarget: openingExternalTarget,
@@ -203,8 +203,8 @@ class _AnimatedRecoveryText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedSwitcher(
-      duration: AppSpacing.recoveryNewContentFadeDuration,
-      reverseDuration: AppSpacing.recoveryOldContentFadeDuration,
+      duration: RecoverySurfaceSpacing.newContentFadeDuration,
+      reverseDuration: RecoverySurfaceSpacing.oldContentFadeDuration,
       transitionBuilder: (child, animation) =>
           FadeTransition(opacity: animation, child: child),
       child: Text(
@@ -249,14 +249,14 @@ class _RecoveryActions extends StatelessWidget {
         phase == RecoveryPhase.runtimeLatest ||
         phase == RecoveryPhase.runtimeVersionUnavailable;
     final primaryLabel = runtimeUnavailable
-        ? UITextConstants.runtimeRecoveryAction
+        ? FoundationText.runtimeRecoveryAction
         : runtimeReentering
-        ? UITextConstants.runtimeRecoveryEnteringAction
+        ? FoundationText.runtimeRecoveryEnteringAction
         : checking
-        ? UITextConstants.startupRecoveryCheckingAction
+        ? FoundationText.startupRecoveryCheckingAction
         : showsUpdate
-        ? UITextConstants.startupRecoveryUpdateAction
-        : UITextConstants.startupRecoveryWebAction;
+        ? FoundationText.startupRecoveryUpdateAction
+        : FoundationText.startupRecoveryWebAction;
     final primaryAction = checking || runtimeReentering || openingExternalTarget
         ? null
         : runtimeUnavailable
@@ -273,9 +273,9 @@ class _RecoveryActions extends StatelessWidget {
           filled: true,
         ),
         if (!onlyWeb) ...<Widget>[
-          const SizedBox(height: AppSpacing.recoveryButtonGap),
+          const SizedBox(height: RecoverySurfaceSpacing.buttonGap),
           _RecoveryButton(
-            label: UITextConstants.startupRecoveryWebAction,
+            label: FoundationText.startupRecoveryWebAction,
             onPressed: openingExternalTarget ? null : onWeb,
             filled: false,
           ),
@@ -366,53 +366,53 @@ _RecoveryCopy _copyFor(RecoveryPhase phase) {
   switch (phase) {
     case RecoveryPhase.startupChecking:
       return const _RecoveryCopy(
-        UITextConstants.startupRecoveryTitle,
-        UITextConstants.startupRecoveryChecking,
+        FoundationText.startupRecoveryTitle,
+        FoundationText.startupRecoveryChecking,
       );
     case RecoveryPhase.startupUpdateRequired:
       return const _RecoveryCopy(
-        UITextConstants.startupRecoveryUpdateTitle,
-        UITextConstants.startupRecoveryUpdateMessage,
+        FoundationText.startupRecoveryUpdateTitle,
+        FoundationText.startupRecoveryUpdateMessage,
       );
     case RecoveryPhase.startupLatest:
       return const _RecoveryCopy(
-        UITextConstants.startupRecoveryLatestTitle,
-        UITextConstants.startupRecoveryWebMessage,
+        FoundationText.startupRecoveryLatestTitle,
+        FoundationText.startupRecoveryWebMessage,
       );
     case RecoveryPhase.startupVersionUnavailable:
       return const _RecoveryCopy(
-        UITextConstants.startupRecoveryTitle,
-        UITextConstants.startupRecoveryWebMessage,
+        FoundationText.startupRecoveryTitle,
+        FoundationText.startupRecoveryWebMessage,
       );
     case RecoveryPhase.runtimeUnavailable:
       return const _RecoveryCopy(
-        UITextConstants.runtimeRecoveryTitle,
-        UITextConstants.runtimeRecoveryMessage,
+        FoundationText.runtimeRecoveryTitle,
+        FoundationText.runtimeRecoveryMessage,
       );
     case RecoveryPhase.runtimeReentering:
       return const _RecoveryCopy(
-        UITextConstants.runtimeRecoveryEnteringTitle,
-        UITextConstants.runtimeRecoveryEnteringMessage,
+        FoundationText.runtimeRecoveryEnteringTitle,
+        FoundationText.runtimeRecoveryEnteringMessage,
       );
     case RecoveryPhase.runtimeVersionChecking:
       return const _RecoveryCopy(
-        UITextConstants.runtimeRecoveryTitle,
-        UITextConstants.startupRecoveryChecking,
+        FoundationText.runtimeRecoveryTitle,
+        FoundationText.startupRecoveryChecking,
       );
     case RecoveryPhase.runtimeUpdateRequired:
       return const _RecoveryCopy(
-        UITextConstants.startupRecoveryUpdateTitle,
-        UITextConstants.runtimeRecoveryUpdateMessage,
+        FoundationText.startupRecoveryUpdateTitle,
+        FoundationText.runtimeRecoveryUpdateMessage,
       );
     case RecoveryPhase.runtimeLatest:
       return const _RecoveryCopy(
-        UITextConstants.startupRecoveryLatestTitle,
-        UITextConstants.startupRecoveryWebMessage,
+        FoundationText.startupRecoveryLatestTitle,
+        FoundationText.startupRecoveryWebMessage,
       );
     case RecoveryPhase.runtimeVersionUnavailable:
       return const _RecoveryCopy(
-        UITextConstants.runtimeRecoveryTitle,
-        UITextConstants.startupRecoveryWebMessage,
+        FoundationText.runtimeRecoveryTitle,
+        FoundationText.startupRecoveryWebMessage,
       );
   }
 }

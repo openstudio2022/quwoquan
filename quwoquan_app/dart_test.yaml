@@ -1,4 +1,5 @@
 tags:
+  serial:
   t4:
   chat:
   avatar:
@@ -19,8 +20,11 @@ tags:
   home-rec:
   video-playback:
   media-publication:
+  text-publication:
   photo:
   video:
+  micro:
+  article:
   search:
   tag:
   gamma:

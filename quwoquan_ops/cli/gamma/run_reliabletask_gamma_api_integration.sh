@@ -28,7 +28,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "${QWQ_RUN_ROOT:-}" ]]; then
-  QWQ_RUN_ROOT="$(PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
+  QWQ_RUN_ROOT="$(PYTHONPATH="$ROOT:$ROOT/quwoquan_data/scripts${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
 from quwoquan_ops.cli.lib.output_paths import env_run_dir
 print(env_run_dir("gamma", "reliabletask-api-integration", target="gamma-local"))
 PY
@@ -59,7 +59,7 @@ print(ports["mongodb"], ports["redis"])
 PY
 )
 
-data_python="$(PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 -B - <<'PY'
+data_python="$(PYTHONPATH="$ROOT:$ROOT/quwoquan_data/scripts${PYTHONPATH:+:$PYTHONPATH}" python3 -B - <<'PY'
 from quwoquan_data.scripts.core.python_environment import resolve_data_agent_python
 
 candidate = resolve_data_agent_python()
@@ -71,7 +71,7 @@ if [[ -z "$data_python" ]]; then
   echo "[gamma:reliabletask-api-integration] preparing disposable data runtime"
   PYTHONDONTWRITEBYTECODE=1 python3 -B "$ROOT/quwoquan_data/scripts/cli.py" \
     task preflight
-  data_python="$(PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 -B - <<'PY'
+  data_python="$(PYTHONPATH="$ROOT:$ROOT/quwoquan_data/scripts${PYTHONPATH:+:$PYTHONPATH}" python3 -B - <<'PY'
 from quwoquan_data.scripts.core.python_environment import resolve_data_agent_python
 
 candidate = resolve_data_agent_python()

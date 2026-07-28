@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+
 enum CloudEnvironment { alpha, beta, gamma, prod }
 
 final class CloudRuntimeEnvironment {
@@ -35,14 +37,8 @@ final class CloudRuntimeEnvironment {
   final Uri gatewayBaseUri;
 
   factory CloudRuntimeEnvironment.fromCompileTime() {
-    const environmentValue = String.fromEnvironment(
-      'APP_RUNTIME_ENV',
-      defaultValue: 'alpha',
-    );
-    const gatewayValue = String.fromEnvironment(
-      'CLOUD_GATEWAY_BASE_URL',
-      defaultValue: 'https://alpha-api.quwoquan-env.test:17000',
-    );
+    final environmentValue = CloudRuntimeConfig.appRuntimeEnv;
+    final gatewayValue = CloudRuntimeConfig.gatewayBaseUrl;
     final environment = CloudEnvironment.values.firstWhere(
       (candidate) => candidate.name == environmentValue,
       orElse: () =>

@@ -26,6 +26,7 @@ def complete_defines(environment: str = "alpha") -> dict[str, str]:
         "APP_RUNTIME_ENV": environment,
         "CLOUD_GATEWAY_BASE_URL": "https://api.example.test",
         "APP_LEGAL_BASE_URL": "https://legal.example.test",
+        "PUBLIC_WEB_BASE_URL": "https://web.example.test",
         "MEDIA_AVATAR_CDN_BASE_URL": "https://avatar.example.test",
         "MEDIA_IMAGE_CDN_BASE_URL": "https://image.example.test",
         "MEDIA_VIDEO_CDN_BASE_URL": "https://video.example.test",

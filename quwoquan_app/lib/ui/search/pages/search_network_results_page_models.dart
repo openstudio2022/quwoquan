@@ -118,19 +118,19 @@ class _NetworkResultCardModel {
                       ? item.summary!.trim()
                       : (item.authorDisplayName?.trim().isNotEmpty == true
                             ? item.authorDisplayName!.trim()
-                            : UITextConstants.searchNetworkResults))),
+                            : SearchText.searchNetworkResults))),
       supportingText: item.summary?.trim().isNotEmpty == true
           ? item.summary!.trim()
           : (item.highlightText?.trim().isNotEmpty == true
                 ? item.highlightText!.trim()
-                : UITextConstants.searchOpenRelatedContent),
+                : SearchText.searchOpenRelatedContent),
       coverUrl: item.coverUrl ?? '',
       footerLabel: footerSegments.isEmpty
-          ? UITextConstants.searchContentResults
+          ? SearchText.searchContentResults
           : footerSegments.join(' · '),
       eyebrowText: item.subCategory?.trim().isNotEmpty == true
           ? item.subCategory!.trim()
-          : UITextConstants.searchNetworkResults,
+          : SearchText.searchNetworkResults,
       likeCount: item.likeCount,
       showVideoBadge: item.contentType == 'video',
     );
@@ -204,7 +204,7 @@ class _GroupResultCardModel {
       if (memberCount > 0) UITextConstants.searchMemberCount(memberCount),
       if (postCount > 0) UITextConstants.searchPostCount(postCount),
       if (hit.resolvedFrom == SearchResolvedFrom.localFallback)
-        UITextConstants.searchLocalFallback,
+        SearchText.searchLocalFallback,
     ];
     return _GroupResultCardModel(
       circleId: circleId,
@@ -213,14 +213,14 @@ class _GroupResultCardModel {
           ? hit.snippet!.trim()
           : (hit.subtitle?.trim().isNotEmpty == true
                 ? hit.subtitle!.trim()
-                : UITextConstants.searchOpenRelatedCircle),
+                : SearchText.searchOpenRelatedCircle),
       coverUrl: view.coverUrl ?? '',
       footerLabel: footerSegments.isEmpty
-          ? UITextConstants.searchDiscussionResults
+          ? SearchText.searchDiscussionResults
           : footerSegments.join(' · '),
       eyebrowText: isCircle
-          ? UITextConstants.searchCategoryCircle
-          : UITextConstants.searchCategoryDiscussion,
+          ? SearchText.searchCategoryCircle
+          : SearchText.searchCategoryDiscussion,
     );
   }
 }

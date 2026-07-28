@@ -8,6 +8,31 @@
     }
   },
   "gates": {
+    "00.local_commit_gate": {
+      "budgetSeconds": 600,
+      "hardFailSeconds": 900,
+      "criticalPath": "max(L0_static_parallel, L0_impacted_tests_parallel)",
+      "phaseBudgetsSeconds": {
+        "L0_static_parallel": 120,
+        "L0_impacted_tests_parallel": 420,
+        "L0_smoke": 90
+      }
+    },
+    "01.local_env_matrix": {
+      "budgetSeconds": 600,
+      "hardFailSeconds": 1800,
+      "criticalPath": "L0 + alpha + beta + gamma + prod(package/purity/release-verify) serial; exclusive local runtime switch",
+      "cacheModeNotes": "warm soft=600s; cold may use hard=1800s or COLD_CACHE_EXEMPT then require a warm re-run. prod-hosted SSH deploy is NOT in this budget.",
+      "phaseBudgetsSeconds": {
+        "L0_commit_gate": 45,
+        "alpha_pkg_up_verify": 60,
+        "beta_pkg_up_verify": 100,
+        "gamma_pkg_up_verify_warm": 150,
+        "gamma_pkg_up_verify_cold": 240,
+        "prod_pkg_purity_release": 30,
+        "down_switch_total": 60
+      }
+    },
     "02.service_pipeline": {
       "budgetSeconds": 180,
       "criticalPath": "prepare_release + max(build_go, build_recommendation_service) + validate_deploy",

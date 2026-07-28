@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_transport_failure.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -32,6 +33,7 @@ class CloudHttpClient {
     this._onUnauthorizedRefresh,
     Duration? timeout,
     this._latencyObserver,
+    this._transportFailureClassifier,
   }) : _client = client ?? RetryHttpClient(),
        _authTokenProvider =
            authTokenProvider ?? const StubCloudAuthTokenProvider(),
@@ -42,6 +44,7 @@ class CloudHttpClient {
   final CloudUnauthorizedRefresh? _onUnauthorizedRefresh;
   final Duration _timeout;
   final ApiLatencyObserver? _latencyObserver;
+  final CloudTransportFailureClassifier? _transportFailureClassifier;
 
   /// Executes exactly one generated-operation network attempt.
   ///
@@ -110,7 +113,10 @@ class CloudHttpClient {
           error is CloudException ? error.statusCode ?? -1 : -1,
         );
       }
-      rethrow;
+      if (error is CloudException || error is http.RequestAbortedException) {
+        rethrow;
+      }
+      throw _mapException(error, requestPath: uri.path);
     }
   }
 
@@ -254,7 +260,7 @@ class CloudHttpClient {
         sw.elapsedMilliseconds,
         -1,
       );
-      throw CloudErrorMapper.fromException(e, requestPath: request.url.path);
+      throw _mapException(e, requestPath: request.url.path);
     } catch (e) {
       sw.stop();
       _latencyObserver?.call(
@@ -264,7 +270,7 @@ class CloudHttpClient {
         -1,
       );
       if (e is CloudException) rethrow;
-      throw CloudErrorMapper.fromException(e, requestPath: request.url.path);
+      throw _mapException(e, requestPath: request.url.path);
     }
   }
 
@@ -708,12 +714,12 @@ class CloudHttpClient {
     } on TimeoutException catch (e) {
       sw.stop();
       _latencyObserver?.call(method, requestPath, sw.elapsedMilliseconds, -1);
-      throw CloudErrorMapper.fromException(e, requestPath: requestPath);
+      throw _mapException(e, requestPath: requestPath);
     } catch (e) {
       sw.stop();
       _latencyObserver?.call(method, requestPath, sw.elapsedMilliseconds, -1);
       if (e is CloudException) rethrow;
-      throw CloudErrorMapper.fromException(e, requestPath: requestPath);
+      throw _mapException(e, requestPath: requestPath);
     }
   }
 
@@ -732,8 +738,16 @@ class CloudHttpClient {
     try {
       return jsonDecode(body) as Object?;
     } catch (e) {
-      throw CloudErrorMapper.fromException(e, requestPath: path);
+      throw _mapException(e, requestPath: path);
     }
+  }
+
+  CloudException _mapException(Object error, {required String requestPath}) {
+    return CloudErrorMapper.fromException(
+      error,
+      requestPath: requestPath,
+      transportFailure: _transportFailureClassifier?.call(error),
+    );
   }
 
   void close() {

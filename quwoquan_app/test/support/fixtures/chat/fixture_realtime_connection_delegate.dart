@@ -2,16 +2,17 @@ import 'dart:async';
 
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 
-/// Test-only catalog backed by the canonical Chat contract fixture.
+import '../../cloud_services/repository_mock_reexports.dart';
+
+/// Test-only catalog backed by the canonical Chat contract scenario.
 final class FixtureRealtimeEventCatalog {
   FixtureRealtimeEventCatalog._();
 
   static List<Map<String, dynamic>> eventsForConversation(
     String conversationId,
   ) {
-    final contractSeed = alphaFixtureSeedReader.seedSet(
+    final contractSeed = objectScenarioSeedReader.seedSet(
       'chat',
       'chat_realtime_fixture_core',
     );

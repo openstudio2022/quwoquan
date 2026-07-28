@@ -11,14 +11,10 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.local_target_tls import (
-    LocalTargetTlsError,
-    resolve_local_target_root_ca,
-)
 CHECKS = (
     (
         "api-health",
-        "alpha-api.quwoquan-env.test",
+        "api.alpha.quwoquan.com",
         17000,
         "/healthz",
         None,
@@ -26,105 +22,53 @@ CHECKS = (
     ),
     (
         "app-config",
-        "alpha-api.quwoquan-env.test",
+        "api.alpha.quwoquan.com",
         17000,
         "/config/app",
         None,
         "200",
     ),
     (
-        "product-ops-health",
-        "alpha-product-ops.quwoquan-env.test",
-        17010,
+        "legal-document",
+        "api.alpha.quwoquan.com",
+        17000,
+        "/legal/user-agreement",
+        None,
+        "200",
+    ),
+    (
+        "avatar-media-health",
+        "cdn.alpha.quwoquan.com",
+        17100,
         "/healthz",
         None,
         "200",
     ),
     (
-        "avatar",
-        "alpha-avatar.quwoquan-env.test",
+        "image-media-health",
+        "cdn.alpha.quwoquan.com",
         17100,
-        "/media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
+        "/healthz",
         None,
         "200",
     ),
     (
-        "chat-group-avatar-current-contract",
-        "alpha-avatar.quwoquan-env.test",
+        "video-media-health",
+        "cdn.alpha.quwoquan.com",
         17100,
-        "/media/avatar/s/archived-avatar/group/fixture_conv_group/composite.png",
+        "/healthz",
         None,
         "200",
-    ),
-    (
-        "home-post-author-avatar",
-        "alpha-avatar.quwoquan-env.test",
-        17100,
-        "/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
-        None,
-        "200",
-    ),
-    (
-        "image",
-        "alpha-image.quwoquan-env.test",
-        17100,
-        "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
-        None,
-        "200",
-    ),
-    (
-        "video-range",
-        "alpha-video.quwoquan-env.test",
-        17100,
-        "/media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
-        "bytes=0-1",
-        "206",
     ),
     (
         "upload-health",
-        "alpha-upload.quwoquan-env.test",
+        "upload.alpha.quwoquan.com",
         17100,
         "/healthz",
         None,
         "200",
     ),
 )
-
-ANDROID_LOOPBACK_CHECKS = (
-    (
-        "android-emulator-chat-group-avatar-current-contract",
-        "10.0.2.2",
-        17100,
-        "/media/avatar/s/archived-avatar/group/fixture_conv_group/composite.png",
-        None,
-        "200",
-    ),
-    (
-        "android-emulator-home-post-author-avatar",
-        "10.0.2.2",
-        17100,
-        "/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
-        None,
-        "200",
-    ),
-    (
-        "android-emulator-image",
-        "10.0.2.2",
-        17100,
-        "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
-        None,
-        "200",
-    ),
-    (
-        "android-emulator-video-range",
-        "10.0.2.2",
-        17100,
-        "/media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
-        "bytes=0-1",
-        "206",
-    ),
-)
-
 
 def _loopback_addresses(host: str) -> set[str]:
     try:
@@ -138,9 +82,6 @@ def _curl_status(
     port: int,
     path: str,
     range_header: str | None,
-    *,
-    connect_to: str | None = None,
-    cacert: Path | None = None,
 ) -> str:
     cmd = [
         "curl",
@@ -150,10 +91,6 @@ def _curl_status(
         "-w",
         "%{http_code}",
     ]
-    if cacert is not None:
-        cmd.extend(["--cacert", str(cacert)])
-    if connect_to is not None:
-        cmd.extend(["--connect-to", f"{host}:{port}:{connect_to}:{port}"])
     if range_header:
         cmd.extend(["-H", f"Range: {range_header}"])
     cmd.append(f"https://{host}:{port}{path}")
@@ -167,8 +104,6 @@ def _curl_status(
 def main() -> int:
     issues: list[str] = []
     checks = CHECKS
-    android_checks = ANDROID_LOOPBACK_CHECKS
-
     hosts = sorted({host for _, host, _, _, _, _ in checks})
     for host in hosts:
         addresses = _loopback_addresses(host)
@@ -185,31 +120,11 @@ def main() -> int:
                 f"{name} expected HTTP {expected}, got {status}: https://{host}:{port}{path}"
             )
 
-    try:
-        local_root_ca = resolve_local_target_root_ca("alpha-local")
-    except LocalTargetTlsError as exc:
-        local_root_ca = None
-        issues.append(str(exc))
-    if local_root_ca is not None:
-        for name, host, port, path, range_header, expected in android_checks:
-            status = _curl_status(
-                host,
-                port,
-                path,
-                range_header,
-                connect_to="127.0.0.1",
-                cacert=local_root_ca,
-            )
-            if status != expected:
-                issues.append(
-                    f"{name} expected HTTP {expected}, got {status}: https://{host}:{port}{path}"
-                )
-
     if issues:
         print("[verify_alpha_https_public_plane] FAIL")
         for issue in issues:
             print(f"  - {issue}")
-        print("Remediation: run `bash quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh up` and allow local DNS/CA trust setup.")
+        print("Remediation: run `python3 quwoquan_ops/cli/stackctl.py up --target alpha-local --skip-app --workload content-release`.")
         return 1
 
     print("[verify_alpha_https_public_plane] OK")

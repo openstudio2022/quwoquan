@@ -18,6 +18,8 @@ private let startupHealthBuildKey = "qwq.runtime.startup_health_build"
 private let startupHealthSafeShellKey = "qwq.runtime.startup_health_safe_shell"
 private let startupHealthFatalBuildKey = "qwq.runtime.startup_health_fatal_build"
 private let startupHealthFatalAtKey = "qwq.runtime.startup_health_fatal_at"
+private let startupHealthFatalQueuedIdentityKey =
+  "qwq.runtime.startup_health_fatal_queued_identity"
 private var previousNativeCrashHandler: (@convention(c) (NSException) -> Void)?
 
 private func persistNativeCrashMarker(_ exception: NSException) {
@@ -64,14 +66,16 @@ private enum NativeCrashMarkerStore {
 
   static func pendingFatal() -> [String: String]? {
     guard shouldRecoverCurrentBuild(),
-          let kind = UserDefaults.standard.string(forKey: nativeCrashMarkerKindKey),
-          !kind.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
           let occurredAt = UserDefaults.standard.object(
             forKey: startupHealthFatalAtKey
           ) as? NSNumber
     else {
       return nil
     }
+    let storedKind = UserDefaults.standard.string(forKey: nativeCrashMarkerKindKey) ?? ""
+    let kind = storedKind.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      ? "NativeStartupCrash"
+      : storedKind
     let date = Date(timeIntervalSince1970: occurredAt.doubleValue)
     return [
       "errorType": kind,
@@ -87,33 +91,87 @@ private enum NativeCrashMarkerStore {
     Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
   }
 
+  static var currentArtifactIdentity: String {
+    let manifest = nativeRuntimeIdentityManifest
+    let environment = manifest["runtimeEnvironment"] as? String ?? "unknown"
+    let configDigest = manifest["runtimeConfigDigest"] as? String ?? "missing"
+    let definesDigest = manifest["dartDefinesDigest"] as? String ?? "missing"
+    let target = manifest["launchTarget"] as? String ?? "missing"
+    let effectiveDigest =
+      manifest["effectiveLaunchManifestDigest"] as? String ?? "missing"
+    return
+      "\(currentBuild)|\(environment)|\(configDigest)|\(definesDigest)|\(target)|\(effectiveDigest)"
+  }
+
   static func shouldRecoverCurrentBuild() -> Bool {
     let fatalBuild = UserDefaults.standard.string(forKey: startupHealthFatalBuildKey) ?? ""
     guard !fatalBuild.isEmpty else { return false }
-    guard fatalBuild == currentBuild else {
+    guard fatalBuild == currentArtifactIdentity else {
       UserDefaults.standard.removeObject(forKey: startupHealthFatalBuildKey)
       UserDefaults.standard.removeObject(forKey: startupHealthFatalAtKey)
+      UserDefaults.standard.removeObject(forKey: startupHealthFatalQueuedIdentityKey)
       return false
     }
     return true
   }
 
   static func markStarting() {
-    UserDefaults.standard.set(currentBuild, forKey: startupHealthBuildKey)
+    UserDefaults.standard.set(currentArtifactIdentity, forKey: startupHealthBuildKey)
     UserDefaults.standard.set(false, forKey: startupHealthSafeShellKey)
+    CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
   }
 
   static func markFatalStartup() {
-    UserDefaults.standard.set(currentBuild, forKey: startupHealthFatalBuildKey)
+    UserDefaults.standard.set(currentArtifactIdentity, forKey: startupHealthFatalBuildKey)
     UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: startupHealthFatalAtKey)
     CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
   }
 
   static func markSafeShell() {
-    UserDefaults.standard.set(currentBuild, forKey: startupHealthBuildKey)
+    UserDefaults.standard.set(currentArtifactIdentity, forKey: startupHealthBuildKey)
     UserDefaults.standard.set(true, forKey: startupHealthSafeShellKey)
     UserDefaults.standard.removeObject(forKey: startupHealthFatalBuildKey)
     UserDefaults.standard.removeObject(forKey: startupHealthFatalAtKey)
+    UserDefaults.standard.removeObject(forKey: startupHealthFatalQueuedIdentityKey)
+  }
+
+  static func fatalNeedsQueueing() -> Bool {
+    guard shouldRecoverCurrentBuild() else { return false }
+    let queuedIdentity = UserDefaults.standard.string(
+      forKey: startupHealthFatalQueuedIdentityKey
+    ) ?? ""
+    return queuedIdentity != currentArtifactIdentity
+  }
+
+  static func markFatalQueued() {
+    UserDefaults.standard.set(
+      currentArtifactIdentity,
+      forKey: startupHealthFatalQueuedIdentityKey
+    )
+    CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
+  }
+
+  static var effectiveLaunchManifestDigest: String {
+    nativeRuntimeIdentityManifest["effectiveLaunchManifestDigest"] as? String ?? ""
+  }
+
+  private static var nativeRuntimeIdentityManifest: [String: Any] {
+    guard
+      let url = Bundle.main.url(
+        forResource: "QWQNativeRuntime",
+        withExtension: "plist"
+      ),
+      let data = try? Data(contentsOf: url),
+      let raw = try? PropertyListSerialization.propertyList(
+        from: data,
+        options: [],
+        format: nil
+      ),
+      let manifest = raw as? [String: Any]
+    else {
+      return [:]
+    }
+    return manifest
   }
 }
 
@@ -357,6 +415,9 @@ private final class RecoveryFailureEncryptedStore {
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   // 所有构建都使用同一进程钟硬门；Debug 慢启动必须修关键路径，不能形成双时钟。
   private static let flutterFirstFrameDeadline: TimeInterval = 6
+  private static let maximumRecoveryRecords = 20
+  private static let maximumRecoveryRecordBytes = 64 << 10
+  private static let recoveryRetention: TimeInterval = 7 * 24 * 60 * 60
   private let processStartUptime = ProcessInfo.processInfo.systemUptime
   private let videoEditingPlugin = VideoEditingPlugin()
   private let personalAssistantNativeApiPlugin = PersonalAssistantNativeApiPlugin()
@@ -393,10 +454,40 @@ private final class RecoveryFailureEncryptedStore {
 
   override func application(
     _ application: UIApplication,
-    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+    willFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     NativeCrashMarkerStore.install()
+    #if QWQ_STARTUP_GATE_TEST_CONTROL
+      if ProcessInfo.processInfo.arguments.contains("--qwq-test-confirmed-startup-fatal") {
+        NativeCrashMarkerStore.markFatalStartup()
+        NSLog("QWQStartup ios_debug_confirmed_startup_fatal_seeded")
+      }
+    #endif
     confirmedPreviousBuildFatal = NativeCrashMarkerStore.shouldRecoverCurrentBuild()
+    if confirmedPreviousBuildFatal {
+      // FlutterAppDelegate 的 will/didFinish 都不得进入；恢复 gate 必须先于
+      // implicit Flutter engine 与任何插件装配。
+      return true
+    }
+    return super.application(
+      application,
+      willFinishLaunchingWithOptions: launchOptions
+    )
+  }
+
+  override func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+  ) -> Bool {
+    if confirmedPreviousBuildFatal {
+      startupSafeTerminalConfirmed = true
+      appInForeground = true
+      if !enqueueConfirmedStartupFatal() {
+        NSLog("QWQStartup ios_native_startup_failure_queue_write_failed")
+      }
+      NSLog("QWQStartup ios_native_startup_gate_recovery")
+      return true
+    }
     NativeCrashMarkerStore.markStarting()
     if #available(iOS 14.0, *) {
       NativeHangMetricStore.shared.install()
@@ -417,18 +508,46 @@ private final class RecoveryFailureEncryptedStore {
     currentDartAttemptStartedUptime = processStartUptime
     // 预算从进程最早可得的 monotonic 时钟开始，不能在 becomeActive 时重新给完整 6 秒。
     foregroundStartedUptime = processStartUptime
-    if confirmedPreviousBuildFatal {
-      startupSafeTerminalConfirmed = true
-      DispatchQueue.main.async { [weak self] in
-        self?.showNativeStartupRecovery()
-      }
-    } else {
-      armFlutterFirstFrameWatchdog()
-    }
+    armFlutterFirstFrameWatchdog()
     return launched
   }
 
+  override func application(
+    _ application: UIApplication,
+    configurationForConnecting connectingSceneSession: UISceneSession,
+    options: UIScene.ConnectionOptions
+  ) -> UISceneConfiguration {
+    guard confirmedPreviousBuildFatal else {
+      // FlutterAppDelegate adopts UIApplicationDelegate but does not implement
+      // this optional selector on every engine version. Calling super here
+      // therefore crashes normal launch with an unrecognized selector.
+      let normal = UISceneConfiguration(
+        name: "flutter",
+        sessionRole: connectingSceneSession.role
+      )
+      normal.sceneClass = UIWindowScene.self
+      normal.delegateClass = AppSceneDelegate.self
+      normal.storyboard = UIStoryboard(name: "Main", bundle: nil)
+      return normal
+    }
+    // Main.storyboard contains FlutterViewController. The fatal path must
+    // replace the scene configuration before UIKit resolves that storyboard;
+    // hiding the Flutter view later would already have created the implicit
+    // engine behind the native recovery gate.
+    let recovery = UISceneConfiguration(
+      name: "native-startup-recovery",
+      sessionRole: connectingSceneSession.role
+    )
+    recovery.delegateClass = StartupRecoverySceneDelegate.self
+    recovery.storyboard = nil
+    return recovery
+  }
+
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+    guard !confirmedPreviousBuildFatal else {
+      assertionFailure("Flutter engine initialized behind native startup recovery gate")
+      return
+    }
     NSLog("QWQStartup ios_implicit_flutter_engine_initialized")
     window?.rootViewController?.view.backgroundColor = StartupTransitionBackground.color
     registerStartupTimingsChannel(
@@ -496,43 +615,6 @@ private final class RecoveryFailureEncryptedStore {
         return
       }
       result(self?.readCellularGeneration() ?? "unknown")
-    }
-
-    let localDevHttpsTrustChannel = FlutterMethodChannel(
-      name: "quwoquan/runtime/local_dev_https_trust",
-      binaryMessenger: binaryMessenger
-    )
-    localDevHttpsTrustChannel.setMethodCallHandler { call, result in
-      guard call.method == "localEnvDebugRootCertificate" else {
-        result(FlutterMethodNotImplemented)
-        return
-      }
-      // 仅由 Debug/Profile 本地 target 构建步骤注入，release 与公网 authority
-      // 不会请求或携带本地根证书。
-      guard let certificateURL = Bundle.main.url(
-        forResource: "local_env_debug_root",
-        withExtension: "crt"
-      ) else {
-        result(
-          FlutterError(
-            code: "LOCAL_HTTPS_TRUST_CA_UNAVAILABLE",
-            message: "Local HTTPS trust root is not bundled",
-            details: nil
-          )
-        )
-        return
-      }
-      do {
-        result(FlutterStandardTypedData(bytes: try Data(contentsOf: certificateURL)))
-      } catch {
-        result(
-          FlutterError(
-            code: "LOCAL_HTTPS_TRUST_CA_UNREADABLE",
-            message: "Local HTTPS trust root cannot be read",
-            details: nil
-          )
-        )
-      }
     }
 
     let nativeCrashMarkerChannel = FlutterMethodChannel(
@@ -681,11 +763,8 @@ private final class RecoveryFailureEncryptedStore {
     else {
       return false
     }
-    return host == "apps.apple.com"
-      || host == "quwoquan.com"
+    return host == "quwoquan.com"
       || host.hasSuffix(".quwoquan.com")
-      || host == "quwoquan-env.test"
-      || host.hasSuffix(".quwoquan-env.test")
   }
 
   private func registerStartupTimingsChannel(
@@ -760,11 +839,12 @@ private final class RecoveryFailureEncryptedStore {
       )
       let missingDefineKeys = safeDefineKeyList(event["missingDefineKeys"] as? String)
       NSLog(
-        "QWQStartup ios_dart_startup_attempt attemptId=%@ launchMode=%@ hotRestart=%@ configurationState=%@%@",
+        "QWQStartup ios_dart_startup_attempt attemptId=%@ launchMode=%@ hotRestart=%@ configurationState=%@ effectiveLaunchManifestDigest=%@%@",
         currentDartAttemptId,
         currentLaunchMode,
         hotRestart ? "true" : "false",
         configurationState,
+        NativeCrashMarkerStore.effectiveLaunchManifestDigest,
         missingDefineKeys.isEmpty ? "" : " missingDefineKeys=\(missingDefineKeys)"
       )
       return
@@ -911,7 +991,9 @@ private final class RecoveryFailureEncryptedStore {
   }
 
   override func applicationDidBecomeActive(_ application: UIApplication) {
-    super.applicationDidBecomeActive(application)
+    if !confirmedPreviousBuildFatal {
+      super.applicationDidBecomeActive(application)
+    }
     if !appInForeground {
       appInForeground = true
       foregroundStartedUptime = ProcessInfo.processInfo.systemUptime
@@ -931,7 +1013,9 @@ private final class RecoveryFailureEncryptedStore {
         webButton: web
       )
     }
-    armFlutterFirstFrameWatchdog()
+    if !confirmedPreviousBuildFatal {
+      armFlutterFirstFrameWatchdog()
+    }
   }
 
   override func applicationWillResignActive(_ application: UIApplication) {
@@ -943,13 +1027,17 @@ private final class RecoveryFailureEncryptedStore {
     appInForeground = false
     foregroundStartedUptime = 0
     cancelFlutterFirstFrameWatchdog()
-    super.applicationWillResignActive(application)
+    if !confirmedPreviousBuildFatal {
+      super.applicationWillResignActive(application)
+    }
   }
 
   override func applicationWillTerminate(_ application: UIApplication) {
     cancelFlutterFirstFrameWatchdog()
     cancelNativeRecoveryTerminalReconciliation()
-    super.applicationWillTerminate(application)
+    if !confirmedPreviousBuildFatal {
+      super.applicationWillTerminate(application)
+    }
   }
 
   private func observeNativeFlutterFirstFrame(
@@ -1191,7 +1279,80 @@ private final class RecoveryFailureEncryptedStore {
     )
   }
 
-  private func showNativeStartupRecovery() {
+  private func enqueueConfirmedStartupFatal() -> Bool {
+    guard NativeCrashMarkerStore.fatalNeedsQueueing(),
+          let pending = NativeCrashMarkerStore.pendingFatal(),
+          let occurredAt = pending["occurredAt"],
+          let errorType = pending["errorType"]
+    else {
+      return !NativeCrashMarkerStore.fatalNeedsQueueing()
+    }
+
+    let formatter = ISO8601DateFormatter()
+    let now = Date()
+    var retained: [[String: Any]] = []
+    if let raw = recoveryFailureEncryptedStore.read(),
+       let data = raw.data(using: .utf8),
+       let decoded = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+    {
+      retained = decoded.filter { entry in
+        guard let savedAt = entry["savedAt"] as? String,
+              let savedDate = formatter.date(from: savedAt)
+        else {
+          return false
+        }
+        return now.timeIntervalSince(savedDate) <= Self.recoveryRetention
+      }
+    }
+
+    let failure: [String: Any] = [
+      "occurredAt": occurredAt,
+      "appVersion": Bundle.main.object(
+        forInfoDictionaryKey: "CFBundleShortVersionString"
+      ) as? String ?? "",
+      "buildNumber": NativeCrashMarkerStore.currentBuild,
+      "platform": "ios",
+      "osVersion": UIDevice.current.systemVersion,
+      "deviceModel": UIDevice.current.model,
+      "errorSource": "native",
+      "errorType": errorType,
+      "errorMessage": "Native startup terminated before safe shell",
+      "stackTrace": "Native stack unavailable after process termination",
+    ]
+    guard let failureData = try? JSONSerialization.data(withJSONObject: failure),
+          failureData.count <= Self.maximumRecoveryRecordBytes
+    else {
+      return false
+    }
+    retained.append([
+      "failure": failure,
+      "savedAt": occurredAt,
+      "attempts": 0,
+    ])
+    if retained.count > Self.maximumRecoveryRecords {
+      retained.removeFirst(retained.count - Self.maximumRecoveryRecords)
+    }
+    guard let output = try? JSONSerialization.data(withJSONObject: retained),
+          let value = String(data: output, encoding: .utf8),
+          recoveryFailureEncryptedStore.write(value)
+    else {
+      return false
+    }
+    NativeCrashMarkerStore.markFatalQueued()
+    return true
+  }
+
+  func installNativeStartupRecoveryRoot(in sceneWindow: UIWindow? = nil) {
+    let recoveryWindow = sceneWindow ?? window ?? UIWindow(frame: UIScreen.main.bounds)
+    let root = UIViewController()
+    root.view.backgroundColor = StartupTransitionBackground.color
+    recoveryWindow.rootViewController = root
+    recoveryWindow.backgroundColor = StartupTransitionBackground.color
+    window = recoveryWindow
+    recoveryWindow.makeKeyAndVisible()
+  }
+
+  func showNativeStartupRecovery() {
     guard (!startupSafeTerminalConfirmed || confirmedPreviousBuildFatal),
           !nativeRecoveryShown,
           let window
@@ -1321,15 +1482,57 @@ private final class RecoveryFailureEncryptedStore {
   }
 
   private var recoveryBaseURLString: String {
+    if let value = nativeRuntimeManifest["recoveryBaseURL"] as? String,
+       isTrustedRecoveryURL(URL(string: value)) {
+      return value
+    }
     let configured = Bundle.main.object(forInfoDictionaryKey: "QWQRecoveryBaseURL") as? String
     let value = configured?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    return isTrustedRecoveryURL(URL(string: value)) ? value : "https://api.quwoquan.com"
+    if isTrustedRecoveryURL(URL(string: value)) {
+      return value
+    }
+    return ""
   }
 
   private var publicWebURLString: String {
+    if let value = nativeRuntimeManifest["publicWebURL"] as? String,
+       isTrustedRecoveryURL(URL(string: value)) {
+      return value
+    }
     let configured = Bundle.main.object(forInfoDictionaryKey: "QWQPublicWebURL") as? String
     let value = configured?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    return isTrustedRecoveryURL(URL(string: value)) ? value : "https://quwoquan.com"
+    if isTrustedRecoveryURL(URL(string: value)) {
+      return value
+    }
+    return ""
+  }
+
+  private var nativeRuntimeEnvironment: String {
+    if let value = nativeRuntimeManifest["runtimeEnvironment"] as? String,
+       ["alpha", "beta", "gamma", "prod"].contains(value) {
+      return value
+    }
+    let configured = Bundle.main.object(forInfoDictionaryKey: "QWQRuntimeEnvironment") as? String
+    let value = configured?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return ["alpha", "beta", "gamma", "prod"].contains(value) ? value : "prod"
+  }
+
+  private var nativeRuntimeManifest: [String: Any] {
+    guard
+      let url = Bundle.main.url(
+        forResource: "QWQNativeRuntime",
+        withExtension: "plist"
+      ),
+      let data = try? Data(contentsOf: url),
+      let value = try? PropertyListSerialization.propertyList(
+        from: data,
+        options: [],
+        format: nil
+      ) as? [String: Any]
+    else {
+      return [:]
+    }
+    return value
   }
 
   private func checkNativeRecoveryVersion(
@@ -1387,8 +1590,9 @@ private final class RecoveryFailureEncryptedStore {
             let latestBuild = Int(latestBuildRaw),
             let updateRaw = payload["updateUrl"] as? String,
             let recoveryRaw = payload["recoveryUrl"] as? String,
-            self.isTrustedRecoveryURL(URL(string: updateRaw)),
-            self.isTrustedRecoveryURL(URL(string: recoveryRaw))
+            self.isTrustedRecoveryURL(URL(string: recoveryRaw)),
+            latestBuild <= (Int(buildNumber) ?? 0)
+              || self.isTrustedRecoveryURL(URL(string: updateRaw))
       else {
         DispatchQueue.main.async { [weak self] in
           self?.applyNativeVersionUnavailable(
@@ -1520,6 +1724,9 @@ private final class RecoveryFailureEncryptedStore {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
+    if confirmedPreviousBuildFatal {
+      return false
+    }
     if commercialAuthPlugin.handle(url: url) {
       return true
     }
@@ -1531,6 +1738,9 @@ private final class RecoveryFailureEncryptedStore {
     continue userActivity: NSUserActivity,
     restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
   ) -> Bool {
+    if confirmedPreviousBuildFatal {
+      return false
+    }
     if commercialAuthPlugin.handle(userActivity: userActivity) {
       return true
     }

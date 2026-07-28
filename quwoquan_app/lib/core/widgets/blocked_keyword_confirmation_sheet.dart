@@ -10,7 +10,7 @@ Future<String?> showBlockedKeywordConfirmationSheet(
   if (keyword.isEmpty) return Future<String?>.value();
   return showAppActionSheet<String>(
     context,
-    title: UITextConstants.blockedKeywordsAddTitle,
+    title: ContentText.blockedKeywordsAddTitle,
     message: UITextConstants.blockKeywordConfirmMessage(keyword),
     sections: <AppActionSheetSection<String>>[
       AppActionSheetSection<String>(

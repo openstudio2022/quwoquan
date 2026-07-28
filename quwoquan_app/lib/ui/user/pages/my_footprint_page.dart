@@ -49,31 +49,11 @@ class _MyFootprintPageState extends ConsumerState<MyFootprintPage> {
   }
 
   UiErrorSemantic _resolvePageErrorSemantic(Object error) {
-    final resolved = runtimeErrorSemantic(
+    return runtimeErrorSemantic(
       context,
       error: error,
       category: UiErrorCategory.pageLoad,
       scope: UiErrorScope.page,
-    );
-    return UiErrorSemantic(
-      category: resolved.category,
-      scope: resolved.scope,
-      title: UITextConstants.myFootprintUnavailableTitle,
-      message: resolved.message,
-      secondaryMessage: resolved.secondaryMessage,
-      primaryAction:
-          resolved.primaryAction ??
-          const UiErrorAction(
-            type: UiErrorActionType.retry,
-            label: UITextConstants.tryAgain,
-          ),
-      secondaryAction: resolved.secondaryAction,
-      dismissible: resolved.dismissible,
-      sourceCode: resolved.sourceCode,
-      failureKind: resolved.failureKind,
-      recoveryAction: resolved.recoveryAction,
-      presentation: resolved.presentation,
-      tone: resolved.tone,
     );
   }
 
@@ -107,7 +87,7 @@ class _MyFootprintPageState extends ConsumerState<MyFootprintPage> {
           onPressed: () => context.pop(),
         ),
         middle: Text(
-          UITextConstants.myFootprintTitle,
+          FoundationText.myFootprintTitle,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
       ),
@@ -124,7 +104,7 @@ class _MyFootprintPageState extends ConsumerState<MyFootprintPage> {
           Padding(
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
             child: Text(
-              UITextConstants.myFootprintPrivacyHint,
+              FoundationText.myFootprintPrivacyHint,
               style: TextStyle(
                 fontSize: AppTypography.iosCaption1,
                 color: AppColors.iosSecondaryLabel(context),
@@ -158,7 +138,7 @@ class _MyFootprintPageState extends ConsumerState<MyFootprintPage> {
 
   Widget _buildBody(BuildContext context, MyFootprintListState state) {
     if (state.isLoading && state.items.isEmpty) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     if (state.rawError != null) {
       return AppPageErrorState(
@@ -178,7 +158,7 @@ class _MyFootprintPageState extends ConsumerState<MyFootprintPage> {
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.lg),
           child: Text(
-            UITextConstants.myFootprintEmpty,
+            FoundationText.myFootprintEmpty,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: AppTypography.iosSubheadline,
@@ -214,12 +194,12 @@ class _MyFootprintPageState extends ConsumerState<MyFootprintPage> {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: state.isLoading
-          ? const Center(child: CupertinoActivityIndicator())
+          ? AppRequestFeedback.section()
           : CupertinoButton(
               onPressed: () =>
                   ref.read(myFootprintListProvider.notifier).loadMore(),
               child: Text(
-                UITextConstants.myFootprintLoadMore,
+                FoundationText.myFootprintLoadMore,
                 style: TextStyle(fontSize: AppTypography.iosFootnote),
               ),
             ),

@@ -35,8 +35,8 @@ class CircleActionBar extends StatelessWidget {
     final neutralFill = AppColors.iosProfileSurface(context);
     final neutralForeground = AppColors.iosLabel(context);
     final joinLabel = joinPolicy == 'approval'
-        ? UITextConstants.circleJoinApproval
-        : UITextConstants.joinCircle;
+        ? CommunityText.circleJoinApproval
+        : CommunityText.joinCircle;
     final isManager = role == CircleRole.owner || role == CircleRole.admin;
     final isMemberLike =
         joinStatus == 'joined' && (isManager || role == CircleRole.member);
@@ -61,13 +61,13 @@ class CircleActionBar extends StatelessWidget {
     final ObjectAction primary;
     if (isPending) {
       primary = neutralAction(
-        label: UITextConstants.joinPending,
+        label: CommunityText.joinPending,
         icon: CupertinoIcons.time,
         onPressed: null,
       );
     } else if (isMemberLike) {
       primary = neutralAction(
-        label: UITextConstants.joinedCircle,
+        label: CommunityText.joinedCircle,
         icon: CupertinoIcons.check_mark_circled,
         onPressed: null,
       );
@@ -84,7 +84,7 @@ class CircleActionBar extends StatelessWidget {
       actions: <ObjectAction>[
         primary,
         neutralAction(
-          label: UITextConstants.circleActionEnterDiscussion,
+          label: ObjectHomepageText.circleActionEnterDiscussion,
           icon: CupertinoIcons.chat_bubble_2,
           onPressed: onEnterDiscussion,
         ),

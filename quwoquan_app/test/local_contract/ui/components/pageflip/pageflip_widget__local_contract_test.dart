@@ -9,13 +9,11 @@ import '../../../../support/pageflip/pageflip.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/article_reader/content/article_reader_page_surfaces.dart';
 import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/article_reader/pageflip/diagnostics/article_reader_diagnostic_signatures.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_reader_stage_widgets.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_pixel_probe.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_uv_mesh.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart';
-import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_sheet_partition.dart';
 import 'package:quwoquan_app/components/pageflip/controller.dart';
 import 'package:quwoquan_app/components/pageflip/curl_renderer.dart';
 import 'package:quwoquan_app/components/pageflip/page_surface_snapshot.dart';
@@ -1128,7 +1126,7 @@ void main() {
     expect(interactiveState.backwardMainline, equals('paperFoldBackMainline'));
     expect(interactiveState.backwardFlippingSheetCount, equals(1));
     if (frontLayerCount > 0) {
-      expect(interactiveState.backwardFrontSheetId, equals('laidFront:2'));
+      expect(interactiveState.backwardFrontSheetId, equals('mainlineLeaf:2'));
     } else {
       expect(interactiveState.backwardFrontSheetId, isNull);
     }
@@ -1327,10 +1325,20 @@ void main() {
         .where(
           (state) =>
               state.backwardBackPaintBounds != null &&
-              state.backwardBackPaintBounds!.width > 8,
+              state.backwardCurrentResidualBounds != null &&
+              state.backwardBackPaintBounds!.width > 8 &&
+              state.backwardBackPaintBounds!.overlaps(
+                state.backwardCurrentResidualBounds!,
+              ),
         )
         .toList(growable: false);
-    expect(visibleBackStates, isNotEmpty);
+    expect(
+      visibleBackStates,
+      isNotEmpty,
+      reason:
+          'the moving BACK leaf must overlap the visible current page in '
+          'viewport space; off-page diagnostic geometry is not paint evidence.',
+    );
     for (final state in visibleBackStates) {
       final reason =
           'phase=${state.backwardPhase ?? "-"} '
@@ -1410,16 +1418,14 @@ void main() {
       expect(state.backwardCurrentResidualBounds, isNotNull);
       expect(state.backwardBackPolygonPoints, isNotNull);
       expect(
-        state.backwardBackPaintBounds!.right,
-        greaterThan(0),
-        reason: 'verso/back must not be fully clipped into negative X.',
-      );
-      expect(
-        state.backwardBackPaintBounds!.top,
-        lessThanOrEqualTo(state.backwardCurrentResidualBounds!.top + 1),
+        state.backwardBackPaintBounds!.overlaps(
+          state.backwardCurrentResidualBounds!,
+        ),
+        isTrue,
         reason:
-            'the moving sheet must cover the upper spine-side region; '
-            'otherwise the current page leaks through the top-left corner.',
+            'the moving previous leaf must have positive viewport overlap with '
+            'the visible current page; L0 remains an underlay rather than a '
+            'replacement surface.',
       );
       expect(
         state.backwardBackVertexCount,
@@ -1462,8 +1468,8 @@ void main() {
       expect(state.backwardMainline, equals('paperFoldBackMainline'));
       expect(state.backwardFlippingSheetCount, equals(1));
       if (state.backwardFrontPaintBounds != null) {
-        expect(state.backwardFrontSheetId, startsWith('laidFront:'));
-        expect(state.backwardBackSheetId, isNot(state.backwardFrontSheetId));
+        expect(state.backwardFrontSheetId, startsWith('mainlineLeaf:'));
+        expect(state.backwardBackSheetId, state.backwardFrontSheetId);
         expect(state.frontBounds, equals(state.backwardFrontPaintBounds));
       } else {
         expect(state.backwardBackSheetId, startsWith('mainlineLeaf:'));
@@ -1583,8 +1589,8 @@ void main() {
           reason:
               'when previous front is visible it must be the page-space reveal segment.',
         );
-        expect(sample.latePoseFrontSheetId, equals('laidFront:2'));
-        expect(sample.latePoseFrontSheetId, isNot(sample.latePoseBackSheetId));
+        expect(sample.latePoseFrontSheetId, equals('mainlineLeaf:2'));
+        expect(sample.latePoseFrontSheetId, sample.latePoseBackSheetId);
       }
     },
   );
@@ -1699,6 +1705,10 @@ void main() {
   ) async {
     final samples = <_BackwardVersoTextureProbeSample>[];
     for (final dragSteps in <List<Offset>>[
+      const <Offset>[Offset(36, -8), Offset(360, -36)],
+      List<Offset>.filled(4, const Offset(64, -8)),
+      List<Offset>.filled(4, const Offset(64, -16)),
+      List<Offset>.filled(4, const Offset(64, -32)),
       List<Offset>.filled(3, const Offset(64, 0)),
       List<Offset>.filled(4, const Offset(64, 0)),
       List<Offset>.filled(5, const Offset(64, 0)),
@@ -1930,7 +1940,8 @@ void main() {
   ) async {
     final sample = await _renderBackwardVersoTextureProbeScene(
       tester,
-      backwardDragDelta: const Offset(360, -36),
+      surfaceSize: const Size(408, 916),
+      backwardDragSteps: List<Offset>.filled(4, const Offset(64, -8)),
     );
 
     final sourcesByLabel = <String, BackwardPaintSourceDiagnostic>{
@@ -2901,10 +2912,15 @@ _collectBackwardAngleToHorizontalSamples(WidgetTester tester) async {
   }
 
   await moveAndSample(const Offset(360, -36));
-  await moveAndSample(const Offset(0, 36));
-  await moveAndSample(const Offset(0, 36));
-  await moveAndSample(const Offset(60, 0));
-  await moveAndSample(const Offset(60, 0));
+  // Sample the held pull through horizontal in pointer-sized increments.
+  // A 36px teleport cannot distinguish a continuous folded sheet from a
+  // discontinuity that happens between two gesture events.
+  for (var i = 0; i < 6; i += 1) {
+    await moveAndSample(const Offset(0, 12));
+  }
+  for (var i = 0; i < 6; i += 1) {
+    await moveAndSample(const Offset(20, 0));
+  }
 
   await gesture.up();
   await tester.pump(const Duration(milliseconds: 16));
@@ -3052,123 +3068,20 @@ _BackwardPartitionTrace? _traceBackwardPartition(StPageFlipScene? scene) {
   if (scene == null || frame == null) {
     return null;
   }
-  final pageSize = Size(
-    scene.layout.bounds.pageWidth,
-    scene.layout.bounds.height,
-  );
-  final sheetLocalPolygon = _toBackwardSheetLocalPolygon(
-    frame.flippingClipArea,
-    anchor: frame.flippingAnchor,
-    angle: frame.angle,
-    direction: frame.visualGeometryDirection,
-  );
-  final sheetLocalFoldLine = _toBackwardSheetLocalLine(
-    frame.backwardProjectedFrame?.foldLine,
-    anchor: frame.flippingAnchor,
-    angle: frame.angle,
-    direction: frame.visualGeometryDirection,
-  );
-  final sheetLocalFreeEdgeLine = _toBackwardSheetLocalLine(
-    frame.backwardProjectedFrame?.projectedRightEdgeLine,
-    anchor: frame.flippingAnchor,
-    angle: frame.angle,
-    direction: frame.visualGeometryDirection,
-  );
-  final faces = resolveBackwardCanonicalSheetFaces(
-    BackwardCanonicalSheetInput(
-      pageSize: pageSize,
-      sheetLocalPolygon: sheetLocalPolygon,
-      sheetAreaPolygon: frame.flippingClipArea,
-      sheetLocalFoldLine: sheetLocalFoldLine,
-      sheetLocalFreeEdgeLine: sheetLocalFreeEdgeLine,
-      currentResidualPagePolygon: frame.bottomClipArea,
-    ),
-  );
+  final leaf = frame.backwardLeafFrame;
   return _BackwardPartitionTrace(
     progress: frame.progress,
     angle: frame.angle,
     visualGeometryDirection: frame.visualGeometryDirection,
-    pageSize: pageSize,
-    sheetLocalBounds: polygonBounds(sheetLocalPolygon),
-    sheetLocalPolygon: articleDiagnosticPolygonSignature(sheetLocalPolygon),
-    foldLocalLine: sheetLocalFoldLine,
-    freeEdgeLocalLine: sheetLocalFreeEdgeLine,
-    leafCoveredWidth: frame.backwardLeafFrame?.coveredWidthNormalized,
-    leafRectoCoverage: frame.backwardLeafFrame?.rectoCoverageNormalized,
-    leafTotalRectoWidth:
-        frame.backwardLeafFrame?.totalRectoVisibleWidthNormalized,
-    leafVersoWidth: frame.backwardLeafFrame == null
+    leafCoveredWidth: leaf?.coveredWidthNormalized,
+    leafRectoCoverage: leaf?.rectoCoverageNormalized,
+    leafTotalRectoWidth: leaf?.totalRectoVisibleWidthNormalized,
+    leafVersoWidth: leaf == null
         ? null
-        : (frame.backwardLeafFrame!.coveredWidthNormalized -
-                  frame.backwardLeafFrame!.totalRectoVisibleWidthNormalized)
+        : (leaf.coveredWidthNormalized - leaf.totalRectoVisibleWidthNormalized)
               .clamp(0.0, 1.0)
               .toDouble(),
-    partitionFailureReason: faces.failureReason,
-    rectoFailureReason: faces.rectoFailureReason,
-    versoFailureReason: faces.versoFailureReason,
-    partitionRectoBounds: polygonBounds(faces.previousFrontRectoLocalPolygon),
-    partitionVersoBounds: polygonBounds(faces.previousBackVersoLocalPolygon),
-    partitionRectoArea: faces.rectoArea,
-    partitionVersoArea: faces.versoArea,
   );
-}
-
-List<Offset> _toBackwardSheetLocalPolygon(
-  List<Offset> polygon, {
-  required Offset anchor,
-  required double angle,
-  required StPageFlipDirection direction,
-}) {
-  if (polygon.length < 3) {
-    return const <Offset>[];
-  }
-  return polygon
-      .map(
-        (point) => _toBackwardSheetLocalPoint(
-          point,
-          anchor: anchor,
-          angle: angle,
-          direction: direction,
-        ),
-      )
-      .toList(growable: false);
-}
-
-(Offset, Offset)? _toBackwardSheetLocalLine(
-  (Offset, Offset)? line, {
-  required Offset anchor,
-  required double angle,
-  required StPageFlipDirection direction,
-}) {
-  if (line == null) {
-    return null;
-  }
-  return (
-    _toBackwardSheetLocalPoint(
-      line.$1,
-      anchor: anchor,
-      angle: angle,
-      direction: direction,
-    ),
-    _toBackwardSheetLocalPoint(
-      line.$2,
-      anchor: anchor,
-      angle: angle,
-      direction: direction,
-    ),
-  );
-}
-
-Offset _toBackwardSheetLocalPoint(
-  Offset point, {
-  required Offset anchor,
-  required double angle,
-  required StPageFlipDirection direction,
-}) {
-  final translated = direction == StPageFlipDirection.back
-      ? Offset(anchor.dx - point.dx, point.dy - anchor.dy)
-      : Offset(point.dx - anchor.dx, point.dy - anchor.dy);
-  return rotatePointForCanvasTransform(translated, angle);
 }
 
 void _expectSourceBoundsTransitionIsContinuous(
@@ -3700,17 +3613,13 @@ Map<_ProbeColor, int> _scanVisibleBackColors({
   for (var y = top; y <= bottom; y += 1) {
     for (var x = left; x <= right; x += 1) {
       final point = Offset(x + 0.5, y + 0.5);
-      if (!backwardPartitionContainsPoint(polygon: polygon, point: point)) {
+      if (!_pointInPolygon(point, polygon)) {
         continue;
       }
-      if (frontPolygon.length >= 3 &&
-          backwardPartitionContainsPoint(polygon: frontPolygon, point: point)) {
+      if (frontPolygon.length >= 3 && _pointInPolygon(point, frontPolygon)) {
         continue;
       }
-      if (excludePolygons.any(
-        (polygon) =>
-            backwardPartitionContainsPoint(polygon: polygon, point: point),
-      )) {
+      if (excludePolygons.any((polygon) => _pointInPolygon(point, polygon))) {
         continue;
       }
       final color = _classifyProbeColor(
@@ -3750,10 +3659,7 @@ Map<_ProbeColor, int> _scanMovingSheetColors({
   for (var y = top; y <= bottom; y += 1) {
     for (var x = left; x <= right; x += 1) {
       final point = Offset(x + 0.5, y + 0.5);
-      if (!polygons.any(
-        (polygon) =>
-            backwardPartitionContainsPoint(polygon: polygon, point: point),
-      )) {
+      if (!polygons.any((polygon) => _pointInPolygon(point, polygon))) {
         continue;
       }
       final color = _classifyProbeColor(
@@ -4056,60 +3962,28 @@ class _BackwardPartitionTrace {
     required this.progress,
     required this.angle,
     required this.visualGeometryDirection,
-    required this.pageSize,
-    required this.sheetLocalBounds,
-    required this.sheetLocalPolygon,
-    required this.foldLocalLine,
-    required this.freeEdgeLocalLine,
     required this.leafCoveredWidth,
     required this.leafRectoCoverage,
     required this.leafTotalRectoWidth,
     required this.leafVersoWidth,
-    required this.partitionFailureReason,
-    required this.rectoFailureReason,
-    required this.versoFailureReason,
-    required this.partitionRectoBounds,
-    required this.partitionVersoBounds,
-    required this.partitionRectoArea,
-    required this.partitionVersoArea,
   });
 
   final double progress;
   final double angle;
   final StPageFlipDirection visualGeometryDirection;
-  final Size pageSize;
-  final Rect? sheetLocalBounds;
-  final String sheetLocalPolygon;
-  final (Offset, Offset)? foldLocalLine;
-  final (Offset, Offset)? freeEdgeLocalLine;
   final double? leafCoveredWidth;
   final double? leafRectoCoverage;
   final double? leafTotalRectoWidth;
   final double? leafVersoWidth;
-  final BackwardCanonicalSheetFailureReason partitionFailureReason;
-  final BackwardCanonicalFaceFailureReason rectoFailureReason;
-  final BackwardCanonicalFaceFailureReason versoFailureReason;
-  final Rect? partitionRectoBounds;
-  final Rect? partitionVersoBounds;
-  final double partitionRectoArea;
-  final double partitionVersoArea;
 
   String describe() {
     return 'progress=${progress.toStringAsFixed(3)} '
         'angle=${angle.toStringAsFixed(3)} '
         'visual=${visualGeometryDirection.name} '
-        'page=${pageSize.width.toStringAsFixed(1)}x${pageSize.height.toStringAsFixed(1)} '
-        'sheetLocal=${_describeRect(sheetLocalBounds)} '
-        'foldLocal=${_describeLine(foldLocalLine)} '
-        'freeLocal=${_describeLine(freeEdgeLocalLine)} '
         'leaf covered=${leafCoveredWidth?.toStringAsFixed(3) ?? "-"} '
         'rectoCoverage=${leafRectoCoverage?.toStringAsFixed(3) ?? "-"} '
         'rectoW=${leafTotalRectoWidth?.toStringAsFixed(3) ?? "-"} '
-        'versoW=${leafVersoWidth?.toStringAsFixed(3) ?? "-"} '
-        'partition=${partitionFailureReason.name} '
-        'recto=${_describeRect(partitionRectoBounds)}/${partitionRectoArea.toStringAsFixed(1)}/${rectoFailureReason.name} '
-        'verso=${_describeRect(partitionVersoBounds)}/${partitionVersoArea.toStringAsFixed(1)}/${versoFailureReason.name} '
-        'sheetPoly=$sheetLocalPolygon';
+        'versoW=${leafVersoWidth?.toStringAsFixed(3) ?? "-"}';
   }
 }
 

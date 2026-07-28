@@ -115,7 +115,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：Remote、Alpha Mock、Provider 与页面 local_contract 对 source、circleId、计数和成员交集行为一致。
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：四环境 Remote API、Provider 与页面 local_contract typed double 对 source、circleId、计数和成员交集行为一致，且测试 double 不进入 App/UAT。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-003"></a>

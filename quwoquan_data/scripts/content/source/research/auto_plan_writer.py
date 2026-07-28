@@ -24,7 +24,10 @@ from content.source.research.auto_plan_lanes import (
     _independent_homepage_media_collections,
     write_image_lane,
 )
-from content.source.research.auto_plan_video import write_video_lane
+from content.source.research.auto_plan_video import (
+    discover_commons_sourced_videos,
+    write_video_lane,
+)
 from content.source.research.auto_plan_article import write_article_lane
 from content.source.research.image_provider_compliance import (
     professional_library_compliance_summary,
@@ -192,6 +195,21 @@ def _write_auto_research_plans_impl(
         obj = resolve_entity_object_dir(execution_id, entity_id, etype_hint=entity_type)
         dl = obj / STAGE_DOWNLOAD
         target_source = target_by_name.get(entity_id) or {}
+        declared_topics = (
+            target_source.get("topics")
+            if isinstance(target_source.get("topics"), list)
+            else []
+        )
+        article_topic_terms = [
+            str(value).strip()
+            for value in (
+                strategy_spec.get("intentLabel"),
+                target_source.get("topic"),
+                target_source.get("theme"),
+                *declared_topics,
+            )
+            if str(value or "").strip()
+        ]
         needs_homepage_media = "homepage" in selected_lanes
         qualified_homepage_source: QualifiedHomepageSource | None = None
         if needs_homepage_media:
@@ -489,6 +507,7 @@ def _write_auto_research_plans_impl(
             updated=updated,
             plan_dir=dl,
             entity_aliases=entity_aliases,
+            topic_terms=article_topic_terms,
             related_wiki_titles=related_wiki_titles,
             voyage_url=voyage_url,
             voyage_page_images=voyage_page_images,
@@ -535,6 +554,10 @@ def _write_auto_research_plans_impl(
                 voyage_title=voyage_title,
             )
         if "video" in selected_lanes:
+            sourced_video_pool = discover_commons_sourced_videos(
+                entity_id,
+                entity_aliases=entity_aliases,
+            )
             write_video_lane(
                 entity_id=entity_id,
                 entity_aliases=entity_aliases,
@@ -544,6 +567,7 @@ def _write_auto_research_plans_impl(
                 report=report,
                 updated=updated,
                 open_license_image_pool=open_license_image_pool,
+                sourced_video_pool=sourced_video_pool,
             )
     report["sourceAvailability"] = _source_availability_summary(report, entity_ids)
     if write_shared_report:

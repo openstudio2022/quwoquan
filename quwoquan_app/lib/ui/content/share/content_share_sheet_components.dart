@@ -207,7 +207,7 @@ class _ShareTargetAction extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               child: busy
-                  ? const CupertinoActivityIndicator()
+                  ? AppRequestFeedback.inline()
                   : Icon(icon, size: AppSpacing.iconLarge, color: color),
             ),
             SizedBox(height: AppSpacing.intraGroupXs),

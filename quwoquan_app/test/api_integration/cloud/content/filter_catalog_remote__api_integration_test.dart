@@ -1,9 +1,6 @@
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md#gwt-003
 
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/io_client.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/remote/content/filter_catalog/filter_catalog_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
@@ -16,10 +13,7 @@ import '../../../support/recording_cloud_operation_telemetry_sink.dart';
 
 const _gatewayUrl = String.fromEnvironment(
   'GAMMA_GATEWAY_URL',
-  defaultValue: 'https://gamma-api.quwoquan-env.test:19000',
-);
-const _gatewayResolveHost = String.fromEnvironment(
-  'GAMMA_GATEWAY_RESOLVE_HOST',
+  defaultValue: '',
 );
 
 final class _GammaFilterCatalogClientContext
@@ -104,31 +98,4 @@ void main() {
   );
 }
 
-CloudHttpClient _buildGammaHttpClient() {
-  if (_gatewayResolveHost.trim().isEmpty) {
-    return CloudHttpClient();
-  }
-  final gateway = Uri.parse(_gatewayUrl);
-  final nativeClient = HttpClient();
-  nativeClient.findProxy = (_) => 'DIRECT';
-  nativeClient.badCertificateCallback = (_, host, _) => host == gateway.host;
-  nativeClient.connectionFactory = (uri, proxyHost, proxyPort) {
-    if (uri.host != gateway.host) {
-      throw StateError(
-        'gamma filter catalog integration client rejected unexpected host '
-        '${uri.host}',
-      );
-    }
-    return Socket.startConnect(_gatewayResolveHost, uri.port).then((task) {
-      final secureSocket = task.socket.then<Socket>(
-        (socket) => SecureSocket.secure(
-          socket,
-          host: uri.host,
-          onBadCertificate: (_) => uri.host == gateway.host,
-        ),
-      );
-      return ConnectionTask.fromSocket<Socket>(secureSocket, task.cancel);
-    });
-  };
-  return CloudHttpClient(client: IOClient(nativeClient));
-}
+CloudHttpClient _buildGammaHttpClient() => CloudHttpClient();

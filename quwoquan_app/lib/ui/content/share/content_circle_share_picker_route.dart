@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/application/circle/membership/persona_circle_summary_mapper.dart';
@@ -57,7 +58,7 @@ class _ContentCircleSharePickerRouteState
   Future<List<CircleDto>> _load() async {
     final ownerUserId = ref.read(resolvedOwnerUserIdProvider).trim();
     if (ownerUserId.isEmpty) {
-      throw StateError(UITextConstants.needLogin);
+      throw StateError(FoundationText.needLogin);
     }
     final persona = await ref.read(activePersonaContextProvider.future);
     final page = await widget.membershipQuery.listPersonaCircles(
@@ -78,7 +79,7 @@ class _ContentCircleSharePickerRouteState
     final isDark = ref.watch(isDarkProvider);
     return SettingsInsetMemberPickerPageScaffold(
       isDark: isDark,
-      title: UITextConstants.shareSelectCircleTitle,
+      title: ContentText.shareSelectCircleTitle,
       onBack: () => Navigator.of(context).pop(false),
       body: Column(
         children: <Widget>[
@@ -91,7 +92,7 @@ class _ContentCircleSharePickerRouteState
             ),
             child: AppSearchField(
               controller: _searchController,
-              placeholder: UITextConstants.search,
+              placeholder: DiscoveryText.search,
               elevated: false,
               onChanged: (value) => setState(() => _query = value.trim()),
             ),
@@ -101,14 +102,13 @@ class _ContentCircleSharePickerRouteState
               future: _future,
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CupertinoActivityIndicator());
+                  return AppRequestFeedback.section();
                 }
                 if (snapshot.hasError) {
                   final semantic = runtimeErrorSemantic(
                     context,
                     error:
-                        snapshot.error ??
-                        StateError(UITextConstants.loadFailed),
+                        snapshot.error ?? StateError(FoundationText.loadFailed),
                     category: UiErrorCategory.sectionLoad,
                     scope: UiErrorScope.section,
                   );
@@ -136,7 +136,7 @@ class _ContentCircleSharePickerRouteState
                 if (circles.isEmpty) {
                   return Center(
                     child: Text(
-                      UITextConstants.shareNoCircles,
+                      ContentText.shareNoCircles,
                       style: TextStyle(
                         fontSize: AppTypography.iosBody,
                         color: AppColors.iosSecondaryLabel(context),
@@ -165,16 +165,16 @@ class _ContentCircleSharePickerRouteState
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
         title: Text(UITextConstants.shareCircleConfirmTitle(circle.name)),
-        content: const Text(UITextConstants.shareCircleConfirmMessage),
+        content: const Text(ContentText.shareCircleConfirmMessage),
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text(UITextConstants.cancel),
+            child: const Text(FoundationText.cancel),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text(UITextConstants.confirm),
+            child: const Text(FoundationText.confirm),
           ),
         ],
       ),
@@ -193,7 +193,7 @@ class _ContentCircleSharePickerRouteState
       if (!mounted) {
         return;
       }
-      AppToast.show(context, UITextConstants.shareCircleSuccess);
+      AppToast.show(context, ContentText.shareCircleSuccess);
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) {
@@ -211,7 +211,7 @@ class _ContentCircleSharePickerRouteState
         semantic: UiErrorSemantic(
           category: resolved.category,
           scope: resolved.scope,
-          title: UITextConstants.shareCircleFailedTitle,
+          title: ContentText.shareCircleFailedTitle,
           message: resolved.message,
           secondaryMessage: resolved.secondaryMessage,
           primaryAction: resolved.primaryAction,
@@ -306,7 +306,7 @@ class _CircleList extends StatelessWidget {
                   ),
                 ),
                 if (busy)
-                  const CupertinoActivityIndicator()
+                  AppRequestFeedback.inline()
                 else
                   Icon(
                     CupertinoIcons.chevron_forward,

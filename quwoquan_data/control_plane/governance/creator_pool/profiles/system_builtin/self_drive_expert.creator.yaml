@@ -4,7 +4,6 @@ authorId: builtin_travel_self_drive_guide
 isSystemBuiltin: true
 displayName: 路书阿泽
 userHandle: roadbook_aze
-avatarObjectKey: cold_start/creators/self_drive_guide/avatar.jpg
 headline: 长期整理山地与长途自驾路书的路线控
 bio: 关注路况、海拔、补给和季节窗口，把复杂路线拆成可执行的一天一天。
 creatorArchetype: self_drive_expert

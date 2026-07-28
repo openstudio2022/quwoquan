@@ -17,6 +17,7 @@ import (
 	platformredis "quwoquan_service/internal/platform/redis"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
+	"quwoquan_service/runtime/controlplane"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
@@ -92,6 +93,9 @@ func main() {
 	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
 		log.Fatalf("user-service config compatibility failed: %v", err)
 	}
+	controlplane.StartReleaseConfigAttestation(
+		serviceName, appEnv, configRoot, configVersion, imageVersion,
+	)
 
 	ctx := context.Background()
 
@@ -296,6 +300,10 @@ func main() {
 		regionTagResolver = userintegration.NewTagServiceRegionResolver(tagServiceBaseURL, nil)
 		profileTagValidator = userintegration.NewTagServiceProfileTagValidator(tagServiceBaseURL, nil)
 	}
+	publicWebBaseURL := strings.TrimSpace(getenvOrDefault("PUBLIC_WEB_BASE_URL", ""))
+	if publicWebBaseURL == "" {
+		log.Fatal("PUBLIC_WEB_BASE_URL must be injected from environment topology")
+	}
 	profileService := application.NewProfileService(
 		profileStore,
 		personaStore,
@@ -305,6 +313,7 @@ func main() {
 		application.WithProfileQrTokenStore(profileQrTokenStore),
 		application.WithRegionTagResolver(regionTagResolver),
 		application.WithProfileTagValidator(profileTagValidator),
+		application.WithProfilePublicBaseURL(publicWebBaseURL),
 	)
 	searchService := application.NewSearchService(profileStore, personaStore)
 	// R-OBJ-001：对象级关系指标经 Prometheus sink 导出到 /metrics。
@@ -342,7 +351,36 @@ func main() {
 	if chatServiceBaseURL == "" {
 		log.Fatal("user-service startup failed: CHAT_SERVICE_BASE_URL is required")
 	}
-	conversationGateway := userintegration.NewChatServiceClient(chatServiceBaseURL, nil)
+	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		log.Fatalf("access token config invalid: %v", err)
+	}
+	accessSigner, err := rtauth.NewHS256Signer(accessTokenConfig)
+	if err != nil {
+		log.Fatalf("access token signer invalid: %v", err)
+	}
+	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
+	if err != nil {
+		log.Fatalf("access token verifier invalid: %v", err)
+	}
+	chatCredentials, err := rtauth.NewHS256DelegatedPersonaAuthorizationProvider(
+		accessTokenConfig,
+		"user-service",
+		[]string{"chat.conversation.internal_direct"},
+	)
+	if err != nil {
+		log.Fatalf("user-service chat credential init failed: %v", err)
+	}
+	conversationGateway, err := userintegration.NewAuthorizedChatServiceClient(
+		chatServiceBaseURL,
+		nil,
+		chatCredentials,
+	)
+	if err != nil {
+		log.Fatalf("user-service chat client init failed: %v", err)
+	}
 	greetingService := greetingapp.NewGreetingService(
 		greetingStore,
 		greetingStore,
@@ -453,20 +491,6 @@ func main() {
 	carrierPhoneResolver, err := newCarrierPhoneResolver()
 	if err != nil && !errors.Is(err, ErrAuthRuntimeCapabilityBlocked) {
 		log.Fatalf("carrier identity adapter init failed: %v", err)
-	}
-	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
-		runtimeconfig.EnvRuntimeConfigProvider{},
-	)
-	if err != nil {
-		log.Fatalf("access token config invalid: %v", err)
-	}
-	accessSigner, err := rtauth.NewHS256Signer(accessTokenConfig)
-	if err != nil {
-		log.Fatalf("access token signer invalid: %v", err)
-	}
-	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
-	if err != nil {
-		log.Fatalf("access token verifier invalid: %v", err)
 	}
 	otpCodeSealer, err := otpseal.LoadFromEnvironment()
 	if err != nil {

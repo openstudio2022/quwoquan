@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/content_campaign_plan.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "rootExecutionId",
+    "gitCommitSha",
+    "sourceDigest",
+    "entityCatalogDigest",
+    "submissionDigests",
+    "executionIds",
+    "frozenAt",
+    "planDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "quwoquan_data.content_campaign_plan" },
+    "rootExecutionId": { "type": "string", "minLength": 1 },
+    "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "sourceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "entityCatalogDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "submissionDigests": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "article": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "image": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "video": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      }
+    },
+    "executionIds": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": { "type": "string", "minLength": 1 },
+        "article": { "type": "string", "minLength": 1 },
+        "image": { "type": "string", "minLength": 1 },
+        "video": { "type": "string", "minLength": 1 }
+      }
+    },
+    "frozenAt": { "type": "string", "format": "date-time" },
+    "planDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

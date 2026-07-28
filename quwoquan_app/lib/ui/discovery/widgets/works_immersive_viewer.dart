@@ -75,6 +75,7 @@ import 'package:quwoquan_app/core/trackers/feed_performance_observability.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/utils/content_keyword_suggester.dart';
 import 'package:quwoquan_app/core/widgets/blocked_keyword_confirmation_sheet.dart';
@@ -263,6 +264,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   late final FeedPerformanceObservability _feedPerformanceObservability;
   late final ContentBehaviorTracker _contentBehaviorTracker;
   late final ContentEngagementTracker _contentEngagementTracker;
+  late final ArticleReaderObservability _articleReaderObservability;
 
   late final PageController _pageController;
   bool _prefetchScheduled = false;
@@ -286,6 +288,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     );
     _contentBehaviorTracker = ref.read(contentBehaviorTrackerProvider);
     _contentEngagementTracker = ref.read(contentEngagementTrackerProvider);
+    _articleReaderObservability = ref.read(articleReaderObservabilityProvider);
     final initialPage = _safeInitialPage;
     _currentPage = initialPage;
     _pageController = PageController(initialPage: initialPage);

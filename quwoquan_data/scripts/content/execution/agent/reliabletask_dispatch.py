@@ -82,10 +82,32 @@ def _active_jobs(
     )
 
 
-def _quota_reached(execution_id: str, queue_stage: QueueJobStage) -> bool:
+def _delivered_count(
+    ctx: ExecutionContext,
+    stage: ExecutionStage,
+    queue_stage: QueueJobStage,
+) -> int:
+    """本阶段已交付的达标对象数。
+
+    主页创作的交付真相是磁盘上的三件套与采纳门结论，队列作业状态只是调度账本：
+    作业可能因超时或信封校验被判终态，而对象已由 finalize 正常落盘。两者一旦分叉
+    必须以采纳门为准，否则批次会在实际已达标时被账本误判为供给不足。
+    """
+    if stage is ExecutionStage.BUILD_HOMEPAGE:
+        from content.execution.controller.homepage_authoring import homepage_quota_verdict
+
+        return homepage_quota_verdict(ctx).qualified_count
+    return _succeeded_count(ctx.execution_id, queue_stage)
+
+
+def _quota_reached(
+    ctx: ExecutionContext,
+    stage: ExecutionStage,
+    queue_stage: QueueJobStage,
+) -> bool:
     from content.execution.spec_contract import approved_quota
 
-    return _succeeded_count(execution_id, queue_stage) >= approved_quota(execution_id)
+    return _delivered_count(ctx, stage, queue_stage) >= approved_quota(ctx.execution_id)
 
 
 def _remaining_jobs(
@@ -210,13 +232,14 @@ def _dispatch_fleet(
     # 宁可阻断也不静默放行。
     discarded = tuple(issue for issue in issues if issue.code in DISCARDED_ISSUE_CODES)
     blocking = tuple(issue for issue in issues if issue.code not in DISCARDED_ISSUE_CODES)
-    active = _active_jobs(ctx.execution_id, queue_stage)
+    delivered = _delivered_count(ctx, stage, queue_stage)
     if blocking:
         status = ReliableTaskDispatchStatus.BLOCKED
-    elif active:
-        status = ReliableTaskDispatchStatus.WAITING
-    elif _quota_reached(ctx.execution_id, queue_stage):
+    elif _quota_reached(ctx, stage, queue_stage):
+        # 配额已交付即收工：过采出来的剩余候选继续跑只是纯浪费额度。
         status = ReliableTaskDispatchStatus.COMPLETED
+    elif _active_jobs(ctx.execution_id, queue_stage):
+        status = ReliableTaskDispatchStatus.WAITING
     else:
         # 候选池已全部终态但达标数不足配额：过采系数偏低或区域供给不足，
         # 必须让运行者看见，而不是继续空转。
@@ -227,8 +250,7 @@ def _dispatch_fleet(
             _contract_issue(
                 stage,
                 f"候选池耗尽但未达准出配额："
-                f"达标 {_succeeded_count(ctx.execution_id, queue_stage)}"
-                f"/{approved_quota(ctx.execution_id)}，"
+                f"达标 {delivered}/{approved_quota(ctx.execution_id)}，"
                 f"丢弃 {len(discarded)}；需提高 oversampleFactor 或扩充区域实体供给",
             ),
         )
@@ -237,7 +259,7 @@ def _dispatch_fleet(
         queue_stage=queue_stage,
         status=status,
         attempted_count=sum(int(getattr(outcome, "attempts", 0)) for outcome in report.outcomes),
-        completed_count=_succeeded_count(ctx.execution_id, queue_stage),
+        completed_count=delivered,
         issues=blocking,
         discarded=discarded,
     )
@@ -256,11 +278,9 @@ def dispatch_reliabletask_checkpoint(
     declared = _declared_jobs(ctx.execution_id, queue_stage)
     if not declared:
         return None
-    # 已达配额且无可推进作业时本 checkpoint 即完成：剩余作业都是终态丢弃对象，
-    # 再次派发只会让批次重新撞上同一批不达标对象。
-    if not _active_jobs(ctx.execution_id, queue_stage) and _quota_reached(
-        ctx.execution_id, queue_stage
-    ):
+    # 配额已交付即视为本 checkpoint 完成：剩余作业要么是终态丢弃对象，
+    # 要么是过采冗余，再次派发只是重复消耗额度。
+    if _quota_reached(ctx, stage, queue_stage):
         return None
     return _dispatch_fleet(ctx, stage, queue_stage)
 

@@ -84,11 +84,11 @@ class ProfileInteractionDirectionSwitch extends StatelessWidget {
         children: <Widget>[
           segment(
             InteractionDirection.received,
-            UITextConstants.profileInteractionDirectionReceived,
+            ProfileText.profileInteractionDirectionReceived,
           ),
           segment(
             InteractionDirection.sent,
-            UITextConstants.profileInteractionDirectionSent,
+            ProfileText.profileInteractionDirectionSent,
           ),
         ],
       ),
@@ -178,7 +178,7 @@ class _InteractionActionChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             if (busy)
-              const CupertinoActivityIndicator()
+              AppRequestFeedback.inline()
             else
               Icon(icon, size: AppSpacing.iconSmall, color: foreground),
             SizedBox(width: AppSpacing.intraGroupXs),
@@ -262,7 +262,7 @@ class _ProfileInteractionPreviewTileState
       return _buildPlaceholder(
         context,
         CupertinoIcons.doc_text,
-        UITextConstants.profileInteractionOriginalUnavailable,
+        ProfileText.profileInteractionOriginalUnavailable,
       );
     }
 
@@ -349,10 +349,10 @@ class _ProfileInteractionPreviewTileState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            const CupertinoActivityIndicator(),
+            AppRequestFeedback.inline(),
             SizedBox(height: AppSpacing.intraGroupXs),
             Text(
-              UITextConstants.profileInteractionPreviewLoading,
+              ProfileText.profileInteractionPreviewLoading,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -379,7 +379,7 @@ class _ProfileInteractionPreviewTileState
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Text(
-              UITextConstants.profileInteractionPreviewLoadFailed,
+              ProfileText.profileInteractionPreviewLoadFailed,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,

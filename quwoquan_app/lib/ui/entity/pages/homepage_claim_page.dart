@@ -46,12 +46,12 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
 
   String get _confirmLabel {
     if ((_detail?.claimStatus ?? '') == 'claimed') {
-      return UITextConstants.homepageClaimAlreadyClaimed;
+      return ObjectHomepageText.homepageClaimAlreadyClaimed;
     }
     if ((_detail?.status ?? '') == 'offline') {
-      return UITextConstants.homepageClaimHomepageOffline;
+      return ObjectHomepageText.homepageClaimHomepageOffline;
     }
-    return UITextConstants.homepageClaimSubmit;
+    return ObjectHomepageText.homepageClaimSubmit;
   }
 
   @override
@@ -91,12 +91,12 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     if (_pageErrorSemantic != null && !_isLoading) {
       return IosSelectionPageScaffold(
-        title: UITextConstants.homepageClaimAction,
+        title: ObjectHomepageText.homepageClaimAction,
         onBack: _handleCloseRequest,
         leadingStyle: IosSelectionHeaderLeadingStyle.close,
         backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
         body: AppPageErrorState(
-          semantic: _pageErrorSemantic!,
+          semantic: ensureRetryUiErrorSemantic(_pageErrorSemantic!),
           onAction: _handlePageErrorAction,
         ),
       );
@@ -107,7 +107,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
         (_detail?.status ?? '') != 'offline' &&
         (_detail?.claimStatus ?? '') != 'claimed';
     return IosSelectionPageScaffold(
-      title: UITextConstants.homepageClaimAction,
+      title: ObjectHomepageText.homepageClaimAction,
       onBack: _handleCloseRequest,
       leadingStyle: IosSelectionHeaderLeadingStyle.close,
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
@@ -120,10 +120,10 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
         ),
         children: <Widget>[
           if (_isLoading)
-            const Center(child: CupertinoActivityIndicator())
+            AppRequestFeedback.section()
           else ...<Widget>[
             const IosSelectionSectionHeader(
-              title: UITextConstants.homepageFormOverviewSection,
+              title: ObjectHomepageText.homepageFormOverviewSection,
               padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
             ),
             IosSelectionSection(
@@ -134,7 +134,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
                   children: <Widget>[
                     Text(
                       _detail?.title ??
-                          UITextConstants.homepageClaimHomepageFallback,
+                          ObjectHomepageText.homepageClaimHomepageFallback,
                       style: const TextStyle(
                         fontSize: AppTypography.iosTitle3,
                         fontWeight: AppTypography.semiBold,
@@ -143,10 +143,10 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
                     SizedBox(height: AppSpacing.intraGroupXs),
                     Text(
                       (_detail?.status ?? '') == 'offline'
-                          ? UITextConstants.homepageClaimOfflineDescription
+                          ? ObjectHomepageText.homepageClaimOfflineDescription
                           : (_detail?.claimStatus ?? '') == 'claimed'
-                          ? UITextConstants.homepageClaimClaimedDescription
-                          : UITextConstants.homepageClaimReviewDescription,
+                          ? ObjectHomepageText.homepageClaimClaimedDescription
+                          : ObjectHomepageText.homepageClaimReviewDescription,
                       style: TextStyle(
                         fontSize: AppTypography.iosFootnote,
                         color: CupertinoColors.secondaryLabel.resolveFrom(
@@ -167,7 +167,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
             ),
             SizedBox(height: AppSpacing.containerSm),
             const IosSelectionSectionHeader(
-              title: UITextConstants.homepageClaimMaterialsSection,
+              title: ObjectHomepageText.homepageClaimMaterialsSection,
               padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
             ),
             IosSelectionSection(
@@ -182,7 +182,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          UITextConstants.homepageClaimTier,
+                          ObjectHomepageText.homepageClaimTier,
                           style: TextStyle(
                             fontSize: AppTypography.iosCaption1,
                             color: AppColors.iosSecondaryLabel(context),
@@ -197,7 +197,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
                                 horizontal: AppSpacing.containerSm,
                               ),
                               child: Text(
-                                UITextConstants.homepageClaimTierBasic,
+                                ObjectHomepageText.homepageClaimTierBasic,
                               ),
                             ),
                             'verified': Padding(
@@ -205,7 +205,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
                                 horizontal: AppSpacing.containerSm,
                               ),
                               child: Text(
-                                UITextConstants.homepageClaimTierVerified,
+                                ObjectHomepageText.homepageClaimTierVerified,
                               ),
                             ),
                           },
@@ -225,14 +225,14 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
                     indent: AppSpacing.containerMd,
                   ),
                   IosSelectionFormFieldRow(
-                    label: UITextConstants.homepageClaimContactPhone,
+                    label: ObjectHomepageText.homepageClaimContactPhone,
                     validationMessage: _phoneValidationMessage,
                     child: IosSelectionTextField(
                       controller: _phoneController,
                       enabled: canSubmit,
                       keyboardType: TextInputType.phone,
                       placeholder:
-                          UITextConstants.homepageClaimContactPhoneHint,
+                          ObjectHomepageText.homepageClaimContactPhoneHint,
                       onChanged: (_) {
                         if (_phoneValidationMessage != null) {
                           setState(() => _phoneValidationMessage = null);
@@ -244,47 +244,47 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
                     indent: AppSpacing.containerMd,
                   ),
                   IosSelectionFormFieldRow(
-                    label: UITextConstants.homepageClaimBusinessLicense,
+                    label: ObjectHomepageText.homepageClaimBusinessLicense,
                     child: IosSelectionTextField(
                       controller: _licenseController,
                       enabled: canSubmit,
                       placeholder:
-                          UITextConstants.homepageClaimOptionalMaterialHint,
+                          ObjectHomepageText.homepageClaimOptionalMaterialHint,
                     ),
                   ),
                   const IosSelectionInlineDivider(
                     indent: AppSpacing.containerMd,
                   ),
                   IosSelectionFormFieldRow(
-                    label: UITextConstants.homepageClaimIdentityCardFront,
+                    label: ObjectHomepageText.homepageClaimIdentityCardFront,
                     child: IosSelectionTextField(
                       controller: _idFrontController,
                       enabled: canSubmit,
                       placeholder:
-                          UITextConstants.homepageClaimOptionalMaterialHint,
+                          ObjectHomepageText.homepageClaimOptionalMaterialHint,
                     ),
                   ),
                   const IosSelectionInlineDivider(
                     indent: AppSpacing.containerMd,
                   ),
                   IosSelectionFormFieldRow(
-                    label: UITextConstants.homepageClaimIdentityCardBack,
+                    label: ObjectHomepageText.homepageClaimIdentityCardBack,
                     child: IosSelectionTextField(
                       controller: _idBackController,
                       enabled: canSubmit,
                       placeholder:
-                          UITextConstants.homepageClaimOptionalMaterialHint,
+                          ObjectHomepageText.homepageClaimOptionalMaterialHint,
                     ),
                   ),
                   const IosSelectionInlineDivider(
                     indent: AppSpacing.containerMd,
                   ),
                   IosSelectionFormFieldRow(
-                    label: UITextConstants.homepageClaimNote,
+                    label: ObjectHomepageText.homepageClaimNote,
                     child: IosSelectionTextField(
                       controller: _noteController,
                       enabled: canSubmit,
-                      placeholder: UITextConstants.homepageClaimNoteHint,
+                      placeholder: ObjectHomepageText.homepageClaimNoteHint,
                       maxLines: 4,
                     ),
                   ),
@@ -379,17 +379,17 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
     final discardChanges = await showAppCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
-        title: const Text(UITextConstants.unsavedChangesTitle),
-        content: const Text(UITextConstants.unsavedChangesMessage),
+        title: const Text(CreationText.unsavedChangesTitle),
+        content: const Text(CreationText.unsavedChangesMessage),
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text(UITextConstants.continueEditing),
+            child: const Text(CreationText.continueEditing),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text(UITextConstants.discard),
+            child: const Text(CreationText.discard),
           ),
         ],
       ),
@@ -443,7 +443,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
     final phone = _phoneController.text.trim();
     if (phone.isEmpty) {
       setState(() {
-        _phoneValidationMessage = UITextConstants.homepageClaimPhoneRequired;
+        _phoneValidationMessage = ObjectHomepageText.homepageClaimPhoneRequired;
       });
       return;
     }
@@ -480,7 +480,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
       if (!mounted) {
         return;
       }
-      AppToast.show(context, UITextConstants.homepageClaimSubmitted);
+      AppToast.show(context, ObjectHomepageText.homepageClaimSubmitted);
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) {
@@ -524,6 +524,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
         }
         return;
       case UiErrorActionType.openSettings:
+      case UiErrorActionType.openUpdate:
       case UiErrorActionType.login:
         return;
     }
@@ -538,6 +539,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
       case UiErrorActionType.dismiss:
         return;
       case UiErrorActionType.openSettings:
+      case UiErrorActionType.openUpdate:
       case UiErrorActionType.login:
         return;
     }

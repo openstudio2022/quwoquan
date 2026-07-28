@@ -208,7 +208,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
             controller: _controller,
             focusNode: _focusNode,
             autofocus: true,
-            placeholder: UITextConstants.globalSearchTitle,
+            placeholder: ContactText.globalSearchTitle,
             onChanged: (value) => _coordinator.updateQuery(value),
             onSubmitted: _handleSearchSubmitted,
             backgroundColor: fieldBackground,
@@ -237,7 +237,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
                     ),
                     onPressed: () => _handleSearchSubmitted(_controller.text),
                     child: Text(
-                      UITextConstants.search,
+                      DiscoveryText.search,
                       style: TextStyle(
                         fontSize: AppTypography.iosSubheadline,
                         fontWeight: AppTypography.medium,

@@ -339,12 +339,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
     );
 
     if (isLoading && items.isEmpty && greetingInbox.isLoading) {
-      return Center(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.lg),
-          child: CupertinoActivityIndicator(),
-        ),
-      );
+      return AppRequestFeedback.page();
     }
 
     if (rowError != null && items.isEmpty) {
@@ -425,12 +420,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
   ) {
     final inbox = ref.watch(notificationInboxProvider);
     return inbox.when(
-      loading: () => Center(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.lg),
-          child: CupertinoActivityIndicator(),
-        ),
-      ),
+      loading: AppRequestFeedback.page,
       error: (error, _) => AppPageErrorState(
         semantic: _chatListBlockingErrorSemantic(context, error),
         onAction: (action) async {
@@ -508,27 +498,11 @@ class _ChatPageState extends ConsumerState<ChatPage>
     BuildContext context,
     Object error,
   ) {
-    final base = runtimeErrorSemantic(
+    return runtimeErrorSemantic(
       context,
       error: error,
       category: UiErrorCategory.pageLoad,
       scope: UiErrorScope.page,
-    );
-    return UiErrorSemantic(
-      category: base.category,
-      scope: base.scope,
-      title: ChatText.chatListLoadFailedTitle,
-      message: ChatText.chatListLoadFailedMessage,
-      secondaryMessage: base.secondaryMessage,
-      primaryAction: base.primaryAction,
-      secondaryAction: base.secondaryAction,
-      dismissible: base.dismissible,
-      sourceCode: base.sourceCode,
-      failureKind: base.failureKind,
-      copyKey: 'chatListLoadFailedTitle',
-      recoveryAction: base.recoveryAction,
-      presentation: base.presentation,
-      tone: base.tone,
     );
   }
 
@@ -536,29 +510,13 @@ class _ChatPageState extends ConsumerState<ChatPage>
     BuildContext context,
     Object error,
   ) {
-    final base = runtimeErrorSemantic(
+    return runtimeErrorSemantic(
       context,
       error: error,
       category: UiErrorCategory.backgroundAction,
       scope: UiErrorScope.section,
       allowRetry: false,
       presentation: UiErrorPresentation.transientNotice,
-    );
-    return UiErrorSemantic(
-      category: base.category,
-      scope: base.scope,
-      title: ChatText.chatListLoadFailedTitle,
-      message: ChatText.chatListCacheFallback,
-      secondaryMessage: base.secondaryMessage,
-      primaryAction: base.primaryAction,
-      secondaryAction: base.secondaryAction,
-      dismissible: base.dismissible,
-      sourceCode: base.sourceCode,
-      failureKind: base.failureKind,
-      copyKey: 'chatListCacheFallback',
-      recoveryAction: base.recoveryAction,
-      presentation: base.presentation,
-      tone: UiErrorTone.caution,
     );
   }
 
@@ -654,7 +612,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                 ),
                 SizedBox(height: AppSpacing.md),
                 Text(
-                  UITextConstants.noData,
+                  CommunityText.noData,
                   style: TextStyle(
                     fontSize: AppTypography.iosTitle3,
                     color: fgSecondary,
@@ -798,7 +756,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
           },
         );
       },
-      loading: () => const Center(child: CupertinoActivityIndicator()),
+      loading: () => AppRequestFeedback.section(),
       error: (error, _) => AppPageErrorState(
         semantic: runtimeErrorSemantic(
           context,

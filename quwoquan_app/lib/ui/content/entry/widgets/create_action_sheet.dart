@@ -43,19 +43,19 @@ class CreateActionSheet extends StatelessWidget {
 
     final createActions = <_SheetActionSpec>[
       _SheetActionSpec(
-        label: UITextConstants.createActionPostPhotoShort,
-        subtitle: UITextConstants.createActionPhotoSubtitle,
+        label: CreationText.createActionPostPhotoShort,
+        subtitle: CreationText.createActionPhotoSubtitle,
         labelKey: TestKeys.createActionGallery,
         onPressed: () => onCreateAction(EditorStartAction.gallery),
       ),
       _SheetActionSpec(
-        label: UITextConstants.createActionPostVideoShort,
-        subtitle: UITextConstants.createActionCameraSubtitle,
+        label: CreationText.createActionPostVideoShort,
+        subtitle: CreationText.createActionCameraSubtitle,
         labelKey: TestKeys.createActionCapture,
         onPressed: () => onCreateAction(EditorStartAction.video),
       ),
       _SheetActionSpec(
-        label: UITextConstants.createActionWriteLong,
+        label: CreationText.createActionWriteLong,
         labelKey: TestKeys.createActionWrite,
         onPressed: () => onCreateAction(EditorStartAction.write),
       ),
@@ -63,7 +63,7 @@ class CreateActionSheet extends StatelessWidget {
     final socialActions = <_SheetActionSpec>[
       if (onAddContact != null)
         _SheetActionSpec(
-          label: UITextConstants.createActionAddContactShort,
+          label: CreationText.createActionAddContactShort,
           onPressed: onAddContact!,
         ),
       if (onStartGroupChat != null)
@@ -73,13 +73,13 @@ class CreateActionSheet extends StatelessWidget {
         ),
       if (onCreateCircle != null)
         _SheetActionSpec(
-          label: UITextConstants.createActionCreateCircleShort,
+          label: CreationText.createActionCreateCircleShort,
           onPressed: onCreateCircle!,
         ),
       if (onInterestMatch != null)
         _SheetActionSpec(
-          label: UITextConstants.createActionInterestMatchShort,
-          subtitle: UITextConstants.createActionInterestMatchSubtitle,
+          label: CreationText.createActionInterestMatchShort,
+          subtitle: CreationText.createActionInterestMatchSubtitle,
           labelKey: TestKeys.createActionInterestMatch,
           onPressed: onInterestMatch!,
         ),
@@ -140,7 +140,7 @@ class CreateActionSheet extends StatelessWidget {
               ),
               ConversationSheetCancelBar(
                 isDark: isDark,
-                label: UITextConstants.cancel,
+                label: FoundationText.cancel,
                 onTap: onCancel,
               ),
             ],

@@ -12,7 +12,7 @@ void main() {
     expect(presentation.isVideo, isTrue);
     expect(
       presentation.summary,
-      '${UITextConstants.callSummaryDurationPrefix}01:05',
+      '${CallText.callSummaryDurationPrefix}01:05',
     );
   });
 
@@ -28,9 +28,9 @@ void main() {
       ),
     );
 
-    expect(find.text(UITextConstants.callVideo), findsOneWidget);
-    expect(find.text(UITextConstants.callRedial), findsOneWidget);
-    await tester.tap(find.text(UITextConstants.callRedial));
+    expect(find.text(CallText.callVideo), findsOneWidget);
+    expect(find.text(CallText.callRedial), findsOneWidget);
+    await tester.tap(find.text(CallText.callRedial));
     expect(redialCount, 1);
   });
 
@@ -38,7 +38,7 @@ void main() {
     final presentation = RtcCallLogPresentation.fromCard(
       _card(durationMs: 0, endReason: 'no_answer'),
     );
-    expect(presentation.summary, UITextConstants.callSummaryNoAnswer);
+    expect(presentation.summary, CallText.callSummaryNoAnswer);
   });
 }
 

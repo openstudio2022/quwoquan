@@ -189,6 +189,17 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
     payload = json.loads(evidence_path.read_text(encoding="utf-8"))
     evidence, admission_issues = SourcedVideoEvidence.from_mapping(payload)
     assert admission_issues == ()
+    asset_index = json.loads(
+        (evidence_path.parent / "assets/index.json").read_text(encoding="utf-8")
+    )
+    indexed_asset = asset_index["assets"][0]
+    assert indexed_asset["fileName"] == "source.mp4"
+    assert indexed_asset["sha256"] == evidence.sha256
+    assert indexed_asset["rightsAuditStatus"] == "verified"
+    author_prompt = evidence.author_prompt_dict()
+    assert "authorizationProofUrl" not in author_prompt
+    assert "commercialAuthorizationStatus" not in author_prompt
+    assert author_prompt["originalCreatorName"] == "山海旅行者"
     root = execution_root(EXECUTION_ID)
     claimed_assets: list[tuple[str, str]] = []
     claimed_hashes: list[tuple[str, str]] = []

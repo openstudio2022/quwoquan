@@ -11,8 +11,10 @@ from content.homepage.homepage_materialization import (
     _homepage_outline_issues,
     _homepage_source_figure_issues,
 )
-from content.homepage.homepage_release import MIN_PAGE_CHARS
-from content.homepage.quality_policy import homepage_source_fidelity_limit
+from content.homepage.quality_policy import (
+    homepage_body_char_minimum,
+    homepage_source_fidelity_limit,
+)
 from content.post.fidelity import base_draft_fidelity_issues, base_draft_similarity
 from core.ai_refine_protocol import expand_image_placeholders, placeholder_consistency_issues
 from core.entity_page_quality import entity_page_quality_issues
@@ -62,9 +64,10 @@ def homepage_draft_report(execution_id: str, entity_name: str) -> dict[str, obje
     base = payload.get("baseDraft") if isinstance(payload.get("baseDraft"), dict) else {}
     base_text = fold_to_simplified(str(base.get("text") or "").strip())
     draft_text = fold_to_simplified(draft_path.read_text(encoding="utf-8"))
-    if _page_char_count(draft_path) < MIN_PAGE_CHARS:
+    minimum_body_chars = homepage_body_char_minimum(execution_id)
+    if _page_char_count(draft_path) < minimum_body_chars:
         issues.append(
-            f"{label}: draft non-whitespace chars {_page_char_count(draft_path)} < {MIN_PAGE_CHARS}"
+            f"{label}: draft non-whitespace chars {_page_char_count(draft_path)} < {minimum_body_chars}"
         )
     issues.extend(entity_page_quality_issues(draft_path, label=label))
     issues.extend(

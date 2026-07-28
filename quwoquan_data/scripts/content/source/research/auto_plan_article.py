@@ -33,7 +33,7 @@ from content.source.research.qunar_sources import (
     _qunar_review_support_source,
     _qunar_travelogue_sources,
 )
-from content.source.research.public_search import public_search_article_sources
+from content.source.research.public_search import discover_article_source_frontier
 
 
 def write_article_lane(
@@ -48,6 +48,7 @@ def write_article_lane(
     updated: list[dict[str, Any]],
     plan_dir: Path,
     entity_aliases: list[str],
+    topic_terms: list[str],
     related_wiki_titles: list[str],
     voyage_url: str,
     voyage_page_images: list[dict[str, Any]],
@@ -63,14 +64,46 @@ def write_article_lane(
 ) -> None:
     article_sources: list[dict[str, Any]] = []
     if "article" in selected_lanes:
-        for source in _qunar_travelogue_sources(
-            entity_id,
-            entity_aliases=entity_aliases,
-            limit=_article_base_candidate_limit(required_article_bases),
-        ):
+        if article_commercial_mode:
+            frontier_outcome = discover_article_source_frontier(
+                entity_id,
+                entity_aliases=entity_aliases,
+                topics=topic_terms,
+                limit=_article_base_candidate_limit(required_article_bases),
+            )
+            report.setdefault("articleSourceDiscovery", []).append(
+                frontier_outcome.as_evidence()
+            )
+            for source in frontier_outcome.source_documents():
+                accepted = _accept_source(
+                    report,
+                    source,
+                    entity_id=entity_id,
+                    lane="article",
+                    vertical=vertical,
+                    entity_aliases=entity_aliases,
+                )
+                if accepted:
+                    article_sources.append(accepted)
+        if not article_commercial_mode:
+            for source in _qunar_travelogue_sources(
+                entity_id,
+                entity_aliases=entity_aliases,
+                limit=_article_base_candidate_limit(required_article_bases),
+            ):
+                accepted = _accept_source(
+                    report,
+                    source,
+                    entity_id=entity_id,
+                    lane="article",
+                    vertical=vertical,
+                    entity_aliases=entity_aliases,
+                )
+                if accepted:
+                    article_sources.append(accepted)
             accepted = _accept_source(
                 report,
-                source,
+                _qunar_review_support_source(entity_id),
                 entity_id=entity_id,
                 lane="article",
                 vertical=vertical,
@@ -78,32 +111,11 @@ def write_article_lane(
             )
             if accepted:
                 article_sources.append(accepted)
-        accepted = _accept_source(
-            report,
-            _qunar_review_support_source(entity_id),
-            entity_id=entity_id,
-            lane="article",
-            vertical=vertical,
-            entity_aliases=entity_aliases,
-        )
-        if accepted:
-            article_sources.append(accepted)
-        for source in public_search_article_sources(
-            entity_id,
-            entity_aliases=entity_aliases,
-            limit=required_article_bases,
+        for related_index, related_title in (
+            enumerate(related_wiki_titles, start=1)
+            if not article_commercial_mode
+            else ()
         ):
-            accepted = _accept_source(
-                report,
-                source,
-                entity_id=entity_id,
-                lane="article",
-                vertical=vertical,
-                entity_aliases=entity_aliases,
-            )
-            if accepted:
-                article_sources.append(accepted)
-        for related_index, related_title in enumerate(related_wiki_titles, start=1):
             related_url = _wiki_url("zh.wikipedia.org", related_title)
             if not related_url:
                 continue
@@ -137,7 +149,7 @@ def write_article_lane(
             )
             if accepted:
                 article_sources.append(accepted)
-        if voyage_url:
+        if voyage_url and not article_commercial_mode:
             voyage_images = voyage_page_images
             accepted = _accept_source(
                 report,
@@ -164,7 +176,11 @@ def write_article_lane(
             )
             if accepted:
                 article_sources.append(accepted)
-        for index, link in enumerate(external_links, start=1):
+        for index, link in (
+            enumerate(external_links, start=1)
+            if not article_commercial_mode
+            else ()
+        ):
             if _url_in_memory(link, rejected_source_urls):
                 continue
             platform = _external_platform(link)

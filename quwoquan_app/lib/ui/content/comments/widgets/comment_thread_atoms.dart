@@ -223,7 +223,7 @@ class _ReplyPreviewItem extends ConsumerWidget {
       children: [
         Semantics(
           button: true,
-          label: UITextConstants.goToUserProfile,
+          label: ContentText.goToUserProfile,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => _openCommentAuthorProfile(context, reply),
@@ -329,7 +329,7 @@ class _ReplyPreviewItem extends ConsumerWidget {
                             ? () => onReplySelected?.call(reply)
                             : null,
                         child: Text(
-                          UITextConstants.replyAction,
+                          ContentText.replyAction,
                           style: TextStyle(
                             fontSize: AppTypography.xs,
                             color: AppColorsFunctional.getColor(
@@ -343,7 +343,7 @@ class _ReplyPreviewItem extends ConsumerWidget {
                   ],
                   Semantics(
                     button: true,
-                    label: UITextConstants.commentMoreActions,
+                    label: ContentText.commentMoreActions,
                     child: CupertinoButton(
                       padding: EdgeInsets.zero,
                       minimumSize: const Size.square(
@@ -458,7 +458,7 @@ class _CommentActions extends StatelessWidget {
           ipLocation.isEmpty
               ? _formatTime(context, comment.createdAt)
               : '${_formatTime(context, comment.createdAt)}'
-                    ' ${UITextConstants.commentIpLocationPrefix}$ipLocation',
+                    ' ${ContentText.commentIpLocationPrefix}$ipLocation',
           style: TextStyle(
             fontSize: AppTypography.xs,
             color: AppColorsFunctional.getColor(
@@ -479,7 +479,7 @@ class _CommentActions extends StatelessWidget {
                   minimumSize: const Size.square(AppSpacing.minInteractiveSize),
                   onPressed: onReply,
                   child: Text(
-                    UITextConstants.replyAction,
+                    ContentText.replyAction,
                     style: TextStyle(
                       fontSize: AppTypography.xs,
                       color: AppColorsFunctional.getColor(
@@ -495,8 +495,8 @@ class _CommentActions extends StatelessWidget {
                 button: true,
                 selected: comment.isPinned,
                 label: comment.isPinned
-                    ? UITextConstants.commentUnpinAction
-                    : UITextConstants.commentPinAction,
+                    ? ContentText.commentUnpinAction
+                    : ContentText.commentPinAction,
                 child: CupertinoButton(
                   padding: EdgeInsets.zero,
                   minimumSize: const Size.square(AppSpacing.minInteractiveSize),
@@ -517,7 +517,7 @@ class _CommentActions extends StatelessWidget {
               ),
             Semantics(
               button: true,
-              label: UITextConstants.commentMoreActions,
+              label: ContentText.commentMoreActions,
               child: CupertinoButton(
                 padding: EdgeInsets.zero,
                 minimumSize: const Size.square(AppSpacing.minInteractiveSize),
@@ -583,7 +583,7 @@ class _CommentReactionGroup extends StatelessWidget {
         children: [
           _ReactionIconButton(
             selected: likeSelected,
-            semanticLabel: UITextConstants.like,
+            semanticLabel: FoundationText.like,
             icon: CupertinoIcons.heart,
             selectedIcon: CupertinoIcons.heart_fill,
             count: likeCount,
@@ -593,7 +593,7 @@ class _CommentReactionGroup extends StatelessWidget {
           if (showDeleteAction)
             _ReactionIconButton(
               selected: false,
-              semanticLabel: UITextConstants.commentDeleteAction,
+              semanticLabel: ContentText.commentDeleteAction,
               icon: CupertinoIcons.trash,
               selectedIcon: CupertinoIcons.trash,
               reserveCountSlot: true,
@@ -602,7 +602,7 @@ class _CommentReactionGroup extends StatelessWidget {
           else
             _ReactionIconButton(
               selected: dislikeSelected,
-              semanticLabel: UITextConstants.commentDislike,
+              semanticLabel: ContentText.commentDislike,
               icon: CupertinoIcons.hand_thumbsdown,
               selectedIcon: CupertinoIcons.hand_thumbsdown_fill,
               count: dislikeCount,
@@ -709,13 +709,13 @@ class _CommentSortSwitcher extends StatelessWidget {
       child: Row(
         children: [
           _sortOption(
-            label: UITextConstants.commentSortHot,
+            label: ContentText.commentSortHot,
             selected: sort == ContentCommentSort.hot,
             onTap: () => onChanged(ContentCommentSort.hot),
           ),
           SizedBox(width: AppSpacing.md),
           _sortOption(
-            label: UITextConstants.commentSortLatest,
+            label: ContentText.commentSortLatest,
             selected: sort == ContentCommentSort.latest,
             onTap: () => onChanged(ContentCommentSort.latest),
           ),

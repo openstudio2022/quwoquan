@@ -28,7 +28,8 @@ from PIL import Image, ImageStat
 APP_DIR = Path(__file__).resolve().parents[2]
 ROOT = APP_DIR.parent
 DEFAULT_ANDROID_PACKAGE = "com.quwoquan.quwoquan_app"
-DEFAULT_ANDROID_ACTIVITY = "com.quwoquan.quwoquan_app/.MainActivity"
+DEFAULT_ANDROID_ACTIVITY = "com.quwoquan.quwoquan_app/.StartupGateActivity"
+DEFAULT_ANDROID_MAIN_ACTIVITY = "com.quwoquan.quwoquan_app/.MainActivity"
 DEFAULT_ANDROID_APK_DIR = APP_DIR / "build/app/outputs/flutter-apk"
 DEFAULT_ANDROID_APK = DEFAULT_ANDROID_APK_DIR / "app-debug.apk"
 DEFAULT_ANDROID_APK_METADATA = APP_DIR / "build/app/outputs/apk/debug/output-metadata.json"
@@ -63,6 +64,7 @@ class ScreenshotAnalysis:
     plain_background: bool
     blue_background: bool
     branded_or_content_visible: bool
+    system_splash_icon: bool = False
 
     @property
     def brand_transition_visible(self) -> bool:
@@ -78,6 +80,7 @@ class ScreenshotAnalysis:
             "plainBackground": self.plain_background,
             "blueBackground": self.blue_background,
             "brandedOrContentVisible": self.branded_or_content_visible,
+            "systemSplashIcon": self.system_splash_icon,
             "brandTransitionVisible": self.brand_transition_visible,
         }
 
@@ -116,6 +119,140 @@ def android_device_kind(device: str) -> str:
         timeout=15,
     ).stdout.strip()
     return "simulator" if qemu == "1" else "true_device"
+
+
+def normalize_android_component(component: str, package: str) -> str:
+    value = component.strip()
+    if "/" not in value:
+        return value
+    component_package, activity = value.split("/", 1)
+    if activity.startswith("."):
+        activity = f"{component_package}{activity}"
+    return f"{component_package}/{activity}"
+
+
+def parse_android_launcher_resolution(
+    raw: str,
+    *,
+    package: str,
+    expected_activity: str,
+) -> dict[str, Any]:
+    components = [
+        line.strip()
+        for line in raw.splitlines()
+        if "/" in line and not line.lstrip().startswith(("priority=", "match="))
+    ]
+    resolved = components[-1] if components else ""
+    return {
+        "resolvedActivity": resolved,
+        "matchesExpectedGate": (
+            normalize_android_component(resolved, package)
+            == normalize_android_component(expected_activity, package)
+        ),
+    }
+
+
+def parse_android_task_snapshot(
+    raw: str,
+    *,
+    package: str,
+    main_activity: str,
+) -> dict[str, Any]:
+    expected = normalize_android_component(main_activity, package)
+    history_components = re.findall(
+        r"Hist #\d+:\s+ActivityRecord\{[^}]*\s+u\d+\s+([^\s}]+)",
+        raw,
+    )
+    normalized_history = [
+        normalize_android_component(component, package)
+        for component in history_components
+    ]
+    main_instances = sum(component == expected for component in normalized_history)
+    return {
+        "historyComponents": normalized_history,
+        "mainActivityInstances": main_instances,
+        "singleMainTask": main_instances == 1,
+    }
+
+
+def android_gate_main_order_observed(log: str) -> bool:
+    static_frame_indexes = [
+        index
+        for event in (
+            "android_gate_static_frame_drawn",
+            "android_gate_static_frame_draw_timeout",
+        )
+        if (index := log.find(event)) >= 0
+    ]
+    handoff_index = log.find("android_gate_main_handoff")
+    main_index = log.find("android_activity_on_create")
+    return bool(
+        static_frame_indexes
+        and min(static_frame_indexes) < handoff_index < main_index
+    )
+
+
+def resolve_android_launch_resource_profile(device: str) -> str:
+    size_output = run(
+        ["adb", "-s", device, "shell", "wm", "size"],
+        check=False,
+        timeout=15,
+    ).stdout
+    density_output = run(
+        ["adb", "-s", device, "shell", "wm", "density"],
+        check=False,
+        timeout=15,
+    ).stdout
+    size_matches = re.findall(r"(?:Override|Physical) size:\s*(\d+)x(\d+)", size_output)
+    density_matches = re.findall(
+        r"(?:Override|Physical) density:\s*(\d+)",
+        density_output,
+    )
+    if not size_matches or not density_matches:
+        return "default"
+    width_px, height_px = (int(value) for value in size_matches[-1])
+    density_dpi = int(density_matches[-1])
+    if density_dpi <= 0:
+        return "default"
+    smallest_width_dp = min(width_px, height_px) * 160 / density_dpi
+    supported = [
+        width for width in (360, 393, 430) if width <= smallest_width_dp + 0.5
+    ]
+    return f"sw{max(supported)}dp" if supported else "default"
+
+
+def native_launch_visual_provenance(profile: str) -> dict[str, Any]:
+    resource_root = APP_DIR / "android/app/src/main/res"
+    qualifier = "" if profile == "default" else f"-{profile}"
+    image_qualifier = "-nodpi" if profile == "default" else f"-{profile}-nodpi"
+    files = [
+        APP_DIR / "tool/generate_native_launch_welcome_final_test.dart",
+        APP_DIR / "lib/ui/welcome/widgets/welcome_brand_cluster.dart",
+        resource_root / f"drawable{qualifier}/launch_background.xml",
+        resource_root / f"drawable{image_qualifier}/launch_brand_cluster.png",
+        resource_root / f"drawable{image_qualifier}/launch_brand_footer.png",
+    ]
+    missing = [str(path.relative_to(APP_DIR)) for path in files if not path.is_file()]
+    digest = hashlib.sha256()
+    if not missing:
+        for path in files:
+            relative = str(path.relative_to(APP_DIR))
+            digest.update(relative.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+            digest.update(b"\0")
+    launch_xml = files[2].read_text(encoding="utf-8") if files[2].is_file() else ""
+    return {
+        "profile": profile,
+        "sourceDigest": digest.hexdigest() if not missing else "",
+        "sourceFiles": [str(path.relative_to(APP_DIR)) for path in files],
+        "missingFiles": missing,
+        "contractVerified": (
+            not missing
+            and "Generated by generate_native_launch_welcome_final_test.dart"
+            in launch_xml
+        ),
+    }
 
 
 def resolve_android_apk(apk: Path, device: str) -> Path:
@@ -191,7 +328,16 @@ def analyze_screenshot(path: Path, offset_ms: int | None = None) -> ScreenshotAn
     stddev = ImageStat.Stat(crop).stddev
     stddev_avg = sum(stddev) / max(len(stddev), 1)
     near_white_background = min(median_rgb) >= 250
-    branded_or_content_visible = (
+    brand_blue_base = (
+        median_rgb[0] <= 40
+        and 90 <= median_rgb[1] <= 170
+        and median_rgb[2] >= 210
+    )
+    # Android 12 renders a large, centered adaptive app icon over its blue
+    # system splash. It is not the native flower composition, even though its
+    # high foreground ratio could otherwise look like branded content.
+    system_splash_icon = brand_blue_base and foreground_ratio >= 0.25
+    branded_or_content_visible = not system_splash_icon and (
         foreground_ratio >= 0.18
         or (
             stddev_avg >= 14.0
@@ -200,10 +346,7 @@ def analyze_screenshot(path: Path, offset_ms: int | None = None) -> ScreenshotAn
         )
     )
     blue_background = (
-        not branded_or_content_visible
-        and median_rgb[0] <= 40
-        and 90 <= median_rgb[1] <= 170
-        and median_rgb[2] >= 210
+        not branded_or_content_visible and brand_blue_base
     )
     brand_transition_visible = blue_background or branded_or_content_visible
     return ScreenshotAnalysis(
@@ -215,6 +358,7 @@ def analyze_screenshot(path: Path, offset_ms: int | None = None) -> ScreenshotAn
         plain_background=not brand_transition_visible,
         blue_background=blue_background,
         branded_or_content_visible=branded_or_content_visible,
+        system_splash_icon=system_splash_icon,
     )
 
 
@@ -327,7 +471,15 @@ def parse_startup_sequence_log(raw: str) -> dict[str, Any]:
         ),
         "welcomeExitMs": finished.get("welcomeExitMs") if finished else None,
         "exitReason": finished.get("exitReason") if finished else None,
-        "replayCount": finished.get("replayCount") if finished else None,
+        "replayCount": next(
+            (
+                event.get("replayCount")
+                for event in reversed(events)
+                if event.get("phase") == "finished"
+                and event.get("replayCount") is not None
+            ),
+            None,
+        ),
         "shellFirstPaintMs": shell.get("shellFirstPaintMs") if shell else None,
         "overlayRemovedMs": (
             overlay_removed.get("overlayRemovedMs") if overlay_removed else None
@@ -369,6 +521,8 @@ def extract_dart_startup_attempts(raw_log: str) -> list[dict[str, Any]]:
         r"(?:\s+launchMode=(?P<launchMode>[A-Za-z0-9_-]+))?"
         r"(?:\s+hotRestart=(?P<hotRestart>true|false))?"
         r"(?:\s+configurationState=(?P<configurationState>[A-Za-z0-9_-]+))?"
+        r"(?:\s+effectiveLaunchManifestDigest="
+        r"(?P<effectiveLaunchManifestDigest>sha256:[0-9a-f]{64}))?"
         r"(?:\s+missingDefineKeys=(?P<missingDefineKeys>[A-Z0-9_,]+))?"
     )
     for match in pattern.finditer(raw_log):
@@ -403,11 +557,13 @@ def extract_startup_watchdog_evidence(raw_log: str) -> dict[str, Any]:
     )
     dart_attempt = re.search(
         r"(?:android|ios)_dart_startup_attempt "
-        r"attemptId=([A-Za-z0-9_-]+)"
-        r"(?:\s+launchMode=([A-Za-z0-9_-]+))?"
-        r"(?:\s+hotRestart=(true|false))?"
-        r"(?:\s+configurationState=([A-Za-z0-9_-]+))?"
-        r"(?:\s+missingDefineKeys=([A-Z0-9_,]+))?",
+        r"attemptId=(?P<attemptId>[A-Za-z0-9_-]+)"
+        r"(?:\s+launchMode=(?P<launchMode>[A-Za-z0-9_-]+))?"
+        r"(?:\s+hotRestart=(?P<hotRestart>true|false))?"
+        r"(?:\s+configurationState=(?P<configurationState>[A-Za-z0-9_-]+))?"
+        r"(?:\s+effectiveLaunchManifestDigest="
+        r"(?P<effectiveLaunchManifestDigest>sha256:[0-9a-f]{64}))?"
+        r"(?:\s+missingDefineKeys=(?P<missingDefineKeys>[A-Z0-9_,]+))?",
         raw_log,
     )
     attempt = re.search(
@@ -417,6 +573,24 @@ def extract_startup_watchdog_evidence(raw_log: str) -> dict[str, Any]:
     failure_code = re.search(
         r'(?:failureCode=|"failureCode"\s*:\s*")([A-Za-z0-9_.-]+)',
         raw_log,
+    )
+    attempt_id = (
+        dart_attempt.group("attemptId")
+        if dart_attempt
+        else attempt.group(1)
+        if attempt
+        else None
+    )
+    telemetry_acks = re.findall(
+        r"startup_telemetry_ack "
+        r"attemptId=([A-Za-z0-9_-]+) "
+        r"acceptedCount=(\d+) duplicateCount=(\d+)",
+        raw_log,
+    )
+    telemetry_acknowledged = any(
+        acknowledged_attempt == attempt_id
+        and int(accepted_count) + int(duplicate_count) > 0
+        for acknowledged_attempt, accepted_count, duplicate_count in telemetry_acks
     )
     race_dismissed = "startup_safe_terminal_race_dismissed" in raw_log
     return {
@@ -442,16 +616,26 @@ def extract_startup_watchdog_evidence(raw_log: str) -> dict[str, Any]:
             else "not_triggered"
         ),
         "canonicalTerminal": None,
-        "attemptId": dart_attempt.group(1) if dart_attempt else attempt.group(1) if attempt else None,
-        "launchMode": dart_attempt.group(2) if dart_attempt else None,
+        "attemptId": attempt_id,
+        "launchMode": dart_attempt.group("launchMode") if dart_attempt else None,
         "hotRestart": (
-            dart_attempt.group(3) == "true"
-            if dart_attempt and dart_attempt.group(3) is not None
+            dart_attempt.group("hotRestart") == "true"
+            if dart_attempt and dart_attempt.group("hotRestart") is not None
             else None
         ),
-        "runtimeConfigurationState": dart_attempt.group(4) if dart_attempt else None,
-        "missingDefineKeys": dart_attempt.group(5) if dart_attempt else None,
+        "runtimeConfigurationState": (
+            dart_attempt.group("configurationState") if dart_attempt else None
+        ),
+        "effectiveLaunchManifestDigest": (
+            dart_attempt.group("effectiveLaunchManifestDigest")
+            if dart_attempt
+            else None
+        ),
+        "missingDefineKeys": (
+            dart_attempt.group("missingDefineKeys") if dart_attempt else None
+        ),
         "failureCode": failure_code.group(1) if failure_code else "",
+        "telemetryAcknowledged": telemetry_acknowledged,
     }
 
 
@@ -596,6 +780,127 @@ def resolve_first_visible_ms(
     )
 
 
+def resolve_android_first_visible_ms(
+    analyses: list[ScreenshotAnalysis],
+    *,
+    renderer_first_frame_ms: int | None,
+    require_branded: bool,
+) -> int | None:
+    """Combine renderer timing with a later screenshot brand witness.
+
+    `adb exec-out screencap` can block an emulator compositor for longer than a
+    sampling interval. Once a screenshot has observed the branded welcome,
+    the renderer's first-frame signal is the more accurate visible timestamp;
+    it prevents the probe itself from manufacturing a missed 2-second sample.
+    """
+    screenshot_first = resolve_first_visible_ms(
+        analyses,
+        budget_ms=10**9,
+        require_branded=require_branded,
+    )
+    if screenshot_first is None:
+        return None
+    if renderer_first_frame_ms is None:
+        return screenshot_first
+    return min(screenshot_first, renderer_first_frame_ms)
+
+
+def first_branded_offset_ms(analyses: list[ScreenshotAnalysis]) -> int | None:
+    return next(
+        (
+            item.offset_ms
+            for item in analyses
+            if item.branded_or_content_visible and item.offset_ms is not None
+        ),
+        None,
+    )
+
+
+def detect_prolonged_system_blue(
+    analyses: list[ScreenshotAnalysis],
+    *,
+    transition_budget_ms: int,
+) -> bool:
+    """Fail when pure Android 12 system blue outlives the OS transition budget.
+
+    The launcher SplashScreen may briefly show brand-blue + app icon. That is
+    not the welcome page. Once the transition budget elapses, any still-pure
+    blue frame before branded petals/content appears is a probe failure.
+    """
+    first_branded = first_branded_offset_ms(analyses)
+    for item in analyses:
+        if item.offset_ms is None:
+            continue
+        if item.offset_ms < transition_budget_ms:
+            continue
+        if not item.blue_background or item.branded_or_content_visible:
+            continue
+        if first_branded is None or item.offset_ms < first_branded:
+            return True
+    return False
+
+
+def detect_repeated_splash(
+    analyses: list[ScreenshotAnalysis],
+    log: str,
+) -> bool:
+    """Fail when Gate→Main reintroduces a second system/native splash.
+
+    Evidence is either duplicate Gate static-frame logs (handoff restart) or a
+    screenshot regression back to pure OS blue after branded content was seen.
+    """
+    static_frame_hits = log.count("android_gate_static_frame_drawn") + log.count(
+        "android_gate_static_frame_draw_timeout"
+    )
+    if static_frame_hits > 1:
+        return True
+    saw_branded = False
+    for item in sorted(
+        analyses,
+        key=lambda entry: entry.offset_ms if entry.offset_ms is not None else -1,
+    ):
+        if item.branded_or_content_visible:
+            saw_branded = True
+            continue
+        if (
+            saw_branded
+            and item.blue_background
+            and not item.branded_or_content_visible
+        ):
+            return True
+    return False
+
+
+def detect_native_static_petal_mismatch(
+    analyses: list[ScreenshotAnalysis],
+    *,
+    compare_after_ms: int,
+    safe_terminal_reached: bool = False,
+) -> bool:
+    """Fail when late frames stay on plain/OS blue instead of flower brand.
+
+    After the Gate static brand frame and Flutter welcome should be visible,
+    a pure-blue or plain background means native static and final petals
+    diverged or the branded surface never painted. A normal router Shell may
+    legitimately have its own (for example white) background after the welcome
+    terminal event, so post-terminal frames are not launch-frame evidence.
+    """
+    if safe_terminal_reached:
+        return False
+    late = [
+        item
+        for item in analyses
+        if item.offset_ms is not None and item.offset_ms >= compare_after_ms
+    ]
+    if not late:
+        return False
+    return any(
+        (item.blue_background or item.plain_background)
+        and not item.branded_or_content_visible
+        for item in late
+    )
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as source:
@@ -679,21 +984,68 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         (output_dir / "android-install.txt").write_text(install_output, encoding="utf-8")
     run(["adb", "-s", args.android_device, "logcat", "-c"])
     run(["adb", "-s", args.android_device, "shell", "am", "force-stop", args.android_package])
-    start_clock = time.monotonic()
-    start = run(
+    launcher_query = run(
         [
             "adb",
             "-s",
             args.android_device,
             "shell",
-            "am",
-            "start",
-            "-n",
-            args.android_activity,
+            "cmd",
+            "package",
+            "resolve-activity",
+            "--brief",
+            "-a",
+            "android.intent.action.MAIN",
+            "-c",
+            "android.intent.category.LAUNCHER",
+            args.android_package,
         ],
+        check=False,
+        timeout=15,
+    )
+    (output_dir / "android-launcher-resolution.txt").write_text(
+        launcher_query.stdout,
+        encoding="utf-8",
+    )
+    launcher_resolution = parse_android_launcher_resolution(
+        launcher_query.stdout,
+        package=args.android_package,
+        expected_activity=args.android_activity,
+    )
+    start_command = [
+        "adb",
+        "-s",
+        args.android_device,
+        "shell",
+        "am",
+        "start",
+        "-W",
+        "-a",
+        "android.intent.action.MAIN",
+        "-c",
+        "android.intent.category.LAUNCHER",
+    ]
+    resolved_launcher = str(launcher_resolution["resolvedActivity"])
+    if resolved_launcher:
+        # Android 12's `am start -p` can fail to resolve a package-scoped
+        # launcher even when PackageManager has already selected the activity.
+        # Bind the previously verified resolution while preserving the real
+        # MAIN/LAUNCHER intent semantics.
+        start_command.extend(["-n", resolved_launcher])
+    else:
+        start_command.extend(["-p", args.android_package])
+    start_clock = time.monotonic()
+    start = run(
+        start_command,
+        check=False,
         timeout=15,
     )
     (output_dir / "android-am-start.txt").write_text(start.stdout, encoding="utf-8")
+    launcher_started = (
+        start.returncode == 0
+        and "unable to resolve Intent" not in start.stdout
+        and "Error:" not in start.stdout
+    )
 
     analyses: list[ScreenshotAnalysis] = []
     log: str | None = None
@@ -701,6 +1053,9 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         log = _wait_for_android_startup_log(
             args.android_device,
             hard_deadline_ms=args.welcome_exit_hard_ms,
+            require_telemetry_ack=(
+                args.require_telemetry_ack or bool(args.matrix_evidence_root)
+            ),
         )
     else:
         for offset in args.android_offsets_ms:
@@ -722,6 +1077,33 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
             timeout=15,
         ).stdout
     (output_dir / "android-logcat.txt").write_text(log, encoding="utf-8")
+    task_dump = run(
+        [
+            "adb",
+            "-s",
+            args.android_device,
+            "shell",
+            "dumpsys",
+            "activity",
+            "activities",
+        ],
+        check=False,
+        timeout=15,
+    ).stdout
+    (output_dir / "android-task-stack.txt").write_text(
+        task_dump,
+        encoding="utf-8",
+    )
+    task_snapshot = parse_android_task_snapshot(
+        task_dump,
+        package=args.android_package,
+        main_activity=args.android_main_activity,
+    )
+    gate_main_order = android_gate_main_order_observed(log)
+    launch_resource_profile = resolve_android_launch_resource_profile(
+        args.android_device
+    )
+    launch_visual = native_launch_visual_provenance(launch_resource_profile)
     timings = parse_qwqstartup_log(log)
     sequence = parse_startup_sequence_log(log)
     terminal_surface = classify_startup_terminal(log, sequence)
@@ -732,15 +1114,18 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         if pattern in log
     ]
     native_welcome_detected = bool(native_welcome_hits)
+    system_splash_icon_detected = any(
+        item.system_splash_icon for item in analyses
+    )
     first_visible = (
         (
             sequence.get("firstVisibleMs")
             or timings.get("android_flutter_first_frame")
         )
         if args.skip_screenshots
-        else resolve_first_visible_ms(
+        else resolve_android_first_visible_ms(
             analyses,
-            args.android_visible_by_ms,
+            renderer_first_frame_ms=timings.get("android_flutter_first_frame"),
             require_branded=args.require_branded_visible,
         )
     )
@@ -763,7 +1148,15 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         )
         for item in analyses
     )
-    blue_screen_detected = native_static_at_deadline and not terminal_surface_classified
+    prolonged_system_blue_detected = (
+        False
+        if args.skip_screenshots
+        else detect_prolonged_system_blue(
+            analyses,
+            transition_budget_ms=args.android_blue_transition_budget_ms,
+        )
+    )
+    repeated_splash_detected = detect_repeated_splash(analyses, log)
     flutter_ui_within_budget = (
         flutter_ui_ms is None or flutter_ui_ms <= args.android_flutter_ui_max_ms
     )
@@ -776,6 +1169,24 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         welcome_exit_ms is not None
         and welcome_exit_ms <= args.welcome_exit_hard_ms
     )
+    native_static_petal_mismatch = (
+        False
+        if args.skip_screenshots
+        else detect_native_static_petal_mismatch(
+            analyses,
+            compare_after_ms=max(
+                args.android_blue_transition_budget_ms,
+                args.android_visible_by_ms,
+            ),
+            safe_terminal_reached=(
+                terminal_surface_classified and welcome_exit_within_deadline
+            ),
+        )
+    )
+    blue_screen_detected = (
+        (native_static_at_deadline and not terminal_surface_classified)
+        or prolonged_system_blue_detected
+    )
     shell_first_paint_within_target = (
         shell_first_paint_ms is not None
         and shell_first_paint_ms <= args.shell_first_paint_target_ms
@@ -786,6 +1197,21 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
     )
     watchdog_evidence = extract_startup_watchdog_evidence(log)
     watchdog_evidence["canonicalTerminal"] = terminal_surface
+    attempt_id = str(watchdog_evidence.get("attemptId") or "").strip()
+    launch_mode = str(watchdog_evidence.get("launchMode") or "").strip()
+    runtime_configuration_complete = (
+        watchdog_evidence.get("runtimeConfigurationState") == "complete"
+        and not watchdog_evidence.get("missingDefineKeys")
+    )
+    effective_manifest_bound = (
+        re.fullmatch(
+            r"sha256:[0-9a-f]{64}",
+            str(
+                watchdog_evidence.get("effectiveLaunchManifestDigest") or ""
+            ),
+        )
+        is not None
+    )
     safe_terminal_within_deadline = (
         _safe_terminal_within_deadline(
             watchdog_evidence,
@@ -797,7 +1223,18 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         not native_welcome_detected
         and not blue_screen_detected
         and not plain_background_detected
+        and not prolonged_system_blue_detected
+        and not repeated_splash_detected
+        and not native_static_petal_mismatch
         and terminal_surface_classified
+        and terminal_surface != "nativeRecovery"
+        and launcher_started
+        and launcher_query.returncode == 0
+        and launcher_resolution["matchesExpectedGate"]
+        and gate_main_order
+        and task_snapshot["singleMainTask"]
+        and launch_visual["contractVerified"]
+        and bool(launch_visual["sourceDigest"])
         and ttid_within_budget
         and (first_visible is not None or not args.require_branded_visible)
         and flutter_ui_within_budget
@@ -805,9 +1242,14 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
             not args.require_startup_sequence_events
             or (
                 sequence_events_present
+                and sequence_motion_current
                 and welcome_exit_within_deadline
                 and overlay_removed_within_deadline
                 and safe_terminal_within_deadline
+                and attempt_id not in {"", "unknown"}
+                and launch_mode not in {"", "unknown"}
+                and runtime_configuration_complete
+                and effective_manifest_bound
             )
         )
         and (
@@ -818,6 +1260,11 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
             not args.require_no_native_recovery
             or terminal_surface != "nativeRecovery"
         )
+        and (
+            not args.require_telemetry_ack
+            and not args.matrix_evidence_root
+            or watchdog_evidence.get("telemetryAcknowledged") is True
+        )
     )
     return {
         "platform": "android",
@@ -825,6 +1272,12 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         "deviceKind": android_device_kind(args.android_device),
         "apk": str(apk) if args.android_install else None,
         "passed": passed,
+        "launcherIntentUsed": True,
+        "launcherStarted": launcher_started,
+        "launcherResolution": launcher_resolution,
+        "gateMainOrderObserved": gate_main_order,
+        "taskSnapshot": task_snapshot,
+        "launchVisual": launch_visual,
         "visibleByMs": args.android_visible_by_ms,
         "firstVisibleMs": first_visible,
         "ttidWithinBudget": ttid_within_budget,
@@ -833,7 +1286,12 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         "flutterEngineConfiguredMs": engine_configured_ms,
         "nativeWelcomeDetected": native_welcome_detected,
         "nativeWelcomeHits": native_welcome_hits,
+        "systemSplashIconDetected": system_splash_icon_detected,
         "blueScreenDetected": blue_screen_detected,
+        "prolongedSystemBlueDetected": prolonged_system_blue_detected,
+        "repeatedSplashDetected": repeated_splash_detected,
+        "nativeStaticPetalMismatch": native_static_petal_mismatch,
+        "blueTransitionBudgetMs": args.android_blue_transition_budget_ms,
         "plainBackgroundDetected": plain_background_detected,
         "terminalSurface": terminal_surface,
         **watchdog_evidence,
@@ -857,7 +1315,12 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
     }
 
 
-def _wait_for_android_startup_log(device: str, *, hard_deadline_ms: int) -> str:
+def _wait_for_android_startup_log(
+    device: str,
+    *,
+    hard_deadline_ms: int,
+    require_telemetry_ack: bool,
+) -> str:
     host_deadline = time.monotonic() + hard_deadline_ms / 1000 + 12
     process_seen_at: float | None = None
     latest = ""
@@ -874,6 +1337,10 @@ def _wait_for_android_startup_log(device: str, *, hard_deadline_ms: int) -> str:
             sequence.get("welcomeExitMs") is not None
             and sequence.get("shellFirstPaintMs") is not None
             and sequence.get("overlayRemovedMs") is not None
+            and (
+                not require_telemetry_ack
+                or "startup_telemetry_ack attemptId=" in latest
+            )
         ):
             return latest
         if (
@@ -888,36 +1355,94 @@ def _wait_for_android_startup_log(device: str, *, hard_deadline_ms: int) -> str:
 
 def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
     app = Path(args.ios_app)
-    if args.ios_install and app.exists():
-        run(
-            ["xcrun", "simctl", "uninstall", args.ios_device, args.ios_bundle],
-            check=False,
-            timeout=60,
+    if args.ios_physical and not args.skip_screenshots:
+        raise ValueError("physical iOS startup probes require --skip-screenshots")
+    launch_pid: int | None = None
+    ios_log: str | None = None
+    if args.ios_physical:
+        if args.ios_install and app.exists():
+            run(
+                [
+                    "xcrun",
+                    "devicectl",
+                    "device",
+                    "install",
+                    "app",
+                    "--device",
+                    args.ios_device,
+                    str(app),
+                ],
+                timeout=180,
+            )
+        start_clock = time.monotonic()
+        console = subprocess.Popen(
+            [
+                "xcrun",
+                "devicectl",
+                "device",
+                "process",
+                "launch",
+                "--device",
+                args.ios_device,
+                "--terminate-existing",
+                "--console",
+                args.ios_bundle,
+            ],
+            cwd=APP_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
         )
-        run(["xcrun", "simctl", "install", args.ios_device, str(app)], timeout=120)
-    run(
-        ["xcrun", "simctl", "terminate", args.ios_device, args.ios_bundle],
-        check=False,
-        timeout=15,
-    )
-    start_clock = time.monotonic()
-    launch = run(
-        ["xcrun", "simctl", "launch", args.ios_device, args.ios_bundle],
-        timeout=15,
-    )
-    (output_dir / "ios-simctl-launch.txt").write_text(launch.stdout, encoding="utf-8")
-    launch_pid_match = re.search(r":\s*(\d+)\s*$", launch.stdout)
-    launch_pid = int(launch_pid_match.group(1)) if launch_pid_match else None
+        try:
+            ios_log, _ = console.communicate(
+                timeout=args.welcome_exit_hard_ms / 1000 + 8,
+            )
+        except subprocess.TimeoutExpired:
+            console.terminate()
+            ios_log, _ = console.communicate(timeout=10)
+        (output_dir / "ios-devicectl-launch.txt").write_text(
+            ios_log,
+            encoding="utf-8",
+        )
+    else:
+        if args.ios_install and app.exists():
+            run(
+                ["xcrun", "simctl", "uninstall", args.ios_device, args.ios_bundle],
+                check=False,
+                timeout=60,
+            )
+            run(
+                ["xcrun", "simctl", "install", args.ios_device, str(app)],
+                timeout=120,
+            )
+        run(
+            ["xcrun", "simctl", "terminate", args.ios_device, args.ios_bundle],
+            check=False,
+            timeout=15,
+        )
+        start_clock = time.monotonic()
+        launch = run(
+            ["xcrun", "simctl", "launch", args.ios_device, args.ios_bundle],
+            timeout=15,
+        )
+        (output_dir / "ios-simctl-launch.txt").write_text(
+            launch.stdout,
+            encoding="utf-8",
+        )
+        launch_pid_match = re.search(r":\s*(\d+)\s*$", launch.stdout)
+        launch_pid = int(launch_pid_match.group(1)) if launch_pid_match else None
 
     analyses: list[ScreenshotAnalysis] = []
-    ios_log: str | None = None
-    if args.skip_screenshots:
+    if args.skip_screenshots and ios_log is None:
         ios_log = _wait_for_ios_startup_log(
             args.ios_device,
             launch_pid=launch_pid,
             hard_deadline_ms=args.welcome_exit_hard_ms,
+            require_telemetry_ack=(
+                args.require_telemetry_ack or bool(args.matrix_evidence_root)
+            ),
         )
-    else:
+    elif not args.skip_screenshots:
         for offset in args.ios_offsets_ms:
             target = start_clock + offset / 1000
             time.sleep(max(target - time.monotonic(), 0))
@@ -965,6 +1490,21 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
     )
     watchdog_evidence = extract_startup_watchdog_evidence(ios_log)
     watchdog_evidence["canonicalTerminal"] = terminal_surface
+    attempt_id = str(watchdog_evidence.get("attemptId") or "").strip()
+    launch_mode = str(watchdog_evidence.get("launchMode") or "").strip()
+    runtime_configuration_complete = (
+        watchdog_evidence.get("runtimeConfigurationState") == "complete"
+        and not watchdog_evidence.get("missingDefineKeys")
+    )
+    effective_manifest_bound = (
+        re.fullmatch(
+            r"sha256:[0-9a-f]{64}",
+            str(
+                watchdog_evidence.get("effectiveLaunchManifestDigest") or ""
+            ),
+        )
+        is not None
+    )
     safe_terminal_within_deadline = (
         _safe_terminal_within_deadline(
             watchdog_evidence,
@@ -1009,9 +1549,14 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
             not args.require_startup_sequence_events
             or (
                 sequence_events_present
+                and sequence_motion_current
                 and welcome_exit_within_deadline
                 and overlay_removed_within_deadline
                 and safe_terminal_within_deadline
+                and attempt_id not in {"", "unknown"}
+                and launch_mode not in {"", "unknown"}
+                and runtime_configuration_complete
+                and effective_manifest_bound
             )
         )
         and (
@@ -1022,11 +1567,16 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
             not args.require_no_native_recovery
             or terminal_surface != "nativeRecovery"
         )
+        and (
+            not args.require_telemetry_ack
+            and not args.matrix_evidence_root
+            or watchdog_evidence.get("telemetryAcknowledged") is True
+        )
     )
     return {
         "platform": "ios",
         "device": args.ios_device,
-        "deviceKind": "simulator",
+        "deviceKind": "physical" if args.ios_physical else "simulator",
         "passed": passed,
         "visibleByMs": args.ios_visible_by_ms,
         "firstVisibleMs": first_visible,
@@ -1059,6 +1609,7 @@ def _read_ios_startup_log(device: str, *, launch_pid: int | None) -> str:
         'OR eventMessage CONTAINS "ios_startup_safe_terminal" '
         'OR eventMessage CONTAINS "ios_native_first_frame_timeout" '
         'OR eventMessage CONTAINS "ios_dart_startup_attempt" '
+        'OR eventMessage CONTAINS "startup_telemetry_ack" '
         'OR eventMessage CONTAINS "ios_startup_bootstrap_failure"'
     )
     if launch_pid is not None:
@@ -1088,6 +1639,7 @@ def _wait_for_ios_startup_log(
     *,
     launch_pid: int | None,
     hard_deadline_ms: int,
+    require_telemetry_ack: bool,
 ) -> str:
     deadline = time.monotonic() + hard_deadline_ms / 1000 + 4
     latest = ""
@@ -1098,6 +1650,10 @@ def _wait_for_ios_startup_log(
             sequence.get("welcomeExitMs") is not None
             and sequence.get("shellFirstPaintMs") is not None
             and sequence.get("overlayRemovedMs") is not None
+            and (
+                not require_telemetry_ack
+                or "startup_telemetry_ack attemptId=" in latest
+            )
         ):
             return latest
         time.sleep(0.25)
@@ -1130,6 +1686,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--android-device")
     parser.add_argument("--android-package", default=DEFAULT_ANDROID_PACKAGE)
     parser.add_argument("--android-activity", default=DEFAULT_ANDROID_ACTIVITY)
+    parser.add_argument(
+        "--android-main-activity",
+        default=DEFAULT_ANDROID_MAIN_ACTIVITY,
+    )
     parser.add_argument("--android-apk", default=str(DEFAULT_ANDROID_APK))
     parser.add_argument(
         "--android-local-ca-path",
@@ -1143,6 +1703,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=[400, 600, 800, 1000, 1500, 2000, 3000, 6000],
     )
     parser.add_argument("--android-visible-by-ms", type=int, default=2000)
+    parser.add_argument(
+        "--android-blue-transition-budget-ms",
+        type=int,
+        default=2000,
+        help=(
+            "Maximum allowed pure Android 12 system-blue transition before "
+            "branded native/Flutter welcome petals must appear."
+        ),
+    )
     parser.add_argument("--android-flutter-ui-max-ms", type=int, default=3000)
     parser.add_argument("--shell-first-paint-target-ms", type=int, default=3000)
     parser.add_argument("--welcome-exit-hard-ms", type=int, default=6000)
@@ -1167,6 +1736,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Fail a run when native recovery is shown; required for repeated release probes.",
     )
     parser.add_argument(
+        "--require-telemetry-ack",
+        action="store_true",
+        help="Wait for and require the server-persisted startup telemetry ACK.",
+    )
+    parser.add_argument(
         "--runs",
         type=int,
         default=1,
@@ -1182,12 +1756,28 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Fail when branded welcome is not visible within visible-by-ms.",
     )
     parser.add_argument("--ios-device")
+    parser.add_argument(
+        "--ios-physical",
+        action="store_true",
+        help="Use xcrun devicectl console capture for a signed app on a real iPhone.",
+    )
     parser.add_argument("--ios-bundle", default=DEFAULT_IOS_BUNDLE)
     parser.add_argument("--ios-app", default=str(DEFAULT_IOS_APP))
     parser.add_argument("--ios-install", action="store_true")
     parser.add_argument(
         "--runtime-env",
         choices=("alpha", "beta", "gamma", "prod"),
+        default="",
+    )
+    parser.add_argument(
+        "--runtime-target",
+        choices=(
+            "alpha-local",
+            "beta-local",
+            "gamma-local",
+            "prod-sim",
+            "prod-hosted",
+        ),
         default="",
     )
     parser.add_argument(
@@ -1245,7 +1835,11 @@ def main() -> int:
                     "results": run_results,
                 }
             )
-        if args.runs > 1 and args.android_device and run_index + 1 < args.runs:
+        if (
+            args.runs > 1
+            and (args.android_device or args.ios_device)
+            and run_index + 1 < args.runs
+        ):
             time.sleep(1.5)
 
     platform_samples = {
@@ -1284,33 +1878,78 @@ def main() -> int:
     if args.matrix_evidence_root:
         if not args.runtime_env:
             raise ValueError("--runtime-env is required with --matrix-evidence-root")
-        if args.runs != 1:
-            raise ValueError("matrix evidence export requires --runs 1")
-        matrix_root = Path(args.matrix_evidence_root) / args.runtime_env
+        matrix_case = args.runtime_target or args.runtime_env
+        matrix_root = Path(args.matrix_evidence_root) / matrix_case
         matrix_root.mkdir(parents=True, exist_ok=True)
-        for result in results:
-            platform = result.get("platform")
-            if platform not in {"android", "ios"}:
+        for platform in ("android", "ios"):
+            platform_results = [
+                result for result in results if result.get("platform") == platform
+            ]
+            if not platform_results:
                 continue
+            samples: list[dict[str, Any]] = []
+            for result in platform_results:
+                sample = {
+                    "runtimeEnv": args.runtime_env,
+                    "runtimeTarget": matrix_case,
+                    "platform": platform,
+                    "deviceKind": result.get("deviceKind", "unknown"),
+                    "passed": result.get("passed") is True,
+                    "attemptId": result.get("attemptId"),
+                    "rendererFirstFrameMs": result.get("rendererFirstFrameMs"),
+                    "safeTerminalMs": result.get("safeTerminalMs"),
+                    "reportedSafeTerminalMs": result.get(
+                        "reportedSafeTerminalMs"
+                    ),
+                    "nativeReceivedSafeTerminalMs": result.get(
+                        "nativeReceivedSafeTerminalMs"
+                    ),
+                    "watchdogOutcome": result.get("watchdogOutcome"),
+                    "canonicalTerminal": result.get("canonicalTerminal"),
+                    "launchMode": result.get("launchMode"),
+                    "hotRestart": result.get("hotRestart"),
+                    "runtimeConfigurationState": result.get(
+                        "runtimeConfigurationState"
+                    ),
+                    "missingDefineKeys": result.get("missingDefineKeys"),
+                    "failureCode": result.get("failureCode", ""),
+                    "startupSequenceMotionCurrent": result.get(
+                        "startupSequenceMotionCurrent"
+                    ),
+                    "effectiveLaunchManifestDigest": result.get(
+                        "effectiveLaunchManifestDigest"
+                    ),
+                    "telemetryAcknowledged": result.get(
+                        "telemetryAcknowledged"
+                    ),
+                    "sourceReport": str(report_path),
+                }
+                if platform == "android":
+                    sample.update(
+                        {
+                            "launcherIntentUsed": result.get(
+                                "launcherIntentUsed"
+                            ),
+                            "launcherStarted": result.get("launcherStarted"),
+                            "launcherResolution": result.get(
+                                "launcherResolution"
+                            ),
+                            "gateMainOrderObserved": result.get(
+                                "gateMainOrderObserved"
+                            ),
+                            "taskSnapshot": result.get("taskSnapshot"),
+                            "launchVisual": result.get("launchVisual"),
+                        }
+                    )
+                samples.append(sample)
             evidence = {
+                "schema": "qwq.startup-runtime-evidence.v1",
                 "runtimeEnv": args.runtime_env,
+                "runtimeTarget": matrix_case,
                 "platform": platform,
-                "attemptId": result.get("attemptId"),
-                "rendererFirstFrameMs": result.get("rendererFirstFrameMs"),
-                "safeTerminalMs": result.get("safeTerminalMs"),
-                "reportedSafeTerminalMs": result.get("reportedSafeTerminalMs"),
-                "nativeReceivedSafeTerminalMs": result.get(
-                    "nativeReceivedSafeTerminalMs"
-                ),
-                "watchdogOutcome": result.get("watchdogOutcome"),
-                "canonicalTerminal": result.get("canonicalTerminal"),
-                "launchMode": result.get("launchMode"),
-                "hotRestart": result.get("hotRestart"),
-                "runtimeConfigurationState": result.get(
-                    "runtimeConfigurationState"
-                ),
-                "missingDefineKeys": result.get("missingDefineKeys"),
-                "failureCode": result.get("failureCode", ""),
+                "runs": len(samples),
+                "passed": all(sample["passed"] for sample in samples),
+                "samples": samples,
                 "sourceReport": str(report_path),
             }
             (matrix_root / f"{platform}.json").write_text(

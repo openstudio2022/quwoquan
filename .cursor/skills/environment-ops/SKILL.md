@@ -26,7 +26,7 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 1. 不要把 `prod-gray` 当成额外环境。生产灰度是 `prod` 下的 rollout stage。
 2. 不要手写本地 canonical 端口；读取 `quwoquan_ops/environments/local_env_port_manifest.yaml` 对应 profile。
 3. 不要手写 public topology；通过 `stackctl` 读取 `quwoquan_ops/environments/<env>/runtime.yaml`，workload 从各服务和外部依赖的环境部署目录实时扫描。
-4. 需要环境打包、纯度、URL 契约或 artifact 隔离时，先跑 `stackctl package`，再按证明边界选择 profile：无环境依赖为 `baseline`，Alpha mock 投影为 `smoke`，Beta/Gamma 内容数据平面为 `integration`，Gamma 商业观测和 Prod 为 `release`。
+4. 需要环境打包、纯度、URL 契约或 artifact 隔离时，先跑 `stackctl package`，再按证明边界选择 profile：无环境依赖为 `baseline`，四环境 Remote 启动与 release 只读探针为 `smoke`，Alpha/Beta/Gamma 内容数据平面为 `integration`，Gamma 商业观测和 Prod 为 `release`。
 5. 需要诊断时，先 `health`，再 `inspect`，最后 `doctor`。只有白名单问题才执行 `repair`。
 6. 远端/hosted 目标只有 `prod-hosted`（backend SSH 托管，gray 与 full 共享同一集群）；`gamma` 仅本地（`gamma-local`），不存在远端 gamma。`prod-hosted` 只通过 `stackctl deploy --target prod-hosted` 驱动 `gray-initial / carry-on / full` rollout stage，真实远端集成与 curated 媒体路由复验在 `gray-initial` 阶段完成；不要跳回旧脚本，除非是在修 `stackctl` 本身。
 7. `mode=prevalidate` 是不可提升的第一方容器验证：公网 IP 只允许作为 `--ssh-host`，必须消费 clean reviewed main 的 Service Pipeline digest 制品；不得接受 rollout/SLO/rollback 参数，不得写正式 release ledger/receipt，且 release eligibility 始终保持 `GATE_BLOCK`。

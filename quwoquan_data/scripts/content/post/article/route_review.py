@@ -134,10 +134,18 @@ def review_route_draft(
         load_base_draft_text,
     )
     from content.post.article.base_draft_source import base_source_use_mode
-    from content.post.fidelity import base_draft_fidelity_issues
+    from content.post.fidelity import (
+        base_draft_fidelity_issues,
+        commercial_article_sources_near_copy_gate,
+    )
 
     if carrier == "image":
         fidelity = []
+        near_copy = commercial_article_sources_near_copy_gate(
+            "",
+            (),
+            carrier=carrier,
+        )
     else:
         # 底稿中心 1:1：门侧分母 = 整篇单一底稿（与 prompt 侧 baseDraftText 同源）。
         # 不再按 writingIntent 收窄分母——成品本就只来自这一篇底稿，整篇度量才能既防误杀
@@ -149,6 +157,27 @@ def review_route_draft(
             base_text,
             carrier=carrier,
             source_use_mode=source_use_mode,
+        )
+        base_source_ref = str(brief.get("baseSourceRef") or "").strip()
+        near_copy_source_refs = (
+            [base_source_ref]
+            if base_source_ref
+            else [
+                str(item).strip()
+                for item in quality_payload.get("sourcePaths") or []
+                if str(item).strip()
+            ]
+        )
+        near_copy = commercial_article_sources_near_copy_gate(
+            body,
+            tuple(
+                (
+                    load_base_draft_text(execution_id, source_ref),
+                    base_source_use_mode(execution_id, source_ref),
+                )
+                for source_ref in near_copy_source_refs
+            ),
+            carrier=carrier,
         )
     if carrier == "image":
         figure_group_issues: list[str] = []
@@ -171,6 +200,7 @@ def review_route_draft(
         "issues": fidelity,
         "suggestions": ["以底稿为基础适度加工：相似度过低则贴回底稿叙事；过高则进一步改写表达、去版权痕迹。"] if fidelity else [],
     }
+    route_checks["commercialNearCopy"] = near_copy.to_review_check()
     from core import quality_gates as qg
 
     # 结构形态硬门（与来源数量无关，低误报）：单章节过半失衡 + 平行时间线拼接未归并。

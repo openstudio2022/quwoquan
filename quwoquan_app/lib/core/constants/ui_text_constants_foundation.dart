@@ -1,6 +1,6 @@
 part of 'ui_text_constants.dart';
 
-abstract final class _UITextFoundation {
+abstract final class FoundationText {
   static const String edgeBackExitPrompt = '再滑动一次退出应用';
   static const String login = '登录', bottomNavGuestProfile = '未登录';
   static const String loginOneTap = '一键登录', loginOneTapPrimary = '本机号码一键登录';
@@ -227,7 +227,7 @@ abstract final class _UITextFoundation {
   static const String needLogin = '需要登录';
   static const String loading = '加载中...', retry = '重试';
   static const String mediaRetrying = '重试中…';
-  static const String requestWaitSlow = '加载时间稍长，请稍候';
+  static const String requestWaitSlow = '还在加载，请稍候';
   static const String requestActionSlow = '正在处理，请稍候';
   static const String requestOutcomePending = '操作结果待确认';
   static const String cancel = '取消', close = '关闭';
@@ -236,28 +236,35 @@ abstract final class _UITextFoundation {
   static const String user = '用户', following = '已关注';
   static const String followBack = '回关', unknownUser = '未知用户';
   static const String copyLink = '复制链接';
-  static const String webInstallBannerTitle = '在 App 里继续趣我圈';
-  static const String webInstallBannerMobileSubtitle =
-      '手机或平板打开，可直接下载 App，也可以转发给朋友安装。';
+  static const String webInstallBannerTitle = '获取趣我圈';
+  static const String webInstallBannerAndroidTitle = '趣我圈 Android 版';
+  static const String webInstallBannerAndroidSubtitle = '下载最新版本';
+  static const String webInstallBannerIosTitle = '趣我圈 iOS 网页版';
+  static const String webInstallBannerIosSubtitle = '添加到主屏幕，快速打开';
+  static const String webInstallBannerMobileSubtitle = '根据当前设备选择官方安装方式。';
   static const String webInstallBannerDesktopSubtitle =
-      '电脑端可选择对应安装包，也可以把安装页发到手机或微信里继续安装。';
-  static const String webInstallBannerDownloadApp = '下载 App';
+      'Android 下载与 iOS 网页版安装说明';
+  static const String webInstallBannerDownloadApp = '获取应用';
+  static const String webInstallBannerDownload = '下载';
+  static const String webInstallBannerInstall = '安装';
+  static const String webInstallBannerChoose = '选择';
   static const String webInstallBannerShareInstall = '分享安装页';
   static const String webInstallBannerDesktopPackages = '选择安装包';
-  static const String webInstallBannerIosPackage = 'iPhone / iPad';
-  static const String webInstallBannerAndroidPackage = 'Android / 鸿蒙';
+  static const String webInstallBannerIosPackage = 'iOS 网页版';
+  static const String webInstallBannerAndroidPackage = 'Android 下载';
   static const String loadFailed = '加载失败';
   static const String temporarilyUnavailable = '暂时连不上';
   static const String contentTemporarilyUnavailable =
-      UITextConstants.workOpenFailedTitle;
+      ContentText.workOpenFailedTitle;
   static const String contentNotLoadedYet = '这里还没加载出来';
-  static const String checkNetworkAndTryAgain = '可能是网络问题。';
+  static const String checkNetworkAndTryAgain = '操作未能完成。';
   static const String contentLoadSoftFailed = '服务暂时不可用，稍后自动恢复后再试';
   static const String refreshSoftFailed = refreshFailedRetained;
   static const String refreshTimeoutSoftFailed = '这次刷新有点慢，稍后再试。';
   static const String appendSoftFailed = appendFailedRetry;
   static const String appendTapToRetry = '加载更多没成功，轻点重试';
-  static const String homeCacheFallback = '网络不太稳，先看看上次刷到的首页。';
+  static const String contentNotUpdatedTitle = '内容未更新';
+  static const String homeCacheFallback = '当前显示的是上次加载的内容。';
   static const String profileCacheFallback = '网络不太稳，先显示上次看到的主页。';
   static const String refreshFailedRetained = '这次刷新没成功，页面先保持不变。';
   static const String appendFailedRetry = '后面没加载出来，轻点重试';

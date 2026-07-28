@@ -283,7 +283,7 @@ class _AppNativeBackScopeState extends State<AppNativeBackScope> {
     if (mounted) {
       AppToast.show(
         context,
-        UITextConstants.edgeBackExitPrompt,
+        FoundationText.edgeBackExitPrompt,
         duration: _policy.rootExitGuardWindow,
       );
     }

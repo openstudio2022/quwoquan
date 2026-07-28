@@ -1,18 +1,16 @@
 schema: app-runtime-config
 runtime:
   appRuntimeEnv: prod
-  appDataSource: remote
-  gatewayBaseUrl: https://api.quwoquan.com
-  legalBaseUrl: https://quwoquan.com/legal
-  realtimeBaseUrl: wss://realtime.quwoquan.com
-  mediaAvatarCdnBaseUrl: https://cdn.quwoquan.com
-  mediaImageCdnBaseUrl: https://cdn.quwoquan.com
-  mediaVideoCdnBaseUrl: https://cdn.quwoquan.com
-  mediaUploadBaseUrl: https://upload.quwoquan.com
-  rtcMediaConnectionUrl: wss://rtc.quwoquan.com
+  gatewayBaseUrl: ''
+  legalBaseUrl: ''
+  publicWebBaseUrl: ''
+  appDownloadBaseUrl: ''
+  realtimeBaseUrl: ''
+  mediaAvatarCdnBaseUrl: ''
+  mediaImageCdnBaseUrl: ''
+  mediaVideoCdnBaseUrl: ''
+  mediaUploadBaseUrl: ''
+  rtcMediaConnectionUrl: ''
   currentUserId: ""
-seed:
-  enabled: false
-  manifest: ""
 gray:
-  strategyEndpoint: https://api.quwoquan.com/runtime/gray-strategy
+  strategyEndpoint: ''

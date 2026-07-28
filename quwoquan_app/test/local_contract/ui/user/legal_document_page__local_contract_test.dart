@@ -13,8 +13,8 @@ void main() {
     return ProviderScope(
       child: CupertinoApp(
         home: LegalDocumentPage(
-          title: UITextConstants.userAgreement,
-          url: 'https://alpha-api.quwoquan-env.test:17000/legal/user-agreement',
+          title: FoundationText.userAgreement,
+          url: 'https://api.alpha.quwoquan.com:17000/legal/user-agreement',
           availabilityProbe: availabilityProbe,
           webViewBuilder: (_, _) => const Text('legal body'),
         ),
@@ -28,13 +28,10 @@ void main() {
       await tester.pumpWidget(host(availabilityProbe: (_) async => false));
       await tester.pumpAndSettle();
 
-      expect(find.text(UITextConstants.legalUnavailableTitle), findsOneWidget);
-      expect(
-        find.text(UITextConstants.legalUnavailableMessage),
-        findsOneWidget,
-      );
-      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
-      expect(find.text(UITextConstants.back), findsWidgets);
+      expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+      expect(find.text(SearchText.recoveryReloadLaterMessage), findsOneWidget);
+      expect(find.text(SearchText.reload), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.back), findsOneWidget);
       expect(find.text('api mock route is not ready'), findsNothing);
       expect(find.text('Error response'), findsNothing);
     },
@@ -55,11 +52,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(probeCount, 1);
 
-    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.tap(find.text(SearchText.reload));
     await tester.pumpAndSettle();
 
     expect(probeCount, 2);
-    expect(find.text(UITextConstants.legalUnavailableTitle), findsOneWidget);
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
   });
 
   test(
@@ -67,7 +64,7 @@ void main() {
     () async {
       final html = await defaultLegalDocumentHtmlLoader(
         Uri.parse(
-          'https://alpha-api.quwoquan-env.test:17000/legal/user-agreement',
+          'https://api.alpha.quwoquan.com:17000/legal/user-agreement',
         ),
         client: _FakeHttpClient(
           (_) async => http.Response.bytes(

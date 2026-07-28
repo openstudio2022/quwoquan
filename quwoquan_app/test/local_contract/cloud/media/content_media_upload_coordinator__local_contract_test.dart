@@ -5,6 +5,9 @@ import 'dart:async';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
@@ -181,6 +184,64 @@ void main() {
         );
         expect(attempts, 1);
         expect(media.abortedSessions, <String>['session_1']);
+      },
+    );
+
+    test(
+      'object failure telemetry records canonical code and recovery action',
+      () async {
+        final media = RecordingContentMediaFacet();
+        final telemetry = _RecordingTelemetry();
+        final coordinator = ContentMediaUploadCoordinator(
+          media: media,
+          telemetry: telemetry,
+          objectUploadRetryBaseDelay: Duration.zero,
+        );
+        const bytes = <int>[1];
+
+        await expectLater(
+          coordinator.uploadPreparedSource(
+            source: PreparedContentMediaSource(
+              fileSize: bytes.length,
+              sha256Digest: sha256.convert(bytes).toString(),
+              openRead: () => Stream<List<int>>.value(bytes),
+            ),
+            mediaType: ContentMediaType.image,
+            contentType: 'image/jpeg',
+            uploadStream:
+                (
+                  _,
+                  _, {
+                  required contentLength,
+                  required contentType,
+                  required expectedSha256,
+                  abortTrigger,
+                }) async {
+                  throw const ContentMediaObjectUploadException(
+                    retryable: false,
+                    statusCode: 403,
+                  );
+                },
+          ),
+          throwsA(isA<ContentMediaObjectUploadException>()),
+        );
+
+        final failurePayloads = telemetry.payloads
+            .where(
+              (payload) =>
+                  payload.extensions['result'] == 'failure' &&
+                  (payload.eventType == 'operation_result' ||
+                      payload.eventType == 'performance_sample'),
+            )
+            .toList(growable: false);
+        expect(failurePayloads, hasLength(2));
+        for (final payload in failurePayloads) {
+          expect(
+            payload.extensions['failReasonCode'],
+            'CONTENT.SYSTEM.storage_write_failed',
+          );
+          expect(payload.extensions['recoveryAction'], 'retry');
+        }
       },
     );
 
@@ -449,4 +510,28 @@ Future<void> _drainUpload(
   Future<void>? abortTrigger,
 }) async {
   await body.drain<void>();
+}
+
+final class _RecordingTelemetry implements AppTelemetryRecorder {
+  final List<AppTelemetryPayload> payloads = <AppTelemetryPayload>[];
+
+  @override
+  Future<void> clearPendingForLogout() async {}
+
+  @override
+  Future<AppTelemetryFlushResult> flush() async =>
+      AppTelemetryFlushResult.empty;
+
+  @override
+  void onNetworkAvailable() {}
+
+  @override
+  Future<AppTelemetryRecordResult> record(
+    AppTelemetryPayload payload, {
+    String? pageName,
+    DateTime? occurredAt,
+  }) async {
+    payloads.add(payload);
+    return AppTelemetryRecordResult.accepted;
+  }
 }

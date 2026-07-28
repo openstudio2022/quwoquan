@@ -57,6 +57,7 @@
             "minLength": 1
           },
           "carrier": {
+            "description": "Must equal the contentType parsed from this job's immutable executionId.",
             "enum": [
               "homepage",
               "article",

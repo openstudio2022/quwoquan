@@ -15,7 +15,7 @@
 ### In Scope
 
 - typed Comment command/query、reply Slice、ContentReaction 与服务端能力投影。
-- production Remote-only、alpha fixture 隔离、严格 decoder 与 RuntimeFailure。
+- 四环境 Remote-only、test-only typed double 隔离、严格 decoder 与 RuntimeFailure。
 - hot/latest 两档服务端 keyset、pinned-first、hotScore、CAS、幂等、outbox、计数和投影收敛。
 - hidden/restore/tombstoned 治理、创建频控、Post 删除级联与审计事实。
 - authorIpLocation、authorLiked、viewerRelation、拉黑过滤与批量读投影。
@@ -74,7 +74,7 @@
 <a id="req-008"></a>
 ### REQ-008 四环境数据源和三层证据无 Mock 污染
 
-- alpha fixture 必须与 beta/gamma/prod Remote 物理隔离；发布证据必须绑定同一 commit 与 ContractGraph 摘要。
+- alpha/beta/gamma/prod App 均使用 Remote Facet；测试树 typed double 与环境 artifact 物理隔离，发布证据必须绑定同一 commit 与 ContractGraph 摘要。
 
 <a id="req-009"></a>
 ### REQ-009 个人评论与互动深链使用 typed Facet
@@ -173,8 +173,8 @@
 
 - GIVEN alpha、beta、gamma、prod 使用各自正式 composition
 - WHEN 执行 package purity、环境 verify 与 Comment Journey
-- THEN alpha 只经独立 runner 使用 fixture Facet。
-- THEN beta/gamma/prod 只使用 Remote，prod kernel 不可达 mock/fixture。
+- THEN alpha/beta/gamma/prod 只使用 Remote Facet，四环境 kernel/UAT support 均不可达 mock/fixture。
+- THEN typed double 只存在测试树，不作为环境 Journey 证据。
 
 <a id="gwt-009"></a>
 ### GWT-009 个人评论与互动深链使用 typed Facet
@@ -219,12 +219,12 @@
 - THEN PostService 评论方法、Memory store 和旧 Repository 不可达。
 
 <a id="gwt-014"></a>
-### GWT-014 production Remote-only 与 alpha fixture 物理隔离
+### GWT-014 四环境 Remote-only 与 test-only double 物理隔离
 
-- GIVEN App 以 alpha 或 production composition 启动
+- GIVEN App 以 alpha、beta、gamma 或 prod composition 启动
 - WHEN 构建、分析并扫描 kernel/AOT/SBOM 可达性
-- THEN production provider 只返回 RemoteContentCommentFacet 与 RemoteContentPostReactionFacet，依赖缺失启动失败。
-- THEN AlphaContentCommentFacet 与 AlphaContentPostReactionFacet 只由 quwoquan_cloud_mock 和 alpha runner 引用。
+- THEN 四环境 provider 只返回 RemoteContentCommentFacet 与 RemoteContentPostReactionFacet，依赖缺失启动失败。
+- THEN typed double 只由测试树引用，不进入 runner、UAT support、kernel/AOT 或 SBOM。
 
 <a id="gwt-015"></a>
 ### GWT-015 Comment 四态生命周期与举报治理单轨
@@ -272,8 +272,8 @@
 
 - GIVEN content-service 分别以 alpha、beta、gamma、prod composition 启动
 - WHEN 装配 Comment IP location resolver 并创建评论
-- THEN alpha 只允许 deterministic fixture resolver。
-- THEN beta/gamma/prod 只允许 ip2region IPv4+IPv6 离线库，缺库、损坏、错误 provider 或数据超过 45 天均启动失败。
+- THEN alpha/beta/gamma/prod 只允许受环境配置约束的 ip2region IPv4+IPv6 离线库；deterministic resolver 仅存在测试树。
+- THEN 环境缺库、损坏、错误 provider 或数据超过 45 天均启动失败。
 - THEN 镜像固定数据版本与双库 SHA256，保留 Apache-2.0 许可证；原始 IP 不落 Comment、不写日志。
 - THEN lookup outcome 与 data age 有 Prometheus 指标和告警，解析失败只落空串。
 
@@ -368,12 +368,12 @@
 - 完成判定：`GWT-009` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-008"></a>
-### OPEN-008 production Remote-only 与 alpha fixture 物理隔离
+### OPEN-008 四环境 Remote-only 与 test-only double 物理隔离
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：缺少 package boundary、production purity、AOT/SBOM 与 gamma Remote Journey 的同版本完整证据。
+- 影响或价值：缺少四环境 package boundary、Remote composition attestation、AOT/SBOM 与 release-bound Remote Journey 的同版本完整证据。
 - 完成判定：`GWT-014` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-009"></a>

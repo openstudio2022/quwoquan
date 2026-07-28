@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 List<FeedItemDto> _contractDiscoveryItems() {
-  final posts = alphaFixtureSeedReader.contentSeedSet()?['posts'];
+  final posts = objectScenarioSeedReader.contentSeedSet()?['posts'];
   if (posts is! List) {
     throw StateError('content_discovery_core.posts fixture is missing');
   }

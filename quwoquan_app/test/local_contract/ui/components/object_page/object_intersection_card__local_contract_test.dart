@@ -82,7 +82,7 @@ void main() {
     test('reasons 为 null → 返回 null（不展示）', () {
       expect(
         ObjectIntersectionCard.fromReasons(
-          title: UITextConstants.objectMyIntersectionsTitle,
+          title: ObjectHomepageText.objectMyIntersectionsTitle,
           reasons: null,
           isDark: false,
         ),
@@ -93,7 +93,7 @@ void main() {
     test('reasons 为空或无 primaryText → 返回 null', () {
       expect(
         ObjectIntersectionCard.fromReasons(
-          title: UITextConstants.objectMyIntersectionsTitle,
+          title: ObjectHomepageText.objectMyIntersectionsTitle,
           reasons: const <IntersectionReason>[],
           isDark: false,
         ),
@@ -101,7 +101,7 @@ void main() {
       );
       expect(
         ObjectIntersectionCard.fromReasons(
-          title: UITextConstants.objectMyIntersectionsTitle,
+          title: ObjectHomepageText.objectMyIntersectionsTitle,
           reasons: <IntersectionReason>[
             _reason(id: 'blank', primaryText: '   '),
           ],
@@ -115,7 +115,7 @@ void main() {
       tester,
     ) async {
       final card = ObjectIntersectionCard.fromReasons(
-        title: UITextConstants.objectMyIntersectionsTitle,
+        title: ObjectHomepageText.objectMyIntersectionsTitle,
         reasons: <IntersectionReason>[
           _reason(
             id: 'ix_primary',
@@ -138,7 +138,7 @@ void main() {
       await tester.pumpWidget(CupertinoApp(home: card!));
 
       expect(
-        find.text(UITextConstants.objectMyIntersectionsTitle),
+        find.text(ObjectHomepageText.objectMyIntersectionsTitle),
         findsOneWidget,
       );
       expect(find.text('4 位共同关注的人正在这里讨论'), findsOneWidget);
@@ -191,7 +191,7 @@ void main() {
         ],
       );
       final card = ObjectIntersectionCard.fromReasons(
-        title: UITextConstants.objectMyIntersectionsTitle,
+        title: ObjectHomepageText.objectMyIntersectionsTitle,
         reasons: <IntersectionReason>[reason],
         isDark: false,
         onReasonTap: (r) => tapped = r,
@@ -212,7 +212,7 @@ void main() {
         Brightness.dark,
       ]) {
         final card = ObjectIntersectionCard.fromReasons(
-          title: UITextConstants.objectMyIntersectionsTitle,
+          title: ObjectHomepageText.objectMyIntersectionsTitle,
           reasons: <IntersectionReason>[
             _reason(
               id: 'ix_visuals_${brightness.name}',
@@ -251,7 +251,7 @@ void main() {
 
     testWidgets('affinity 只显示推荐辅助文案，不伪装成事实计数', (tester) async {
       final card = ObjectIntersectionCard.fromReasons(
-        title: UITextConstants.objectMyIntersectionsTitle,
+        title: ObjectHomepageText.objectMyIntersectionsTitle,
         reasons: <IntersectionReason>[
           _reason(
             id: 'ix_affinity',
@@ -275,7 +275,7 @@ void main() {
 
     testWidgets('就地展开：默认 inlineExpandCount 条 reason，点击展开余下理由', (tester) async {
       final card = ObjectIntersectionCard.fromReasons(
-        title: UITextConstants.objectMyIntersectionsTitle,
+        title: ObjectHomepageText.objectMyIntersectionsTitle,
         inlineExpandCount: 2,
         reasons: <IntersectionReason>[
           _reason(id: 'r1', primaryText: '第一条交集事实'),
@@ -297,7 +297,7 @@ void main() {
 
     testWidgets('旅程高亮：highlightKind 命中折叠区 reason 时自动展开', (tester) async {
       final card = ObjectIntersectionCard.fromReasons(
-        title: UITextConstants.objectMyIntersectionsTitle,
+        title: ObjectHomepageText.objectMyIntersectionsTitle,
         inlineExpandCount: 1,
         highlightKind: 'coCommented',
         reasons: <IntersectionReason>[
@@ -315,7 +315,7 @@ void main() {
     testWidgets('展开更多两段式：先展开，再进入全部连接', (tester) async {
       var openedAll = false;
       final card = ObjectIntersectionCard.fromReasons(
-        title: UITextConstants.objectMyIntersectionsTitle,
+        title: ObjectHomepageText.objectMyIntersectionsTitle,
         inlineExpandCount: 1,
         moreLabel: '全部连接',
         onMoreTap: () => openedAll = true,
@@ -352,7 +352,7 @@ void main() {
     testWidgets('可执行 navigate actionHint 展示 pill 并回调', (tester) async {
       IntersectionActionHint? tapped;
       final card = ObjectIntersectionCard.fromReasons(
-        title: UITextConstants.objectMyIntersectionsTitle,
+        title: ObjectHomepageText.objectMyIntersectionsTitle,
         reasons: <IntersectionReason>[
           _reason(
             id: 'ix_action',
@@ -391,7 +391,7 @@ void main() {
       'navigate+login 门行动显示为可执行入口（门交承接页）；deferred/connect 无真实 handler 不显示',
       (tester) async {
         final card = ObjectIntersectionCard.fromReasons(
-          title: UITextConstants.objectMyIntersectionsTitle,
+          title: ObjectHomepageText.objectMyIntersectionsTitle,
           reasons: <IntersectionReason>[
             _reason(
               id: 'ix_dead_actions',
@@ -448,7 +448,7 @@ void main() {
 
     testWidgets('无任何可执行行动（仅 deferred/connect）→ 回落安静共同证据副句', (tester) async {
       final card = ObjectIntersectionCard.fromReasons(
-        title: UITextConstants.objectMyIntersectionsTitle,
+        title: ObjectHomepageText.objectMyIntersectionsTitle,
         reasons: <IntersectionReason>[
           _reason(
             id: 'ix_summary_fallback',

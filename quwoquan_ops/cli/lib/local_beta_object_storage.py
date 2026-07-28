@@ -18,7 +18,7 @@ def prepare_local_beta_object_storage(*, edge_port: int) -> LocalBetaObjectStora
         environment="beta",
         target_name="beta-local",
         edge_port=edge_port,
-        public_host="beta-upload.quwoquan-env.test",
+        public_host="upload.beta.quwoquan.com",
         local_host="beta-upload.localhost",
         environment_prefix="BETA",
     )

@@ -286,7 +286,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      await tester.tap(find.text(UITextConstants.callGroupVoice));
+      await tester.tap(find.text(CallText.callGroupVoice));
       await tester.pump();
 
       expect(pickerIntents, hasLength(1));
@@ -424,7 +424,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text(ChatText.removeMemberEntry), findsOneWidget);
 
-      await tester.tap(find.text(UITextConstants.confirm));
+      await tester.tap(find.text(FoundationText.confirm));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 

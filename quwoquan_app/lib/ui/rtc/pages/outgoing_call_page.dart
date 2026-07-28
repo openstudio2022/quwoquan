@@ -58,9 +58,9 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
     });
 
     if (session.isLoading && session.session == null) {
-      return const AppScaffold(
+      return AppScaffold(
         backgroundColor: AppColors.transparent,
-        child: Center(child: CupertinoActivityIndicator()),
+        child: AppRequestFeedback.section(),
       );
     }
     if (session.failure case final failure? when session.session == null) {
@@ -95,7 +95,7 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
         ? remoteParticipants
               .map((participant) => participant.displayName)
               .join(', ')
-        : UITextConstants.user;
+        : FoundationText.user;
     final remoteAvatarUrl = remoteParticipants.length == 1
         ? remoteParticipants.single.avatarUrl
         : null;
@@ -130,7 +130,7 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
                   children: [
                     SizedBox(height: AppSpacing.xl * 2),
                     Text(
-                      UITextConstants.callOutgoingCalling,
+                      CallText.callOutgoingCalling,
                       style: TextStyle(
                         color: CallStageChrome.secondaryOnGradient(isDark),
                         fontSize: AppTypography.md,
@@ -206,7 +206,7 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
           ),
           SizedBox(height: AppSpacing.sm),
           Text(
-            UITextConstants.cancel,
+            FoundationText.cancel,
             style: TextStyle(
               color: AppColors.callStageForeground,
               fontSize: AppTypography.sm,

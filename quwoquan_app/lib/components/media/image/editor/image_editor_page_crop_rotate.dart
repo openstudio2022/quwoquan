@@ -305,7 +305,7 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
       final rotatedPath = await _applyRotateToCurrentImage();
       if (rotatedPath == null) {
         await _showEditorActionFailure(
-          title: UITextConstants.imageEditorRotate,
+          title: MediaText.imageEditorRotate,
         );
         return;
       }
@@ -324,7 +324,7 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
     if (toolIndex == kImageEditorToolCrop) {
       final croppedPath = await _applyCropToCurrentImage();
       if (croppedPath == null) {
-        await _showEditorActionFailure(title: UITextConstants.imageEditorCrop);
+        await _showEditorActionFailure(title: MediaText.imageEditorCrop);
         return;
       }
       _commitBakedStep(
@@ -340,7 +340,7 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
         final filteredPath = await _applyFilterToCurrentImage();
         if (filteredPath == null) {
           await _showEditorActionFailure(
-            title: UITextConstants.imageEditorFilter,
+            title: MediaText.imageEditorFilter,
           );
           return;
         }
@@ -362,7 +362,7 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
         final mosaicPath = await _applyMosaicToCurrentImage();
         if (mosaicPath == null) {
           await _showEditorActionFailure(
-            title: UITextConstants.imageEditorMosaic,
+            title: MediaText.imageEditorMosaic,
           );
           return;
         }
@@ -385,7 +385,7 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
         final textPath = await _applyTextToCurrentImage();
         if (textPath == null) {
           await _showEditorActionFailure(
-            title: UITextConstants.imageEditorText,
+            title: MediaText.imageEditorText,
           );
           return;
         }
@@ -431,7 +431,7 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
     final beforePath = _currentPath;
     final croppedPath = await _applyCropToCurrentImage();
     if (croppedPath == null) {
-      await _showEditorActionFailure(title: UITextConstants.imageEditorCrop);
+      await _showEditorActionFailure(title: MediaText.imageEditorCrop);
       return;
     }
     _commitBakedStep(

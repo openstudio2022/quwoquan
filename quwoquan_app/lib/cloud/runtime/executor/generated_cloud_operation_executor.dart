@@ -477,11 +477,13 @@ final class AppGeneratedCloudOperationExecutor
     Object error,
     CloudOperationContract operation,
   ) {
-    if (error is CloudException) return error;
+    if (error is CloudException) {
+      return error.withSourceOperationId(operation.canonicalOperationId);
+    }
     return CloudErrorMapper.fromException(
       error,
       requestPath: operation.pathTemplate,
-    );
+    ).withSourceOperationId(operation.canonicalOperationId);
   }
 
   String? _retryReason(CloudException error) {

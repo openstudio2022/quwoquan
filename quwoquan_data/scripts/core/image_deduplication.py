@@ -65,6 +65,35 @@ def _avg_hash_bytes(data: bytes):
     except (Image.DecompressionBombWarning, Image.DecompressionBombError, OSError, ValueError):
         return None
 
+
+def perceptual_hash(path: str | Path) -> str:
+    """Return the stable pHash identity for one decodable image.
+
+    Commercial image publication treats a missing pHash as a hard failure; a
+    caller must not silently downgrade cross-execution deduplication to URL or
+    filename comparison.
+    """
+
+    value = _avg_hash(Path(path))
+    if value is None:
+        raise ValueError(f"image perceptual hash unavailable: {path}")
+    return str(value)
+
+
+def perceptual_hash_distance(left: str, right: str) -> int:
+    """Return the Hamming distance between two same-width hexadecimal pHashes."""
+
+    normalized_left = str(left or "").strip().lower()
+    normalized_right = str(right or "").strip().lower()
+    if (
+        not normalized_left
+        or len(normalized_left) != len(normalized_right)
+        or any(char not in "0123456789abcdef" for char in normalized_left + normalized_right)
+    ):
+        raise ValueError("perceptual hashes must be same-width hexadecimal strings")
+    return (int(normalized_left, 16) ^ int(normalized_right, 16)).bit_count()
+
+
 def dedupe_image_payloads(
     payloads: Sequence[dict], *, threshold: int | None = None
 ) -> tuple[list[dict], list[int]]:

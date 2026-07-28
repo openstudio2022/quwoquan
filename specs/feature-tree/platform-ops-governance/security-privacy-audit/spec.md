@@ -39,7 +39,7 @@
 - 本能力必须组合直属 Story 与公开契约，交付“统一发布前与运营期的权限、隐私、审计和供应链检查”所定义的业务结果；失败终态必须可区分且不得伪造成功。
 - 法律正文通过 legal-static 独立包发布，不依赖 App 包、service 包、内容发布包或数据工程内容包。
 - stable URL 与 manifest currentVersion 一致，版本 URL 不可变，prod 发布前先完成 gamma legal-static 探测。
-- alpha / flutter run mock public plane 可直接访问 `/legal/user-agreement`、`/legal/privacy-policy`、`/legal/permissions`、`/legal/third-party-sdk-list`，不得返回 `api mock route is not ready`。
+- alpha / flutter run Remote public plane 可直接访问 `/legal/user-agreement`、`/legal/privacy-policy`、`/legal/permissions`、`/legal/third-party-sdk-list`，不得回退 fixture/mock API 路由。
 - 协议 URL 不可达或返回非成功状态时，App 展示原生错误态、提供重试和返回，不暴露 raw HTTP/WebView 错误页，且不阻断登录协议勾选与验证码登录流程。
 
 <a id="req-002"></a>
@@ -49,7 +49,7 @@
 - 审计留痕：危险动作 / 双签动作 / 放量动作经统一审计事件可检索（对齐 ops-portal 审计）。
 - 法律文本与版本是上架硬阻断项；`/legal/user-agreement`、`/legal/privacy-policy`、`/legal/permissions`、`/legal/third-party-sdk-list` 任一 URL 不可达即 No-Go。
 - 协议正文不得放入其他业务领域服务代码，不随 App、内容页或数据工程内容包一起打包；唯一源目录为 `quwoquan_service/static/legal/`，发布包为 `QWQ_DEPLOY_WORK_ROOT/<target>/packages/legal-static/<version>/`。
-- alpha / `flutter run` 的 mock gateway 必须同样挂载 `legal-static` 的 `/legal/*` 静态目录，禁止回退到 mock 404 HTML 或业务 API mock 路由。
+- alpha / `flutter run` 的 Remote gateway 必须挂载 `legal-static` 的 `/legal/*` 静态目录，禁止回退到 fixture 404 HTML 或业务 API mock 路由。
 - 隐私相关文案与同意版本以 `auth_legal_config.dart` + 登录契约为准，不得在业务代码硬编码第二套版本。
 - 协议页 URL 不可达、HTTP 非成功或 WebView 资源失败时，App 必须展示原生错误态与重试/返回动作；该错误不阻断用户返回登录页、勾选协议与继续验证码登录。
 - 权限用途、SDK 数据类别必须与端侧实际行为一致，禁止低报或漏报。
@@ -72,7 +72,7 @@
 - THEN 直属 Story 共同交付“统一发布前与运营期的权限、隐私、审计和供应链检查”，失败终态可区分且不产生伪成功事实。
 - THEN 法律正文通过 legal-static 独立包发布，不依赖 App 包、service 包、内容发布包或数据工程内容包。
 - THEN stable URL 与 manifest currentVersion 一致，版本 URL 不可变，prod 发布前先完成 gamma legal-static 探测。
-- THEN alpha / flutter run mock public plane 可直接访问 `/legal/user-agreement`、`/legal/privacy-policy`、`/legal/permissions`、`/legal/third-party-sdk-list`，不得返回 `api mock route is not ready`。
+- THEN alpha / flutter run Remote public plane 可直接访问 `/legal/user-agreement`、`/legal/privacy-policy`、`/legal/permissions`、`/legal/third-party-sdk-list`，不得回退 fixture/mock API 路由。
 - THEN 协议 URL 不可达或返回非成功状态时，App 展示原生错误态、提供重试和返回，不暴露 raw HTTP/WebView 错误页，且不阻断登录协议勾选与验证码登录流程。
 
 ## 8. 开放事项

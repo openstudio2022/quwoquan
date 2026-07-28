@@ -223,7 +223,7 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
             ) as issue_session,
         ):
             resolved = stackctl._log_sink_control_query_session(
-                api_base="https://gamma-api.quwoquan-env.test:19000",
+                api_base="https://api.gamma.quwoquan.com:19000",
                 environment="gamma",
                 target_name="gamma-local",
                 resolve_host="127.0.0.1",
@@ -231,7 +231,7 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
 
         self.assertIs(resolved, query_session)
         issue_session.assert_called_once_with(
-            "https://gamma-api.quwoquan-env.test:19000",
+            "https://api.gamma.quwoquan.com:19000",
             environment="gamma",
             target_name="gamma-local",
             profile="product-telemetry-query",

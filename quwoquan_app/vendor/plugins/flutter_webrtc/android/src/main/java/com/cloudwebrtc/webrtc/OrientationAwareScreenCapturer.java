@@ -13,6 +13,7 @@ import android.content.Intent;
 import android.media.projection.MediaProjection;
 import android.view.Surface;
 import android.view.WindowManager;
+import android.view.WindowMetrics;
 import android.app.Activity;
 import android.hardware.display.DisplayManager;
 import android.util.DisplayMetrics;
@@ -77,10 +78,18 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
     }
 
     private boolean isDeviceOrientationPortrait() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            final WindowMetrics metrics = windowManager.getCurrentWindowMetrics();
+            return metrics.getBounds().height() > metrics.getBounds().width();
+        }
+        return isLegacyDeviceOrientationPortrait();
+    }
+
+    @SuppressWarnings("deprecation") // WindowMetrics is available only on API 30+.
+    private boolean isLegacyDeviceOrientationPortrait() {
         final Display display = windowManager.getDefaultDisplay();
         final DisplayMetrics metrics = new DisplayMetrics();
         display.getRealMetrics(metrics);
-        
         return metrics.heightPixels > metrics.widthPixels;
     }
 

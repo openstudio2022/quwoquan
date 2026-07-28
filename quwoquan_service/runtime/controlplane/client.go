@@ -24,19 +24,20 @@ type ConfigResolveResponse struct {
 }
 
 type InstanceConfigReport struct {
-	ID            string `json:"id"`
-	Environment   string `json:"environment"`
-	Cluster       string `json:"cluster"`
-	Service       string `json:"service"`
-	InstanceID    string `json:"instanceId"`
-	ConfigVersion string `json:"configVersion,omitempty"`
-	ImageVersion  string `json:"imageVersion,omitempty"`
-	DesiredHash   string `json:"desiredHash,omitempty"`
-	EffectiveHash string `json:"effectiveHash,omitempty"`
-	InSync        bool   `json:"inSync"`
-	Source        string `json:"source,omitempty"`
-	UpdatedAt     string `json:"updatedAt,omitempty"`
-	LastError     string `json:"lastError,omitempty"`
+	ID                    string `json:"id"`
+	Environment           string `json:"environment"`
+	Cluster               string `json:"cluster"`
+	Service               string `json:"service"`
+	InstanceID            string `json:"instanceId"`
+	ConfigVersion         string `json:"configVersion,omitempty"`
+	ImageVersion          string `json:"imageVersion,omitempty"`
+	ReleaseManifestDigest string `json:"releaseManifestDigest"`
+	DesiredHash           string `json:"desiredHash,omitempty"`
+	EffectiveHash         string `json:"effectiveHash,omitempty"`
+	InSync                bool   `json:"inSync"`
+	Source                string `json:"source,omitempty"`
+	UpdatedAt             string `json:"updatedAt,omitempty"`
+	LastError             string `json:"lastError,omitempty"`
 }
 
 type Client struct {

@@ -19,6 +19,11 @@ from governance.coverage.coverage_merge import (
     normalize_name,
 )
 from governance.coverage.coverage_runtime import now_iso
+from governance.coverage.admin_entity_catalog import (
+    ADMIN_ENTITY_TYPE,
+    ADMIN_ENTITY_TYPE_TAG_REF,
+    admin_entity_candidates,
+)
 from governance.coverage.master_list import (
     iter_master_leaves,
     load_master_list_file,
@@ -46,7 +51,9 @@ def _read_candidates(paths: list[Path]) -> list[dict[str, Any]]:
 
 
 def _master_candidates(provinces: list[str]) -> list[dict[str, Any]]:
-    candidates: list[dict[str, Any]] = []
+    # 全国行政实体与川浙等旅游 POI 共享候选入口，但保持不同 source/canonical
+    # identity；行政实体直接消费 pca + taxonomy，不写入 POI master-list YAML。
+    candidates: list[dict[str, Any]] = admin_entity_candidates(provinces=provinces)
     for path in master_list_files(provinces=provinces):
         data = load_master_list_file(path)
         province = str(data.get("province") or path.parent.name)
@@ -73,6 +80,9 @@ def _master_candidates(provinces: list[str]) -> list[dict[str, Any]]:
 
 
 def _readiness_key(candidate: dict[str, Any]) -> str:
+    canonical_identity = str(candidate.get("canonicalIdentity") or "").strip()
+    if canonical_identity:
+        return canonical_identity
     name = normalize_name(
         str(candidate.get("canonicalName") or candidate.get("name") or "")
     )
@@ -92,6 +102,28 @@ def _candidate_score(candidate: dict[str, Any]) -> tuple[int, int, int]:
         int(isinstance(identity, dict) and any(identity.values())),
         int(isinstance(coordinates, dict) and bool(coordinates)),
         len(candidate.get("typeTagRefs") or []),
+    )
+
+
+def _source_ready_type_evidence(
+    candidate: dict[str, Any],
+) -> tuple[str, list[str]] | None:
+    if candidate.get("candidateKind") == "admin_region":
+        entity_type = str(candidate.get("entityType") or "").strip()
+        type_refs = [
+            str(ref).strip()
+            for ref in candidate.get("typeTagRefs") or []
+            if str(ref).strip()
+        ]
+        if (
+            entity_type == ADMIN_ENTITY_TYPE
+            and ADMIN_ENTITY_TYPE_TAG_REF in type_refs
+        ):
+            return entity_type, type_refs
+        return None
+    return _type_evidence(
+        [candidate],
+        str(candidate.get("name") or ""),
     )
 
 
@@ -122,10 +154,7 @@ def _dedupe_candidates(
                 if province in wanted
             ]
         for item in expanded:
-            classified = _type_evidence(
-                [item],
-                str(item.get("name") or ""),
-            )
+            classified = _source_ready_type_evidence(item)
             if classified is None:
                 continue
             item = {
@@ -278,5 +307,6 @@ __all__ = [
     "_qualify_candidate",
     "_read_candidates",
     "_readiness_key",
+    "_source_ready_type_evidence",
     "_wikipedia_evidence",
 ]

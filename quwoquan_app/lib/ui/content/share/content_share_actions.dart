@@ -116,12 +116,12 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
           );
         default:
           if (context.mounted) {
-            AppToast.show(context, UITextConstants.operationFailed);
+            AppToast.show(context, CreationText.operationFailed);
           }
           return ContentShareActionResult(
             actionId: action.id,
             success: false,
-            message: UITextConstants.operationFailed,
+            message: CreationText.operationFailed,
           );
       }
     } catch (error, stackTrace) {

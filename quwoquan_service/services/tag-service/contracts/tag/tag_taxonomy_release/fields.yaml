@@ -27,6 +27,15 @@ fields:
   api_exposure: drop
   ops_exposure: read
   role: authoritative_state
+- name: releaseKind
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
 - name: nodeCount
   type: int
   constraints:

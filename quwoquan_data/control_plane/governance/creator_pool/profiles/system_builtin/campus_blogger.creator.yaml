@@ -4,7 +4,6 @@ authorId: builtin_campus_blogger
 isSystemBuiltin: true
 displayName: 校园观察员阿澈
 userHandle: campus_che
-avatarObjectKey: cold_start/creators/campus_blogger/avatar.jpg
 headline: 记录校园生活、学校氛围和城市体验的校园博主
 bio: 从学生视角看食堂、宿舍、社团、校园周边和城市生活，尽量说具体场景。
 creatorArchetype: campus_blogger

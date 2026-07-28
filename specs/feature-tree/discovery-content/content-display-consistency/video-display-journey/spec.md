@@ -35,7 +35,7 @@
 <a id="req-002"></a>
 ### REQ-002 视频 feed、沉浸浏览器与作者详情状态一致
 
-- Mock/Remote 模式下状态同步与重入保持均由同一 Provider/Repository 合同覆盖，不维护页面级第二状态源。
+- 四环境 composition 仅通过同一组 typed Remote Query/Command port 同步与恢复状态；测试 double 只存在测试树，不维护 runner fixture、运行时 Mock/Remote 切换或页面级第二状态源。
 
 <a id="req-003"></a>
 ### REQ-003 数据工程导入视频与用户上传视频展示合同一致
@@ -49,9 +49,9 @@
 - compact、regular 与 expanded 视口必须保持文本和控制区不碰撞，并在文字缩放、评论重绑、过滤恢复和媒体重排后保持同一媒体身份。
 
 <a id="req-005"></a>
-### REQ-005 约束：须支持 Mock/Remote 一键切换
+### REQ-005 约束：production Remote-only 与 Alpha/test 隔离
 
-- **约束**：须支持 Mock/Remote 一键切换
+- **约束**：四环境 production composition、runner 与 UAT support 不得提供 Mock/Remote 切换或 fixture override；对象级 typed double 只存在测试树。
 - 按 category=video 隔离，不与图片混用
 - 不得把 `videoUrl` 当图片 URL 交给 image loader
 - 首页、通用视频卡、作品浏览器、沉浸式浏览器首帧态必须消费同一封面优先级，不允许使用无关 seed 图、作者头像、地点图、视频 URL 或端侧运行时临时抽帧。
@@ -153,7 +153,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：Mock/Remote 模式下状态同步与重入保持均由同一 Provider/Repository 合同覆盖，不维护页面级第二状态源。
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：四环境 Remote-only 状态同步与重入保持均由同一 typed port 合同覆盖，测试 double 仅在测试树中且不维护页面级第二状态源。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-003"></a>
@@ -162,7 +162,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：local_contract、api_integration 与 user_acceptance 均证明两类视频通过同一 DTO/read model 展示。
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：三层证据均证明两类视频通过同一 DTO/read model 展示。
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-004"></a>
@@ -171,5 +171,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：两种 profile 的控制层只消费 PlaybackSnapshot，并由 local_contract、受控视觉 UAT 和真实设备 seek/首帧证据共同证明。
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：两种 profile 的控制层只消费 PlaybackSnapshot，并由本地契约、受控视觉验收和真实设备 seek/首帧证据共同证明。
 - 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效

@@ -162,9 +162,9 @@ class _ShareInteractionListState extends ConsumerState<ShareInteractionList> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            const CupertinoActivityIndicator(),
+            AppRequestFeedback.inline(),
             SizedBox(width: AppSpacing.xs),
-            Text(UITextConstants.profileShareLoading),
+            Text(ProfileText.profileShareLoading),
           ],
         ),
       );
@@ -178,14 +178,14 @@ class _ShareInteractionListState extends ConsumerState<ShareInteractionList> {
         onPressed: () => unawaited(
           ref.read(shareInteractionProvider(_bucketKey).notifier).loadMore(),
         ),
-        child: Text(UITextConstants.profileShareLoadFailed),
+        child: Text(ProfileText.profileShareLoadFailed),
       );
     }
     if (!state.hasMore) {
       return Padding(
         padding: EdgeInsets.all(AppSpacing.md),
         child: Text(
-          UITextConstants.profileShareNoMore,
+          ProfileText.profileShareNoMore,
           textAlign: TextAlign.center,
           style: TextStyle(
             color: AppColors.iosSecondaryLabel(context),
@@ -331,10 +331,9 @@ class _GroupHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = switch (group) {
-      ShareInteractionDateGroup.today => UITextConstants.profileShareToday,
-      ShareInteractionDateGroup.yesterday =>
-        UITextConstants.profileShareYesterday,
-      ShareInteractionDateGroup.older => UITextConstants.profileShareOlder,
+      ShareInteractionDateGroup.today => ProfileText.profileShareToday,
+      ShareInteractionDateGroup.yesterday => ProfileText.profileShareYesterday,
+      ShareInteractionDateGroup.older => ProfileText.profileShareOlder,
     };
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -453,7 +452,7 @@ class _InitialErrorState extends StatelessWidget {
           AppSpacing.minInteractiveSize,
         ),
         onPressed: onRetry,
-        child: Text(UITextConstants.profileShareLoadFailed),
+        child: Text(ProfileText.profileShareLoadFailed),
       ),
     );
   }

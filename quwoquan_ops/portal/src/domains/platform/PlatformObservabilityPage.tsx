@@ -132,8 +132,8 @@ export function PlatformObservabilityPage() {
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实可观测数据已接入' : '等待平台控制面连接'}
           </span>
-          <span className={`badge ${firingAlerts.length > 0 ? 'badge--danger' : 'badge--success'}`}>
-            firing={firingAlerts.length}
+          <span className={`badge ${summary ? (firingAlerts.length > 0 ? 'badge--danger' : 'badge--success') : 'badge--warning'}`}>
+            firing={summary ? firingAlerts.length : '—'}
           </span>
           <span className="badge badge--neutral">env={environment}</span>
           <RuntimeErrorBadge error={runtimeError} />
@@ -144,23 +144,23 @@ export function PlatformObservabilityPage() {
       <div className="section-grid section-grid--cards">
         <KpiCard
           label="活动告警"
-          value={String(summary?.activeAlerts ?? activeAlerts.filter((item) => item.status !== 'resolved').length)}
+          value={summary ? String(summary.activeAlerts) : '—'}
           icon={<BellRing size={20} color="#DC2626" />}
-          trendLabel={`${firingAlerts.length} 条待认领`}
+          trendLabel={summary ? `${firingAlerts.length} 条待认领` : '等待控制面投影'}
           trendTone={firingAlerts.length > 0 ? 'negative' : 'positive'}
           description="Alertmanager 推送的 firing/acknowledged 告警集合。"
         />
         <KpiCard
           label="审批与回滚事件"
-          value={String(summary?.approvalCount ?? 0)}
+          value={summary ? String(summary.approvalCount) : '—'}
           icon={<Siren size={20} color="#DC2626" />}
-          trendLabel={`${summary?.auditCount ?? 0} 条审计事件`}
+          trendLabel={summary ? `${summary.auditCount} 条审计事件` : '等待控制面投影'}
           trendTone="warning"
           description="高风险操作的审批与审计已统一沉淀到平台控制面。"
         />
         <KpiCard
           label="24h 运行诊断"
-          value={String(runtimeLogSummary?.totalCount ?? 0)}
+          value={runtimeLogSummary ? String(runtimeLogSummary.totalCount) : '—'}
           icon={<Activity size={20} color="#7C3AED" />}
           trendLabel={runtimeLogsReady ? `${runtimeSignals.length} 个高频 signal` : '等待运行日志查询权限'}
           trendTone={runtimeLogsError ? 'warning' : 'positive'}

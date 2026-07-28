@@ -21,7 +21,7 @@ TEST_ROOTS = (
     ROOT / "quwoquan_service/control-plane",
 )
 SPEC_REF = re.compile(
-    r"spec_ref:\s*(specs/feature-tree/[^\s#]+/spec\.md)#"
+    r"spec_ref:\s*(specs/feature-tree/(?:[^\s#]+/)?spec\.md)#"
     r"((?:uat|dom|sit|gwt)-\d+)",
     re.IGNORECASE,
 )

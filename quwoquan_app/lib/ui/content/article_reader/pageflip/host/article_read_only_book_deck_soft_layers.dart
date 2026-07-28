@@ -105,6 +105,7 @@ extension _ArticleReadOnlyBookDeckSoftLayers on _ArticleReadOnlyBookDeckState {
         backwardLeafFrame: backwardLeafFrame,
         palette: palette,
         progress: progress,
+        sheetLocalPolygon: sheetLocalPolygon,
       );
     }
     final showBackside = _shouldShowSoftFlippingBackside(
@@ -161,6 +162,7 @@ extension _ArticleReadOnlyBookDeckSoftLayers on _ArticleReadOnlyBookDeckState {
     required ArticlePageBackwardLeafFrame backwardLeafFrame,
     required ArticleTemplatePalette palette,
     required double progress,
+    required List<Offset> sheetLocalPolygon,
   }) {
     final coveredWidth =
         (backwardLeafFrame.coveredWidthNormalized * pageSize.width)
@@ -170,11 +172,15 @@ extension _ArticleReadOnlyBookDeckSoftLayers on _ArticleReadOnlyBookDeckState {
         (backwardLeafFrame.totalRectoVisibleWidthNormalized * pageSize.width)
             .clamp(0.0, coveredWidth)
             .toDouble();
-    final versoWidth = math.max(0.0, coveredWidth - rectoWidth).toDouble();
+    final slices = resolveArticlePageBackwardSheetLocalSlices(
+      sheetLocalPolygon: sheetLocalPolygon,
+      coveredWidth: coveredWidth,
+      rectoWidth: rectoWidth,
+    );
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
-        if (rectoWidth > 0.001)
+        if (slices != null && slices.rectoWidth > 0.001)
           _buildBackwardSheetFaceSlice(
             key: const ValueKey<String>(
               'article_backward_flipping_recto_slice',
@@ -182,11 +188,11 @@ extension _ArticleReadOnlyBookDeckSoftLayers on _ArticleReadOnlyBookDeckState {
             context: context,
             pageIndex: pageIndex,
             pageSize: pageSize,
-            left: 0,
-            width: rectoWidth,
+            left: slices.rectoLeft,
+            width: slices.rectoWidth,
             kind: ArticlePageSurfaceKind.front,
           ),
-        if (versoWidth > 0.001)
+        if (slices != null && slices.versoWidth > 0.001)
           _buildBackwardSheetFaceSlice(
             key: const ValueKey<String>(
               'article_backward_flipping_verso_slice',
@@ -194,15 +200,15 @@ extension _ArticleReadOnlyBookDeckSoftLayers on _ArticleReadOnlyBookDeckState {
             context: context,
             pageIndex: backFacePageIndex,
             pageSize: pageSize,
-            left: rectoWidth,
-            width: versoWidth,
+            left: slices.versoLeft,
+            width: slices.versoWidth,
             kind: ArticlePageSurfaceKind.back,
           ),
         _buildFlippingSurfaceOverlay(
           palette: palette,
           direction: StPageFlipDirection.back,
           progress: progress,
-          showBackside: versoWidth > 0.001,
+          showBackside: slices != null && slices.versoWidth > 0.001,
         ),
       ],
     );
@@ -217,18 +223,20 @@ extension _ArticleReadOnlyBookDeckSoftLayers on _ArticleReadOnlyBookDeckState {
     required double width,
     required ArticlePageSurfaceKind kind,
   }) {
-    return Positioned(
+    return Positioned.fill(
       key: key,
-      left: left,
-      top: 0,
-      width: width,
-      height: pageSize.height,
-      child: ClipRect(
-        child: Transform.translate(
-          offset: Offset(-left, 0),
-          child: SizedBox(
-            width: pageSize.width,
-            height: pageSize.height,
+      child: ClipPath(
+        clipper: ArticlePolygonClipper(<Offset>[
+          Offset(left, 0),
+          Offset(left + width, 0),
+          Offset(left + width, pageSize.height),
+          Offset(left, pageSize.height),
+        ]),
+        clipBehavior: Clip.hardEdge,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox.fromSize(
+            size: pageSize,
             child: _buildCachedPageSurface(
               context,
               pageIndex,
@@ -497,7 +505,7 @@ extension _ArticleReadOnlyBookDeckSoftLayers on _ArticleReadOnlyBookDeckState {
     final position = convertBookPointToViewport(
       layerOrigin,
       bounds,
-      direction: softLayerViewportDirection(direction),
+      direction: softLayerViewportDirection(geometryDirection),
     );
     final paintBounds = isFlippingPage
         ? resolveSoftLayerPaintBounds(pageSize: pageSize, polygon: polygon)
@@ -524,32 +532,37 @@ extension _ArticleReadOnlyBookDeckSoftLayers on _ArticleReadOnlyBookDeckState {
         ),
         child: ClipPath(
           clipper: ArticlePolygonClipper(shiftedPolygon),
-          child: SizedBox(
-            width: pageSize.width,
-            height: pageSize.height,
-            child: isFlippingPage
-                ? _buildSoftFlippingPageSurface(
-                    context: context,
-                    pageIndex: pageIndex,
-                    pageSize: pageSize,
-                    direction: direction,
-                    progress: progress,
-                    visualAngle: surfaceAngle ?? angle,
-                    backFacePageIndex: backFacePageIndex,
-                    backwardLeafFrame: backwardLeafFrame,
-                    backwardFoldLine: localBackwardFoldLine,
-                    backwardFreeEdgeLine: localBackwardFreeEdgeLine,
-                    sheetLocalPolygon: polygon,
-                    sheetAreaPolygon: useBackwardMaterialSheet ? polygon : area,
-                    sheetMaterialLocalPolygon: sheetMaterialLocalPolygon,
-                  )
-                : _buildBottomProjectedPageSurface(
-                    context: context,
-                    pageIndex: pageIndex,
-                    pageSize: pageSize,
-                    direction: direction,
-                    shadow: projectedShadow,
-                  ),
+          child: Transform.translate(
+            offset: -paintOrigin,
+            child: SizedBox(
+              width: pageSize.width,
+              height: pageSize.height,
+              child: isFlippingPage
+                  ? _buildSoftFlippingPageSurface(
+                      context: context,
+                      pageIndex: pageIndex,
+                      pageSize: pageSize,
+                      direction: direction,
+                      progress: progress,
+                      visualAngle: surfaceAngle ?? angle,
+                      backFacePageIndex: backFacePageIndex,
+                      backwardLeafFrame: backwardLeafFrame,
+                      backwardFoldLine: localBackwardFoldLine,
+                      backwardFreeEdgeLine: localBackwardFreeEdgeLine,
+                      sheetLocalPolygon: shiftedPolygon,
+                      sheetAreaPolygon: useBackwardMaterialSheet
+                          ? polygon
+                          : area,
+                      sheetMaterialLocalPolygon: sheetMaterialLocalPolygon,
+                    )
+                  : _buildBottomProjectedPageSurface(
+                      context: context,
+                      pageIndex: pageIndex,
+                      pageSize: pageSize,
+                      direction: direction,
+                      shadow: projectedShadow,
+                    ),
+            ),
           ),
         ),
       ),

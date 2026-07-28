@@ -1,11 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/core/platform/cloud_transport_failure_classifier.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 void main() {
@@ -72,8 +77,40 @@ void main() {
       TimeoutException('slow'),
       requestPath: '/assistant/run',
     );
-    final offline = CloudErrorMapper.runtimeFailureFromException(
+    final genericConnection = CloudErrorMapper.runtimeFailureFromException(
       http.ClientException('offline'),
+    );
+    const connectionRefusedError = SocketException(
+      'Connection refused',
+      osError: OSError('Connection refused', 61),
+    );
+    final connectionRefused = CloudErrorMapper.runtimeFailureFromException(
+      connectionRefusedError,
+      transportFailure: classifyCloudTransportFailure(connectionRefusedError),
+    );
+    const nameResolutionError = SocketException(
+      'Failed host lookup',
+      osError: OSError('nodename nor servname provided', 8),
+    );
+    final nameResolution = CloudErrorMapper.runtimeFailureFromException(
+      nameResolutionError,
+      transportFailure: classifyCloudTransportFailure(nameResolutionError),
+    );
+    const offlineError = SocketException(
+      'Network is unreachable',
+      osError: OSError('Network is unreachable', 51),
+    );
+    final offline = CloudErrorMapper.runtimeFailureFromException(
+      offlineError,
+      transportFailure: classifyCloudTransportFailure(offlineError),
+    );
+    const tlsError = TlsException('certificate verify failed');
+    final tls = CloudErrorMapper.runtimeFailureFromException(
+      tlsError,
+      transportFailure: classifyCloudTransportFailure(tlsError),
+    );
+    final cancelled = CloudErrorMapper.runtimeFailureFromException(
+      const CloudOperationCancelledException(),
     );
     final invalidJson = CloudErrorMapper.runtimeFailureFromException(
       const FormatException('bad json'),
@@ -87,9 +124,30 @@ void main() {
 
     expect(timeout.kind, RuntimeFailureKind.timeout);
     expect(timeout.code, RuntimeFailureCodes.appTimeoutRequestTimeout);
+    expect(genericConnection.kind, RuntimeFailureKind.network);
+    expect(
+      genericConnection.code,
+      RuntimeFailureCodes.appNetworkConnectionFailed,
+    );
+    expect(
+      connectionRefused.code,
+      RuntimeFailureCodes.appNetworkConnectionRefused,
+    );
+    expect(
+      nameResolution.code,
+      RuntimeFailureCodes.appNetworkNameResolutionFailed,
+    );
     expect(offline.kind, RuntimeFailureKind.network);
     expect(offline.code, RuntimeFailureCodes.appNetworkOffline);
     expect(offline.origin, RuntimeFailureOrigin.environment);
+    expect(offline.context.attributes.single.key, 'platformErrorCode');
+    expect(offline.context.attributes.single.value, '51');
+    expect(tls.code, RuntimeFailureCodes.appNetworkSecureConnectionFailed);
+    expect(tls.nature, RuntimeFailureNature.permanent);
+    expect(cancelled.kind, RuntimeFailureKind.cancelled);
+    expect(cancelled.code, RuntimeFailureCodes.appCancelledOperationCancelled);
+    expect(cancelled.recovery.action, 'absorb');
+    expect(cancelled.recovery.disruptionLevel, 'silent');
     expect(invalidJson.kind, RuntimeFailureKind.parsing);
     expect(invalidState.kind, RuntimeFailureKind.contract);
     expect(invalidState.code, RuntimeFailureCodes.appContractInvalidResponse);
@@ -98,6 +156,57 @@ void main() {
     expect(
       invalidArgument.code,
       RuntimeFailureCodes.appContractInvalidResponse,
+    );
+  });
+
+  test('CloudErrorMapper preserves distinct HTTP failure kinds', () {
+    const cases = <int, RuntimeFailureKind>{
+      400: RuntimeFailureKind.validation,
+      401: RuntimeFailureKind.auth,
+      403: RuntimeFailureKind.permission,
+      404: RuntimeFailureKind.notFound,
+      409: RuntimeFailureKind.validation,
+      422: RuntimeFailureKind.validation,
+      429: RuntimeFailureKind.rateLimited,
+      500: RuntimeFailureKind.internal,
+      503: RuntimeFailureKind.unavailable,
+      504: RuntimeFailureKind.timeout,
+    };
+
+    for (final entry in cases.entries) {
+      final failure = CloudErrorMapper.runtimeFailureFromStatusCode(
+        entry.key,
+        requestPath: '/content/feed',
+      );
+      expect(
+        failure.kind,
+        entry.value,
+        reason: 'HTTP ${entry.key} must retain its confirmed semantic kind',
+      );
+      expect(failure.transportStatus, entry.key);
+    }
+  });
+
+  test('CloudHttpClient 通过平台分类端口保留 Socket 失败语义', () async {
+    const socketError = SocketException(
+      'Connection refused',
+      osError: OSError('Connection refused', 61),
+    );
+    final client = CloudHttpClient(
+      client: MockClient((_) async => throw socketError),
+      transportFailureClassifier: classifyCloudTransportFailure,
+    );
+    addTearDown(client.close);
+
+    await expectLater(
+      client.get(Uri.parse('https://api.quwoquan.test/content/feed')),
+      throwsA(
+        isA<CloudException>().having(
+          (error) => error.runtimeFailure.code,
+          'runtimeFailure.code',
+          RuntimeFailureCodes.appNetworkConnectionRefused,
+        ),
+      ),
     );
   });
 

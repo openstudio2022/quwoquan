@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show SemanticsFlag;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,8 +11,20 @@ import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
+Finder _decorativeCircleWithin(Finder ancestor) {
+  return find.descendant(
+    of: ancestor,
+    matching: find.byWidgetPredicate((widget) {
+      if (widget is! Container || widget.decoration is! BoxDecoration) {
+        return false;
+      }
+      return (widget.decoration! as BoxDecoration).shape == BoxShape.circle;
+    }),
+  );
+}
+
 void main() {
-  testWidgets('AppPageErrorState 使用柔和整页空态和再试一次动作', (tester) async {
+  testWidgets('AppPageErrorState 使用柔和整页空态和重新加载动作', (tester) async {
     var retryCount = 0;
     await tester.pumpWidget(
       CupertinoApp(
@@ -19,11 +32,11 @@ void main() {
           semantic: const UiErrorSemantic(
             category: UiErrorCategory.pageLoad,
             scope: UiErrorScope.page,
-            title: UITextConstants.temporarilyUnavailable,
-            message: UITextConstants.checkNetworkAndTryAgain,
+            title: SearchText.recoveryReloadLaterTitle,
+            message: SearchText.recoveryReloadLaterMessage,
             primaryAction: UiErrorAction(
               type: UiErrorActionType.retry,
-              label: UITextConstants.tryAgain,
+              label: SearchText.reload,
             ),
           ),
           onAction: (_) async => retryCount++,
@@ -31,28 +44,26 @@ void main() {
       ),
     );
 
-    expect(find.text(UITextConstants.temporarilyUnavailable), findsOneWidget);
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('app-page-error-close-button')),
       findsNothing,
     );
-    expect(find.text(UITextConstants.back), findsNothing);
-    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
-    expect(find.text(UITextConstants.loadFailed), findsNothing);
-    expect(find.text(UITextConstants.retry), findsNothing);
-    expect(UITextConstants.checkNetworkAndTryAgain, isNot(contains('再试一次')));
-    expect(UITextConstants.checkNetworkAndTryAgain, isNot(contains('稍后')));
+    expect(find.text(ContentText.back), findsNothing);
+    expect(find.text(SearchText.reload), findsOneWidget);
+    expect(find.text(FoundationText.loadFailed), findsNothing);
+    expect(find.text(FoundationText.retry), findsNothing);
     final defaultText = tester.widget<DefaultTextStyle>(
       find
           .ancestor(
-            of: find.text(UITextConstants.temporarilyUnavailable),
+            of: find.text(SearchText.recoveryReloadLaterTitle),
             matching: find.byType(DefaultTextStyle),
           )
           .first,
     );
     expect(defaultText.style.decoration, TextDecoration.none);
 
-    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.tap(find.text(SearchText.reload));
     await tester.pump();
     expect(retryCount, 1);
   });
@@ -64,20 +75,85 @@ void main() {
           semantic: UiErrorSemantic(
             category: UiErrorCategory.pageLoad,
             scope: UiErrorScope.page,
-            title: UITextConstants.temporarilyUnavailable,
-            message: UITextConstants.checkNetworkAndTryAgain,
+            title: SearchText.recoveryReloadLaterTitle,
+            message: SearchText.recoveryReloadLaterMessage,
             primaryAction: UiErrorAction(
               type: UiErrorActionType.retry,
-              label: UITextConstants.tryAgain,
+              label: SearchText.reload,
             ),
           ),
         ),
       ),
     );
 
-    expect(find.text(UITextConstants.back), findsNothing);
+    expect(find.text(ContentText.back), findsNothing);
     expect(find.byIcon(CupertinoIcons.xmark), findsNothing);
-    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+    expect(find.text(SearchText.reload), findsNothing);
+  });
+
+  testWidgets('AppPageErrorState 用户树不展示图标或技术诊断', (tester) async {
+    await tester.pumpWidget(
+      const CupertinoApp(
+        home: AppPageErrorState(
+          semantic: UiErrorSemantic(
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+            title: SearchText.recoveryReloadLaterTitle,
+            message: SearchText.recoveryReloadLaterMessage,
+            sourceCode: 'APP.NETWORK.connection_refused',
+            sourceOperationId: 'GetFeed',
+            sourceRouteId: '/content/feed',
+            requestId: 'request-1',
+            traceId: 'trace-1',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(Icon), findsNothing);
+    expect(find.textContaining('GetFeed'), findsNothing);
+    expect(find.textContaining('APP.NETWORK.connection_refused'), findsNothing);
+    expect(find.textContaining('/content/feed'), findsNothing);
+    expect(find.textContaining('request-1'), findsNothing);
+    expect(find.textContaining('trace-1'), findsNothing);
+    final semantics = tester.getSemantics(
+      find.text(SearchText.recoveryReloadLaterTitle),
+    );
+    expect(semantics.hasFlag(SemanticsFlag.isLiveRegion), isTrue);
+  });
+
+  testWidgets('429 主操作在 Retry-After 倒计时结束前不可触发', (tester) async {
+    var retryCount = 0;
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: AppPageErrorState(
+          semantic: const UiErrorSemantic(
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+            title: SearchText.recoveryWaitThenReloadTitle,
+            message: '操作有点频繁，2 秒后可以重新加载。',
+            sourceCode: 'CONTENT.USER.rate_limited',
+            primaryAction: UiErrorAction(
+              type: UiErrorActionType.retry,
+              label: SearchText.reload,
+              availableAfterSeconds: 2,
+            ),
+          ),
+          onAction: (_) async => retryCount++,
+        ),
+      ),
+    );
+
+    expect(find.text('2 秒后加载'), findsOneWidget);
+    await tester.tap(find.text('2 秒后加载'));
+    expect(retryCount, 0);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('1 秒后加载'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text(SearchText.reload), findsOneWidget);
+    await tester.tap(find.text(SearchText.reload));
+    await tester.pump();
+    expect(retryCount, 1);
   });
 
   testWidgets('AppPageErrorState 统一结算错误 TTI 与恢复 outcome', (tester) async {
@@ -98,14 +174,14 @@ void main() {
           semantic: const UiErrorSemantic(
             category: UiErrorCategory.pageLoad,
             scope: UiErrorScope.page,
-            title: UITextConstants.temporarilyUnavailable,
-            message: UITextConstants.checkNetworkAndTryAgain,
+            title: SearchText.recoveryReloadLaterTitle,
+            message: SearchText.recoveryReloadLaterMessage,
             sourceCode: 'CONTENT.SYSTEM.read_unavailable',
             sourceSurfaceId: 'home_feed',
             recoveryAction: RuntimeRecoveryAction.retry,
             primaryAction: UiErrorAction(
               type: UiErrorActionType.retry,
-              label: UITextConstants.tryAgain,
+              label: SearchText.reload,
             ),
           ),
           onAction: (_) async {},
@@ -126,7 +202,7 @@ void main() {
     expect(shown.extensions['surfaceId'], 'home_feed');
     expect(shown.extensions['errorCode'], 'CONTENT.SYSTEM.read_unavailable');
 
-    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.tap(find.text(SearchText.reload));
     await tester.pumpAndSettle();
 
     final outcomes = recorder.records
@@ -155,13 +231,13 @@ void main() {
           semantic: const UiErrorSemantic(
             category: UiErrorCategory.pageLoad,
             scope: UiErrorScope.page,
-            title: UITextConstants.temporarilyUnavailable,
-            message: UITextConstants.checkNetworkAndTryAgain,
+            title: SearchText.recoveryReloadLaterTitle,
+            message: SearchText.recoveryReloadLaterMessage,
             sourceSurfaceId: 'home_feed',
             recoveryAction: RuntimeRecoveryAction.retry,
             primaryAction: UiErrorAction(
               type: UiErrorActionType.retry,
-              label: UITextConstants.tryAgain,
+              label: SearchText.reload,
             ),
           ),
           onAction: (_) async => retryCount += 1,
@@ -170,7 +246,7 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.tap(find.text(SearchText.reload));
     await tester.pump();
 
     expect(retryCount, 1);
@@ -199,11 +275,11 @@ void main() {
           semantic: UiErrorSemantic(
             category: UiErrorCategory.sectionLoad,
             scope: UiErrorScope.section,
-            title: UITextConstants.commentLoadFailedTitle,
-            message: UITextConstants.pageLoadFailedMessage,
+            title: SearchText.recoveryReloadLaterTitle,
+            message: SearchText.recoveryReloadLaterMessage,
             primaryAction: UiErrorAction(
               type: UiErrorActionType.retry,
-              label: UITextConstants.tryAgain,
+              label: SearchText.reload,
             ),
           ),
         ),
@@ -212,13 +288,11 @@ void main() {
 
     expect(find.byType(AppSectionErrorState), findsOneWidget);
     expect(find.byType(AppSectionErrorCard), findsNothing);
-    expect(find.text(UITextConstants.commentLoadFailedTitle), findsOneWidget);
-    expect(UITextConstants.pageLoadFailedMessage, isNot(contains('再试一次')));
-    expect(UITextConstants.pageLoadFailedMessage, isNot(contains('稍后')));
-    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+    expect(find.text(SearchText.reload), findsNothing);
   });
 
-  testWidgets('AppFormErrorCard 使用透明统一错误行并提供 44dp 恢复动作', (tester) async {
+  testWidgets('AppFormErrorCard 使用无图标错误行并保留 44dp 恢复动作', (tester) async {
     var retryCount = 0;
     await tester.pumpWidget(
       CupertinoApp(
@@ -241,7 +315,7 @@ void main() {
 
     final semantics = tester.widgetList<Semantics>(find.byType(Semantics));
     expect(semantics.any((node) => node.properties.liveRegion == true), isTrue);
-    expect(find.byIcon(CupertinoIcons.exclamationmark_circle), findsOneWidget);
+    expect(find.byType(Icon), findsNothing);
     final message = tester.widget<Text>(find.text('验证码发送失败，请重试'));
     expect(message.style?.fontSize, AppTypography.inlineError);
     expect(message.style?.fontWeight, AppTypography.inlineErrorWeight);
@@ -282,7 +356,7 @@ void main() {
     expect(semantics.any((node) => node.properties.liveRegion == true), isTrue);
   });
 
-  testWidgets('AppInlineFieldError 使用统一错误色和 16px 图标', (tester) async {
+  testWidgets('AppInlineFieldError 使用统一错误色且不展示错误图标', (tester) async {
     await tester.pumpWidget(
       const CupertinoApp(home: AppInlineFieldError(message: '请输入正确的手机号')),
     );
@@ -291,10 +365,7 @@ void main() {
     final context = tester.element(find.text('请输入正确的手机号'));
     expect(text.style?.color, AppColors.errorForeground(context));
     expect(text.style?.fontSize, AppTypography.inlineError);
-    final icon = tester.widget<Icon>(
-      find.byIcon(CupertinoIcons.exclamationmark_circle),
-    );
-    expect(icon.size, AppSpacing.inlineErrorIconSize);
+    expect(find.byType(Icon), findsNothing);
     final semantics = tester.widgetList<Semantics>(find.byType(Semantics));
     expect(semantics.any((node) => node.properties.liveRegion == true), isTrue);
   });
@@ -328,8 +399,8 @@ void main() {
           semantic: UiErrorSemantic(
             category: UiErrorCategory.pageLoad,
             scope: UiErrorScope.page,
-            title: UITextConstants.temporarilyUnavailable,
-            message: UITextConstants.checkNetworkAndTryAgain,
+            title: FoundationText.temporarilyUnavailable,
+            message: FoundationText.checkNetworkAndTryAgain,
             appearanceMode: UiErrorAppearanceMode.light,
           ),
         ),
@@ -337,7 +408,7 @@ void main() {
     );
 
     final titleText = tester.widget<Text>(
-      find.text(UITextConstants.temporarilyUnavailable),
+      find.text(FoundationText.temporarilyUnavailable),
     );
     final titleColor = titleText.style!.color!;
     expect(titleColor.computeLuminance(), lessThan(0.5));
@@ -360,16 +431,63 @@ void main() {
           semantic: UiErrorSemantic(
             category: UiErrorCategory.backgroundAction,
             scope: UiErrorScope.section,
-            title: UITextConstants.temporarilyUnavailable,
-            message: UITextConstants.refreshSoftFailed,
+            title: FoundationText.temporarilyUnavailable,
+            message: FoundationText.refreshSoftFailed,
             presentation: UiErrorPresentation.transientNotice,
           ),
         ),
       ),
     );
 
-    expect(find.text(UITextConstants.refreshSoftFailed), findsOneWidget);
-    expect(find.text(UITextConstants.tryAgain), findsNothing);
+    expect(find.text(FoundationText.refreshSoftFailed), findsOneWidget);
+    expect(find.text(ContentText.tryAgain), findsNothing);
+    expect(
+      _decorativeCircleWithin(find.byType(AppTransientErrorNotice)),
+      findsNothing,
+    );
+  });
+
+  testWidgets('区块错误与权限 gate 不展示装饰性前导圆点并保留动作', (tester) async {
+    var actionCount = 0;
+    const semantic = UiErrorSemantic(
+      category: UiErrorCategory.sectionLoad,
+      scope: UiErrorScope.section,
+      title: SearchText.recoveryReloadLaterTitle,
+      message: SearchText.recoveryReloadLaterMessage,
+      primaryAction: UiErrorAction(
+        type: UiErrorActionType.retry,
+        label: SearchText.reload,
+      ),
+    );
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Column(
+          children: <Widget>[
+            AppSectionErrorCard(
+              semantic: semantic,
+              onAction: (_) async => actionCount += 1,
+            ),
+            AppInlineGateState(
+              semantic: semantic,
+              onAction: (_) async => actionCount += 1,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(
+      _decorativeCircleWithin(find.byType(AppSectionErrorCard)),
+      findsNothing,
+    );
+    expect(
+      _decorativeCircleWithin(find.byType(AppInlineGateState)),
+      findsNothing,
+    );
+    expect(find.text(SearchText.reload), findsNWidgets(2));
+    await tester.tap(find.text(SearchText.reload).first);
+    await tester.pump();
+    expect(actionCount, 1);
   });
 
   testWidgets('AppListAppendErrorFooter 渲染分页失败轻提示并支持点击重试', (tester) async {
@@ -381,11 +499,11 @@ void main() {
             category: UiErrorCategory.listAppend,
             scope: UiErrorScope.section,
             title: '继续加载没成功',
-            message: UITextConstants.appendSoftFailed,
+            message: FoundationText.appendSoftFailed,
             presentation: UiErrorPresentation.appendFooter,
             primaryAction: UiErrorAction(
               type: UiErrorActionType.retry,
-              label: UITextConstants.tryAgain,
+              label: ContentText.tryAgain,
             ),
           ),
           onAction: (_) async => retryCount++,
@@ -393,10 +511,10 @@ void main() {
       ),
     );
 
-    expect(find.text(UITextConstants.appendSoftFailed), findsOneWidget);
-    expect(find.text(UITextConstants.loadFailed), findsNothing);
+    expect(find.text(FoundationText.appendSoftFailed), findsOneWidget);
+    expect(find.text(FoundationText.loadFailed), findsNothing);
 
-    await tester.tap(find.text(UITextConstants.appendSoftFailed));
+    await tester.tap(find.text(FoundationText.appendSoftFailed));
     await tester.pump();
     expect(retryCount, 1);
   });
@@ -429,7 +547,7 @@ void main() {
 
     expect(find.byType(CupertinoAlertDialog), findsOneWidget);
     expect(find.text('提交未完成'), findsOneWidget);
-    expect(find.text(UITextConstants.gotIt), findsOneWidget);
+    expect(find.text(ContentText.gotIt), findsOneWidget);
   });
 }
 

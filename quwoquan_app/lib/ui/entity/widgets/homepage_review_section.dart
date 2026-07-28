@@ -202,8 +202,8 @@ final class _HomepageReviewSectionState
       AppToast.show(
         context,
         isUpdate
-            ? UITextConstants.homepageReviewUpdated
-            : UITextConstants.homepageReviewSubmitted,
+            ? ObjectHomepageText.homepageReviewUpdated
+            : ObjectHomepageText.homepageReviewSubmitted,
       );
       unawaited(
         ref
@@ -272,17 +272,17 @@ final class _HomepageReviewSectionState
     final confirmed = await showCupertinoDialog<bool>(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: Text(UITextConstants.homepageReviewDeleteConfirmTitle),
-        content: Text(UITextConstants.homepageReviewDeleteConfirmMessage),
+        title: Text(ObjectHomepageText.homepageReviewDeleteConfirmTitle),
+        content: Text(ObjectHomepageText.homepageReviewDeleteConfirmMessage),
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(UITextConstants.cancel),
+            child: Text(FoundationText.cancel),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(UITextConstants.homepageReviewDeleteAction),
+            child: Text(ObjectHomepageText.homepageReviewDeleteAction),
           ),
         ],
       ),
@@ -294,7 +294,7 @@ final class _HomepageReviewSectionState
           .read(homepageReviewCommandWriterProvider)
           .delete(DeleteHomepageReviewCommand(reviewId: mine.id));
       if (!mounted) return;
-      AppToast.show(context, UITextConstants.homepageReviewDeleted);
+      AppToast.show(context, ObjectHomepageText.homepageReviewDeleted);
       unawaited(
         ref
             .read(journeyEventTrackerProvider)
@@ -327,7 +327,7 @@ final class _HomepageReviewSectionState
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     if (_errorSemantic case final semantic?) {
       return AppSectionErrorState(
@@ -348,7 +348,7 @@ final class _HomepageReviewSectionState
           children: <Widget>[
             Expanded(
               child: Text(
-                UITextConstants.homepageReviewSectionTitle,
+                ObjectHomepageText.homepageReviewSectionTitle,
                 style: TextStyle(
                   fontSize: AppTypography.iosTitle3,
                   fontWeight: AppTypography.semiBold,
@@ -365,8 +365,8 @@ final class _HomepageReviewSectionState
                   : () => unawaited(_openWriteSheet()),
               child: Text(
                 mineActive
-                    ? UITextConstants.homepageReviewEditAction
-                    : UITextConstants.homepageReviewWriteAction,
+                    ? ObjectHomepageText.homepageReviewEditAction
+                    : ObjectHomepageText.homepageReviewWriteAction,
                 style: TextStyle(
                   fontSize: AppTypography.iosBody,
                   color: AppColors.primaryColor,
@@ -385,7 +385,7 @@ final class _HomepageReviewSectionState
                   children: <Widget>[
                     Expanded(
                       child: Text(
-                        UITextConstants.homepageReviewMineLabel,
+                        ObjectHomepageText.homepageReviewMineLabel,
                         style: TextStyle(
                           fontSize: AppTypography.iosFootnote,
                           color: AppColors.iosSecondaryLabel(context),
@@ -429,7 +429,7 @@ final class _HomepageReviewSectionState
           if (_nextCursor != null)
             CupertinoButton(
               onPressed: () => unawaited(_loadMore()),
-              child: Text(UITextConstants.myFootprintLoadMore),
+              child: Text(FoundationText.myFootprintLoadMore),
             ),
         ],
       ],
@@ -455,7 +455,7 @@ final class _HomepageReviewTile extends StatelessWidget {
               child: Text(
                 displayName?.isNotEmpty == true
                     ? displayName!
-                    : UITextConstants.homepageReviewAnonymousAuthor,
+                    : ObjectHomepageText.homepageReviewAnonymousAuthor,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -537,7 +537,7 @@ final class _HomepageReviewEmptyState extends StatelessWidget {
         ),
         SizedBox(height: AppSpacing.intraGroupXs),
         Text(
-          UITextConstants.homepageReviewEmptyTitle,
+          ObjectHomepageText.homepageReviewEmptyTitle,
           style: TextStyle(
             fontSize: AppTypography.iosSubheadline,
             fontWeight: AppTypography.medium,
@@ -546,7 +546,7 @@ final class _HomepageReviewEmptyState extends StatelessWidget {
         ),
         SizedBox(height: AppSpacing.intraGroupXs),
         Text(
-          UITextConstants.homepageReviewEmptyDescription,
+          ObjectHomepageText.homepageReviewEmptyDescription,
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: AppTypography.iosFootnote,

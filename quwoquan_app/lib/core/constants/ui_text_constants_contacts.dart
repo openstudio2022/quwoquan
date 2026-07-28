@@ -1,6 +1,6 @@
 part of 'ui_text_constants.dart';
 
-abstract final class _UITextContacts {
+abstract final class ContactText {
   static const String circleSubmitPost = '向圈子投稿';
   static const String addContact = '添加';
   static const String searchCircleFallback = '圈子';

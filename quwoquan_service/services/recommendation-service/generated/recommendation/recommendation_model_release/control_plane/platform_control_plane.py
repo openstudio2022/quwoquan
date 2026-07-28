@@ -134,26 +134,19 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "object_type": "config_instance_report",
       "operations": [
         {
-          "actor": "account",
-          "auth_mode": "required",
+          "contract_operation_id": "ops.config_instance_report.ListConfigInstanceReports",
           "method": "GET",
           "operation": "ListConfigInstanceReports",
-          "ownership_policy": "operator_scope",
           "path": "/control-plane/platform/configs/instances",
-          "principal": "operator",
           "scopes": [
             "ops.platform.config.read"
           ]
         },
         {
-          "actor": "account",
-          "auth_mode": "required",
-          "idempotency": "payload_digest_server_side",
+          "contract_operation_id": "ops.config_instance_report.ReportConfigInstance",
           "method": "POST",
           "operation": "ReportConfigInstance",
-          "ownership_policy": "service_instance_bound",
           "path": "/control-plane/platform/configs/instances/{instanceId}:report",
-          "principal": "service",
           "scopes": [
             "ops.platform.config.ack"
           ]
@@ -177,12 +170,12 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         }
       ],
       "deployment_profile": "batch_heavy",
-      "label": "配置发布单",
-      "object_type": "config_release",
+      "label": "发布候选 ACK",
+      "object_type": "release_candidate",
       "operations": [
         {
           "method": "GET",
-          "operation": "ListConfigReleases",
+          "operation": "ListReleaseCandidateAcks",
           "path": "/control-plane/platform/releases",
           "scopes": [
             "ops.platform.rollout.read"
@@ -198,9 +191,9 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
         }
       ],
       "risk_level": "critical",
-      "source_entity": "ConfigRelease",
-      "view_kind": "release",
-      "view_model": "ConfigRelease"
+      "source_entity": "ConfigInstanceReport",
+      "view_kind": "snapshot",
+      "view_model": "ReleaseManifestCandidate"
     },
     {
       "deployment_profile": "audit_heavy",

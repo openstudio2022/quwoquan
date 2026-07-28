@@ -70,7 +70,7 @@ class _AddContactPageState extends ConsumerState<AddContactPage> {
       });
       AppToast.show(
         context,
-        UITextConstants.addContactRecentDiscoveryDismissed,
+        ContentText.addContactRecentDiscoveryDismissed,
       );
       unawaited(
         ref
@@ -149,7 +149,7 @@ class _AddContactPageState extends ConsumerState<AddContactPage> {
           },
         ),
         middle: Text(
-          UITextConstants.addContactSheetTitle,
+          ContactText.addContactSheetTitle,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
       ),
@@ -160,14 +160,14 @@ class _AddContactPageState extends ConsumerState<AddContactPage> {
             Semantics(
               key: const ValueKey<String>('add-contact-search-entry'),
               button: true,
-              label: UITextConstants.addContactSearchHubPlaceholder,
+              label: ContactText.addContactSearchHubPlaceholder,
               onTap: _openSearch,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: _openSearch,
                 child: AbsorbPointer(
                   child: AppSearchField(
-                    placeholder: UITextConstants.addContactSearchHubPlaceholder,
+                    placeholder: ContactText.addContactSearchHubPlaceholder,
                   ),
                 ),
               ),
@@ -178,8 +178,8 @@ class _AddContactPageState extends ConsumerState<AddContactPage> {
                 children: <Widget>[
                   AddContactEntryCard(
                     icon: CupertinoIcons.qrcode_viewfinder,
-                    title: UITextConstants.editProfileQrScanAction,
-                    subtitle: UITextConstants.addContactScanEntrySubtitle,
+                    title: ProfileText.editProfileQrScanAction,
+                    subtitle: ContactText.addContactScanEntrySubtitle,
                     showDivider: caps.contacts,
                     onTap: () => _openEntry(
                       'open_contact_scan',
@@ -189,8 +189,8 @@ class _AddContactPageState extends ConsumerState<AddContactPage> {
                   if (caps.contacts)
                     AddContactEntryCard(
                       icon: CupertinoIcons.person_2_fill,
-                      title: UITextConstants.addContactPhoneEntryTitle,
-                      subtitle: UITextConstants.addContactPhoneEntrySubtitle,
+                      title: ContactText.addContactPhoneEntryTitle,
+                      subtitle: ContactText.addContactPhoneEntrySubtitle,
                       onTap: () => _openEntry(
                         'open_phone_contacts',
                         AppRoutePaths.addContactPhone,
@@ -250,8 +250,8 @@ class _LatestContactDiscoveryCard extends StatelessWidget {
         if (snapshot.connectionState != ConnectionState.done) {
           return const _InlineQrStateCard(
             icon: CupertinoIcons.person_2,
-            title: UITextConstants.addContactRecentDiscoveryTitle,
-            body: UITextConstants.loading,
+            title: ContentText.addContactRecentDiscoveryTitle,
+            body: FoundationText.loading,
           );
         }
         final result = snapshot.data;
@@ -281,7 +281,7 @@ class _LatestContactDiscoveryCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        UITextConstants.addContactRecentDiscoveryTitle,
+                        ContentText.addContactRecentDiscoveryTitle,
                         style: TextStyle(
                           color: AppColors.iosLabel(context),
                           fontSize: AppTypography.iosBody,
@@ -307,7 +307,7 @@ class _LatestContactDiscoveryCard extends StatelessWidget {
                   ),
                   onPressed: () => onDismiss(result),
                   child: const Text(
-                    UITextConstants.addContactRecentDiscoveryDismiss,
+                    ContentText.addContactRecentDiscoveryDismiss,
                   ),
                 ),
               ],
@@ -369,8 +369,8 @@ class _InlineMyQrCard extends StatelessWidget {
         }
         return const _InlineQrStateCard(
           icon: CupertinoIcons.qrcode,
-          title: UITextConstants.editProfileQrCardTitle,
-          body: UITextConstants.loading,
+          title: ProfileText.editProfileQrCardTitle,
+          body: FoundationText.loading,
         );
       },
     );

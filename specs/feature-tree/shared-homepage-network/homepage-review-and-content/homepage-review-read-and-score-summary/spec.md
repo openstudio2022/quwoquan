@@ -28,7 +28,7 @@
 <a id="req-001"></a>
 ### REQ-001 用户发表评价后列表与评分摘要真实收敛
 
-- 五个 operation（create/update/delete/list/mine）在 alpha mock 与 remote 行为同构且全部 per-op commercial ready。
+- 五个 operation（create/update/delete/list/mine）在四环境 Remote 与测试树 typed double 行为同构且全部 per-op commercial ready。
 
 <a id="req-002"></a>
 ### REQ-002 评分摘要必须与真实口碑聚合保持一致

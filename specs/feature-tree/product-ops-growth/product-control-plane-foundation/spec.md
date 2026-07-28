@@ -30,7 +30,7 @@
 
 
 
-- [`app-release-recovery-routing`](./app-release-recovery-routing/spec.md)：公开版本查询只按平台、可见版本和 Build 返回已发布事实；iOS 指向 App Store，Android 指向趣我圈官网签名 APK 下载通道。
+- [`app-release-recovery-routing`](./app-release-recovery-routing/spec.md)：公开版本查询只按平台、可见版本和 Build 返回已发布事实；公众 iOS 指向趣我圈 PWA 安装与网页版通道，Android 指向趣我圈官网签名 APK 下载通道。
 - [`product-control-plane-contract`](./product-control-plane-contract/spec.md)：每个控制面动作必须声明 operation scope；危险动作必须记录操作者、目标、原因、revision 与结果，失败时不得生成成功审计。
 
 ## 5. 能力要求

@@ -292,7 +292,7 @@ func buildCreatorRuntimeProfileView(creator *model.CreatorRuntimeProfile) map[st
 		"headline":           creator.Headline,
 		"nicknameCustomized": false,
 		"avatarUrl":          creator.AvatarURL,
-		"avatarVersion":      1,
+		"avatarVersion":      creator.AvatarVersion,
 		"backgroundUrl":      creator.CoverURL,
 		"bio":                creator.Bio,
 		"identityTags":       identityTags,

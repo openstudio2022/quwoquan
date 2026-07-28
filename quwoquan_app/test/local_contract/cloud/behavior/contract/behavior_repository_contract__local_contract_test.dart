@@ -5,6 +5,8 @@ import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 
+import '../../../../support/cloud_services/behavior_repository_double.dart';
+
 final class _UnavailableCloudHttpClient extends CloudHttpClient {
   _UnavailableCloudHttpClient() : super(client: http.Client());
 

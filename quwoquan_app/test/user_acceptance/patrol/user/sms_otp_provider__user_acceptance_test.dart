@@ -23,11 +23,11 @@ void main() {
       await launchProviderLogin($);
 
       if (find.byType(PhoneNumberField).evaluate().isEmpty) {
-        await $(find.text(UITextConstants.loginOtherMethodFallback)).tap();
+        await $(find.text(FoundationText.loginOtherMethodFallback)).tap();
         await $(
-          find.text(UITextConstants.loginMethodPhone),
+          find.text(FoundationText.loginMethodPhone),
         ).waitUntilVisible(timeout: const Duration(seconds: 15));
-        await $(find.text(UITextConstants.loginMethodPhone)).tap();
+        await $(find.text(FoundationText.loginMethodPhone)).tap();
       }
 
       final phoneField = find.descendant(
@@ -36,7 +36,7 @@ void main() {
       );
       await $(phoneField).enterText(_phone.trim());
       await acceptLoginAgreement($);
-      await $(find.text(UITextConstants.loginSendOtp)).tap();
+      await $(find.text(FoundationText.loginSendOtp)).tap();
 
       await $(
         find.byType(OtpCodeBoxes),
@@ -46,7 +46,7 @@ void main() {
         matching: find.byType(CupertinoTextField),
       );
       await $(otpField).enterText(_otp.trim());
-      await $(find.text(UITextConstants.loginPhoneSubmit)).tap();
+      await $(find.text(FoundationText.loginPhoneSubmit)).tap();
       await waitForProviderLoginSuccess($);
     },
   );

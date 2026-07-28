@@ -26,9 +26,11 @@ import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
@@ -90,6 +92,7 @@ void main() {
         runtimeFailure: testRuntimeFailure(
           code: AssistantErrorCode.skillConsentRequired.code,
           kind: RuntimeFailureKind.permission,
+          nature: RuntimeFailureNature.requiresPermission,
         ),
       ),
     );
@@ -114,8 +117,16 @@ void main() {
 
     // 失败关闭：不得回落到本地静态欢迎语或 chips 伪造服务端成功。
     expect(
-      find.text(AssistantErrorCode.skillConsentRequired.defaultMessage),
+      find.text(SearchText.recoveryEnablePermissionMessage),
       findsOneWidget,
+    );
+    expect(
+      find.text(SearchText.recoveryEnablePermissionAction),
+      findsOneWidget,
+    );
+    expect(
+      find.text(AssistantErrorCode.skillConsentRequired.defaultMessage),
+      findsNothing,
     );
     expect(find.text('服务端欢迎语（UAT）'), findsNothing);
     expect(find.text('服务端找资料'), findsNothing);
@@ -126,6 +137,44 @@ void main() {
       findsOneWidget,
     );
 
+    await _disposeTree(tester);
+  });
+
+  testWidgets('retryable_error：统一错误卡提供重试并重新请求个性化', (tester) async {
+    final errorCode = AssistantErrorCode.runStorageUnavailable;
+    final facet = _RecordingPersonalizationFacet(
+      entryError: CloudException(
+        type: CloudErrorType.network,
+        message: 'assistant personalization network unavailable',
+        statusCode: errorCode.httpStatus,
+        code: errorCode.code,
+        userMessage: errorCode.defaultMessage,
+        runtimeFailure: testRuntimeFailure(
+          code: errorCode.code,
+          kind: RuntimeFailureKind.network,
+          nature: RuntimeFailureNature.transient,
+        ),
+      ),
+    );
+    final openContext = _openContext();
+    await _pumpLauncher(tester, facet: facet, openContext: openContext);
+    await _openHalfSheet(tester);
+
+    expect(find.byType(AppTransientErrorNotice), findsOneWidget);
+    expect(find.text(SearchText.recoveryReloadLaterMessage), findsOneWidget);
+    expect(find.text(SearchText.reload), findsOneWidget);
+    final attemptsBeforeRetry = facet.calls
+        .where((call) => call == 'getEntryPersonalization')
+        .length;
+
+    await tester.tap(find.text(SearchText.reload));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(
+      facet.calls.where((call) => call == 'getEntryPersonalization').length,
+      greaterThan(attemptsBeforeRetry),
+    );
     await _disposeTree(tester);
   });
 

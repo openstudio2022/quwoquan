@@ -16,7 +16,6 @@ import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/platform/startup_native_bridge.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/quwoquan_app_shell.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
@@ -68,7 +67,6 @@ void main() {
   }) {
     return [
       ...mockContentFacetOverrides(MockContentRepository()),
-      appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
       authSessionStoreProvider.overrideWithValue(authStore),
       appTelemetryReporterProvider.overrideWithValue(
         RecordingAppTelemetryRecorder(),
@@ -109,12 +107,12 @@ void main() {
 
     // pumpWidget 已提交 Flutter 首帧；认证从此刻开始并行，但不阻塞品牌终态。
     expect(blockingStore.readStarted, isTrue);
-    expect(find.text(UITextConstants.welcomeTitle), findsOneWidget);
+    expect(find.text(FoundationText.welcomeTitle), findsOneWidget);
 
     await tester.pump();
 
     expect(blockingStore.readStarted, isTrue);
-    expect(find.text(UITextConstants.welcomeTitle), findsOneWidget);
+    expect(find.text(FoundationText.welcomeTitle), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 50));
@@ -154,7 +152,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   });
 
-  testWidgets('原生时钟晚于 Dart 启动时立即收紧 Root 绝对 deadline', (tester) async {
+  testWidgets('5950ms 原生水合收紧 deadline 但纯超时不进入恢复页', (tester) async {
     suppressExpectedErrors();
     final routerNeverCompletes = Completer<void>();
     AppStartupRuntime.instance.resetForTesting();
@@ -188,7 +186,7 @@ void main() {
     await pumpStartupThroughWelcome(tester);
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text(UITextConstants.startupRecoveryTitle), findsOneWidget);
+    expect(find.text(FoundationText.startupRecoveryTitle), findsNothing);
     expect(
       find.byKey(const ValueKey('startup-welcome-frozen')),
       findsOneWidget,
@@ -215,7 +213,7 @@ void main() {
 
     expect(find.byType(WelcomeScreen), findsNothing);
     expect(find.byType(MainAppShell), findsOneWidget);
-    expect(find.text(UITextConstants.startupStillStartingInline), findsNothing);
+    expect(find.text(FoundationText.startupStillStartingInline), findsNothing);
     expect(find.text('正在进入趣我圈'), findsNothing);
     expect(find.text('恢复账号状态'), findsNothing);
 
@@ -246,7 +244,7 @@ void main() {
     expect(store.readStarted, isFalse);
     expect(find.byType(WelcomeScreen), findsNothing);
     expect(find.byType(MainAppShell), findsOneWidget);
-    expect(find.text(UITextConstants.startupStillStartingInline), findsNothing);
+    expect(find.text(FoundationText.startupStillStartingInline), findsNothing);
 
     prerequisites.complete();
     await tester.pump();
@@ -500,11 +498,6 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 50));
   });
-}
-
-final class _StartupMockDataSource extends AppDataSourceModeNotifier {
-  @override
-  AppDataSourceMode build() => AppDataSourceMode.mock;
 }
 
 final class _FixedNativeTimingBridge implements StartupTimingsNativeBridge {

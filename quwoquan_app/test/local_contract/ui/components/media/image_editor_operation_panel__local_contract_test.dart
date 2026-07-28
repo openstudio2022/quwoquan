@@ -17,15 +17,15 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 void main() {
   test('图片编辑语义文案可从 UITextConstants 门面直接访问', () {
     const labels = <String>[
-      UITextConstants.imageEditorProCurve,
-      UITextConstants.imageEditorProCurveChannelRgb,
-      UITextConstants.imageEditorProWhiteBalance,
-      UITextConstants.imageEditorProWhiteBalanceAuto,
-      UITextConstants.imageEditorTextStylePlain,
-      UITextConstants.imageEditorTextStyleOutline,
-      UITextConstants.imageEditorTextStyleBar,
-      UITextConstants.imageEditorMosaicPixel,
-      UITextConstants.imageEditorMosaicBlur,
+      MediaText.imageEditorProCurve,
+      MediaText.imageEditorProCurveChannelRgb,
+      MediaText.imageEditorProWhiteBalance,
+      MediaText.imageEditorProWhiteBalanceAuto,
+      MediaText.imageEditorTextStylePlain,
+      MediaText.imageEditorTextStyleOutline,
+      MediaText.imageEditorTextStyleBar,
+      MediaText.imageEditorMosaicPixel,
+      MediaText.imageEditorMosaicBlur,
     ];
 
     expect(labels, everyElement(isNotEmpty));
@@ -88,8 +88,8 @@ void main() {
     await tester.pump();
 
     expect(find.byType(ImageEditorCurvePanel), findsOneWidget);
-    expect(find.text(UITextConstants.imageEditorProCurveChannelRgb), findsOne);
-    await tester.tap(find.text(UITextConstants.imageEditorProChannelRed));
+    expect(find.text(MediaText.imageEditorProCurveChannelRgb), findsOne);
+    await tester.tap(find.text(MediaText.imageEditorProChannelRed));
     expect(selectedChannel, ImageEditorCurveChannel.red);
     expect(tester.takeException(), isNull);
   });
@@ -108,9 +108,9 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text(UITextConstants.imageEditorProColorTemp), findsOneWidget);
-    expect(find.text(UITextConstants.imageEditorProTone), findsOneWidget);
-    await tester.tap(find.text(UITextConstants.imageEditorProWhiteBalanceAuto));
+    expect(find.text(MediaText.imageEditorProColorTemp), findsOneWidget);
+    expect(find.text(MediaText.imageEditorProTone), findsOneWidget);
+    await tester.tap(find.text(MediaText.imageEditorProWhiteBalanceAuto));
     expect(autoInvocations, 1);
     expect(tester.takeException(), isNull);
   });
@@ -138,7 +138,7 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text(UITextConstants.imageEditorTextStyleOutline));
+    await tester.tap(find.text(MediaText.imageEditorTextStyleOutline));
     expect(selectedStyle, ImageEditorTextStyleKind.outline);
     await tester.tap(find.byIcon(CupertinoIcons.trash));
     expect(deleteInvocations, 1);

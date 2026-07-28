@@ -14,8 +14,8 @@ void main() {
       machine.confirmVersion(
         currentBuild: 18100,
         latestBuild: 18201,
-        updateUrl: 'https://quwoquan.com/download/android',
-        recoveryUrl: 'https://quwoquan.com/recovery',
+        updateUrl: 'https://cdn.quwoquan.com/downloads/android/latest.json',
+        recoveryUrl: 'https://quwoquan.com/',
       ),
       isTrue,
     );
@@ -25,8 +25,8 @@ void main() {
       machine.confirmVersion(
         currentBuild: 18100,
         latestBuild: 18300,
-        updateUrl: 'https://quwoquan.com/download/android',
-        recoveryUrl: 'https://quwoquan.com/recovery',
+        updateUrl: 'https://cdn.quwoquan.com/downloads/android/latest.json',
+        recoveryUrl: 'https://quwoquan.com/',
       ),
       isFalse,
     );
@@ -51,8 +51,8 @@ void main() {
         machine.confirmVersion(
           currentBuild: 18100,
           latestBuild: 18201,
-          updateUrl: 'https://quwoquan.com/download/android',
-          recoveryUrl: 'https://quwoquan.com/recovery',
+          updateUrl: 'https://cdn.quwoquan.com/downloads/android/latest.json',
+          recoveryUrl: 'https://quwoquan.com/',
         ),
         isTrue,
       );
@@ -68,7 +68,7 @@ void main() {
         currentBuild: 18100,
         latestBuild: 18201,
         updateUrl: 'javascript:alert(1)',
-        recoveryUrl: 'https://quwoquan.com/recovery',
+        recoveryUrl: 'https://quwoquan.com/',
       ),
       isFalse,
     );
@@ -78,9 +78,24 @@ void main() {
         currentBuild: 18100,
         latestBuild: 18201,
         updateUrl: 'https://attacker.example/quwoquan.apk',
-        recoveryUrl: 'https://quwoquan.com/recovery',
+        recoveryUrl: 'https://quwoquan.com/',
       ),
       isFalse,
     );
+  });
+
+  test('confirmed latest build does not require a native update url', () {
+    final machine = RecoveryStateMachine();
+    expect(
+      machine.confirmVersion(
+        currentBuild: 18201,
+        latestBuild: 18201,
+        updateUrl: '',
+        recoveryUrl: 'https://quwoquan.com/',
+      ),
+      isTrue,
+    );
+    expect(machine.snapshot.phase, RecoveryPhase.startupLatest);
+    expect(machine.snapshot.updateUrl, isEmpty);
   });
 }

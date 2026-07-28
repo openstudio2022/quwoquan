@@ -13,16 +13,9 @@ export type ProductTelemetryNetworkClass =
 export interface ReleaseItem {
   releaseId: string;
   service: string;
-  configPath: string;
-  grayStages: number[];
   releaseState: string;
-  stageState?: string;
-  fromConfig?: string;
-  toConfig?: string;
-  currentStage?: number;
+  configVersion?: string;
   updatedAt?: string;
-  workflowRef?: string;
-  rollbackToken?: string;
 }
 
 export interface ReportItem {
@@ -187,7 +180,6 @@ export interface PlatformProjectionSummary {
   approvalCount: number;
   auditCount: number;
   activeAlerts: number;
-  releaseServices: string[];
 }
 
 // ActiveAlertItem 对齐 platform-ops-service 的 Alertmanager 回流对象：
@@ -252,6 +244,7 @@ export interface ConfigInstanceReportItem {
   instanceId: string;
   configVersion?: string;
   imageVersion?: string;
+  releaseManifestDigest?: string;
   desiredHash?: string;
   effectiveHash?: string;
   inSync: boolean;

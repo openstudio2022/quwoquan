@@ -56,10 +56,10 @@ void main() {
     expect(find.text('Alice'), findsOneWidget);
     expect(find.textContaining('alice'), findsOneWidget);
     expect(
-      find.text(UITextConstants.addContactConfirmSourceScan),
+      find.text(ContactText.addContactConfirmSourceScan),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.addContactSheetTitle), findsWidgets);
+    expect(find.text(ContactText.addContactSheetTitle), findsWidgets);
   });
 }
 

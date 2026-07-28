@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
@@ -137,7 +138,7 @@ class _AssistantHistorySheetState
     if (_loading) {
       return Padding(
         padding: EdgeInsets.all(AppSpacing.lg),
-        child: const Center(child: CupertinoActivityIndicator()),
+        child: AppRequestFeedback.section(),
       );
     }
     final error = _error;
@@ -188,7 +189,7 @@ class _AssistantHistorySheetState
                 minimumSize: const Size.square(AppSpacing.minInteractiveSize),
                 onPressed: _loadMore,
                 child: _loadingMore
-                    ? const CupertinoActivityIndicator()
+                    ? AppRequestFeedback.inline()
                     : Text(
                         l10n.seeMore,
                         style: TextStyle(

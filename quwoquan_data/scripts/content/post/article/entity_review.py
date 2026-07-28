@@ -201,10 +201,19 @@ def review_entity_draft(
         load_base_draft_text,
     )
     from content.post.article.base_draft_source import base_source_use_mode
-    from content.post.fidelity import base_draft_fidelity_issues
+    from content.post.fidelity import (
+        base_draft_fidelity_issues,
+        commercial_article_near_copy_gate,
+    )
 
     if carrier == "image":
         fidelity = []
+        near_copy = commercial_article_near_copy_gate(
+            "",
+            "",
+            source_use_mode="factual_reference_only",
+            carrier=carrier,
+        )
     else:
         # 底稿中心 1:1：分母 = 整篇单一底稿（与 prompt 侧 baseDraftText 同源），
         # 不再按 writingIntent 收窄——成品只来自这一篇底稿，整篇度量同时防误杀与防照搬。
@@ -216,11 +225,18 @@ def review_entity_draft(
             carrier=carrier,
             source_use_mode=source_use_mode,
         )
+        near_copy = commercial_article_near_copy_gate(
+            body,
+            base_text,
+            carrier=carrier,
+            source_use_mode=source_use_mode,
+        )
     checks["baseDraftFidelity"] = {
         "passed": not fidelity,
         "issues": fidelity,
         "suggestions": ["以底稿为基础适度加工：相似度过低则贴回底稿叙事；过高则进一步改写表达、去版权痕迹。"] if fidelity else [],
     }
+    checks["commercialNearCopy"] = near_copy.to_review_check()
     # 单底稿零参考硬门（仅对声明了唯一底稿的可轻改文章生效）：
     # ① 正文不得从同实体其它来源单元长串照搬（反拼接）；② 配图必须与底稿同一 source unit。
     single_base_issues: list[str] = []
@@ -438,6 +454,8 @@ def _entity_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
     if not checks.get("factTraceability", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks.get("baseDraftFidelity", {"passed": True})["passed"]:
+        return "agent_compose"
+    if not checks.get("commercialNearCopy", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks.get("singleBaseZeroReference", {"passed": True})["passed"]:
         return "agent_compose"

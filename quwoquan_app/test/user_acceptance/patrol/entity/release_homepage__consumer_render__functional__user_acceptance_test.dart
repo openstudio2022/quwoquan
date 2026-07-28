@@ -68,7 +68,7 @@ void main() {
         expect(
           await _scrollUntilVisible(
             $,
-            find.text(UITextConstants.objectIntroSourceTitle),
+            find.text(ObjectHomepageText.objectIntroSourceTitle),
           ),
           isTrue,
           reason: '${homepage.title} source disclosure must be reachable',

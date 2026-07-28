@@ -94,9 +94,6 @@ FACTUAL_COMPRESSION_TIERS: tuple[tuple[int, float], ...] = (
     (0, 1.0),      # <1000 字：少压缩但仍必须重写（fidelity 门管住）
 )
 
-MIN_SECTION_CHARS = 40
-MIN_BODY_CHARS = 200
-
 
 def _body_without_frontmatter(text: str) -> str:
     if text.startswith("---\n"):
@@ -113,10 +110,21 @@ def _compact(text: str) -> str:
 def final_page_hard_issues(
     page_text: str,
     *,
+    minimum_body_chars: int,
+    minimum_section_chars: int,
     entity_name: str = "",
     label: str = "",
 ) -> list[str]:
-    """成品 page.md 最终页硬门（deterministic，可重放）。"""
+    """成品 page.md 最终页硬门（deterministic，可重放）。
+
+    字数口径不在本模块自持：``minimum_body_chars`` / ``minimum_section_chars``
+    必须由调用方从 vertical content supply policy 取值，与下发给 Agent 的
+    prompt 同源，避免「提示词说 X 字、质量门判 Y 字」。
+    """
+    if isinstance(minimum_body_chars, bool) or minimum_body_chars < 1:
+        raise ValueError("final page minimum_body_chars must be a positive integer")
+    if isinstance(minimum_section_chars, bool) or minimum_section_chars < 1:
+        raise ValueError("final page minimum_section_chars must be a positive integer")
     prefix = f"{label}: " if label else ""
     issues: list[str] = []
     body = _body_without_frontmatter(page_text)
@@ -181,12 +189,12 @@ def final_page_hard_issues(
         if title == "相关图片":
             continue
         compact_len = len(_compact(re.sub(r":::[a-z]+[^\n]*\n|:::", "", section_body)))
-        if compact_len < MIN_SECTION_CHARS:
+        if compact_len < minimum_section_chars:
             issues.append(
-                f"{prefix}章节「{title}」信息量不足（{compact_len} 字 < {MIN_SECTION_CHARS}）"
+                f"{prefix}章节「{title}」信息量不足（{compact_len} 字 < {minimum_section_chars}）"
             )
-    if len(_compact(plain_body)) < MIN_BODY_CHARS:
-        issues.append(f"{prefix}正文总量不足 {MIN_BODY_CHARS} 字")
+    if len(_compact(plain_body)) < minimum_body_chars:
+        issues.append(f"{prefix}正文总量不足 {minimum_body_chars} 字")
 
     # 重复段落（复用共同层实现，保持单一真相源）。
     issues.extend(f"{prefix}{issue}" for issue in qg.intra_doc_repetition_issues(body))
@@ -378,6 +386,8 @@ def provenance_checksum_issues(
 def evaluate_commercial_page(
     entity_dir: Path,
     *,
+    minimum_body_chars: int,
+    minimum_section_chars: int,
     entity_name: str = "",
     source_text: str = "",
     source_use_mode: str = "",
@@ -408,7 +418,15 @@ def evaluate_commercial_page(
     else:
         issues.append(f"{tag}: manifest.json 缺失")
 
-    issues.extend(final_page_hard_issues(page_text, entity_name=name, label=tag))
+    issues.extend(
+        final_page_hard_issues(
+            page_text,
+            minimum_body_chars=minimum_body_chars,
+            minimum_section_chars=minimum_section_chars,
+            entity_name=name,
+            label=tag,
+        )
+    )
     issues.extend(entity_page_quality_issues(page_path, label=tag))
     if manifest_payload:
         issues.extend(homepage_structure_issues(Path(entity_dir), manifest_payload, tag))

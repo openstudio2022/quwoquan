@@ -1,6 +1,6 @@
 /// 解析「我的二维码」名片 payload。
 ///
-/// 名片 payload 形如 `https://app.quwoquan.com/u/{handle}?qr={token}`：`handle` 在
+/// 名片 payload 使用 publicWeb role 下的 `/u/{handle}?qr={token}`：`handle` 在
 /// 路径段、`token` 在 `qr` query。端侧只负责提取 `handle` + `qr`，再交由
 /// `ResolveProfileQrToken` 在云侧校验落地，禁止自解析 payload 直跳他人主页。
 class QrPayloadParseResult {

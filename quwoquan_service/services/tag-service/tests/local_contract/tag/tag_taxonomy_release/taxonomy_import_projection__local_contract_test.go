@@ -72,6 +72,150 @@ func TestCanonicalTaxonomyProjectsRuntimeDimensionMetadata(t *testing.T) {
 	}
 }
 
+func TestImmutableContentReleaseProjectsExactTagReceipt(t *testing.T) {
+	serviceRoot := findServiceRoot(t)
+	releaseRoot := filepath.Join(t.TempDir(), "release-a")
+	tagRoot := filepath.Join(
+		releaseRoot,
+		"payload",
+		"objects",
+		"tags",
+		"Topic",
+		"旅行",
+	)
+	if err := os.MkdirAll(tagRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeJSONFile(t, filepath.Join(releaseRoot, "payload", "release.json"), map[string]any{
+		"schema":      "quwoquan_data.release",
+		"releaseId":   "release-a",
+		"releaseKind": "content",
+	})
+	writeJSONFile(t, filepath.Join(releaseRoot, "payload", "desired_state.json"), map[string]any{
+		"schema":    "quwoquan_data.release_desired_state",
+		"releaseId": "release-a",
+		"desiredRefs": map[string]any{
+			"tags": []string{"Topic/旅行"},
+		},
+	})
+	writeJSONFile(t, filepath.Join(tagRoot, "_definition.json"), map[string]any{
+		"label":   "旅行",
+		"labelEn": "travel",
+	})
+	reportPath := filepath.Join(t.TempDir(), "tag-import.json")
+	command := exec.Command(
+		"go",
+		"run",
+		"./services/tag-service/cmd/import",
+		"--release-root",
+		releaseRoot,
+		"--release-id",
+		"release-a",
+		"--env",
+		"gamma",
+		"--report",
+		reportPath,
+		"--dry-run",
+	)
+	command.Dir = serviceRoot
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("dry-run immutable release tags: %v\n%s", err, output)
+	}
+	raw, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report struct {
+		Schema      string   `json:"schema"`
+		Status      string   `json:"status"`
+		Environment string   `json:"environment"`
+		ReleaseID   string   `json:"releaseId"`
+		ReleaseKind string   `json:"releaseKind"`
+		NodeCount   int      `json:"nodeCount"`
+		TagRefs     []string `json:"tagRefs"`
+	}
+	if err := json.Unmarshal(raw, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Schema != "quwoquan.tag_import_report" ||
+		report.Status != "dry-run" ||
+		report.Environment != "gamma" ||
+		report.ReleaseID != "release-a" ||
+		report.ReleaseKind != "content" ||
+		report.NodeCount != 1 ||
+		len(report.TagRefs) != 1 ||
+		report.TagRefs[0] != "Topic/旅行" {
+		t.Fatalf("unexpected tag import receipt: %#v", report)
+	}
+}
+
+func TestImmutableEmptyBaselineProjectsZeroNodeReceipt(t *testing.T) {
+	serviceRoot := findServiceRoot(t)
+	releaseRoot := filepath.Join(t.TempDir(), "baseline-a")
+	writeJSONFile(t, filepath.Join(releaseRoot, "payload", "release.json"), map[string]any{
+		"schema":      "quwoquan_data.release",
+		"releaseId":   "baseline-a",
+		"releaseKind": "empty_baseline",
+	})
+	writeJSONFile(t, filepath.Join(releaseRoot, "payload", "desired_state.json"), map[string]any{
+		"schema":    "quwoquan_data.release_desired_state",
+		"releaseId": "baseline-a",
+		"desiredRefs": map[string]any{
+			"tags": []string{},
+		},
+	})
+	reportPath := filepath.Join(t.TempDir(), "tag-import.json")
+	command := exec.Command(
+		"go",
+		"run",
+		"./services/tag-service/cmd/import",
+		"--release-root",
+		releaseRoot,
+		"--env",
+		"gamma",
+		"--report",
+		reportPath,
+		"--dry-run",
+	)
+	command.Dir = serviceRoot
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("dry-run immutable empty baseline: %v\n%s", err, output)
+	}
+	var report struct {
+		ReleaseID   string   `json:"releaseId"`
+		ReleaseKind string   `json:"releaseKind"`
+		NodeCount   int      `json:"nodeCount"`
+		TagRefs     []string `json:"tagRefs"`
+	}
+	raw, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.ReleaseID != "baseline-a" ||
+		report.ReleaseKind != "empty_baseline" ||
+		report.NodeCount != 0 ||
+		len(report.TagRefs) != 0 {
+		t.Fatalf("unexpected empty baseline receipt: %#v", report)
+	}
+}
+
+func writeJSONFile(t *testing.T, path string, value any) {
+	t.Helper()
+	payload, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, payload, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func findServiceRoot(t *testing.T) string {
 	t.Helper()
 	current, err := os.Getwd()

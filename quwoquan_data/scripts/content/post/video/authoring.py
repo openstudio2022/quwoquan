@@ -106,6 +106,11 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
         )
     pack_payload = pack.to_dict()
     write_writing_pack(execution_id, ref, pack_payload)
+    prompt_pack_payload = dict(pack_payload)
+    if pack.source_video is not None:
+        prompt_pack_payload["sourceVideo"] = (
+            pack.source_video.author_prompt_dict()
+        )
     write_prompt(
         execution_id,
         ref,
@@ -117,9 +122,9 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
                 "segment_count": delivery.minimum_segment_count,
                 "source_frames_json": json.dumps(
                     (
-                        pack_payload["sourceVideo"]
+                        prompt_pack_payload["sourceVideo"]
                         if pack.source_video is not None
-                        else pack_payload["sourceFrames"]
+                        else prompt_pack_payload["sourceFrames"]
                     ),
                     ensure_ascii=False,
                     indent=2,
@@ -129,7 +134,7 @@ def prepare_video_brief(execution_id: str, ref: str) -> dict[str, object]:
             },
         ),
         template_family="video_author",
-        variables={"writingPack": pack_payload},
+        variables={"writingPack": prompt_pack_payload},
         output_refs=(
             f"4.draft/{VIDEO_SCRIPT_FILE}",
             "4.draft/draft_meta.json",

@@ -14,7 +14,13 @@
   ],
   "properties": {
     "schema": { "const": "quwoquan_data.source_ready_candidate" },
-    "identityKey": { "type": "string", "pattern": "^name_location:.+\\|.+\\|.+\\|.+$" },
+    "identityKey": {
+      "type": "string",
+      "oneOf": [
+        { "pattern": "^name_location:.+\\|.+\\|.+\\|.+$" },
+        { "pattern": "^admin_region:Topic/地理/行政区/中国/.+$" }
+      ]
+    },
     "candidate": {
       "type": "object",
       "required": ["name", "province", "city", "district"],

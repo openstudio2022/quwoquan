@@ -17,16 +17,16 @@ class _OtpResendAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final counting = resendSeconds > 0;
     final label = counting
-        ? UITextConstants.loginOtpResendCountdown.replaceFirst(
+        ? FoundationText.loginOtpResendCountdown.replaceFirst(
             '%d',
             '$resendSeconds',
           )
-        : UITextConstants.loginOtpResend;
+        : FoundationText.loginOtpResend;
     final canTap = enabled && !counting;
     return Semantics(
       button: true,
       enabled: canTap,
-      label: UITextConstants.loginOtpResend,
+      label: FoundationText.loginOtpResend,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: canTap ? onResend : null,
@@ -186,7 +186,7 @@ class _PhoneNumberFieldState extends State<PhoneNumberField> {
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.done,
                 autofillHints: const <String>[AutofillHints.telephoneNumber],
-                placeholder: UITextConstants.loginPhoneNumberPlaceholder,
+                placeholder: FoundationText.loginPhoneNumberPlaceholder,
                 inputFormatters: <TextInputFormatter>[
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(11),
@@ -412,10 +412,10 @@ class _ResolvingPanel extends StatelessWidget {
       key: const ValueKey<String>('resolving'),
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
-        CupertinoActivityIndicator(color: AppColors.iosAccent(context)),
+        AppRequestFeedback.inline(indicatorColor: AppColors.iosAccent(context)),
         const SizedBox(height: AppSpacing.loginOtherTitleToIconsGap),
         Text(
-          UITextConstants.loginResolvingHint,
+          FoundationText.loginResolvingHint,
           style: TextStyle(
             fontSize: AppTypography.iosCallout,
             color: AppColors.iosSecondaryLabel(context),
@@ -473,7 +473,7 @@ class _AvatarState extends State<_Avatar> {
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: Semantics(
               image: true,
-              label: UITextConstants.loginAccountAvatarSemanticLabel,
+              label: FoundationText.loginAccountAvatarSemanticLabel,
               child: ClipOval(
                 child: AppAvatarImage(
                   key: ValueKey<String>(avatarUrl),
@@ -526,7 +526,7 @@ class PrimaryLoginButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.radiusEighteen),
         onPressed: enabled && !isSubmitting ? onPressed : null,
         child: isSubmitting
-            ? const CupertinoActivityIndicator(color: CupertinoColors.white)
+            ? AppRequestFeedback.inline(indicatorColor: CupertinoColors.white)
             : Text(
                 label,
                 style: TextStyle(
@@ -583,25 +583,25 @@ class LoginAgreementRow extends StatelessWidget {
             child: Wrap(
               children: <Widget>[
                 Text(
-                  UITextConstants.loginAgreementPrefix,
+                  FoundationText.loginAgreementPrefix,
                   style: TextStyle(
                     fontSize: AppTypography.base,
                     color: AppColors.iosSecondaryLabel(context),
                   ),
                 ),
                 _AgreementLink(
-                  label: UITextConstants.userAgreement,
+                  label: FoundationText.userAgreement,
                   onTap: onAgreementTap,
                 ),
                 Text(
-                  UITextConstants.loginAgreementAnd,
+                  FoundationText.loginAgreementAnd,
                   style: TextStyle(
                     fontSize: AppTypography.base,
                     color: AppColors.iosSecondaryLabel(context),
                   ),
                 ),
                 _AgreementLink(
-                  label: UITextConstants.privacyPolicy,
+                  label: FoundationText.privacyPolicy,
                   onTap: onPrivacyTap,
                 ),
               ],
@@ -619,7 +619,7 @@ class LoginAgreementRow extends StatelessWidget {
             padding: const EdgeInsets.only(left: AppSpacing.minInteractiveSize),
             child: AppInlineFieldError(
               key: const ValueKey<String>('loginAgreementError'),
-              message: UITextConstants.loginAgreementRequired,
+              message: FoundationText.loginAgreementRequired,
             ),
           ),
       ],
@@ -687,8 +687,8 @@ class OtherLoginMethodGrid extends StatelessWidget {
             background: AppColors.loginMethodWechatBrand,
             iconColor: AppColors.white,
             iconSize: AppSpacing.loginOtherMethodIconSize,
-            label: UITextConstants.loginMethodWechat,
-            semanticLabel: UITextConstants.loginMethodWechatSemanticLabel,
+            label: FoundationText.loginMethodWechat,
+            semanticLabel: FoundationText.loginMethodWechatSemanticLabel,
           ),
           (
             id: 'qq',
@@ -696,8 +696,8 @@ class OtherLoginMethodGrid extends StatelessWidget {
             background: AppColors.loginMethodQqBrand,
             iconColor: AppColors.white,
             iconSize: AppSpacing.loginOtherMethodIconSize,
-            label: UITextConstants.loginMethodQq,
-            semanticLabel: UITextConstants.loginMethodQqSemanticLabel,
+            label: FoundationText.loginMethodQq,
+            semanticLabel: FoundationText.loginMethodQqSemanticLabel,
           ),
           (
             id: 'alipay',
@@ -705,8 +705,8 @@ class OtherLoginMethodGrid extends StatelessWidget {
             background: AppColors.loginMethodAlipayBrand,
             iconColor: AppColors.white,
             iconSize: AppSpacing.loginOtherMethodIconSize,
-            label: UITextConstants.loginMethodAlipay,
-            semanticLabel: UITextConstants.loginMethodAlipaySemanticLabel,
+            label: FoundationText.loginMethodAlipay,
+            semanticLabel: FoundationText.loginMethodAlipaySemanticLabel,
           ),
         ];
     final allEntries =
@@ -728,8 +728,8 @@ class OtherLoginMethodGrid extends StatelessWidget {
               background: AppColors.loginMethodPhoneCircle,
               iconColor: AppColors.white,
               iconSize: AppSpacing.loginOtherMethodIconSize,
-              label: UITextConstants.loginMethodPhone,
-              semanticLabel: UITextConstants.loginMethodPhoneSemanticLabel,
+              label: FoundationText.loginMethodPhone,
+              semanticLabel: FoundationText.loginMethodPhoneSemanticLabel,
             ),
           ...socialEntries,
         ];
@@ -757,7 +757,7 @@ class OtherLoginMethodGrid extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               child: Text(
-                UITextConstants.loginOtherMethods,
+                FoundationText.loginOtherMethods,
                 style: TextStyle(
                   fontSize: AppTypography.base,
                   color: AppColors.iosSecondaryLabel(context),

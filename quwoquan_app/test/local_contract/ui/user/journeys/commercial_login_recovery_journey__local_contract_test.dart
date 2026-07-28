@@ -59,7 +59,7 @@ void main() {
     await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.loginSendOtp));
+    await tester.tap(find.text(FoundationText.loginSendOtp));
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(facets.sendOtpCalls, 1);
@@ -68,7 +68,7 @@ void main() {
     await tester.pump();
     expect(facets.loginCalls, 0, reason: '六位验证码完成后不得自动提交');
 
-    await tester.tap(find.text(UITextConstants.loginPhoneSubmit));
+    await tester.tap(find.text(FoundationText.loginPhoneSubmit));
     await tester.pump(const Duration(milliseconds: 350));
 
     expect(facets.loginCalls, 1);
@@ -90,12 +90,12 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 50));
       final returningPrimary = tester.getRect(
-        find.text(UITextConstants.loginContinue),
+        find.text(FoundationText.loginContinue),
       );
 
       expect(returningPrimary.left, greaterThanOrEqualTo(0));
       expect(returningPrimary.right, lessThanOrEqualTo(size.width));
-      expect(find.text(UITextConstants.loginOtherMethods), findsOneWidget);
+      expect(find.text(FoundationText.loginOtherMethods), findsOneWidget);
     }
     await tester.binding.setSurfaceSize(null);
   });

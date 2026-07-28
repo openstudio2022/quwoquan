@@ -33,6 +33,10 @@ WORK_PACKAGE_DIRECTORIES = (
 _TRANSACTION_OBJECT_MARKERS = ("--entity-", "--post-")
 
 
+class ExecutionSourceDigestDriftError(ValueError):
+    """The immutable execution was created from different repository inputs."""
+
+
 def transaction_workspace_root() -> Path:
     return core_paths.DATA_LOCAL_ROOT / "workspace" / "object-transactions"
 
@@ -237,6 +241,38 @@ def _canonical_payload_sha256(payload: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def entity_catalog_digest(source_ref: str) -> str:
+    """Fingerprint one reusable entity catalog without execution-local identity.
+
+    Carrier executions may select different candidates, but a coordinated run
+    must prove that all selectors observed the same version-controlled catalog.
+    """
+    normalized = str(source_ref or "").strip().strip("/")
+    if not normalized:
+        raise ValueError("entity catalog sourceRef is required")
+    root = (core_paths.REPO_ROOT / normalized).resolve()
+    repo_root = core_paths.REPO_ROOT.resolve()
+    try:
+        root.relative_to(repo_root)
+    except ValueError as exc:
+        raise ValueError("entity catalog must be inside the repository") from exc
+    if not root.exists():
+        raise FileNotFoundError(f"entity catalog does not exist: {root}")
+    files = (root,) if root.is_file() else tuple(
+        path for path in sorted(root.rglob("*")) if path.is_file()
+    )
+    if not files:
+        raise ValueError(f"entity catalog is empty: {root}")
+    digest = hashlib.sha256()
+    for path in files:
+        relative = path.relative_to(repo_root).as_posix()
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return f"sha256:{digest.hexdigest()}"
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -267,6 +303,7 @@ def write_frozen_target_set(
         "executionId": validate_execution_id(execution_id),
         "selectionPolicy": SelectionPolicy.FROZEN.value,
         "sourceRef": str(source_ref).strip(),
+        "entityCatalogDigest": entity_catalog_digest(source_ref),
         "targetCount": len(normalized),
         "targetRefs": sorted(refs),
         "targets": normalized,
@@ -442,7 +479,8 @@ def create_execution_manifest(
     return candidate
 
 
-def load_execution_manifest(execution_id: str) -> dict[str, Any]:
+def load_frozen_execution_manifest(execution_id: str) -> dict[str, Any]:
+    """Load immutable execution evidence without comparing it to today's source tree."""
     manifest_path = execution_manifest_path(execution_id)
     if not manifest_path.is_file():
         raise FileNotFoundError(f"execution manifest does not exist: {manifest_path}")
@@ -455,15 +493,22 @@ def load_execution_manifest(execution_id: str) -> dict[str, Any]:
 
     assert_valid(manifest, "execution", "content_execution_manifest", label=f"execution_manifest:{execution_id}")
     try:
-        source_digest = SourceDigest.from_document(manifest.get("sourceDigest"))
+        SourceDigest.from_document(manifest.get("sourceDigest"))
     except SourceDigestError as exc:
         raise ValueError(f"execution manifest sourceDigest invalid: {exc}") from exc
-    if source_digest != current_source_digest():
-        raise ValueError(
-            "execution manifest sourceDigest drift; create a new sequence with retryOf"
-        )
     if manifest.get("targetSetDigest") != frozen_target_set_digest(execution_id):
         raise ValueError(f"execution manifest target set digest mismatch: {manifest_path}")
+    return manifest
+
+
+def load_execution_manifest(execution_id: str) -> dict[str, Any]:
+    """Load a resumable execution and require its repository inputs to be unchanged."""
+    manifest = load_frozen_execution_manifest(execution_id)
+    source_digest = SourceDigest.from_document(manifest.get("sourceDigest"))
+    if source_digest != current_source_digest():
+        raise ExecutionSourceDigestDriftError(
+            "execution manifest sourceDigest drift; create a new sequence with retryOf"
+        )
     return manifest
 
 

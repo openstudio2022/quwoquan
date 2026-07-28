@@ -206,7 +206,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
         _recordedMs = 0;
         _surfaceState = CameraPhotoSurfaceState.ready;
       });
-      AppToast.show(context, UITextConstants.cameraVideoRecordTooShort);
+      AppToast.show(context, MediaText.cameraVideoRecordTooShort);
       await _deleteTempFile(path);
       await _emitVideoTelemetry('camera_video_record_too_short');
       return;
@@ -233,19 +233,19 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
     }
     final choice = await showAppActionSheet<_MicrophoneChoice>(
       context,
-      title: UITextConstants.cameraMicrophonePermissionTitle,
-      message: UITextConstants.cameraMicrophonePermission,
+      title: MediaText.cameraMicrophonePermissionTitle,
+      message: MediaText.cameraMicrophonePermission,
       sections: <AppActionSheetSection<_MicrophoneChoice>>[
         AppActionSheetSection<_MicrophoneChoice>(
           items: <AppActionSheetItem<_MicrophoneChoice>>[
             const AppActionSheetItem<_MicrophoneChoice>(
               value: _MicrophoneChoice.openSettings,
-              label: UITextConstants.openSettings,
+              label: FoundationText.openSettings,
               icon: CupertinoIcons.settings,
             ),
             const AppActionSheetItem<_MicrophoneChoice>(
               value: _MicrophoneChoice.continueMuted,
-              label: UITextConstants.cameraMicrophoneContinueMuted,
+              label: MediaText.cameraMicrophoneContinueMuted,
               icon: CupertinoIcons.mic_slash,
             ),
           ],
@@ -311,7 +311,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
                 ),
               ),
               Text(
-                UITextConstants.cameraVideoDiscardTitle,
+                MediaText.cameraVideoDiscardTitle,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: titleColor,
@@ -321,7 +321,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
               ),
               SizedBox(height: AppSpacing.intraGroupSm),
               Text(
-                UITextConstants.cameraVideoDiscardMessage,
+                MediaText.cameraVideoDiscardMessage,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: messageColor,
@@ -349,7 +349,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
                   onPressed: () => Navigator.of(sheetContext).pop(true),
                   child: Center(
                     child: Text(
-                      UITextConstants.cameraVideoDiscardConfirm,
+                      MediaText.cameraVideoDiscardConfirm,
                       style: TextStyle(
                         color: AppColors.iosAccent(sheetContext),
                         fontSize: AppTypography.lg,
@@ -379,7 +379,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
                   onPressed: () => Navigator.of(sheetContext).pop(false),
                   child: Center(
                     child: Text(
-                      UITextConstants.cameraVideoDiscardCancel,
+                      MediaText.cameraVideoDiscardCancel,
                       style: TextStyle(
                         color: titleColor,
                         fontSize: AppTypography.lg,
@@ -407,7 +407,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
         icon: _flashMode == CameraPhotoFlashMode.off
             ? CupertinoIcons.lightbulb_slash_fill
             : CupertinoIcons.lightbulb_fill,
-        label: UITextConstants.cameraVideoLight,
+        label: MediaText.cameraVideoLight,
         enabled: _canUseFlash,
         onTap: () => unawaited(_toggleLight()),
       );
@@ -420,7 +420,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
       icon: _flashMode == CameraPhotoFlashMode.off
           ? CupertinoIcons.bolt_slash_fill
           : CupertinoIcons.bolt_fill,
-      label: UITextConstants.cameraFlash,
+      label: MediaText.cameraFlash,
       enabled: _canUseFlash,
       onTap: () => unawaited(_toggleFlashMode()),
     );
@@ -540,13 +540,13 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
           children: [
             _buildModeSegment(
               key: const ValueKey<String>('camera-mode-photo'),
-              label: UITextConstants.cameraPhotoMode,
+              label: MediaText.cameraPhotoMode,
               selected: !_isVideoMode,
               mode: MediaPickerEntryMode.image,
             ),
             _buildModeSegment(
               key: const ValueKey<String>('camera-mode-video'),
-              label: UITextConstants.cameraVideoRecord,
+              label: MediaText.cameraVideoRecord,
               selected: _isVideoMode,
               mode: MediaPickerEntryMode.video,
             ),
@@ -631,7 +631,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
             child: CameraBottomTextAction(
               key: const ValueKey<String>('camera-filter-action'),
               icon: CupertinoIcons.slider_horizontal_3,
-              label: UITextConstants.cameraFilter,
+              label: MediaText.cameraFilter,
               onTap: _toggleFilterStrip,
               semanticIconKey: kEditorIconFilterRings,
               selected: _surfaceState == CameraPhotoSurfaceState.filterOpen,
@@ -651,7 +651,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
                 ? CameraBottomTextAction(
                     key: const ValueKey<String>('camera-rotate-action'),
                     icon: CupertinoIcons.camera_rotate_fill,
-                    label: UITextConstants.cameraSwitchLens,
+                    label: MediaText.cameraSwitchLens,
                     onTap: () => unawaited(_toggleCamera()),
                   )
                 : SizedBox.square(dimension: AppSpacing.minInteractiveSize),
@@ -671,7 +671,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
             child: CameraBottomTextAction(
               key: const ValueKey<String>('camera-filter-action'),
               icon: CupertinoIcons.slider_horizontal_3,
-              label: UITextConstants.cameraFilter,
+              label: MediaText.cameraFilter,
               onTap: _toggleFilterStrip,
               semanticIconKey: kEditorIconFilterRings,
               selected: _surfaceState == CameraPhotoSurfaceState.filterOpen,
@@ -696,7 +696,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
                 ? CameraBottomTextAction(
                     key: const ValueKey<String>('camera-rotate-action'),
                     icon: CupertinoIcons.camera_rotate_fill,
-                    label: UITextConstants.cameraSwitchLens,
+                    label: MediaText.cameraSwitchLens,
                     onTap: () => unawaited(_toggleCamera()),
                     enabled: !locked,
                   )

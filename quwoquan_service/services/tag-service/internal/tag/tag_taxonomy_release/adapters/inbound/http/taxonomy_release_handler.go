@@ -31,6 +31,7 @@ func (h *TaxonomyReleaseHandler) handleStage(w http.ResponseWriter, r *http.Requ
 		ReleaseID       string `json:"releaseId"`
 		SourceOwner     string `json:"sourceOwner"`
 		CanonicalDigest string `json:"canonicalDigest"`
+		ReleaseKind     string `json:"releaseKind"`
 		NodeCount       int    `json:"nodeCount"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -41,6 +42,7 @@ func (h *TaxonomyReleaseHandler) handleStage(w http.ResponseWriter, r *http.Requ
 		ReleaseID:       body.ReleaseID,
 		SourceOwner:     body.SourceOwner,
 		CanonicalDigest: body.CanonicalDigest,
+		ReleaseKind:     releasemodel.ReleaseKind(body.ReleaseKind),
 		NodeCount:       body.NodeCount,
 	})
 	if err != nil {

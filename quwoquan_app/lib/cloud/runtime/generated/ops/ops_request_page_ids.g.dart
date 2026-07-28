@@ -17,9 +17,11 @@ class OpsRequestPageIds {
     'GetRuntimeLogSummary': 'ops.get.runtime.log.summary',
     'GetVisitStats': 'ops.get.visit.stats',
     'ListConfigDomains': 'ops.list.config.domains',
+    'ListConfigInstanceReports': 'ops.list.config.instance.reports',
     'ListExperiments': 'ops.list.experiments',
     'ListServiceConfigs': 'ops.list.service.configs',
     'RecordVisit': 'ops.record.visit',
+    'ReportConfigInstance': 'ops.report.config.instance',
     'ReportEventBatch': 'ops.report.event.batch',
     'ReportRecoveryFailure': 'ops.report.recovery.failure',
     'ReportRuntimeLogBatch': 'ops.report.runtime.log.batch',
@@ -41,9 +43,11 @@ class OpsRequestPageIds {
   static const String getRuntimeLogSummary = 'ops.get.runtime.log.summary';
   static const String getVisitStats = 'ops.get.visit.stats';
   static const String listConfigDomains = 'ops.list.config.domains';
+  static const String listConfigInstanceReports = 'ops.list.config.instance.reports';
   static const String listExperiments = 'ops.list.experiments';
   static const String listServiceConfigs = 'ops.list.service.configs';
   static const String recordVisit = 'ops.record.visit';
+  static const String reportConfigInstance = 'ops.report.config.instance';
   static const String reportEventBatch = 'ops.report.event.batch';
   static const String reportRecoveryFailure = 'ops.report.recovery.failure';
   static const String reportRuntimeLogBatch = 'ops.report.runtime.log.batch';

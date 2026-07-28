@@ -132,6 +132,7 @@ export const platformControlPlane = {
       "object_type": "config_instance_report",
       "operations": [
         {
+          "contract_operation_id": "ops.config_instance_report.ListConfigInstanceReports",
           "method": "GET",
           "operation": "ListConfigInstanceReports",
           "path": "/control-plane/platform/configs/instances",
@@ -140,11 +141,12 @@ export const platformControlPlane = {
           ]
         },
         {
+          "contract_operation_id": "ops.config_instance_report.ReportConfigInstance",
           "method": "POST",
           "operation": "ReportConfigInstance",
           "path": "/control-plane/platform/configs/instances/{instanceId}:report",
           "scopes": [
-            "ops.platform.config.write"
+            "ops.platform.config.ack"
           ]
         }
       ],
@@ -166,12 +168,12 @@ export const platformControlPlane = {
         }
       ],
       "deployment_profile": "batch_heavy",
-      "label": "配置发布单",
-      "object_type": "config_release",
+      "label": "发布候选 ACK",
+      "object_type": "release_candidate",
       "operations": [
         {
           "method": "GET",
-          "operation": "ListConfigReleases",
+          "operation": "ListReleaseCandidateAcks",
           "path": "/control-plane/platform/releases",
           "scopes": [
             "ops.platform.rollout.read"
@@ -187,9 +189,9 @@ export const platformControlPlane = {
         }
       ],
       "risk_level": "critical",
-      "source_entity": "ConfigRelease",
-      "view_kind": "release",
-      "view_model": "ConfigRelease"
+      "source_entity": "ConfigInstanceReport",
+      "view_kind": "snapshot",
+      "view_model": "ReleaseManifestCandidate"
     },
     {
       "deployment_profile": "audit_heavy",

@@ -2,6 +2,10 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_pages.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
+import 'package:quwoquan_app/core/di/ops_event_dependencies.dart';
+import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 
 class ArticleReaderMetricNames {
   /// 阅读器打开耗时（区分 hydration 问题）。
@@ -24,10 +28,10 @@ class ArticleReaderMetricNames {
 }
 
 class ArticleReaderObservability {
-  ArticleReaderObservability({required this._analytics});
+  ArticleReaderObservability(this._analytics, this._telemetryRecorder);
 
   final AnalyticsService _analytics;
-  final Set<String> _openReportedPostIds = <String>{};
+  final AppTelemetryRecorder _telemetryRecorder;
   final Set<String> _fallbackKeys = <String>{};
 
   void trackReaderOpen({
@@ -39,9 +43,6 @@ class ArticleReaderObservability {
     required int pageCount,
     required bool bookReaderEnabled,
   }) {
-    if (!_openReportedPostIds.add(postId)) {
-      return;
-    }
     _track(
       eventName: ArticleReaderMetricNames.readerOpenMs,
       properties: <String, dynamic>{
@@ -53,6 +54,80 @@ class ArticleReaderObservability {
         'pageCount': pageCount,
         'bookReaderEnabled': bookReaderEnabled,
       },
+    );
+    _record(
+      AppTelemetryPayload.articleReaderEnter(
+        surfaceId: 'workBrowser',
+        objectType: 'contentPost',
+        objectId: postId,
+        durationMs: durationMs,
+        result: 'success',
+      ),
+    );
+  }
+
+  /// Records an active-reading interval. The catalog samples this high-volume
+  /// signal independently; entering, exiting, errors and recovery stay at 100%.
+  void trackReaderDwell({required String postId, required int durationMs}) {
+    _record(
+      AppTelemetryPayload.articleReaderDwell(
+        surfaceId: 'workBrowser',
+        objectType: 'contentPost',
+        objectId: postId,
+        durationMs: durationMs,
+        result: 'success',
+      ),
+    );
+  }
+
+  void trackReaderExit({required String postId, required int durationMs}) {
+    _record(
+      AppTelemetryPayload.articleReaderExit(
+        surfaceId: 'workBrowser',
+        objectType: 'contentPost',
+        objectId: postId,
+        durationMs: durationMs,
+        result: 'success',
+      ),
+    );
+  }
+
+  void trackReaderError({
+    required String postId,
+    required String errorCode,
+    required String recoveryAction,
+    required int durationMs,
+  }) {
+    _record(
+      AppTelemetryPayload.articleReaderError(
+        surfaceId: 'workBrowser',
+        objectType: 'contentPost',
+        objectId: postId,
+        errorCode: errorCode,
+        recoveryAction: recoveryAction,
+        result: 'failure',
+        durationMs: durationMs,
+      ),
+    );
+  }
+
+  void trackReaderRecovery({
+    required String postId,
+    required String recoveryAction,
+    required String result,
+    required int durationMs,
+    String? errorCode,
+  }) {
+    _record(
+      AppTelemetryPayload.articleReaderRecovery(
+        surfaceId: 'workBrowser',
+        objectType: 'contentPost',
+        objectId: postId,
+        recoveryAction: recoveryAction,
+        result: result,
+        durationMs: durationMs,
+        errorCode: errorCode,
+      ),
     );
   }
 
@@ -146,10 +221,19 @@ class ArticleReaderObservability {
       ),
     );
   }
+
+  void _record(AppTelemetryPayload payload) {
+    unawaited(
+      _telemetryRecorder.record(payload, pageName: PageNames.workBrowser),
+    );
+  }
 }
 
 final articleReaderObservabilityProvider = Provider<ArticleReaderObservability>(
   (ref) {
-    return ArticleReaderObservability(analytics: ref.read(analyticsProvider));
+    return ArticleReaderObservability(
+      ref.read(analyticsProvider),
+      ref.read(appTelemetryReporterProvider),
+    );
   },
 );

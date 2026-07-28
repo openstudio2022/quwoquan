@@ -14,6 +14,7 @@ import (
 	model "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/model"
 	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/infrastructure/persistence"
 	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/application/taxonomyrelease"
+	releasemodel "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/domain/taxonomyrelease/model"
 	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/infrastructure/taxonomyreleasestore"
 )
 
@@ -86,6 +87,7 @@ func seedLaunchSubset(t *testing.T) {
 		ReleaseID:       "feedback-test-release",
 		SourceOwner:     "test",
 		CanonicalDigest: "feedback-test-digest",
+		ReleaseKind:     releasemodel.ReleaseKindContent,
 		NodeCount:       1,
 	}); err != nil {
 		t.Fatalf("stage feedback release: %v", err)

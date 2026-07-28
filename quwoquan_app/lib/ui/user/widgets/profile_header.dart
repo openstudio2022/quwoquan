@@ -121,7 +121,7 @@ class ProfileHeader extends StatelessWidget {
           avatar,
           SizedBox(height: AppSpacing.intraGroupXs),
           Text(
-            UITextConstants.profileUploadAvatar,
+            ProfileText.profileUploadAvatar,
             style: TextStyle(
               fontSize: AppTypography.iosCaption2,
               color: fgSecondary,
@@ -161,7 +161,7 @@ class ProfileHeader extends StatelessWidget {
         minimumSize: Size.zero,
         onPressed: onEdit,
         child: Text(
-          UITextConstants.profileEmptyTagsPrompt,
+          ProfileText.profileEmptyTagsPrompt,
           style: TextStyle(
             fontSize: AppTypography.iosFootnote,
             color: fgSecondary,

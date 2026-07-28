@@ -191,17 +191,10 @@ class _ReferenceLoadError extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
         child: AppSectionErrorCard(
-          semantic: UiErrorSemantic(
+          semantic: AppUserRecoveryContract.semanticFor(
+            group: AppUserRecoveryGroup.reloadLater,
             category: UiErrorCategory.sectionLoad,
             scope: UiErrorScope.section,
-            title: UITextConstants.pageLoadFailedTitle,
-            message: host.trim().isNotEmpty
-                ? host.trim()
-                : UITextConstants.contentLoadSoftFailed,
-            primaryAction: const UiErrorAction(
-              type: UiErrorActionType.retry,
-              label: UITextConstants.tryAgain,
-            ),
           ),
           margin: EdgeInsets.zero,
           onAction: (action) async {

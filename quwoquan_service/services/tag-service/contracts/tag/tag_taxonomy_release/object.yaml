@@ -18,8 +18,10 @@ capabilities:
 - auditable
 business_rules:
 - releaseId、contentDigest 和 parent graph 创建后不可变
+- content release 至少包含一个节点；release-bound empty_baseline 是合法的零节点 snapshot
 - taxonomy 必须无环且所有 node path、alias 和 canonical id 唯一
 - 同一 taxonomy 只能有一个 active release
+- retired release 可作为 rollback/replay 目标再次激活，历史 release 与 TagNode snapshot 不物理删除
 - 在线服务不得直接修改 TagNodeView，只能切换已验证 release
 lifecycle:
   states:

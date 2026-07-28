@@ -62,7 +62,7 @@ func TestTaxonomyReleaseStageDigestIdempotent(t *testing.T) {
 
 	first, err := facade.Stage(ctx, taxonomyrelease.StageCommand{
 		ReleaseID: "rel-1", SourceOwner: "qwq_data",
-		CanonicalDigest: "digest-aaa", NodeCount: 42,
+		CanonicalDigest: "digest-aaa", ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 42,
 	})
 	if err != nil {
 		t.Fatalf("first stage: %v", err)
@@ -74,7 +74,7 @@ func TestTaxonomyReleaseStageDigestIdempotent(t *testing.T) {
 	// 完全相同的导入意图才可幂等重放。
 	replayed, err := facade.Stage(ctx, taxonomyrelease.StageCommand{
 		ReleaseID: "rel-1", SourceOwner: "qwq_data",
-		CanonicalDigest: "digest-aaa", NodeCount: 42,
+		CanonicalDigest: "digest-aaa", ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 42,
 	})
 	if err != nil {
 		t.Fatalf("replay stage: %v", err)
@@ -85,19 +85,19 @@ func TestTaxonomyReleaseStageDigestIdempotent(t *testing.T) {
 	for _, conflicting := range []taxonomyrelease.StageCommand{
 		{
 			ReleaseID: "rel-other", SourceOwner: "qwq_data",
-			CanonicalDigest: "digest-aaa", NodeCount: 42,
+			CanonicalDigest: "digest-aaa", ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 42,
 		},
 		{
 			ReleaseID: "rel-1", SourceOwner: "another_owner",
-			CanonicalDigest: "digest-aaa", NodeCount: 42,
+			CanonicalDigest: "digest-aaa", ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 42,
 		},
 		{
 			ReleaseID: "rel-1", SourceOwner: "qwq_data",
-			CanonicalDigest: "digest-aaa", NodeCount: 43,
+			CanonicalDigest: "digest-aaa", ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 43,
 		},
 		{
 			ReleaseID: "rel-1", SourceOwner: "qwq_data",
-			CanonicalDigest: "digest-other", NodeCount: 42,
+			CanonicalDigest: "digest-other", ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 42,
 		},
 	} {
 		if _, err := facade.Stage(ctx, conflicting); !errors.Is(err, releasemodel.ErrDigestConflict) {
@@ -111,7 +111,8 @@ func TestTaxonomyReleaseStageDigestIdempotent(t *testing.T) {
 
 	// 无效参数 fail-fast。
 	if _, err := facade.Stage(ctx, taxonomyrelease.StageCommand{
-		ReleaseID: "", CanonicalDigest: "x", SourceOwner: "o", NodeCount: 1,
+		ReleaseID: "", CanonicalDigest: "x", SourceOwner: "o",
+		ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 1,
 	}); err == nil {
 		t.Fatal("empty releaseId must be rejected")
 	}
@@ -124,7 +125,7 @@ func TestTaxonomyReleaseActivateSingleActive(t *testing.T) {
 
 	if _, err := facade.Stage(ctx, taxonomyrelease.StageCommand{
 		ReleaseID: "rel-a", SourceOwner: "qwq_data",
-		CanonicalDigest: "digest-a", NodeCount: 10,
+		CanonicalDigest: "digest-a", ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 10,
 	}); err != nil {
 		t.Fatalf("stage a: %v", err)
 	}
@@ -146,7 +147,7 @@ func TestTaxonomyReleaseActivateSingleActive(t *testing.T) {
 	// 激活第二个 release：旧 active 让位，同一时刻只有一个 active。
 	if _, err := facade.Stage(ctx, taxonomyrelease.StageCommand{
 		ReleaseID: "rel-b", SourceOwner: "qwq_data",
-		CanonicalDigest: "digest-b", NodeCount: 11,
+		CanonicalDigest: "digest-b", ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 11,
 	}); err != nil {
 		t.Fatalf("stage b: %v", err)
 	}
@@ -167,12 +168,40 @@ func TestTaxonomyReleaseActivateSingleActive(t *testing.T) {
 		t.Fatalf("previous active must retire: %+v", retired)
 	}
 
-	// 未知 releaseId 与非法状态。
+	// retired immutable snapshot 可回放为 active，旧 active 仍只做状态切换而不物理删除。
+	rolledBack, err := facade.Activate(ctx, "rel-a")
+	if err != nil || rolledBack.Status != releasemodel.StatusActive {
+		t.Fatalf("reactivate retired release: %+v err=%v", rolledBack, err)
+	}
+	if count, err := mongoDB.Collection("tag_nodes").CountDocuments(ctx, bson.M{
+		"releaseId": "rel-a",
+	}); err != nil || count != 10 {
+		t.Fatalf("historical rel-a snapshot count=%d err=%v", count, err)
+	}
+
+	// release-bound empty baseline 是合法的零节点 snapshot，可激活也可被历史 snapshot 替换。
+	if _, err := facade.Stage(ctx, taxonomyrelease.StageCommand{
+		ReleaseID: "rel-empty", SourceOwner: "qwq_data",
+		CanonicalDigest: "digest-empty",
+		ReleaseKind:     releasemodel.ReleaseKindEmptyBaseline, NodeCount: 0,
+	}); err != nil {
+		t.Fatalf("stage empty baseline: %v", err)
+	}
+	empty, err := facade.Activate(ctx, "rel-empty")
+	if err != nil || empty.Status != releasemodel.StatusActive || empty.NodeCount != 0 {
+		t.Fatalf("activate empty baseline: %+v err=%v", empty, err)
+	}
+	replayedHistorical, err := facade.Activate(ctx, "rel-b")
+	if err != nil || replayedHistorical.Status != releasemodel.StatusActive {
+		t.Fatalf("replay historical rel-b: %+v err=%v", replayedHistorical, err)
+	}
+	if count, err := mongoDB.Collection("tag_taxonomy_releases").CountDocuments(ctx, bson.M{}); err != nil || count != 3 {
+		t.Fatalf("immutable release history count=%d err=%v", count, err)
+	}
+
+	// 未知 releaseId 仍 fail-fast。
 	if _, err := facade.Activate(ctx, "rel-missing"); err == nil {
 		t.Fatal("unknown release must fail")
-	}
-	if _, err := facade.Activate(ctx, "rel-a"); err == nil {
-		t.Fatal("retired release must not re-activate")
 	}
 }
 

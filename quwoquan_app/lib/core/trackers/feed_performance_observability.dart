@@ -95,27 +95,34 @@ class FeedPerformanceObservability {
     _loadFailureReported.removeWhere((key) => key.startsWith('$id::'));
   }
 
-  /// 首页加载失败（阻断态空内容）：按 `channel::reason` 去重上报异常归因。
+  /// 首页加载失败（阻断态空内容）：按 canonical error code 去重上报归因。
   void recordFeedLoadFailed({
     required String channelId,
-    required String reason,
+    required String errorCode,
+    required String operation,
+    required String surface,
+    required bool hasCache,
+    String? recovery,
+    String? requestId,
+    String? traceId,
   }) {
     final id = channelId.trim();
-    final normalizedReason = reason.trim().isEmpty ? 'unknown' : reason.trim();
-    if (id.isEmpty || !_loadFailureReported.add('$id::$normalizedReason')) {
+    final normalizedCode = errorCode.trim().isEmpty
+        ? 'APP.SYSTEM.unknown_error'
+        : errorCode.trim();
+    if (id.isEmpty || !_loadFailureReported.add('$id::$normalizedCode')) {
       return;
     }
     unawaited(
-      _analytics.trackEvent(
-        AnalyticsEvent(
-          eventType: 'feed_metric',
-          eventName: FeedPerformanceMetricNames.feedLoadFailed,
-          properties: <String, dynamic>{
-            'channelId': id,
-            'reason': normalizedReason,
-            'result': 'failed',
-          },
-        ),
+      _analytics.trackOperationResult(
+        operationId: operation,
+        result: 'failed',
+        surfaceId: surface,
+        hasCache: hasCache,
+        failReasonCode: normalizedCode,
+        recoveryAction: recovery,
+        requestId: requestId,
+        traceId: traceId,
       ),
     );
   }

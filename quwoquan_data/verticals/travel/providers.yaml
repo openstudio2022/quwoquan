@@ -82,11 +82,11 @@ sites:
     domains: [baike.baidu.com]
     urlPatterns:
       - https://baike.baidu.com/item/*
-    fetchable: true
+    fetchable: false
     extractor: baidu_baike_html
     licensePolicy: factual_citation_only
     qualityTier: A
-    notes: 百度百科公开词条 HTML 候选源；research 必须经精确词条重定向校验标题与地域，空响应不得写入 source plan。
+    notes: 百度百科可用于候选发现与标题解析；其公开 HTML 不具备稳定批量抓取能力，不得冻结为可重复执行的主页正文源。
   - siteId: toutiao_baike
     platform: 今日头条百科
     category: encyclopedia
@@ -94,11 +94,11 @@ sites:
     urlPatterns:
       - https://www.baike.com/wikiid/*
       - https://baike.com/wikiid/*
-    fetchable: false
+    fetchable: true
     extractor: toutiao_baike_html
     licensePolicy: factual_citation_only
     qualityTier: B
-    notes: 搜索元数据可用于发现，但公开正文会返回动态验证码，不能作为可重复执行的主页正文源。
+    notes: 经结构化 DOM 抽取与正文事实门验证后，可作为实体主页百科正文源；批处理仍受运行时访问约束和来源质量门约束。
   - siteId: scenic_official
     platform: 景区官网
     category: official
@@ -303,6 +303,10 @@ sites:
       loginPolicy: public_only
       watermarkPolicy: reject_watermarked_publish_assets
       termsUrl: https://pages.ctrip.com/webhome/purehtml/cn/memberCenter/regTerm.html
+      rateLimit:
+        mode: conservative
+        maxRequestsPerSecond: 0.2
+        backoffOnStatus: [403, 429]
       discoveryStrategy:
         mode: content_search
         searchProvider: brave_public

@@ -45,7 +45,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     RealtimeConfig? config,
     RemoteRealtimeLongPollFactory? longPollFactory,
     RemoteRealtimeWebSocketFactory? webSocketFactory,
-  }) : _config = config ?? RealtimeConfig.fromGateway(),
+  }) : _config = config ?? RealtimeConfig.fromRuntime(),
        _longPollFactory = longPollFactory ?? _defaultLongPollFactory,
        _webSocketFactory = webSocketFactory ?? _defaultWebSocketFactory {
     _handler = RealtimeMessageHandler(

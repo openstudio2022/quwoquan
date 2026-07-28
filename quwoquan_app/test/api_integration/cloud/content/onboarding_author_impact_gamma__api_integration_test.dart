@@ -1,10 +1,7 @@
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/interest-onboarding-prior/spec.md#gwt-001
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-005
 
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/io_client.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/remote/content/post/author_impact_remote.dart';
@@ -23,9 +20,6 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 const _gatewayURL = String.fromEnvironment('GAMMA_GATEWAY_URL');
 const _accessToken = String.fromEnvironment('TEST_AUTH_TOKEN');
 const _personaID = String.fromEnvironment('GAMMA_ACCEPTANCE_PERSONA_ID');
-const _allowBadCertificate = bool.fromEnvironment(
-  'API_CONTRACT_ALLOW_BAD_CERT',
-);
 
 void main() {
   setUpAll(_requireGammaRuntimeInputs);
@@ -157,13 +151,7 @@ void _requireGammaRuntimeInputs() {
 }
 
 CloudHttpClient _newCloudHttpClient() {
-  final ioClient = HttpClient();
-  if (_allowBadCertificate) {
-    ioClient.badCertificateCallback = (X509Certificate _, String _, int _) =>
-        true;
-  }
   return CloudHttpClient(
-    client: IOClient(ioClient),
     authTokenProvider: const _StaticTokenProvider(_accessToken),
   );
 }

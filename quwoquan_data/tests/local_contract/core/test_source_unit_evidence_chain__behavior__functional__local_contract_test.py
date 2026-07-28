@@ -10,6 +10,8 @@
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import sys
 from pathlib import Path
@@ -109,6 +111,55 @@ def test_source_unit_layout_no_loose_images():
     assert not (obj / "images").exists()
     assert not (obj / "1.download" / "images").exists()
     assert not (obj / "1.download" / "sources").exists()
+
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/spec.md#sit-001
+def test_raw_source_snapshot_redacts_secret_values_before_persisting():
+    ensure_execution_layout(TASK)
+    ensure_execution_command_layout(TASK, "source")
+    write_execution_runtime_state(TASK, command="source")
+    obj = execution_entity_object_dir(TASK, "地点", "景区", "天台山")
+    raw = json.dumps(
+        {
+            "responses": [
+                {
+                    "body": (
+                        "https://example.test/source?token=public-page-query-value "
+                        "Bearer public-page-bearer-value"
+                    ),
+                    "accessToken": "public-page-json-value",
+                }
+            ]
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+
+    manifest = write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="wikipedia_snapshot_redaction",
+        source_md="# 天台山\n\n用于验证来源快照落盘前脱敏。",
+        html_bytes=raw,
+        raw_format="mediawiki_api_json",
+        source_kind="wikipedia",
+        url="https://zh.wikipedia.org/wiki/天台山",
+        title="天台山",
+        target_ref="/entity/地点/景区/天台山",
+        execution_id=TASK,
+        build_variants=False,
+    )
+
+    unit = execution_source_unit_dir(TASK, str(manifest["sourceUnitId"]))
+    persisted = (unit / "page.raw.json").read_bytes()
+    payload = json.loads(persisted)
+    response = payload["responses"][0]
+    assert response["accessToken"] == "<redacted>"
+    assert "token=<redacted>" in response["body"]
+    assert "Bearer <redacted>" in response["body"]
+    assert b"public-page-query-value" not in persisted
+    assert b"public-page-bearer-value" not in persisted
+    assert b"public-page-json-value" not in persisted
+    assert manifest["rawSha256"] == "sha256:" + hashlib.sha256(persisted).hexdigest()
 
 
 def test_object_image_candidates_carry_relative_refs():

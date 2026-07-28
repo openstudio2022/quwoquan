@@ -129,14 +129,16 @@ def test_projection_three_segments_and_asset_binding(tmp_path: Path) -> None:
     assert "bodyMarkdown" not in related
 
 
-def test_media_base_url_overrides_cdn(tmp_path: Path) -> None:
+def test_media_image_base_url_overrides_cdn(tmp_path: Path) -> None:
     seed_entity(tmp_path)
     entry, _ = project_entity_introduction(
         tmp_path / "地点/景区/测试山", "地点/景区/测试山",
-        media_base_url="https://media.local/",
+        media_image_base_url="https://cdn.example.invalid/media/image/",
     )
     assert entry is not None
-    assert entry["coverUrl"].startswith("https://media.local/library/")
+    assert entry["coverUrl"].startswith(
+        "https://cdn.example.invalid/media/image/library/"
+    )
 
 
 def test_unmaterialized_assets_reported_as_issue(tmp_path: Path) -> None:

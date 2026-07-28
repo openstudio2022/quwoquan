@@ -140,6 +140,10 @@ def verify_travel_source_registry(*, allowed_extractors: set[str] | None = None)
                 rights_policy = str(site_crawl_profile.get("rightsPolicy") or license_policy or "").strip()
                 robots_policy = str(site_crawl_profile.get("robotsPolicy") or "").strip()
                 login_policy = str(site_crawl_profile.get("loginPolicy") or "").strip()
+                terms_url = str(site_crawl_profile.get("termsUrl") or "").strip()
+                rate_limit = site_crawl_profile.get("rateLimit")
+                max_depth = site_crawl_profile.get("maxDepth")
+                max_pages_per_day = site_crawl_profile.get("maxPagesPerDay")
                 controlled_trial = site_crawl_profile.get("controlledTrial")
                 article_admission = str(site_crawl_profile.get("articleCommercialAdmission") or "").strip()
                 if crawl_allowed not in (True, False):
@@ -150,6 +154,51 @@ def verify_travel_source_registry(*, allowed_extractors: set[str] | None = None)
                     issues.append(f"{prefix}: siteCrawlProfile.allowedPaths must not be empty when crawlAllowed=true")
                 if crawl_allowed is True and not content_lanes:
                     issues.append(f"{prefix}: siteCrawlProfile.contentLanes must not be empty when crawlAllowed=true")
+                if crawl_allowed is True and robots_policy != "respect_robots_txt":
+                    issues.append(
+                        f"{prefix}: crawlAllowed=true requires robotsPolicy=respect_robots_txt"
+                    )
+                if crawl_allowed is True and login_policy != "public_only":
+                    issues.append(
+                        f"{prefix}: crawlAllowed=true requires loginPolicy=public_only"
+                    )
+                if crawl_allowed is True and not terms_url.startswith("https://"):
+                    issues.append(
+                        f"{prefix}: crawlAllowed=true requires an https termsUrl"
+                    )
+                if crawl_allowed is True:
+                    if not isinstance(rate_limit, dict):
+                        issues.append(
+                            f"{prefix}: crawlAllowed=true requires siteCrawlProfile.rateLimit"
+                        )
+                    else:
+                        try:
+                            requests_per_second = float(
+                                rate_limit.get("maxRequestsPerSecond") or 0
+                            )
+                        except (TypeError, ValueError):
+                            requests_per_second = 0
+                        if requests_per_second <= 0:
+                            issues.append(
+                                f"{prefix}: rateLimit.maxRequestsPerSecond must be positive"
+                            )
+                        backoff_statuses = rate_limit.get("backoffOnStatus")
+                        if not isinstance(backoff_statuses, list) or not backoff_statuses:
+                            issues.append(
+                                f"{prefix}: rateLimit.backoffOnStatus must not be empty"
+                            )
+                    if not isinstance(max_depth, int) or isinstance(max_depth, bool) or max_depth < 0:
+                        issues.append(
+                            f"{prefix}: crawlAllowed=true requires maxDepth >= 0"
+                        )
+                    if (
+                        not isinstance(max_pages_per_day, int)
+                        or isinstance(max_pages_per_day, bool)
+                        or max_pages_per_day <= 0
+                    ):
+                        issues.append(
+                            f"{prefix}: crawlAllowed=true requires maxPagesPerDay > 0"
+                        )
                 if rights_policy and rights_policy not in license_policies:
                     issues.append(f"{prefix}: siteCrawlProfile.rightsPolicy {rights_policy!r} not declared in licensePolicies")
                 if robots_policy in {"ignore", "bypass"}:
@@ -217,6 +266,45 @@ def verify_travel_source_registry(*, allowed_extractors: set[str] | None = None)
                                     f"{prefix}: siteCrawlProfile.discoveryStrategy.queryTemplates must not be empty "
                                     "for content_search"
                                 )
+                        sitemap_urls = discovery_strategy.get("sitemapUrls")
+                        if sitemap_urls is not None:
+                            if (
+                                not isinstance(sitemap_urls, list)
+                                or not sitemap_urls
+                                or any(
+                                    not str(value).strip().startswith("https://")
+                                    for value in sitemap_urls
+                                )
+                            ):
+                                issues.append(
+                                    f"{prefix}: discoveryStrategy.sitemapUrls must be non-empty https URLs"
+                                )
+                        pagination = discovery_strategy.get("pagination")
+                        if pagination is not None:
+                            if not isinstance(pagination, dict):
+                                issues.append(
+                                    f"{prefix}: discoveryStrategy.pagination must be an object"
+                                )
+                            else:
+                                pagination_template = str(
+                                    pagination.get("urlTemplate") or ""
+                                ).strip()
+                                pagination_max_pages = pagination.get("maxPages")
+                                if (
+                                    not pagination_template.startswith("https://")
+                                    or "{page}" not in pagination_template
+                                ):
+                                    issues.append(
+                                        f"{prefix}: pagination.urlTemplate must be https and contain {{page}}"
+                                    )
+                                if (
+                                    not isinstance(pagination_max_pages, int)
+                                    or isinstance(pagination_max_pages, bool)
+                                    or pagination_max_pages <= 0
+                                ):
+                                    issues.append(
+                                        f"{prefix}: pagination.maxPages must be positive"
+                                    )
                         if mode in {"site_listing_scan", "photo_collection_scan"}:
                             if "light_fetch" not in precheck_gates:
                                 issues.append(

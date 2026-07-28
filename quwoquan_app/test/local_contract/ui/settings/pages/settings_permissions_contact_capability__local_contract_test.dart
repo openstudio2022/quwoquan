@@ -11,22 +11,22 @@ void main() {
     await _pump(tester, CapabilityProfile.web);
 
     expect(
-      find.text(UITextConstants.settingsContactsPermission),
+      find.text(SettingsText.settingsContactsPermission),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.settingsPermissionUnavailable),
+      find.text(SettingsText.settingsPermissionUnavailable),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.openSettings), findsNothing);
+    expect(find.text(FoundationText.openSettings), findsNothing);
   });
 
   testWidgets('Mobile 有通讯录能力时提供系统设置动作', (tester) async {
     await _pump(tester, CapabilityProfile.mobile);
 
-    expect(find.text(UITextConstants.openSettings), findsOneWidget);
+    expect(find.text(FoundationText.openSettings), findsOneWidget);
     expect(
-      find.text(UITextConstants.settingsPermissionUnavailable),
+      find.text(SettingsText.settingsPermissionUnavailable),
       findsNothing,
     );
   });

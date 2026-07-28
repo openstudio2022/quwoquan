@@ -50,13 +50,29 @@
 <a id="dec-003"></a>
 ### DEC-003 第一方容器预验证与正式 release transaction 物理分轨
 
-- 决策：预验证只使用独立 Compose project、远端目录和 rootless user systemd unit；只消费 Service Pipeline 发布到 GHCR 的 OCI digest 制品，不进入 rollout lock、SLO、正式 release ledger 或 receipt。受限单机使用声明式容器内存/PID 上限；空间门同时校验当前可用量、可回收量与回收后实测量。
+- 决策：预验证只使用独立 Compose project、远端目录和 rootless user systemd unit。
+- 决策补充：只消费 Service Pipeline 发布到 GHCR 的 OCI digest 制品，不进入 rollout lock、SLO、正式 release ledger 或 receipt。
+- 决策补充：受限单机使用声明式容器内存/PID 上限，空间门同时校验当前可用量、可回收量与回收后实测量。
 - 理由：在 Provider、SFU、真实数据和公网入口尚未就绪时，仍需验证第一方容器可部署性，但该结果不能被误用为生产准出。
 - 被否决方案：使用 `latest`、远端临时构建、旧容器、裸 IP public base，或把容器启动成功写成正式发布成功。
 - 约束与影响：隔离数据使用重新摘要的不可提升配置投影和独立随机认证材料，unit 不得继承正式 credentials；Actions Artifact 只可作为非必需兼容输出，ReleaseManifest 配置包和镜像均以 GHCR digest 消费。旧运行面回收仅允许匹配声明前缀且处于 `Created/Exited` 的容器和未使用镜像，禁止删除任何 volume 或恢复容器。报告必须并列输出 container runtime、Provider readiness 与 release eligibility，后两者在完整生产证据前固定为 `GATE_BLOCK`。
 - 关联要求：`REQ-009`
 - 影响 Story：在 [`zero-risk-production-readiness`](./zero-risk-production-readiness/spec.md) 中约束预验证与正式准出分轨。
 - 关联验收：`SIT-008`、`GWT-003`
+
+<a id="dec-004"></a>
+### DEC-004 发布执行面唯一，Portal 仅观察且 Config ACK 是发布前置条件
+
+- 决策：唯一可变发布执行面为受保护的 CI/CD 调用 `stackctl`。
+- Portal 只能读取由控制面、Prometheus、SLS 或业务投影返回的状态，不能 apply、扩量或回滚。
+- 发布页仅呈现当前候选摘要下按服务聚合的实例 ACK，不得从本地 release 文件推导阶段、生成 workflow/rollback token 或把默认值显示为成功。
+- 决策补充：每个受管实例以 service principal 调用 generated ConfigSnapshot resolve/report operation；其 service/environment/instance 身份、ReleaseManifest digest、configVersion 和 desired/effective hash 由控制面验证。`stackctl` 在 hosted rollout 中只接受所有必需实例在有效期内对候选摘要 `in-sync` 的 config-convergence readiness。
+- 理由：由 Portal、容器内脚本或调用方参数分别驱动发布会形成第二执行面，且匿名或未绑定的 ACK 无法证明当前候选已实际加载。
+- 被否决方案：Portal 提供 release mutation、服务匿名 POST ACK、客户端自报 province/carrier 参与分流，或仅凭单一容器存活继续 rollout。
+- 约束与影响：灰度只使用 appVersion/userId。province/carrier 仅在可信边缘证明链和 hosted UAT 同时完成后才可启用，IaC 在满足该条件前保持显式禁用。缺少任何 ACK、实例过期、摘要不匹配或未可信维度时均 fail-closed，且不得用本地状态、旧报告或页面显示替代。无真实 query/mutation 契约的全局搜索、通知计数和工作台入口不得渲染为可操作能力。
+- 关联要求：`REQ-006`
+- 影响 Story：同 DEC-001，约束 `SIT-004` 与 `SIT-006`。
+- 关联验收：`SIT-002`、`SIT-004`、`SIT-006`
 
 ## 5. 失败与恢复
 

@@ -36,23 +36,23 @@ void main() {
 
     await tester.longPress(find.text('待确认删除的评论'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.commentDeleteAction).last);
+    await tester.tap(find.text(ContentText.commentDeleteAction).last);
     await tester.pumpAndSettle();
 
     expect(
-      find.text(UITextConstants.commentDeleteConfirmTitle),
+      find.text(ContentText.commentDeleteConfirmTitle),
       findsOneWidget,
     );
     expect(comments.deleteCalls, 0);
-    await tester.tap(find.text(UITextConstants.cancel));
+    await tester.tap(find.text(FoundationText.cancel));
     await tester.pumpAndSettle();
     expect(comments.deleteCalls, 0);
 
     await tester.longPress(find.text('待确认删除的评论'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.commentDeleteAction).last);
+    await tester.tap(find.text(ContentText.commentDeleteAction).last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.commentDeleteAction).last);
+    await tester.tap(find.text(ContentText.commentDeleteAction).last);
     await tester.pumpAndSettle();
 
     expect(comments.deleteCalls, 1);
@@ -80,18 +80,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.bySemanticsLabel(UITextConstants.commentMoreActions),
+      find.bySemanticsLabel(ContentText.commentMoreActions),
       findsOneWidget,
     );
     await tester.tap(find.byIcon(CupertinoIcons.trash));
     await tester.pumpAndSettle();
 
     expect(
-      find.text(UITextConstants.commentDeleteConfirmTitle),
+      find.text(ContentText.commentDeleteConfirmTitle),
       findsOneWidget,
     );
     expect(comments.deleteCalls, 0);
-    await tester.tap(find.text(UITextConstants.commentDeleteAction).last);
+    await tester.tap(find.text(ContentText.commentDeleteAction).last);
     await tester.pumpAndSettle();
 
     expect(comments.deleteCalls, 1);

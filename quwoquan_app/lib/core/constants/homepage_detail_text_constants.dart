@@ -14,7 +14,7 @@ abstract final class HomepageDetailText {
   static const String offlineNoticeMessage = '这里暂时不可关注，过往记录、讨论与关联内容会继续保留，方便回看。';
 
   static String relatedGroupMemberLine(String formattedCount) =>
-      '$formattedCount ${UITextConstants.homepageRelatedGroupSubtitle}';
+      '$formattedCount ${ObjectHomepageText.homepageRelatedGroupSubtitle}';
 
   static const String relatedGroupOpenAction = '打开圈子';
   static const String relatedGroupDefaultReason = '围绕这里的记录与讨论正在沉淀';

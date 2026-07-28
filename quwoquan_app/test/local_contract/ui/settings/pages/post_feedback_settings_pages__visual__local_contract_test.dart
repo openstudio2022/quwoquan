@@ -7,7 +7,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/settings/pages/blocked_keywords_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/my_reports_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 class _AuthenticatedSessionController extends AuthSessionController {
   @override
@@ -30,7 +30,9 @@ void main() {
 
   testWidgets('我的举报浅色 iOS 页面视觉基线', (tester) async {
     await _setPhoneSurface(tester);
-    final now = DateTime.utc(2026, 7, 20);
+    // 视觉基线只验证行高与层级；使用稳定的相对时间窗口，避免固定日期跨过
+    // ContentTimeLabel 的 7 天边界后从“N天前”变为绝对日期而产生伪 diff。
+    final now = DateTime.now().subtract(const Duration(days: 2));
     final query = AlphaContentReportQueryAdapter(<ContentMyReportItem>[
       ContentMyReportItem(
         id: 'report-1',

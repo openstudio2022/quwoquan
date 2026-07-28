@@ -1,4 +1,5 @@
 """自治 canonical + immutable release overlay 一致性扫描。"""
+
 from __future__ import annotations
 
 import json
@@ -6,9 +7,14 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from core.io import read_json, write_json
-from core.media_asset_url import build_release_media_manifest
+from core.media_asset_url import (
+    build_public_media_slice_key,
+    is_public_media_slice_key,
+    sha256_file,
+)
 from core.paths import PUBLISH_ROOT
 from core.release_layout import payload_file, payload_root
+from core.schema import assert_valid
 
 DESIRED_SCHEMA = "quwoquan_data.release_desired_state"
 
@@ -38,6 +44,7 @@ def _creator_issues(
     ref: str,
     *,
     media_root: Path | None = None,
+    check_private_assets: bool = True,
 ) -> list[dict[str, str]]:
     issues: list[dict[str, str]] = []
     if not _safe_local_ref(ref):
@@ -47,11 +54,14 @@ def _creator_issues(
     if not header_path.is_file():
         return [_issue("desired_creator_missing", "creator object 不存在", ref)]
     header = read_json(header_path)
-    if (
-        header.get("schema") != "quwoquan_data.creator_object"
-        or str(header.get("creatorId") or "") != Path(ref).name
-    ):
-        issues.append(_issue("creator_identity_mismatch", "creatorId/schema 与 desired ref 不一致", ref))
+    if header.get("schema") != "quwoquan_data.creator_object" or str(header.get("creatorId") or "") != Path(ref).name:
+        issues.append(
+            _issue(
+                "creator_identity_mismatch",
+                "creatorId/schema 与 desired ref 不一致",
+                ref,
+            )
+        )
     local_paths: dict[str, Path] = {}
     for key in ("profileRef", "assetsRef", "worksRefsRef"):
         local_ref = str(header.get(key) or "")
@@ -66,10 +76,17 @@ def _creator_issues(
     profile_path = local_paths.get("profileRef")
     if profile_path is not None:
         profile = read_json(profile_path)
-        if str(profile.get("userId") or "") != str(header.get("creatorId") or ""):
-            issues.append(_issue("creator_profile_identity_mismatch", "profile.userId 与 creatorId 不一致", ref))
+        profile_creator_id = str(profile.get("creatorId") or profile.get("userId") or "")
+        if profile_creator_id != str(header.get("creatorId") or ""):
+            issues.append(
+                _issue(
+                    "creator_profile_identity_mismatch",
+                    "profile.creatorId 与 creator object 不一致",
+                    ref,
+                )
+            )
     assets_path = local_paths.get("assetsRef")
-    if assets_path is not None:
+    if assets_path is not None and check_private_assets:
         issues.extend(_cas_issues(media_root or root, read_json(assets_path), ref))
     works_path = local_paths.get("worksRefsRef")
     if works_path is not None:
@@ -79,7 +96,13 @@ def _creator_issues(
             try:
                 work = json.loads(line)
             except json.JSONDecodeError:
-                issues.append(_issue("invalid_creator_work_ref", f"works refs 第 {line_number} 行不是 JSON", ref))
+                issues.append(
+                    _issue(
+                        "invalid_creator_work_ref",
+                        f"works refs 第 {line_number} 行不是 JSON",
+                        ref,
+                    )
+                )
                 continue
             work_ref = str(work.get("ref") or "")
             if work_ref and (not _safe_local_ref(work_ref) or not (root / work_ref).is_dir()):
@@ -113,6 +136,42 @@ def _cas_issues(root: Path, value: Any, source: str) -> list[dict[str, str]]:
     return issues
 
 
+def _release_private_storage_issues(objects: Path) -> list[dict[str, str]]:
+    """Reject private CAS identity anywhere in the immutable object payload."""
+
+    def contains_private_storage(value: Any) -> bool:
+        if isinstance(value, dict):
+            if "objectKey" in value:
+                return True
+            return any(contains_private_storage(child) for child in value.values())
+        if isinstance(value, list):
+            return any(contains_private_storage(child) for child in value)
+        return isinstance(value, str) and value.startswith("media/objects/sha256/")
+
+    issues: list[dict[str, str]] = []
+    for path in sorted(objects.rglob("*.json")):
+        if contains_private_storage(read_json(path)):
+            issues.append(
+                _issue(
+                    "release_object_private_storage_leak",
+                    "release object snapshot 禁止暴露 private CAS objectKey",
+                    path.relative_to(objects).as_posix(),
+                )
+            )
+    return issues
+
+
+def _object_root(root: Path, kind: str, ref: str) -> Path:
+    return root / kind / ref.removeprefix(f"{kind}/")
+
+
+def _asset_rows(root: Path) -> list[dict[str, Any]]:
+    path = root / "asset.refs.json"
+    if not path.is_file():
+        return []
+    return [row for row in read_json(path).get("assets") or [] if isinstance(row, dict)]
+
+
 def _load_object_manifest(root: Path, kind: str, ref: str) -> tuple[Path, dict[str, Any]] | None:
     object_root = root / kind / ref.removeprefix(f"{kind}/")
     manifest = object_root / "manifest.json"
@@ -130,32 +189,154 @@ def _release_media_issues(
 ) -> list[dict[str, str]]:
     release_id = str(contract.get("releaseId") or "")
     desired = contract.get("desiredRefs") if isinstance(contract.get("desiredRefs"), Mapping) else {}
-    expected = build_release_media_manifest(
-        release_id=release_id,
-        post_refs=sorted({str(ref) for ref in desired.get("posts") or [] if str(ref).strip()}),
-        entity_refs=sorted({str(ref) for ref in desired.get("entities") or [] if str(ref).strip()}),
-        object_root=objects,
-        media_root=media_root,
-    )
     issues: list[dict[str, str]] = []
-    for message in expected["issues"]:
-        issues.append(_issue("release_media_closure_invalid", str(message), release_id))
+    expected_assets: dict[str, str] = {}
+    for kind in ("creators", "posts", "entities"):
+        for ref in sorted({str(item) for item in desired.get(kind) or [] if str(item).strip()}):
+            root = _object_root(objects, kind, ref)
+            for row in _asset_rows(root):
+                asset_id = str(row.get("assetId") or "").strip()
+                sha256 = str(row.get("sha256") or "").strip()
+                if not asset_id or not sha256:
+                    issues.append(
+                        _issue(
+                            "release_media_source_identity_invalid",
+                            "asset.refs 必须声明 assetId 与 sha256",
+                            f"{kind}/{ref}",
+                        )
+                    )
+                    continue
+                prior = expected_assets.get(asset_id)
+                if prior is not None and prior != sha256:
+                    issues.append(
+                        _issue(
+                            "release_media_source_identity_collision",
+                            "同一 assetId 绑定了不同 sha256",
+                            asset_id,
+                        )
+                    )
+                    continue
+                expected_assets[asset_id] = sha256
     path = payload_file(release_root, "media_manifest.json")
     if not path.is_file():
         return issues
     actual = read_json(path)
-    if actual.get("schema") != "quwoquan_data.release_media_manifest":
-        issues.append(_issue("release_media_schema_invalid", "media_manifest schema 非法", release_id))
+    try:
+        assert_valid(
+            actual,
+            "release",
+            "media_manifest",
+            label=f"release_media_manifest:{release_id}",
+        )
+    except ValueError as exc:
+        issues.append(_issue("release_media_schema_invalid", str(exc), release_id))
     if str(actual.get("releaseId") or "") != release_id:
-        issues.append(_issue("release_media_identity_mismatch", "media_manifest releaseId 不一致", release_id))
+        issues.append(
+            _issue(
+                "release_media_identity_mismatch",
+                "media_manifest releaseId 不一致",
+                release_id,
+            )
+        )
     actual_assets = actual.get("assets")
     if not isinstance(actual_assets, list):
-        issues.append(_issue("release_media_assets_invalid", "media_manifest assets 必须为数组", release_id))
-    elif actual_assets != expected["assets"]:
+        issues.append(
+            _issue(
+                "release_media_assets_invalid",
+                "media_manifest assets 必须为数组",
+                release_id,
+            )
+        )
+        return issues
+    actual_identity: dict[str, str] = {}
+    slice_owners: dict[str, str] = {}
+    for row in actual_assets:
+        if not isinstance(row, Mapping):
+            continue
+        asset_id = str(row.get("assetId") or "").strip()
+        sha256 = str(row.get("sha256") or "").strip()
+        public_slice_key = str(row.get("publicSliceKey") or "").strip()
+        version = row.get("version")
+        expected_slice_key = (
+            build_public_media_slice_key(
+                asset_id=asset_id,
+                kind=str(row.get("kind") or ""),
+                version=version,
+                content_type=str(row.get("contentType") or ""),
+            )
+            if isinstance(version, int) and not isinstance(version, bool)
+            else ""
+        )
+        if "objectKey" in row:
+            issues.append(
+                _issue(
+                    "release_media_private_key_leak",
+                    "media_manifest 禁止暴露 private CAS objectKey",
+                    asset_id,
+                )
+            )
+        if not is_public_media_slice_key(public_slice_key):
+            issues.append(
+                _issue(
+                    "release_media_public_slice_invalid",
+                    "publicSliceKey 不是 avatar/image/video canonical slice",
+                    asset_id,
+                )
+            )
+            continue
+        if public_slice_key != expected_slice_key:
+            issues.append(
+                _issue(
+                    "release_media_public_slice_identity_mismatch",
+                    "publicSliceKey 必须由 MediaAsset kind/assetId/version/contentType 唯一派生",
+                    asset_id,
+                )
+            )
+            continue
+        if asset_id in actual_identity:
+            issues.append(
+                _issue(
+                    "release_media_identity_duplicated",
+                    "media_manifest 内 assetId 必须唯一",
+                    asset_id,
+                )
+            )
+            continue
+        slice_owner = slice_owners.get(public_slice_key)
+        if slice_owner is not None:
+            issues.append(
+                _issue(
+                    "release_media_public_slice_collision",
+                    f"publicSliceKey 同时绑定 {slice_owner} 与 {asset_id}",
+                    public_slice_key,
+                )
+            )
+            continue
+        physical = media_root / public_slice_key
+        if not physical.is_file():
+            issues.append(
+                _issue(
+                    "release_media_public_slice_missing",
+                    f"public slice 不存在: {public_slice_key}",
+                    asset_id,
+                )
+            )
+            continue
+        if sha256_file(physical) != sha256:
+            issues.append(
+                _issue(
+                    "release_media_public_slice_hash_mismatch",
+                    "public slice 与 MediaAsset sha256 不一致",
+                    asset_id,
+                )
+            )
+        actual_identity[asset_id] = sha256
+        slice_owners[public_slice_key] = asset_id
+    if actual_identity != expected_assets:
         issues.append(
             _issue(
                 "release_media_closure_mismatch",
-                "media_manifest 必须精确等于 desired objects 的 CAS 闭包，禁止携带无关 canonical media",
+                "media_manifest 必须精确等于 desired objects 的 MediaAsset 身份闭包",
                 release_id,
             )
         )
@@ -211,7 +392,13 @@ def scan_release_contract(
                 issues.append(_issue("invalid_final_content_ref", "finalContentRef 非法", ref))
             elif not (object_root / final_ref).is_file():
                 issues.append(_issue("final_content_missing", "final content 不存在", ref))
-            for evidence_ref in ("sourceCatalogRef", "rightsRef", "creatorRefsRef", "tagRefsRef", "assetRefsRef"):
+            for evidence_ref in (
+                "sourceCatalogRef",
+                "rightsRef",
+                "creatorRefsRef",
+                "tagRefsRef",
+                "assetRefsRef",
+            ):
                 rel = str(manifest.get(evidence_ref) or "")
                 if not rel or Path(rel).is_absolute() or ".." in Path(rel).parts or not (object_root / rel).is_file():
                     issues.append(_issue("object_evidence_missing", f"{evidence_ref} 不可解析", ref))
@@ -222,6 +409,26 @@ def scan_release_contract(
                     required_creators.add(str(creator_ref))
                     if not _creator_exists(objects, str(creator_ref)):
                         issues.append(_issue("dangling_creator_ref", str(creator_ref), ref))
+                if kind == "entities":
+                    entity_header = object_root / "_entity.json"
+                    if entity_header.is_file():
+                        profile_id = str(
+                            read_json(entity_header).get("creatorProfileId") or ""
+                        ).strip()
+                        if profile_id:
+                            required_creators.add(profile_id)
+                            if profile_id not in creator_refs:
+                                issues.append(
+                                    _issue(
+                                        "entity_creator_closure_missing",
+                                        "entity creatorProfileId 必须进入 creator.refs.json",
+                                        ref,
+                                    )
+                                )
+                            if not _creator_exists(objects, profile_id):
+                                issues.append(
+                                    _issue("dangling_creator_ref", profile_id, ref)
+                                )
             tag_refs_path = object_root / str(manifest.get("tagRefsRef") or "")
             if tag_refs_path.is_file():
                 for tag_ref in read_json(tag_refs_path).get("tagRefs") or []:
@@ -230,20 +437,23 @@ def scan_release_contract(
                     if not _tag_exists(objects, tag_ref):
                         issues.append(_issue("dangling_tag_ref", tag_ref, ref))
             asset_refs_path = object_root / str(manifest.get("assetRefsRef") or "")
-            if asset_refs_path.is_file():
+            if asset_refs_path.is_file() and release_root is None:
                 issues.extend(_cas_issues(media_root, read_json(asset_refs_path), ref))
             action = actions.get((kind[:-1], ref)) or actions.get((kind, ref))
             if action is not None and not action.get("sourceHash"):
                 issues.append(_issue("missing_source_hash", "release action 缺少 sourceHash", ref))
     for ref in creators:
-        issues.extend(_creator_issues(objects, ref, media_root=media_root))
+        issues.extend(
+            _creator_issues(
+                objects,
+                ref,
+                media_root=media_root,
+                check_private_assets=release_root is None,
+            )
+        )
         header_path = objects / "creators" / ref / "_creator.json"
         if header_path.is_file():
-            required_tags.update(
-                str(item)
-                for item in read_json(header_path).get("tagRefs") or []
-                if str(item).strip()
-            )
+            required_tags.update(str(item) for item in read_json(header_path).get("tagRefs") or [] if str(item).strip())
     if creators != sorted(required_creators):
         issues.append(
             _issue(
@@ -265,20 +475,19 @@ def scan_release_contract(
             issues.append(_issue("desired_tag_missing", "tag snapshot 不存在", ref))
             continue
     if release_root is not None:
+        issues.extend(_release_private_storage_issues(objects))
         for kind, refs in (
             ("posts", posts),
             ("entities", entities),
             ("creators", creators),
             ("tags", tags),
         ):
-            marker = "_creator.json" if kind == "creators" else (
-                "_definition.json" if kind == "tags" else "manifest.json"
+            marker = (
+                "_creator.json" if kind == "creators" else ("_definition.json" if kind == "tags" else "manifest.json")
             )
             for ref in refs:
                 object_ref = ref.removeprefix(f"{kind}/")
-                if not payload_file(
-                    release_root, f"objects/{kind}/{object_ref}/{marker}"
-                ).is_file():
+                if not payload_file(release_root, f"objects/{kind}/{object_ref}/{marker}").is_file():
                     issues.append(
                         _issue(
                             "release_object_snapshot_missing",
@@ -286,7 +495,13 @@ def scan_release_contract(
                             ref,
                         )
                     )
-        for name in ("release.json", "desired_state.json", "sample_bundle.json", "media_manifest.json", "index/objects.json"):
+        for name in (
+            "release.json",
+            "desired_state.json",
+            "sample_bundle.json",
+            "media_manifest.json",
+            "index/objects.json",
+        ):
             if not payload_file(release_root, name).is_file():
                 issues.append(_issue("release_artifact_missing", name, str(release_root)))
         issues.extend(
@@ -301,7 +516,7 @@ def scan_release_contract(
         required = {
             "post-write": "import.json",
             "post-write-pre-activation": "import.json",
-            "post-activation": "activation-smoke.json",
+            "post-activation": "applied_ref.json",
         }.get(phase)
         if required and not (env_run_root / required).is_file():
             issues.append(_issue("environment_evidence_missing", required, str(env_run_root)))
@@ -325,8 +540,7 @@ def scan_release_contract(
             "desiredCreators": len(creators),
             "desiredTags": len(tags),
             "danglingRefs": sum(
-                issue["code"].startswith("dangling") or issue["code"] == "desired_object_missing"
-                for issue in issues
+                issue["code"].startswith("dangling") or issue["code"] == "desired_object_missing" for issue in issues
             ),
         },
     }

@@ -24,7 +24,9 @@ class ObjectIntersectionListPage extends ConsumerWidget {
 
   String get _title {
     final trimmed = title.trim();
-    return trimmed.isEmpty ? UITextConstants.objectIntersectionsTitle : trimmed;
+    return trimmed.isEmpty
+        ? ObjectHomepageText.objectIntersectionsTitle
+        : trimmed;
   }
 
   void _openObject(
@@ -80,7 +82,7 @@ class ObjectIntersectionListPage extends ConsumerWidget {
       title: _title,
       onBack: () => context.pop(),
       body: asyncReasons.when(
-        loading: () => const Center(child: CupertinoActivityIndicator()),
+        loading: () => AppRequestFeedback.section(),
         error: (error, _) {
           final resolved = runtimeErrorSemantic(
             context,
@@ -88,26 +90,7 @@ class ObjectIntersectionListPage extends ConsumerWidget {
             category: UiErrorCategory.pageLoad,
             scope: UiErrorScope.page,
           );
-          return AppPageErrorState(
-            semantic: UiErrorSemantic(
-              category: resolved.category,
-              scope: resolved.scope,
-              title: UITextConstants.objectIntersectionsUnavailableTitle,
-              message: resolved.message,
-              secondaryMessage: resolved.secondaryMessage,
-              primaryAction: resolved.primaryAction,
-              secondaryAction: resolved.secondaryAction,
-              dismissible: resolved.dismissible,
-              sourceCode: resolved.sourceCode,
-              failureKind: resolved.failureKind,
-              recoveryAction: resolved.recoveryAction,
-              presentation: resolved.presentation,
-              tone: resolved.tone,
-              appearanceMode: resolved.appearanceMode,
-              sourceRouteId: resolved.sourceRouteId,
-              sourceSurfaceId: resolved.sourceSurfaceId,
-            ),
-          );
+          return AppPageErrorState(semantic: resolved);
         },
         data: (reasons) {
           final card = ObjectIntersectionCard.fromReasons(
@@ -137,7 +120,7 @@ class ObjectIntersectionListPage extends ConsumerWidget {
                 child: AppListSurface(
                   padding: EdgeInsets.all(AppSpacing.containerMd),
                   child: Text(
-                    UITextConstants.objectIntersectionsEmpty,
+                    ObjectHomepageText.objectIntersectionsEmpty,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: AppTypography.iosSubheadline,

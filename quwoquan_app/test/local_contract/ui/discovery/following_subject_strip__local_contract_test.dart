@@ -109,7 +109,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(UITextConstants.followingSubjectStripTitle),
+      find.text(DiscoveryText.followingSubjectStripTitle),
       findsOneWidget,
     );
     expect(find.text('旅行摄影师'), findsOneWidget);
@@ -175,11 +175,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(UITextConstants.followingSubjectEmptyTitle),
+      find.text(DiscoveryText.followingSubjectEmptyTitle),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.followingSubjectEmptySubtitle),
+      find.text(DiscoveryText.followingSubjectEmptySubtitle),
       findsOneWidget,
     );
   });
@@ -200,7 +200,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.followingSubjectEmptyTitle), findsNothing);
+    expect(find.text(DiscoveryText.followingSubjectEmptyTitle), findsNothing);
     expect(find.byType(AppSectionErrorState), findsOneWidget);
   });
 }

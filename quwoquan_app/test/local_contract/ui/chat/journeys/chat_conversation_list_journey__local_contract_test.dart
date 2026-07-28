@@ -9,13 +9,14 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/chat_fixture.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 import '../../../../support/cloud_services/user_typed_facet_test_support.dart';
 
@@ -190,7 +191,8 @@ void main() {
 
       expect(find.byType(ChatPage), findsOneWidget);
       expect(find.byType(AppPageErrorState), findsOneWidget);
-      expect(find.text(ChatText.chatListLoadFailedTitle), findsOneWidget);
+      expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+      expect(find.text(SearchText.recoveryReloadLaterMessage), findsOneWidget);
     });
 
     testWidgets('会话 Facet 异常不导致页面崩溃', (tester) async {

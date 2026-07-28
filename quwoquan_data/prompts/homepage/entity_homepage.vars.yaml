@@ -2,6 +2,7 @@ template: entity_homepage
 system:
   required:
     - min_page_chars
+    - min_section_chars
   optional: []
 task:
   required:

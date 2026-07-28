@@ -197,6 +197,32 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+    /auth/login/social/phone/complete:
+        post:
+            operationId: CompleteFederatedPhoneBinding
+            x-contract-operation-id: user.credential_binding.CompleteFederatedPhoneBinding
+            x-object-id: user.credential_binding
+            x-actor: none
+            x-application:
+                kind: command
+                facet: CredentialCommandFacade
+                method: completeFederatedPhoneBinding
+                aggregateOwner: CredentialBinding
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CompleteFederatedPhoneBindingRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
     /auth/login/wechat:
         post:
             operationId: LoginWithWechat
@@ -3065,6 +3091,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CloseAccountResultWire
+            x-contract-placeholder: true
+        CompleteFederatedPhoneBindingRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CompleteFederatedPhoneBindingRequest
             x-contract-placeholder: true
         ConfirmProposalRequest:
             type: object

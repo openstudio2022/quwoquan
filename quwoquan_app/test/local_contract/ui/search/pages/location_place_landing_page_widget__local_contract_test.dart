@@ -93,7 +93,7 @@ void main() {
     expect(find.text('西湖旁断桥小巷'), findsOneWidget);
     expect(find.text('杭州 · 西湖区'), findsOneWidget);
     expect(
-      find.text(UITextConstants.locationPlaceLandingTempBadge),
+      find.text(CreationText.locationPlaceLandingTempBadge),
       findsOneWidget,
     );
     expect(
@@ -191,10 +191,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(UITextConstants.searchResultUnavailableTitle),
-      findsWidgets,
-    );
-    expect(find.text(UITextConstants.searchEditQuery), findsOneWidget);
+    expect(find.text(SearchText.recoveryContentUnavailableTitle), findsWidgets);
+    expect(find.text(SearchText.recoveryReturnAction), findsOneWidget);
   });
 }

@@ -26,6 +26,7 @@ void main() {
       'lib/components/media/image/editor/panels/image_editor_operation_panel.dart',
       'lib/components/media/image/editor/panels/image_editor_operation_panel_pro.dart',
       'lib/components/media/image/editor/panels/image_editor_operation_panel_controls.dart',
+      'lib/components/media/image/editor/panels/image_editor_operation_panel_filter.dart',
     ],
   };
 
@@ -96,7 +97,8 @@ void main() {
     expect(pickerSources, contains('this.imageEditorBuilder'));
     expect(pickerSources, contains('this.cameraBuilder'));
     expect(panelSources, contains('AppSpacing.'));
-    expect(panelSources, contains('UITextConstants.'));
+    expect(panelSources, contains('MediaText.'));
+    expect(panelSources, contains('ContentText.'));
   });
 
   test('四个已达标原文件不再进入 file_line_budget allowlist', () {

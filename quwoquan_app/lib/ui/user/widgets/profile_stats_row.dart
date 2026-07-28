@@ -28,17 +28,17 @@ class ProfileStatsRow extends StatelessWidget {
     final items = <ObjectStatItem>[
       ObjectStatItem(
         value: formatCompactActionCount(subject?.followerCount ?? 0),
-        label: UITextConstants.profileStatFollowers,
+        label: ProfileText.profileStatFollowers,
         type: 'fans',
       ),
       ObjectStatItem(
         value: formatCompactActionCount(subject?.followingCount ?? 0),
-        label: UITextConstants.follow,
+        label: FoundationText.follow,
         type: 'following',
       ),
       ObjectStatItem(
         value: formatCompactActionCount(subject?.likeCount ?? 0),
-        label: UITextConstants.circleLikes,
+        label: CommunityText.circleLikes,
         type: 'likes',
       ),
       ObjectStatItem(

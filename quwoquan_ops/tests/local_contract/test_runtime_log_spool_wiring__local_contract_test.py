@@ -34,6 +34,7 @@ class RuntimeLogSpoolWiringContractTest(unittest.TestCase):
             media_root="/runtime/media",
             legal_root="/runtime/legal",
             portal_root="/runtime/portal",
+            web_root="/runtime/public-web",
             caddyfile_path="/runtime/Caddyfile",
             model_cache_root="/runtime/model-cache",
         )
@@ -85,16 +86,44 @@ class RuntimeLogSpoolWiringContractTest(unittest.TestCase):
         self.assertNotIn("RUNTIME_LOG_INGEST_URL", env)
         self.assertNotIn("RUNTIME_LOG_SPOOL_DIR", env)
 
-    def test_platform_ops_reads_the_synced_release_ledger_projection(self) -> None:
+    def test_platform_ops_does_not_mount_release_ledger_as_a_portal_data_source(self) -> None:
         rendered = self.rewrite("platform-ops-service")
-        self.assertEqual(
-            rendered["environment"]["QWQ_PROD_RELEASE_STATE_DIR"],
-            "/var/lib/quwoquan/release-state",
+        self.assertNotIn(
+            "QWQ_PROD_RELEASE_STATE_DIR",
+            rendered["environment"],
         )
-        self.assertIn(
+        self.assertNotIn(
             "./release-ledger:/var/lib/quwoquan/release-state:ro",
             rendered["volumes"],
         )
+
+    def test_every_managed_runtime_service_receives_bound_config_ack_identity(self) -> None:
+        for service in sorted(self.render.RUNTIME_LOG_EXPORT_SERVICES):
+            with self.subTest(service=service):
+                rendered = self.rewrite(service)
+                environment = rendered["environment"]
+                cluster = "prod-prod-control-a"
+                self.assertEqual(
+                    environment["PLATFORM_OPS_BASE_URL"],
+                    "http://platform-ops-service:18088",
+                )
+                self.assertEqual(environment["CLUSTER_NAME"], cluster)
+                self.assertEqual(
+                    environment["SERVICE_INSTANCE_ID"],
+                    f"{service}-{cluster}-0",
+                )
+                self.assertEqual(environment["IMAGE_VERSION"], "1.20260720.1")
+
+        platform = self.rewrite("platform-ops-service")["environment"]
+        expected = {
+            f"{service}-prod-prod-control-a-0"
+            for service in self.render.RUNTIME_LOG_EXPORT_SERVICES
+        }
+        self.assertEqual(
+            set(platform["CONFIG_ACK_REQUIRED_INSTANCES"].split(",")),
+            expected,
+        )
+        self.assertEqual(platform["CONFIG_ACK_MAX_AGE_SECONDS"], "120")
 
 
 if __name__ == "__main__":

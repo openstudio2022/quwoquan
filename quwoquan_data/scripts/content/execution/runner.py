@@ -214,6 +214,7 @@ def run_execution(
     execution_id: str,
     recipe: dict[str, Any],
     *,
+    until: str | None = None,
     recover_stage: str | None = None,
     recovery_reason: str | None = None,
 ) -> None:
@@ -230,6 +231,7 @@ def run_execution(
         ControllerRequest(
             execution_id=execution_id,
             resume=True,
+            until=ExecutionStage(until) if until else None,
             recover_stage=ExecutionStage(recover_stage) if recover_stage else None,
             recovery_reason=recovery_reason,
             baseline_packet=None,

@@ -34,7 +34,7 @@ void main() {
       );
       expect(pageVisible, isTrue, reason: '兴趣页必须从真实 Gamma taxonomy 加载');
       expect(
-        find.text(UITextConstants.interestOnboardingTitle),
+        find.text(ProfileText.interestOnboardingTitle),
         findsOneWidget,
       );
 

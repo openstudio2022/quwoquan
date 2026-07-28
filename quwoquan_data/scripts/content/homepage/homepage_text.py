@@ -141,6 +141,10 @@ _HOMEPAGE_FACT_UNIT_RE = re.compile(
 _HOMEPAGE_TERMINAL_SPLIT_RE = re.compile(r"[^。！？；;]+[。！？；;]?")
 _HOMEPAGE_SOFT_SPLIT_RE = re.compile(r"[^，,、：:]+[，,、：:]?")
 _HOMEPAGE_ENTITY_SPLIT_RE = re.compile(r"[—－\-·•、/|()（）]+")
+_HOMEPAGE_FIGURE_BLOCK_RE = re.compile(
+    r"(?ms)^:::(?:figure|figuregroup)\b[^\n]*\n.*?^:::[ \t]*$"
+)
+_HOMEPAGE_ASSET_IMAGE_RE = re.compile(r"!\[[^\]]*\]\(asset://[^)]+\)")
 _HOMEPAGE_GENERIC_ENTITY_TOKENS = {
     "景区",
     "旅游区",
@@ -188,6 +192,30 @@ def _homepage_source_text(meta: dict[str, Any]) -> str:
     return " ".join(str(meta.get(field) or "") for field in fields).strip()
 
 
+def load_homepage_base_draft_text(execution_id: str, source_ref: str) -> str:
+    """Read the exact frozen homepage source body used for authoring.
+
+    Homepage evidence is an encyclopedia page, so its semantic sections and
+    facts must remain intact.  The article lane's generic draft loader prefers
+    ``source.clean.md`` and extracts a short prose subset; using it here made a
+    source pass discovery but fail the later homepage gate.  A homepage base
+    source is therefore always its canonical ``source.md`` unit, with no
+    fallback to a transformed representation.
+    """
+    from core.paths import execution_root
+
+    normalized_ref = str(source_ref or "").strip()
+    if not normalized_ref.endswith("/source.md"):
+        return ""
+    path = execution_root(execution_id) / normalized_ref
+    if not path.is_file():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
 def _homepage_source_priority(meta: dict[str, Any]) -> int:
     lane = str(meta.get("researchLane") or "")
     if lane not in _HOMEPAGE_ALLOWED_LANES:
@@ -223,6 +251,9 @@ def homepage_base_draft_readiness(
     entity_name: str,
     aliases: tuple[str, ...] | list[str] = (),
     unit_dir: Any = None,
+    minimum_body_chars: int,
+    minimum_fact_count: int,
+    minimum_fact_chars: int,
 ) -> dict[str, Any]:
     """Return the shared admission verdict for entity homepage base drafts.
 
@@ -263,12 +294,40 @@ def homepage_base_draft_readiness(
             "issue": str(admission.get("issue") or "homepage source judge rejected"),
             "judge": admission,
         }
-    fact_count = len(_split_fact_sentences(source_text[:4000], entity_name=entity_name))
+    if isinstance(minimum_body_chars, bool) or minimum_body_chars < 1:
+        raise ValueError("homepage minimum_body_chars must be a positive integer")
+    if isinstance(minimum_fact_count, bool) or minimum_fact_count < 1:
+        raise ValueError("homepage minimum_fact_count must be a positive integer")
+    if isinstance(minimum_fact_chars, bool) or minimum_fact_chars < 1:
+        raise ValueError("homepage minimum_fact_chars must be a positive integer")
+    body_chars = len(re.sub(r"\s+", "", _strip_frontmatter(source_text)))
+    facts = _split_fact_sentences(source_text[:4000], entity_name=entity_name)
+    fact_count = len(facts)
+    fact_chars = sum(len(fact) for fact in facts)
+    ready = (
+        body_chars >= minimum_body_chars
+        and fact_count >= minimum_fact_count
+        and fact_chars >= minimum_fact_chars
+    )
     return {
-        "ready": fact_count >= 4,
+        "ready": ready,
         "priority": priority,
+        "bodyChars": body_chars,
         "factCount": fact_count,
-        "issue": "" if fact_count >= 4 else f"usable facts {fact_count}<4",
+        "factChars": fact_chars,
+        "issue": (
+            ""
+            if ready
+            else (
+                f"usable source chars {body_chars}<{minimum_body_chars}"
+                if body_chars < minimum_body_chars
+                else (
+                    f"usable facts {fact_count}<{minimum_fact_count}"
+                    if fact_count < minimum_fact_count
+                    else f"usable fact chars {fact_chars}<{minimum_fact_chars}"
+                )
+            )
+        ),
         "judge": admission,
     }
 
@@ -279,6 +338,11 @@ def _strip_frontmatter(text: str) -> str:
         parts = raw.split("---", 2)
         if len(parts) == 3:
             raw = parts[2].strip()
+    # Figure blocks are structural media anchors.  Their placeholder changes
+    # after source assets are bound, so treating their syntax as prose made one
+    # source pass planning and fail its later download gate.
+    raw = _HOMEPAGE_FIGURE_BLOCK_RE.sub("\n", raw)
+    raw = _HOMEPAGE_ASSET_IMAGE_RE.sub("", raw)
     # Headings are navigation labels, not facts. Removing just the Markdown
     # marker used to concatenate "## 概况" with the opening sentence after
     # whitespace compaction, leaking a malformed entity summary.

@@ -304,6 +304,8 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/平湖市
+    aliases:
+    - 莫氏庄园
     selectionPriority: 2
   - name: 九龙山旅游度假区
     canonicalName: 平湖九龙山旅游度假区

@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections import Counter
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 from content.post.article.base_draft_analysis import (
     FIDELITY_MAX,
@@ -16,12 +18,83 @@ from content.post.article.base_draft import base_draft_is_adaptable
 
 OUT_OF_DRAFT_MAX_RATIO = 0.78
 CROSS_SOURCE_OVERLAP_MIN_RUN = 80
+FACTUAL_REFERENCE_MAX_NEAR_COPY_RATIO = 0.55
+FACTUAL_REFERENCE_EXACT_RUN_CHARS = 80
+
+
+@dataclass(frozen=True, slots=True)
+class CommercialNearCopyGate:
+    """Typed, replayable copyright gate for one commercial article."""
+
+    source_use_mode: str
+    article_containment_ratio: float
+    exact_run_sample: str
+    issues: tuple[str, ...]
+
+    @property
+    def passed(self) -> bool:
+        return not self.issues
+
+    def to_review_check(self) -> dict[str, object]:
+        return {
+            "passed": self.passed,
+            "issues": list(self.issues),
+            "suggestions": (
+                [
+                    "只保留可核验事实并重新组织结构与表达；删除来源连续长句、原段落顺序和近似复写。"
+                ]
+                if self.issues
+                else []
+            ),
+            "evidence": {
+                "sourceUseMode": self.source_use_mode,
+                "articleContainmentRatio": round(self.article_containment_ratio, 6),
+                "exactRunChars": len(self.exact_run_sample),
+            },
+        }
 
 
 def _char_ngrams(text: str, size: int = _NGRAM) -> set[str]:
     return ({text} if text else set()) if len(text) < size else {
         text[index : index + size] for index in range(len(text) - size + 1)
     }
+
+
+def _ngram_containment(body: str, source: str, *, size: int = _NGRAM) -> float:
+    if not body:
+        return 0.0
+    if len(body) < size:
+        return 1.0 if body in source else 0.0
+    body_grams = Counter(
+        body[index : index + size] for index in range(len(body) - size + 1)
+    )
+    source_grams = Counter(
+        source[index : index + size] for index in range(max(0, len(source) - size + 1))
+    )
+    overlap = sum(
+        min(count, source_grams.get(gram, 0))
+        for gram, count in body_grams.items()
+    )
+    return overlap / sum(body_grams.values())
+
+
+def _exact_run_sample(
+    body: str,
+    source: str,
+    *,
+    min_run: int = FACTUAL_REFERENCE_EXACT_RUN_CHARS,
+) -> str:
+    if len(body) < min_run or len(source) < min_run:
+        return ""
+    source_runs = {
+        source[index : index + min_run]
+        for index in range(len(source) - min_run + 1)
+    }
+    for index in range(len(body) - min_run + 1):
+        sample = body[index : index + min_run]
+        if sample in source_runs:
+            return sample
+    return ""
 
 
 def _normalized_pair(article: str, base_text: str, carrier: str) -> tuple[str, str]:
@@ -44,8 +117,15 @@ def base_draft_fidelity_issues(
     carrier: str = "article",
     source_use_mode: str = "licensed_adaptation",
 ) -> list[str]:
-    if not base_draft_is_adaptable(source_use_mode):
+    mode = str(source_use_mode or "").strip()
+    if mode == "factual_reference_only":
+        # 事实参考源不拥有“贴近底稿”的最低留存合同；其商用边界由
+        # commercial_article_near_copy_gate 从成稿视角独立判定。
         return []
+    if mode != "licensed_adaptation":
+        return [f"unsupported sourceUseMode {mode!r} (fail-closed)"]
+    if not base_draft_is_adaptable(mode):
+        return [f"sourceUseMode {mode!r} is not adaptable"]
     body, base = _normalized_pair(article, base_text, carrier)
     if not body or not base:
         return []
@@ -61,6 +141,122 @@ def base_draft_fidelity_issues(
             "(零加工整篇逐字照搬，至少需完成去语病/错字、私人信息脱敏替代与作者人设用词语气适配)"
         ]
     return []
+
+
+def commercial_article_near_copy_gate(
+    article: str,
+    base_text: str,
+    *,
+    source_use_mode: str,
+    carrier: str = "article",
+    max_containment_ratio: float = FACTUAL_REFERENCE_MAX_NEAR_COPY_RATIO,
+    exact_run_chars: int = FACTUAL_REFERENCE_EXACT_RUN_CHARS,
+) -> CommercialNearCopyGate:
+    """Fail closed when a factual-reference article remains a source near-copy.
+
+    The containment denominator is the produced article, so copying one source
+    excerpt from a much longer page cannot hide behind a low source-denominator
+    fidelity score. A separate exact-run detector catches pasted paragraphs even
+    when the rest of the article is independently written.
+    """
+
+    mode = str(source_use_mode or "").strip()
+    if carrier == "image":
+        return CommercialNearCopyGate(mode, 0.0, "", ())
+    if mode == "licensed_adaptation":
+        return CommercialNearCopyGate(mode, 0.0, "", ())
+    if mode != "factual_reference_only":
+        return CommercialNearCopyGate(
+            mode,
+            0.0,
+            "",
+            (f"unsupported sourceUseMode {mode!r} (fail-closed)",),
+        )
+    body, source = _normalized_pair(article, base_text, carrier)
+    if not body or not source:
+        return CommercialNearCopyGate(
+            mode,
+            0.0,
+            "",
+            ("factual_reference_only requires non-empty article and source",),
+        )
+    containment = _ngram_containment(body, source)
+    exact_sample = _exact_run_sample(body, source, min_run=exact_run_chars)
+    issues: list[str] = []
+    if containment > max_containment_ratio:
+        issues.append(
+            "factual_reference_only article containment "
+            f"{containment:.3f} > {max_containment_ratio:.3f}"
+        )
+    if exact_sample:
+        issues.append(
+            "factual_reference_only contains an exact source run "
+            f">= {exact_run_chars} chars, sample『{exact_sample[:24]}…』"
+        )
+    return CommercialNearCopyGate(mode, containment, exact_sample, tuple(issues))
+
+
+def commercial_article_sources_near_copy_gate(
+    article: str,
+    sources: Sequence[tuple[str, str]],
+    *,
+    carrier: str = "article",
+) -> CommercialNearCopyGate:
+    """Apply the typed gate to every source unit used by a commercial article."""
+
+    if carrier == "image":
+        return CommercialNearCopyGate("factual_reference_only", 0.0, "", ())
+    if not sources:
+        return CommercialNearCopyGate(
+            "factual_reference_only",
+            0.0,
+            "",
+            ("commercial article requires at least one source unit for near-copy review",),
+        )
+    gates = [
+        commercial_article_near_copy_gate(
+            article,
+            source_text,
+            source_use_mode=source_use_mode,
+            carrier=carrier,
+        )
+        for source_text, source_use_mode in sources
+    ]
+    factual_gates = [
+        gate
+        for gate in gates
+        if gate.source_use_mode == "factual_reference_only"
+    ]
+    reviewed = [
+        gate
+        for gate in gates
+        if gate.source_use_mode == "factual_reference_only"
+        or gate.issues
+    ] or gates
+    issues = tuple(
+        dict.fromkeys(
+            issue
+            for gate in reviewed
+            for issue in gate.issues
+        )
+    )
+    strongest = max(
+        reviewed,
+        key=lambda gate: (
+            gate.article_containment_ratio,
+            len(gate.exact_run_sample),
+        ),
+    )
+    return CommercialNearCopyGate(
+        (
+            "factual_reference_only"
+            if factual_gates
+            else strongest.source_use_mode
+        ),
+        strongest.article_containment_ratio,
+        strongest.exact_run_sample,
+        issues,
+    )
 
 
 def out_of_draft_ratio(article: str, base_text: str, *, carrier: str = "article") -> float:

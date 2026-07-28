@@ -84,6 +84,8 @@ class ProdDeployContractTest(unittest.TestCase):
             release_manifest = Path(tmp) / "release-manifest.json"
             self._write_release_manifest(release_manifest, env["IMAGE_VERSION"])
             env.setdefault("RELEASE_MANIFEST", str(release_manifest))
+            manifest = json.loads(release_manifest.read_text(encoding="utf-8"))
+            env.setdefault("RELEASE_MANIFEST_DIGEST", manifest["manifestDigest"])
             return subprocess.run(
                 ["bash", "quwoquan_ops/cli/prod/deploy_to_prod.sh"],
                 cwd=str(ROOT),

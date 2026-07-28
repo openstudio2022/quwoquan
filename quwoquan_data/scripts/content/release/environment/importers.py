@@ -15,6 +15,7 @@ from content.release.model import DeletePolicy, ImportMode
 
 _IMPORT_REPORT_SCHEMAS = {
     "quwoquan.content_import_report": "import_report",
+    "quwoquan.tag_import_report": "tag_import_report",
     "quwoquan.user_creator_import_report": "creator_import_report",
     "quwoquan_service.homepage_import_report": "homepage_import_report",
 }
@@ -59,7 +60,8 @@ def run_content_importer(
     env: str,
     run: Path,
     mongo_uri: str,
-    media_base_url: str,
+    media_image_base_url: str,
+    media_video_base_url: str,
     dry_run: bool,
     mode: ImportMode = ImportMode.UPSERT,
     delete_policy: DeletePolicy = DeletePolicy.NONE,
@@ -74,8 +76,10 @@ def run_content_importer(
         str(release),
         "--mongo-uri",
         mongo_uri,
-        "--media-base-url",
-        media_base_url,
+        "--media-image-base-url",
+        media_image_base_url,
+        "--media-video-base-url",
+        media_video_base_url,
         "--env",
         env,
         "--mode",
@@ -106,6 +110,7 @@ def run_creator_importer(
     run: Path,
     mongo_uri: str,
     postgres_dsn: str,
+    media_avatar_base_url: str,
     dry_run: bool,
     mode: ImportMode = ImportMode.UPSERT,
 ) -> Path:
@@ -121,6 +126,8 @@ def run_creator_importer(
         mongo_uri,
         "--postgres-dsn",
         postgres_dsn,
+        "--media-avatar-base-url",
+        media_avatar_base_url,
         "--env",
         env,
         "--mode",
@@ -133,7 +140,66 @@ def run_creator_importer(
     result = subprocess.run(command, cwd=REPO_ROOT / "quwoquan_service", check=False)
     if result.returncode != 0:
         raise SystemExit(f"[ship] creator importer failed: exit={result.returncode}")
-    assert_import_report_contract(report_path, expected_release_id=release.name)
+    report = assert_import_report_contract(
+        report_path,
+        expected_release_id=release.name,
+    )
+    desired = read_json(payload_file(release, "desired_state.json"))
+    expected = sorted(
+        str(item)
+        for item in desired.get("desiredRefs", {}).get("creators", [])
+        if str(item).strip()
+    )
+    if not dry_run and report.get("verifiedCreatorIds") != expected:
+        raise SystemExit(
+            "[ship] creator importer readback differs from release desired creators"
+        )
+    return report_path
+
+
+def run_tag_importer(
+    *,
+    release: Path,
+    env: str,
+    run: Path,
+    mongo_uri: str,
+    dry_run: bool,
+) -> Path:
+    """Activate the exact release-owned tag snapshot before dependent objects."""
+
+    report_path = run / "tag-import.json"
+    command = [
+        "go",
+        "run",
+        "./services/tag-service/cmd/import",
+        "--release-root",
+        str(release),
+        "--release-id",
+        release.name,
+        "--mongo-uri",
+        mongo_uri,
+        "--env",
+        env,
+        "--report",
+        str(report_path),
+    ]
+    if dry_run:
+        command.append("--dry-run")
+    result = subprocess.run(command, cwd=REPO_ROOT / "quwoquan_service", check=False)
+    if result.returncode != 0:
+        raise SystemExit(f"[ship] tag importer failed: exit={result.returncode}")
+    report = assert_import_report_contract(
+        report_path,
+        expected_release_id=release.name,
+    )
+    desired = read_json(payload_file(release, "desired_state.json"))
+    expected = sorted(
+        str(item)
+        for item in desired.get("desiredRefs", {}).get("tags", [])
+        if str(item).strip()
+    )
+    if report.get("tagRefs") != expected or report.get("nodeCount") != len(expected):
+        raise SystemExit("[ship] tag importer closure differs from release desired tags")
     return report_path
 
 
@@ -144,7 +210,7 @@ def run_homepage_importer(
     run: Path,
     run_id: str,
     mongo_uri: str,
-    media_base_url: str,
+    media_image_base_url: str,
     dry_run: bool,
     mode: ImportMode,
 ) -> dict[str, Any]:
@@ -157,8 +223,8 @@ def run_homepage_importer(
         str(release),
         "--mongo-uri",
         mongo_uri,
-        "--media-base-url",
-        media_base_url,
+        "--media-image-base-url",
+        media_image_base_url,
         "--env",
         env,
         "--run-id",
@@ -202,6 +268,7 @@ def run_homepage_importer(
 
 __all__ = [
     "assert_import_report_contract",
+    "run_tag_importer",
     "run_creator_importer",
     "run_content_importer",
     "run_homepage_importer",

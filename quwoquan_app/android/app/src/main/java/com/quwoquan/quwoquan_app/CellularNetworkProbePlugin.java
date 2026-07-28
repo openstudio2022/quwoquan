@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.telephony.PhoneStateListener;
+import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyDisplayInfo;
 import android.telephony.TelephonyManager;
 import io.flutter.plugin.common.MethodCall;
@@ -22,7 +23,8 @@ final class CellularNetworkProbePlugin {
   // 0 等于 TelephonyDisplayInfo 的 NONE 值。保持字面量以避免 Android 11 以下
   // 在加载本类时解析 API 30 常量。
   private volatile int displayOverrideNetworkType = 0;
-  private PhoneStateListener displayInfoListener;
+  private ModernDisplayInfoCallback modernDisplayInfoCallback;
+  private Api30DisplayInfoListener api30DisplayInfoListener;
   private boolean displayListenerRegistered;
 
   CellularNetworkProbePlugin(Context context) {
@@ -40,10 +42,16 @@ final class CellularNetworkProbePlugin {
   }
 
   void dispose() {
-    if (telephonyManager == null || displayInfoListener == null || !displayListenerRegistered) {
+    if (telephonyManager == null || !displayListenerRegistered) {
       return;
     }
-    telephonyManager.listen(displayInfoListener, PhoneStateListener.LISTEN_NONE);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && modernDisplayInfoCallback != null) {
+      telephonyManager.unregisterTelephonyCallback(modernDisplayInfoCallback);
+      modernDisplayInfoCallback = null;
+    } else if (api30DisplayInfoListener != null) {
+      unregisterApi30DisplayInfoListener();
+      api30DisplayInfoListener = null;
+    }
     displayListenerRegistered = false;
   }
 
@@ -77,20 +85,46 @@ final class CellularNetworkProbePlugin {
             == PackageManager.PERMISSION_GRANTED;
   }
 
-  @SuppressWarnings("deprecation")
   private void registerDisplayInfoListenerIfSupported() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || displayListenerRegistered) {
       return;
     }
-    displayInfoListener =
-        new PhoneStateListener() {
-          @Override
-          public void onDisplayInfoChanged(TelephonyDisplayInfo displayInfo) {
-            displayOverrideNetworkType = displayInfo.getOverrideNetworkType();
-          }
-        };
-    telephonyManager.listen(displayInfoListener, PhoneStateListener.LISTEN_DISPLAY_INFO_CHANGED);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      modernDisplayInfoCallback = new ModernDisplayInfoCallback();
+      telephonyManager.registerTelephonyCallback(
+          applicationContext.getMainExecutor(), modernDisplayInfoCallback);
+    } else {
+      registerApi30DisplayInfoListener();
+    }
     displayListenerRegistered = true;
+  }
+
+  @SuppressWarnings("deprecation") // TelephonyCallback is available only on API 31+.
+  private void registerApi30DisplayInfoListener() {
+    api30DisplayInfoListener = new Api30DisplayInfoListener();
+    telephonyManager.listen(
+        api30DisplayInfoListener, PhoneStateListener.LISTEN_DISPLAY_INFO_CHANGED);
+  }
+
+  @SuppressWarnings("deprecation") // TelephonyCallback is available only on API 31+.
+  private void unregisterApi30DisplayInfoListener() {
+    telephonyManager.listen(api30DisplayInfoListener, PhoneStateListener.LISTEN_NONE);
+  }
+
+  private final class ModernDisplayInfoCallback extends TelephonyCallback
+      implements TelephonyCallback.DisplayInfoListener {
+    @Override
+    public void onDisplayInfoChanged(TelephonyDisplayInfo displayInfo) {
+      displayOverrideNetworkType = displayInfo.getOverrideNetworkType();
+    }
+  }
+
+  @SuppressWarnings("deprecation") // Isolated Android 11 listener; Android 12+ uses TelephonyCallback.
+  private final class Api30DisplayInfoListener extends PhoneStateListener {
+    @Override
+    public void onDisplayInfoChanged(TelephonyDisplayInfo displayInfo) {
+      displayOverrideNetworkType = displayInfo.getOverrideNetworkType();
+    }
   }
 
   private static boolean isFiveGDataNetworkType(int networkType) {
@@ -103,7 +137,8 @@ final class CellularNetworkProbePlugin {
       return false;
     }
     if (overrideNetworkType == TelephonyDisplayInfo.OVERRIDE_NETWORK_TYPE_NR_NSA
-        || overrideNetworkType == TelephonyDisplayInfo.OVERRIDE_NETWORK_TYPE_NR_NSA_MMWAVE) {
+        // Android 11's NR_NSA_MMWAVE was deprecated in API 31 in favor of NR_ADVANCED.
+        || overrideNetworkType == 4) {
       return true;
     }
     return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S

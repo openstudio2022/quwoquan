@@ -31,30 +31,30 @@ class CircleStatsPage extends ConsumerStatefulWidget {
   static String _title(String type) {
     switch (type) {
       case 'members':
-        return UITextConstants.circleMembers;
+        return CommunityText.circleMembers;
       case 'groups':
-        return UITextConstants.circleGroups;
+        return CommunityText.circleGroups;
       case 'fans':
-        return UITextConstants.circleFans;
+        return CommunityText.circleFans;
       case 'likes':
-        return UITextConstants.circleLikes;
+        return CommunityText.circleLikes;
       default:
-        return UITextConstants.circleMembers;
+        return CommunityText.circleMembers;
     }
   }
 
   static String _searchHint(String type) {
     switch (type) {
       case 'members':
-        return UITextConstants.searchMembersHint;
+        return CommunityText.searchMembersHint;
       case 'groups':
-        return UITextConstants.searchGroupsHint;
+        return CommunityText.searchGroupsHint;
       case 'fans':
-        return UITextConstants.searchFansHint;
+        return CommunityText.searchFansHint;
       case 'likes':
-        return UITextConstants.searchLikesHint;
+        return CommunityText.searchLikesHint;
       default:
-        return UITextConstants.searchMembersHint;
+        return CommunityText.searchMembersHint;
     }
   }
 
@@ -73,31 +73,11 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
   List<CircleStatsLikeRowViewData> _likes = [];
 
   UiErrorSemantic _resolvePageErrorSemantic(Object error) {
-    final resolved = runtimeErrorSemantic(
+    return runtimeErrorSemantic(
       context,
       error: error,
       category: UiErrorCategory.pageLoad,
       scope: UiErrorScope.page,
-    );
-    return UiErrorSemantic(
-      category: resolved.category,
-      scope: resolved.scope,
-      title: '${CircleStatsPage._title(_type)}暂不可用',
-      message: resolved.message,
-      secondaryMessage: resolved.secondaryMessage,
-      primaryAction:
-          resolved.primaryAction ??
-          const UiErrorAction(
-            type: UiErrorActionType.retry,
-            label: UITextConstants.tryAgain,
-          ),
-      secondaryAction: resolved.secondaryAction,
-      dismissible: resolved.dismissible,
-      sourceCode: resolved.sourceCode,
-      failureKind: resolved.failureKind,
-      recoveryAction: resolved.recoveryAction,
-      presentation: resolved.presentation,
-      tone: resolved.tone,
     );
   }
 
@@ -285,7 +265,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
           ),
           Expanded(
             child: _isLoading
-                ? const Center(child: CupertinoActivityIndicator())
+                ? AppRequestFeedback.section()
                 : _pageErrorSemantic != null
                 ? AppPageErrorState(
                     semantic: _pageErrorSemantic!,
@@ -317,7 +297,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     if (list.isEmpty) {
       return Center(
         child: Text(
-          UITextConstants.noData,
+          CommunityText.noData,
           style: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
         ),
       );
@@ -410,8 +390,8 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
                     },
                     child: Text(
                       isFollowed
-                          ? UITextConstants.following
-                          : UITextConstants.follow,
+                          ? FoundationText.following
+                          : FoundationText.follow,
                       style: TextStyle(
                         fontSize: AppTypography.xsPlus,
                         fontWeight: AppTypography.extraBold,
@@ -435,7 +415,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     if (list.isEmpty) {
       return Center(
         child: Text(
-          UITextConstants.noData,
+          CommunityText.noData,
           style: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
         ),
       );
@@ -528,7 +508,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     if (list.isEmpty) {
       return Center(
         child: Text(
-          UITextConstants.noLikesRecord,
+          CommunityText.noLikesRecord,
           style: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
         ),
       );

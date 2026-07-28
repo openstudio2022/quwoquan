@@ -272,7 +272,7 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
     required Color sectionBandColor,
   }) {
     if (_loadingInitial) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     if (_errorSemantic != null && _groups.isEmpty) {
       return AppPageErrorState(
@@ -319,9 +319,9 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
           ),
       ],
       if (_loadingMore)
-        const Padding(
+        Padding(
           padding: EdgeInsets.all(AppSpacing.md),
-          child: Center(child: CupertinoActivityIndicator()),
+          child: AppRequestFeedback.section(),
         )
       else if (_appendErrorSemantic != null)
         AppListAppendErrorFooter(
@@ -333,7 +333,7 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
           child: CupertinoButton(
             key: const ValueKey<String>('start-group-group-picker-load-more'),
             onPressed: () => unawaited(_loadMoreGroups()),
-            child: const Text(UITextConstants.loadMore),
+            child: const Text(ContentText.loadMore),
           ),
         ),
       SizedBox(height: AppSpacing.xl),

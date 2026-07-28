@@ -83,10 +83,38 @@ def _build(quota: int):
     return ctx, jobs
 
 
-def _settle(jobs, succeeded: int):
-    """前 ``succeeded`` 个作业成功，其余由 fleet 判死（质量不达标）。"""
+def _deliver(monkeypatch, quota: int) -> dict[str, int]:
+    """接管采纳门：磁盘上的达标对象数是本阶段准出的唯一真相源。
+
+    返回可变计数器，创作跑批前为 0，fleet 跑过之后由用例设定真实落盘数。
+    """
+    from content.execution.controller import homepage_authoring
+
+    delivered = {"qualified": 0}
+
+    def verdict(_ctx):
+        qualified = delivered["qualified"]
+        return homepage_authoring.HomepageQuotaVerdict(
+            approved_quota=quota,
+            qualified_refs=tuple(f"地点/景区/{name}" for name in _NAMES[:qualified]),
+            discarded={
+                f"地点/景区/{name}": ("质量不达标",) for name in _NAMES[qualified:]
+            },
+        )
+
+    monkeypatch.setattr(homepage_authoring, "homepage_quota_verdict", verdict)
+    return delivered
+
+
+def _settle(jobs, succeeded: int, delivered: dict[str, int] | None = None, finalized: int = 0):
+    """前 ``succeeded`` 个作业成功，其余由 fleet 判死（质量不达标）。
+
+    ``finalized`` 是本轮真正落盘的达标对象数，可以与账本成功数不同。
+    """
 
     def run_fleet(_execution_id, _stage, *, workers, completion_grace_seconds):
+        if delivered is not None:
+            delivered["qualified"] = finalized
         outcomes = []
         for index, job in enumerate(jobs):
             if index < succeeded:
@@ -126,8 +154,11 @@ def test_quota_met_with_discards__batch_advances__functional__local_contract(
     ctx, jobs = _build(quota=3)
     from content.execution import reliabletask_fleet
 
+    delivered = _deliver(monkeypatch, quota=3)
     monkeypatch.setattr(
-        reliabletask_fleet, "run_reliabletask_fleet", _settle(jobs, succeeded=3)
+        reliabletask_fleet,
+        "run_reliabletask_fleet",
+        _settle(jobs, succeeded=3, delivered=delivered, finalized=3),
     )
     result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
         ctx, ExecutionStage.BUILD_HOMEPAGE
@@ -150,8 +181,11 @@ def test_quota_met__resume_does_not_redispatch_discards__functional__local_contr
     ctx, jobs = _build(quota=3)
     from content.execution import reliabletask_fleet
 
+    delivered = _deliver(monkeypatch, quota=3)
     monkeypatch.setattr(
-        reliabletask_fleet, "run_reliabletask_fleet", _settle(jobs, succeeded=3)
+        reliabletask_fleet,
+        "run_reliabletask_fleet",
+        _settle(jobs, succeeded=3, delivered=delivered, finalized=3),
     )
     reliabletask_dispatch.dispatch_reliabletask_checkpoint(
         ctx, ExecutionStage.BUILD_HOMEPAGE
@@ -178,8 +212,11 @@ def test_quota_short__candidate_pool_exhausted__blocks__functional__local_contra
     ctx, jobs = _build(quota=3)
     from content.execution import reliabletask_fleet
 
+    delivered = _deliver(monkeypatch, quota=3)
     monkeypatch.setattr(
-        reliabletask_fleet, "run_reliabletask_fleet", _settle(jobs, succeeded=2)
+        reliabletask_fleet,
+        "run_reliabletask_fleet",
+        _settle(jobs, succeeded=2, delivered=delivered, finalized=2),
     )
     result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
         ctx, ExecutionStage.BUILD_HOMEPAGE
@@ -190,4 +227,34 @@ def test_quota_short__candidate_pool_exhausted__blocks__functional__local_contra
     assert result.completed_count == 2
     assert len(result.discarded) == 2
     assert any("候选池耗尽" in str(issue) for issue in result.issues)
+    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+
+
+def test_acceptance_gate_outranks_queue_ledger__functional__local_contract(
+    monkeypatch,
+) -> None:
+    """作业账本与磁盘产物分叉时以采纳门为准。
+
+    作业可能因租约超时或信封校验被判终态，而 finalize 已把三件套正常落盘。
+    若 dispatch 仍按账本的 SUCCEEDED 计数判配额，实际已达标的批次会被误判为
+    供给不足而停在 manual_required——这正是 pilot-013 的真实停摆原因。
+    """
+    ctx, jobs = _build(quota=3)
+    from content.execution import reliabletask_fleet
+
+    # 账本只认 1 个成功，磁盘上却有 4 个达标对象。
+    delivered = _deliver(monkeypatch, quota=3)
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "run_reliabletask_fleet",
+        _settle(jobs, succeeded=1, delivered=delivered, finalized=4),
+    )
+    result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
+        ctx, ExecutionStage.BUILD_HOMEPAGE
+    )
+
+    assert result is not None
+    assert result.status is ReliableTaskDispatchStatus.COMPLETED
+    assert result.completed_count == 4
+    assert result.issues == ()
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)

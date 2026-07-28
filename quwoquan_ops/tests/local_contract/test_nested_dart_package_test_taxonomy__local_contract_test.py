@@ -16,22 +16,22 @@ from test_directory_layout_lib import (
 )
 
 
-CANONICAL_ALPHA_LOCATION_TEST = (
-    "quwoquan_app/packages/quwoquan_cloud_mock/test/local_contract/"
-    "integration/alpha_location_query__local_contract_test.dart"
+CANONICAL_APP_LOCATION_TEST = (
+    "quwoquan_app/test/local_contract/core/providers/"
+    "create_location_service_provider__local_contract_test.dart"
 )
 
 
-def test_nested_dart_package_local_contract_is_canonical() -> None:
-    assert evidence_path_is_canonical(CANONICAL_ALPHA_LOCATION_TEST)
+def test_app_local_contract_is_canonical_after_mock_package_retirement() -> None:
+    assert evidence_path_is_canonical(CANONICAL_APP_LOCATION_TEST)
     assert not evidence_path_is_canonical(
         "quwoquan_app/packages/quwoquan_cloud_mock/test/integration/alpha_location_query_test.dart"
     )
 
 
-def test_nested_dart_package_local_contract_is_inventory_visible() -> None:
+def test_app_local_contract_is_inventory_visible() -> None:
     paths = {path.relative_to(ROOT).as_posix() for _, path, _ in iter_canonical_files()}
-    assert CANONICAL_ALPHA_LOCATION_TEST in paths
+    assert CANONICAL_APP_LOCATION_TEST in paths
 
 
 def test_embedded_real_service_integration_test_is_canonical() -> None:

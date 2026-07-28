@@ -38,7 +38,34 @@
     "isSystemBuiltin": { "type": "boolean" },
     "displayName": { "type": "string" },
     "userHandle": { "type": "string" },
-    "avatarObjectKey": { "type": "string" },
+    "avatarAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assetId",
+        "kind",
+        "sha256",
+        "objectKey",
+        "bytes",
+        "mimeType",
+        "rightsSnapshotRef"
+      ],
+      "properties": {
+        "assetId": { "type": "string", "minLength": 1 },
+        "kind": { "const": "avatar" },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "objectKey": {
+          "type": "string",
+          "pattern": "^media/objects/sha256/[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]{64}\\.[a-z0-9]+$"
+        },
+        "bytes": {"type": "integer", "minimum": 1},
+        "mimeType": {"type": "string", "pattern": "^image/"},
+        "rightsSnapshotRef": {"type": "string", "minLength": 1}
+      }
+    },
     "headline": { "type": "string" },
     "bio": { "type": "string" },
     "creatorArchetype": { "type": "string" },

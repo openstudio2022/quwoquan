@@ -11,6 +11,7 @@ final class SendOtpCommand {
     this.platform,
     this.appVersion,
     this.sourceOperation,
+    this.bindingTicket,
   }) : phone = _required(phone, 'phone');
 
   final String phone;
@@ -20,6 +21,9 @@ final class SendOtpCommand {
 
   /// 发码用途（login/bind_phone），服务端按用途隔离配额与消费。
   final String? sourceOperation;
+
+  /// 仅 `bind_phone` 使用；服务端据此约束 OTP 只能完成对应社交首登绑定。
+  final String? bindingTicket;
 }
 
 final class CreateAlipayAuthorizationRequestCommand {
@@ -130,6 +134,8 @@ CloudOperationRequestPayload encodeSendOtpCommand(SendOtpCommand command) =>
         if (command.appVersion != null) 'appVersion': command.appVersion,
         if (command.sourceOperation != null)
           'sourceOperation': command.sourceOperation,
+        if (command.bindingTicket != null)
+          'bindingTicket': command.bindingTicket,
       },
     );
 

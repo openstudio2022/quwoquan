@@ -54,6 +54,34 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             }
             for service in services
         }
+        artifact_schemas = {
+            "publicWeb": "qwq.public-web.release.v1",
+            "androidOfficialRelease": "qwq.android.official-release.v1",
+            "opsPortal": "qwq.ops_portal_package.v1",
+            "contractGraph": "qwq.contract-graph.v1",
+            "providerBindings": "compiled-external-provider-bindings",
+            "testEvidence": "qwq.three-layer-case-results.v1",
+        }
+        artifacts: dict[str, dict[str, str]] = {}
+        for artifact_id in sorted(stackctl._REQUIRED_RELEASE_ARTIFACTS):
+            relative = f"artifacts/{artifact_id}.json"
+            artifact_path = root / relative
+            artifact_path.parent.mkdir(parents=True, exist_ok=True)
+            artifact_path.write_text(
+                json.dumps({"schema": artifact_schemas[artifact_id]}),
+                encoding="utf-8",
+            )
+            digest_field = (
+                "manifestSHA256"
+                if artifact_id in {"publicWeb", "androidOfficialRelease"}
+                else "contentSHA256"
+            )
+            artifacts[artifact_id] = {
+                "schema": artifact_schemas[artifact_id],
+                "path": relative,
+                digest_field: "sha256:"
+                + hashlib.sha256(artifact_path.read_bytes()).hexdigest(),
+            }
         payload = {
             "schema": "mainline-release-artifact",
             "artifactName": "mainline-release-artifact",
@@ -71,6 +99,8 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             "images": images,
             "releaseFiles": release_files,
             "releaseFileDigests": release_digests,
+            "requiredArtifacts": sorted(stackctl._REQUIRED_RELEASE_ARTIFACTS),
+            "artifacts": artifacts,
         }
         payload["manifestDigest"] = "sha256:" + hashlib.sha256(
             json.dumps(
@@ -159,7 +189,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
     def test_constrained_host_policy_never_removes_volumes(self) -> None:
         spec, _ = prevalidate.load_projection()
         self.assertEqual(spec["capacityStrategy"], "constrained-single-host")
-        reclaim = spec["legacyReclaimPolicy"]
+        reclaim = spec["staleRuntimeReclaimPolicy"]
         self.assertTrue(reclaim["enabled"])
         self.assertFalse(reclaim["removeVolumes"])
         self.assertIn("quwoquan-data-recovery-mongodb", reclaim["preservedContainers"])

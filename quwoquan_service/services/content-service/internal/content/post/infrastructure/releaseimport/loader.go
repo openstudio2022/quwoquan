@@ -7,7 +7,6 @@ package releaseimport
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	runtimemedia "quwoquan_service/runtime/media"
 	postsemantic "quwoquan_service/services/content-service/internal/content/post/domain/semantic"
 )
 
@@ -27,15 +27,14 @@ const (
 	RightsAuditStatusUnverified RightsAuditStatus = "unverified"
 )
 
-var (
-	sha256Pattern       = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-	casObjectKeyPattern = regexp.MustCompile(`^media/objects/sha256/[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]{64}\.[A-Za-z0-9]+$`)
-)
+var sha256Pattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 type AssetManifestItem struct {
 	AssetID              string   `json:"assetId" bson:"assetId"`
 	Kind                 string   `json:"kind,omitempty" bson:"kind,omitempty"`
-	ObjectKey            string   `json:"objectKey" bson:"objectKey"`
+	ObjectKey            string   `json:"objectKey,omitempty" bson:"-"`
+	Version              int64    `json:"version,omitempty" bson:"version,omitempty"`
+	PublicSliceKey       string   `json:"publicSliceKey,omitempty" bson:"publicSliceKey,omitempty"`
 	CDNURL               string   `json:"cdnUrl,omitempty" bson:"cdnUrl,omitempty"`
 	Sha256               string   `json:"sha256" bson:"sha256"`
 	MimeType             string   `json:"mimeType,omitempty" bson:"mimeType,omitempty"`
@@ -105,6 +104,7 @@ type PostDoc struct {
 	Assets                []AssetManifestItem      `json:"assets" bson:"assets"`
 	SourceCollectionID    string                   `json:"sourceCollectionId" bson:"sourceCollectionId"`
 	SourcePlatform        string                   `json:"sourcePlatform" bson:"sourcePlatform"`
+	SourceAttribution     any                      `json:"sourceAttribution,omitempty" bson:"sourceAttribution,omitempty"`
 	Creator               any                      `json:"creator" bson:"creator"`
 	Page                  any                      `json:"page" bson:"page"`
 	LicenseProof          any                      `json:"licenseProof" bson:"licenseProof"`
@@ -160,6 +160,8 @@ type creatorImportReceipt struct {
 	AuthorIDs   []string `json:"authorIds"`
 }
 
+type ReleaseMediaAsset = runtimemedia.ReleaseMediaAsset
+
 func ReleaseObjectRoot(releaseRoot string) (string, error) {
 	root := filepath.Join(releaseRoot, "payload", "objects")
 	info, err := os.Stat(root)
@@ -202,6 +204,10 @@ func LoadReleaseDesiredState(releaseRoot string) (*ReleaseDesiredState, error) {
 		}
 	}
 	return &desired, nil
+}
+
+func LoadReleaseMediaAssets(releaseRoot, expectedReleaseID string) (map[string]ReleaseMediaAsset, error) {
+	return runtimemedia.LoadReleaseMediaAssets(releaseRoot, expectedReleaseID)
 }
 
 // LoadCreatorAuthorIDs makes the release's public-author closure explicit for
@@ -319,6 +325,7 @@ type postManifest struct {
 	Assets                []AssetManifestItem      `json:"assets"`
 	SourceCollectionID    string                   `json:"sourceCollectionId"`
 	SourcePlatform        string                   `json:"sourcePlatform"`
+	SourceAttribution     any                      `json:"sourceAttribution"`
 	Creator               any                      `json:"creator"`
 	Page                  any                      `json:"page"`
 	LicenseProof          any                      `json:"licenseProof"`
@@ -361,8 +368,12 @@ func validateAssetItem(asset AssetManifestItem, ref string) error {
 	if strings.TrimSpace(asset.AssetID) == "" {
 		return fmt.Errorf("%s: asset manifest missing assetId", ref)
 	}
-	if !casObjectKeyPattern.MatchString(strings.TrimSpace(asset.ObjectKey)) {
-		return fmt.Errorf("%s: asset manifest objectKey must be CAS path", ref)
+	objectKey := strings.TrimSpace(asset.ObjectKey)
+	if objectKey != "" {
+		return fmt.Errorf(
+			"%s: release asset manifest must not expose private objectKey",
+			ref,
+		)
 	}
 	if !sha256Pattern.MatchString(strings.TrimSpace(asset.Sha256)) {
 		return fmt.Errorf("%s: asset manifest sha256 invalid", ref)
@@ -423,9 +434,11 @@ func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, 
 				return fmt.Errorf("%s: verified image asset %q has audit issues", ref, asset.AssetID)
 			}
 		case RightsAuditStatusUnverified:
-			if !hasNonEmptyString(asset.RightsAuditIssues) {
-				return fmt.Errorf("%s: unverified image asset %q missing audit issues", ref, asset.AssetID)
-			}
+			return fmt.Errorf(
+				"%s: unverified image asset %q cannot enter an immutable release",
+				ref,
+				asset.AssetID,
+			)
 		}
 	}
 	return nil
@@ -436,6 +449,17 @@ func validateVideoAssets(assets []AssetManifestItem, ref string) error {
 	for _, asset := range assets {
 		if err := validateAssetItem(asset, ref); err != nil {
 			return err
+		}
+		status, err := parseRightsAuditStatus(asset.RightsAuditStatus)
+		if err != nil {
+			return fmt.Errorf("%s: video asset %q %w", ref, asset.AssetID, err)
+		}
+		if status != RightsAuditStatusVerified || hasNonEmptyString(asset.RightsAuditIssues) {
+			return fmt.Errorf(
+				"%s: video asset %q must be commercially verified without issues",
+				ref,
+				asset.AssetID,
+			)
 		}
 		if _, exists := byID[asset.AssetID]; exists {
 			return fmt.Errorf("%s: duplicate assetId %q", ref, asset.AssetID)
@@ -464,7 +488,11 @@ func validateVideoAssets(assets []AssetManifestItem, ref string) error {
 	return nil
 }
 
-func BindPostAssetURLs(posts []PostDoc, mediaBaseURL string) error {
+func BindPostAssetURLs(
+	posts []PostDoc,
+	releaseAssets map[string]ReleaseMediaAsset,
+	mediaBases runtimemedia.MediaDeliveryBases,
+) error {
 	hasAssets := false
 	for _, post := range posts {
 		if len(post.Assets) > 0 {
@@ -475,21 +503,38 @@ func BindPostAssetURLs(posts []PostDoc, mediaBaseURL string) error {
 	if !hasAssets {
 		return nil
 	}
-	base := strings.TrimRight(strings.TrimSpace(mediaBaseURL), "/")
-	parsed, err := url.Parse(base)
-	if err != nil ||
-		(parsed.Scheme != "http" && parsed.Scheme != "https") ||
-		parsed.Host == "" ||
-		parsed.RawQuery != "" ||
-		parsed.Fragment != "" {
-		return fmt.Errorf("media base URL must be an absolute http(s) URL")
-	}
 	for postIndex := range posts {
 		assets := posts[postIndex].Assets
 		byID := make(map[string]*AssetManifestItem, len(assets))
 		for assetIndex := range assets {
 			asset := &assets[assetIndex]
-			asset.CDNURL = base + "/" + strings.TrimLeft(asset.ObjectKey, "/")
+			kind := strings.ToLower(strings.TrimSpace(asset.Kind))
+			if kind == "" {
+				if releaseAsset, exists := releaseAssets[asset.AssetID]; exists {
+					kind = releaseAsset.Kind
+				}
+			}
+			resolved, err := runtimemedia.ResolveReleaseMediaAsset(
+				releaseAssets,
+				mediaBases,
+				asset.AssetID,
+				kind,
+				asset.Sha256,
+				posts[postIndex].PostRef,
+			)
+			if err != nil {
+				return fmt.Errorf(
+					"%s: asset %q identity differs from release media authority: %w",
+					posts[postIndex].PostRef,
+					asset.AssetID,
+					err,
+				)
+			}
+			asset.Kind = kind
+			asset.Version = resolved.Version
+			asset.PublicSliceKey = resolved.PublicSliceKey
+			asset.CDNURL = resolved.PublicURL
+			asset.ObjectKey = ""
 			byID[asset.AssetID] = asset
 		}
 		for assetIndex := range assets {
@@ -505,6 +550,12 @@ func BindPostAssetURLs(posts []PostDoc, mediaBaseURL string) error {
 			asset.CoverURL = poster.CDNURL
 		}
 		posts[postIndex].Assets = assets
+		if posts[postIndex].ArticleAssetManifest != nil {
+			posts[postIndex].ArticleAssetManifest.Assets = append(
+				[]AssetManifestItem(nil),
+				assets...,
+			)
+		}
 	}
 	return nil
 }
@@ -788,6 +839,7 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 			Assets:                assets,
 			SourceCollectionID:    m.SourceCollectionID,
 			SourcePlatform:        m.SourcePlatform,
+			SourceAttribution:     m.SourceAttribution,
 			Creator:               firstSourceFact(m.Creator, m.SourceCreator),
 			Page:                  firstSourceFact(m.Page, m.SourceCollectionURL),
 			LicenseProof:          firstSourceFact(m.LicenseProof, m.LicenseProofRef),

@@ -69,7 +69,9 @@ void main() {
         }),
       );
       final container = ProviderContainer(
-        overrides: [cloudHttpClientProvider.overrideWithValue(httpClient)],
+        overrides: [
+          unauthenticatedCloudHttpClientProvider.overrideWithValue(httpClient),
+        ],
       );
       addTearDown(container.dispose);
 

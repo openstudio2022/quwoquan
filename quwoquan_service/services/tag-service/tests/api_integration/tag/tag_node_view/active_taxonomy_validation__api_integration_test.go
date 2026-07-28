@@ -14,6 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/application/taxonomyrelease"
+	releasemodel "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/domain/taxonomyrelease/model"
 )
 
 func TestValidateTagRefsRejectsParentInactiveAndOldSnapshots(t *testing.T) {
@@ -178,6 +179,7 @@ func stageReleaseForTest(t *testing.T, releaseID string, nodeCount int) {
 		ReleaseID:       releaseID,
 		SourceOwner:     "test",
 		CanonicalDigest: "seed-" + releaseID,
+		ReleaseKind:     releasemodel.ReleaseKindContent,
 		NodeCount:       nodeCount,
 	}); err != nil {
 		t.Fatalf("stage test release %s: %v", releaseID, err)

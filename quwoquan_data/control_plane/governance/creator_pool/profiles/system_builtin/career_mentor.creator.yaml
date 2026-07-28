@@ -4,7 +4,6 @@ authorId: builtin_career_mentor
 isSystemBuiltin: true
 displayName: 校招辅导员一禾
 userHandle: career_yihe
-avatarObjectKey: cold_start/creators/career_mentor/avatar.jpg
 headline: 写校园招聘、实习投递和简历经验的就业辅导型作者
 bio: 把秋招春招、实习投递和简历优化拆成时间线与清单，给在校生可执行的求职路径。
 creatorArchetype: career_mentor

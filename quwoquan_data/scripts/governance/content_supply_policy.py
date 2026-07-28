@@ -82,6 +82,11 @@ class ContentSupplyPolicy:
     non_empty_rate_minimum: float
     duplicate_exposure_rate_maximum: float
     homepage_max_source_fidelity: float
+    homepage_minimum_body_chars: int
+    homepage_minimum_fact_count: int
+    homepage_minimum_fact_chars: int
+    homepage_minimum_section_chars: int
+    homepage_source_outline_section_chars: int
     media_subject: MediaSubjectPolicy
     video_delivery: VideoDeliveryPolicy
 
@@ -150,6 +155,26 @@ def load_content_supply_policy(vertical: str) -> ContentSupplyPolicy:
         homepage_max_source_fidelity=_ratio(
             quality["homepageMaxSourceFidelity"],
             label="quality.homepageMaxSourceFidelity",
+        ),
+        homepage_minimum_body_chars=_positive_int(
+            quality["homepageMinimumBodyChars"],
+            label="quality.homepageMinimumBodyChars",
+        ),
+        homepage_minimum_fact_count=_positive_int(
+            quality["homepageMinimumFactCount"],
+            label="quality.homepageMinimumFactCount",
+        ),
+        homepage_minimum_fact_chars=_positive_int(
+            quality["homepageMinimumFactChars"],
+            label="quality.homepageMinimumFactChars",
+        ),
+        homepage_minimum_section_chars=_positive_int(
+            quality["homepageMinimumSectionChars"],
+            label="quality.homepageMinimumSectionChars",
+        ),
+        homepage_source_outline_section_chars=_positive_int(
+            quality["homepageSourceOutlineSectionChars"],
+            label="quality.homepageSourceOutlineSectionChars",
         ),
         media_subject=MediaSubjectPolicy(
             representative_indicators=tuple(

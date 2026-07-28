@@ -72,6 +72,9 @@ class NoFakeGateContractTest(unittest.TestCase):
             "await tester.pumpWidget(app)",
             "final query = FakeLocationQueryAdapter()",
             "import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';",
+            "buildAlphaCloudOverrides()",
+            "providerScopeOverrides: businessOverrides",
+            "import '../cloud_services/repository_mock_reexports.dart';",
         )
         for sample in samples:
             with self.subTest(sample=sample):
@@ -82,6 +85,18 @@ class NoFakeGateContractTest(unittest.TestCase):
                     ),
                     sample,
                 )
+
+    def test_local_contract_object_typed_double_is_allowed_by_layer(self) -> None:
+        gate = _load_gate()
+        local_contract = Path(
+            "quwoquan_app/test/local_contract/user/profile_query__local_contract_test.dart"
+        )
+        user_acceptance = Path(
+            "quwoquan_app/test/user_acceptance/user/profile_query__user_acceptance_test.dart"
+        )
+
+        self.assertFalse(gate.is_app_user_acceptance_source(local_contract))
+        self.assertTrue(gate.is_app_user_acceptance_source(user_acceptance))
 
     def test_app_user_acceptance_evidence_checklist_is_rejected(self) -> None:
         gate = _load_gate()

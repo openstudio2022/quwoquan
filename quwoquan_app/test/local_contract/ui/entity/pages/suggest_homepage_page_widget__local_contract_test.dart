@@ -27,20 +27,20 @@ void main() {
     await tester.tap(find.text('打开添加主页'));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.addHomepageCityLabel), findsOneWidget);
+    expect(find.text(CreationText.addHomepageCityLabel), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.homepageTypeVehicle));
+    await tester.tap(find.text(CreationText.homepageTypeVehicle));
     await tester.pumpAndSettle();
 
     expect(
-      find.text(UITextConstants.addHomepageVehicleManufacturerLabel),
+      find.text(CreationText.addHomepageVehicleManufacturerLabel),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.addHomepageVehicleSeriesLabel),
+      find.text(CreationText.addHomepageVehicleSeriesLabel),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.addHomepageCityLabel), findsNothing);
+    expect(find.text(CreationText.addHomepageCityLabel), findsNothing);
   });
 
   testWidgets('添加主页页关闭时会提示放弃未提交修改', (tester) async {
@@ -58,10 +58,10 @@ void main() {
     await tester.tap(find.byIcon(CupertinoIcons.xmark));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.unsavedChangesTitle), findsOneWidget);
-    expect(find.text(UITextConstants.continueEditing), findsOneWidget);
+    expect(find.text(CreationText.unsavedChangesTitle), findsOneWidget);
+    expect(find.text(CreationText.continueEditing), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.discard));
+    await tester.tap(find.text(CreationText.discard));
     await tester.pumpAndSettle();
 
     expect(find.text('result:closed'), findsOneWidget);
@@ -81,7 +81,7 @@ void main() {
     await tester.tap(find.text('打开添加主页'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(UITextConstants.homepageTypeVehicle));
+    await tester.tap(find.text(CreationText.homepageTypeVehicle));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(CupertinoTextField).at(0), '丰田');

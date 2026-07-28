@@ -15,6 +15,7 @@ from core.paths import DATA_EXECUTIONS_ROOT, is_execution_id
 from core.schema import assert_valid
 from content.execution.workspace import load_execution_manifest
 from content.execution.identity import parse_execution_id
+from content.execution.post_review_closure import load_post_review_closure
 from core.control_types import ContentType, expected_content_generator
 from verify.verify_content_execution_layout import content_execution_layout_issues
 from verify.verify_homepage_media_completeness import homepage_media_completeness_report
@@ -269,6 +270,38 @@ def execution_readiness_issues(
     if not objects:
         issues.append("reviewed execution has no content objects")
         return issues
+    if content_type is not ContentType.HOMEPAGE and mode == "commercial":
+        try:
+            closure = load_post_review_closure(
+                execution_id,
+                root=root,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            issues.append(f"commercial post review closure is invalid: {exc}")
+            return issues
+        if closure.carrier != content_type.value:
+            issues.append(
+                "commercial post review closure carrier drift: "
+                f"expected={content_type.value} actual={closure.carrier}"
+            )
+            return issues
+        objects_by_publish_ref = {
+            object_root.relative_to(root).as_posix(): object_root
+            for object_root in objects
+        }
+        closure_publish_refs = {
+            row.publish_ref for row in closure.objects
+        }
+        if closure_publish_refs != set(objects_by_publish_ref):
+            issues.append(
+                "commercial post review closure differs from execution post objects"
+            )
+            return issues
+        objects = [
+            objects_by_publish_ref[publish_ref]
+            for publish_ref in closure.qualified_publish_refs
+        ]
+
     object_issue_groups = [
         _reviewed_object_issues(
             root,
@@ -297,7 +330,7 @@ def execution_readiness_issues(
             f"reviewed object pass rate below contract: "
             f"required={min_pass_rate:.6f} actual={pass_rate:.6f}"
         )
-    if fail_on_no_go:
+    if mode == "commercial" or fail_on_no_go:
         for group in object_issue_groups:
             issues.extend(group)
     return issues

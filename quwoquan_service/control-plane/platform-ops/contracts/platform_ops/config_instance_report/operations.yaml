@@ -1,0 +1,60 @@
+description: 由 service principal 上报并由 operator 只读查看的实例配置 ACK。
+api_routes:
+- method: GET
+  path: /control-plane/platform/configs/instances
+  operation: ListConfigInstanceReports
+  actor: account
+  security: {auth_mode: required}
+  response_entity: ConfigInstanceReportSlice
+  authorization:
+    principal: operator
+    scopes: [ops.platform.config.read]
+    ownership_policy: operator_scope
+  reliability: {timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [OPS.USER.unauthorized, OPS.USER.forbidden, OPS.SYSTEM.config_instance_report_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_config_instance_reports, trace: true, attributes: [operation, outcome]}
+  slo: {latency_p95_ms: 500, availability_percent: 99.9}
+  commercial: {status: ready}
+  application:
+    kind: query
+    facet: ConfigInstanceReportQueryFacade
+    method: listConfigInstanceReports
+    reader: ConfigInstanceReportReader
+    slice: ConfigInstanceReportSlice
+- method: POST
+  path: /control-plane/platform/configs/instances/{instanceId}:report
+  operation: ReportConfigInstance
+  actor: account
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+  request_entity: ConfigInstanceReport
+  request_fields: [environment, cluster, service, instanceId, configVersion, imageVersion, releaseManifestDigest, effectiveHash, source, lastError]
+  response_entity: ConfigInstanceReport
+  authorization:
+    principal: service
+    scopes: [ops.platform.config.ack]
+    ownership_policy: service_instance_bound
+  reliability: {timeout_ms: 1200, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
+  error_codes: [OPS.USER.unauthorized, OPS.USER.forbidden, OPS.USER.config_instance_report_invalid, OPS.USER.config_instance_report_conflict, OPS.SYSTEM.config_instance_report_candidate_unavailable, OPS.SYSTEM.config_instance_report_storage_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: redacted}
+  telemetry: {metric: ops_platform_config_instance_ack, trace: true, attributes: [operation, environment, service, outcome]}
+  slo: {latency_p95_ms: 700, availability_percent: 99.9}
+  commercial: {status: ready}
+  application:
+    kind: command
+    facet: ConfigInstanceReportCommandFacade
+    method: reportConfigInstance
+    aggregate_owner: ConfigInstanceReport
+    mutation_target: ConfigInstanceReport
+    invariant_target: ConfigInstanceReport
+consumers:
+- name: platform-ops
+  capabilities: [list_config_instance_reports, report_config_instance]
+contract_test:
+  coverage_requirements:
+  - ACK 只接受绑定 service/environment/instance namespace 的已验证 service principal。
+  - ACK 必须绑定 canonical ReleaseManifest digest，desiredHash 只能来自 ConfigSnapshot。
+  current_evidence:
+    local_contract: [control-plane/platform-ops/cmd/api/main__local_contract_test.go]
+    api_integration: [control-plane/platform-ops/tests/api_integration/ops/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go]
+    real_engines: {postgres: embedded-postgres}

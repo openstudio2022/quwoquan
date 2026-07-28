@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/io_client.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/remote/user/profile_update_proposal/profile_update_proposal_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
@@ -19,10 +18,7 @@ import '../../../support/recording_cloud_operation_telemetry_sink.dart';
 
 const _gatewayUrl = String.fromEnvironment(
   'CLOUD_GATEWAY_BASE_URL',
-  defaultValue: 'https://gamma-api.quwoquan-env.test:19000',
-);
-const _gatewayResolveHost = String.fromEnvironment(
-  'GAMMA_GATEWAY_RESOLVE_HOST',
+  defaultValue: '',
 );
 const _definedAccessToken = String.fromEnvironment('TEST_AUTH_TOKEN');
 const _personaId = String.fromEnvironment('TEST_PERSONA_ID');
@@ -174,39 +170,9 @@ Future<void> _writeRemoteEvidence(Map<String, Object?> evidence) async {
   await output.writeAsString('${jsonEncode(evidence)}\n');
 }
 
-CloudHttpClient _buildGammaHttpClient() {
-  if (_gatewayResolveHost.isEmpty) {
-    return CloudHttpClient(
-      authTokenProvider: _StaticTokenProvider(_accessToken),
-    );
-  }
-  final gateway = Uri.parse(_gatewayUrl);
-  final nativeClient = HttpClient();
-  nativeClient.findProxy = (_) => 'DIRECT';
-  nativeClient.badCertificateCallback = (_, host, _) => host == gateway.host;
-  nativeClient.connectionFactory = (uri, proxyHost, proxyPort) {
-    if (uri.host != gateway.host) {
-      throw StateError(
-        'gamma profile proposal integration client rejected unexpected host '
-        '${uri.host}',
-      );
-    }
-    return Socket.startConnect(_gatewayResolveHost, uri.port).then((task) {
-      final secureSocket = task.socket.then<Socket>(
-        (socket) => SecureSocket.secure(
-          socket,
-          host: uri.host,
-          onBadCertificate: (_) => uri.host == gateway.host,
-        ),
-      );
-      return ConnectionTask.fromSocket<Socket>(secureSocket, task.cancel);
-    });
-  };
-  return CloudHttpClient(
-    client: IOClient(nativeClient),
-    authTokenProvider: _StaticTokenProvider(_accessToken),
-  );
-}
+CloudHttpClient _buildGammaHttpClient() => CloudHttpClient(
+  authTokenProvider: _StaticTokenProvider(_accessToken),
+);
 
 final class _StaticTokenProvider implements CloudAuthTokenProvider {
   const _StaticTokenProvider(this.token);

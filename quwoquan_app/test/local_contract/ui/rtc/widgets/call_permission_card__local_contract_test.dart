@@ -10,31 +10,20 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('CallPermissionGuard.permissionSemantic — 统一语义', () {
     test('麦克风权限卡片：permissionRequired + openSettings', () {
-      final semantic = CallPermissionGuard.permissionSemantic(
-        title: UITextConstants.callPermissionMicTitle,
-        message: UITextConstants.callPermissionMicDenied,
-      );
+      final semantic = CallPermissionGuard.permissionSemantic();
       expect(semantic.category, UiErrorCategory.permissionRequired);
       expect(semantic.scope, UiErrorScope.dialog);
       expect(semantic.presentation, UiErrorPresentation.gateCard);
       expect(semantic.tone, UiErrorTone.info);
-      expect(semantic.title, UITextConstants.callPermissionMicTitle);
-      expect(
-        semantic.primaryAction?.type,
-        UiErrorActionType.openSettings,
-      );
+      expect(semantic.title, SearchText.recoveryEnablePermissionTitle);
+      expect(semantic.message, SearchText.recoveryEnablePermissionMessage);
+      expect(semantic.primaryAction?.type, UiErrorActionType.openSettings);
     });
 
     test('摄像头权限卡片：去设置文案统一', () {
-      final semantic = CallPermissionGuard.permissionSemantic(
-        title: UITextConstants.callPermissionCameraTitle,
-        message: UITextConstants.callPermissionOpenSettings,
-      );
-      expect(semantic.title, UITextConstants.callPermissionCameraTitle);
-      expect(
-        semantic.primaryAction?.label,
-        UITextConstants.openSettings,
-      );
+      final semantic = CallPermissionGuard.permissionSemantic();
+      expect(semantic.title, SearchText.recoveryEnablePermissionTitle);
+      expect(semantic.primaryAction?.label, FoundationText.openSettings);
     });
   });
 

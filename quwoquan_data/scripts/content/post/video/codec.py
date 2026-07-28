@@ -12,6 +12,7 @@ from core.io import read_json
 from core.schema import assert_valid
 from governance.creators.assignment import creator_from_payload
 from content.post.video.source_video import SourcedVideoEvidence
+from governance.coverage.license import RightsAuditStatus
 
 
 class VideoReviewDecision(StrEnum):
@@ -38,6 +39,9 @@ class VideoSourceFrameEvidence:
     creator: str
     license: str
     sha256: str
+    source_use_mode: str
+    rights_audit_status: RightsAuditStatus
+    rights_audit_issues: tuple[str, ...]
     caption: str = ""
     source_collection_id: str = ""
 
@@ -62,6 +66,30 @@ class VideoSourceFrameEvidence:
             raise ValueError(
                 f"sourceFrames[{index}] missing {','.join(missing)}"
             )
+        source_use_mode = _string(payload.get("sourceUseMode"))
+        if source_use_mode not in {
+            "licensed_adaptation",
+            "factual_reference_only",
+        }:
+            raise ValueError(
+                f"sourceFrames[{index}] sourceUseMode is invalid or missing"
+            )
+        try:
+            rights_audit_status = RightsAuditStatus(
+                _string(payload.get("rightsAuditStatus"))
+            )
+        except ValueError as exc:
+            raise ValueError(
+                f"sourceFrames[{index}] rightsAuditStatus is invalid or missing"
+            ) from exc
+        rights_audit_issues = _strings(payload.get("rightsAuditIssues"))
+        if (
+            rights_audit_status is RightsAuditStatus.UNVERIFIED
+            and not rights_audit_issues
+        ):
+            raise ValueError(
+                f"sourceFrames[{index}] unverified rights require rightsAuditIssues"
+            )
         return cls(
             asset_ref=required["assetRef"],
             source_ref=required["sourceRef"],
@@ -70,6 +98,9 @@ class VideoSourceFrameEvidence:
             creator=required["creator"],
             license=required["license"],
             sha256=required["sha256"],
+            source_use_mode=source_use_mode,
+            rights_audit_status=rights_audit_status,
+            rights_audit_issues=rights_audit_issues,
             caption=_string(payload.get("caption")),
             source_collection_id=_string(payload.get("sourceCollectionId")),
         )
@@ -83,6 +114,9 @@ class VideoSourceFrameEvidence:
             "creator": self.creator,
             "license": self.license,
             "sha256": self.sha256,
+            "sourceUseMode": self.source_use_mode,
+            "rightsAuditStatus": self.rights_audit_status.value,
+            "rightsAuditIssues": list(self.rights_audit_issues),
             **({"caption": self.caption} if self.caption else {}),
             **(
                 {"sourceCollectionId": self.source_collection_id}

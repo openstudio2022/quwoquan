@@ -22,10 +22,62 @@ PY
 )"
 ENV_NAME="${QWQ_APP_RUNTIME_ENV:-${EXISTING_RUNTIME_ENV:-}}"
 LAUNCH_MODE="${QWQ_APP_LAUNCH_MODE:-xcode_build}"
+DIRECT_ALPHA_HANDOFF_APPLIED=0
+DIRECT_ALPHA_RUNTIME_DEFINES_JSON=""
 
 if [[ -z "$ENV_NAME" ]]; then
-  echo "[ios-dart-defines] FAIL: explicit QWQ_APP_RUNTIME_ENV or DART_DEFINES APP_RUNTIME_ENV is required." >&2
-  exit 2
+  if [[ "${CONFIGURATION:-}" == "Debug" ]] && \
+    { [[ "${EFFECTIVE_PLATFORM_NAME:-}" == *"iphonesimulator"* ]] || \
+      [[ "${PLATFORM_NAME:-}" == "iphonesimulator" ]]; }; then
+    DIRECT_ALPHA_HANDOFF_JSON="$(
+      python3 "$APP_DIR/scripts/device/build_launcher_handoff.py" \
+        --env alpha \
+        --target alpha-local \
+        --launch-mode canonical_launcher \
+        --app-instance-id xcode-direct-alpha \
+        --app-instance-namespace xcode-direct-alpha
+    )" || {
+      echo "[ios-dart-defines] FAIL: canonical Alpha launcher handoff could not be built." >&2
+      exit 2
+    }
+    DIRECT_ALPHA_EXPORTS="$(
+      python3 - "$DIRECT_ALPHA_HANDOFF_JSON" <<'PY'
+import json
+import shlex
+import sys
+
+handoff = json.loads(sys.argv[1])
+values = {
+    "QWQ_APP_RUNTIME_ENV": handoff["environment"],
+    "QWQ_APP_LAUNCH_MODE": handoff["launchMode"],
+    "QWQ_LAUNCH_TARGET": handoff["target"],
+    "QWQ_DART_DEFINES_DIGEST": handoff["dartDefinesDigest"],
+    "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": handoff["runtimeConfigDigest"],
+    "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": handoff[
+        "effectiveLaunchManifestDigest"
+    ],
+    "DIRECT_ALPHA_RUNTIME_DEFINES_JSON": json.dumps(
+        handoff["dartDefines"],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ),
+}
+for key, value in values.items():
+    print(f"export {key}={shlex.quote(str(value))}")
+PY
+    )" || {
+      echo "[ios-dart-defines] FAIL: canonical Alpha launcher handoff is invalid." >&2
+      exit 2
+    }
+    eval "$DIRECT_ALPHA_EXPORTS"
+    ENV_NAME="$QWQ_APP_RUNTIME_ENV"
+    LAUNCH_MODE="$QWQ_APP_LAUNCH_MODE"
+    DIRECT_ALPHA_HANDOFF_APPLIED=1
+    echo "[ios-dart-defines] using canonical Alpha handoff for direct iOS Debug." >&2
+  else
+    echo "[ios-dart-defines] FAIL: explicit QWQ_APP_RUNTIME_ENV or DART_DEFINES APP_RUNTIME_ENV is required outside direct iOS Simulator Debug." >&2
+    exit 2
+  fi
 fi
 
 if [[ -n "${QWQ_APP_RUNTIME_ENV:-}" \
@@ -43,63 +95,70 @@ case "$ENV_NAME" in
     ;;
 esac
 
-RUNTIME_DEFINES_JSON="$(
-  python3 "$APP_DIR/scripts/env/print_app_env_dart_defines.py" \
-    --env "$ENV_NAME" \
-    --format json \
-    --launch-mode "$LAUNCH_MODE"
-)"
+if [[ "$DIRECT_ALPHA_HANDOFF_APPLIED" == "1" ]]; then
+  RUNTIME_DEFINES_JSON="$DIRECT_ALPHA_RUNTIME_DEFINES_JSON"
+else
+  RUNTIME_DEFINES_JSON="$(
+    python3 "$APP_DIR/scripts/env/print_app_env_dart_defines.py" \
+      --env "$ENV_NAME" \
+      --format json \
+      --launch-mode "$LAUNCH_MODE"
+  )"
+fi
 
-python3 - "$RUNTIME_DEFINES_JSON" "${DART_DEFINES:-}" <<'PY'
+python3 - \
+  "$RUNTIME_DEFINES_JSON" \
+  "${DART_DEFINES:-}" \
+  "$DIRECT_ALPHA_HANDOFF_APPLIED" <<'PY'
 import base64
 import json
+import os
 import shlex
 import sys
-from urllib.parse import urlparse
 
 runtime_defines = json.loads(sys.argv[1])
 existing = sys.argv[2].strip()
 expected_env = runtime_defines.get("APP_RUNTIME_ENV", "")
+launch_target = os.environ.get("QWQ_LAUNCH_TARGET", "").strip()
+effective_manifest_digest = os.environ.get(
+    "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST",
+    "",
+).strip()
+dart_defines_digest = os.environ.get("QWQ_DART_DEFINES_DIGEST", "").strip()
+runtime_config_digest = os.environ.get(
+    "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST",
+    "",
+).strip()
+if not launch_target:
+    print(
+        "[ios-dart-defines] FAIL: canonical QWQ_LAUNCH_TARGET is required.",
+        file=sys.stderr,
+    )
+    raise SystemExit(5)
+for label, value in (
+    ("QWQ_DART_DEFINES_DIGEST", dart_defines_digest),
+    ("QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST", runtime_config_digest),
+    ("QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST", effective_manifest_digest),
+):
+    if not value.startswith("sha256:") or len(value) != 71:
+        print(
+            f"[ios-dart-defines] FAIL: canonical {label} is required.",
+            file=sys.stderr,
+        )
+        raise SystemExit(5)
 required_keys = {
     "APP_RUNTIME_ENV",
     "CLOUD_GATEWAY_BASE_URL",
     "APP_LEGAL_BASE_URL",
+    "PUBLIC_WEB_BASE_URL",
+    "APP_DOWNLOAD_BASE_URL",
+    "REALTIME_CONNECTION_URL",
     "MEDIA_AVATAR_CDN_BASE_URL",
     "MEDIA_IMAGE_CDN_BASE_URL",
     "MEDIA_VIDEO_CDN_BASE_URL",
     "MEDIA_UPLOAD_BASE_URL",
     "RTC_MEDIA_CONNECTION_URL",
 }
-device_local_transport_keys = {
-    "CLOUD_GATEWAY_BASE_URL",
-    "MEDIA_AVATAR_CDN_BASE_URL",
-    "MEDIA_IMAGE_CDN_BASE_URL",
-    "MEDIA_VIDEO_CDN_BASE_URL",
-    "MEDIA_UPLOAD_BASE_URL",
-}
-
-
-def is_authorized_local_transport(raw: str, canonical: str) -> bool:
-    candidate = urlparse(raw.strip())
-    expected = urlparse(canonical.strip())
-    if not (
-        candidate.scheme == expected.scheme == "https"
-        and candidate.port == expected.port
-        and candidate.path == expected.path
-        and candidate.params == expected.params
-        and candidate.query == expected.query
-        and candidate.fragment == expected.fragment
-    ):
-        return False
-    candidate_host = (candidate.hostname or "").lower()
-    expected_host = (expected.hostname or "").lower()
-    if candidate_host == "localhost":
-        return True
-    public_suffix = ".quwoquan-env.test"
-    if not expected_host.endswith(public_suffix):
-        return False
-    local_host = expected_host[: -len(public_suffix)] + ".localhost"
-    return candidate_host == local_host
 
 merged = {}
 for encoded in filter(None, existing.split(",")):
@@ -113,12 +172,6 @@ for encoded in filter(None, existing.split(",")):
     merged[key] = value
 
 for key, value in runtime_defines.items():
-    supplied = merged.get(key, "")
-    if (
-        key in device_local_transport_keys
-        and is_authorized_local_transport(supplied, value)
-    ):
-        continue
     merged[key] = value
 missing = sorted(key for key in required_keys if not merged.get(key, "").strip())
 if missing:
@@ -135,6 +188,37 @@ if not expected_env or merged["APP_RUNTIME_ENV"] != expected_env:
     )
     raise SystemExit(4)
 
+target_build_dir = os.environ.get("TARGET_BUILD_DIR", "").strip()
+resources_folder = os.environ.get(
+    "UNLOCALIZED_RESOURCES_FOLDER_PATH",
+    "",
+).strip()
+if target_build_dir and resources_folder:
+    import plistlib
+    from pathlib import Path
+
+    resource_root = Path(target_build_dir) / resources_folder
+    resource_root.mkdir(parents=True, exist_ok=True)
+    manifest_path = resource_root / "QWQNativeRuntime.plist"
+    temporary_path = manifest_path.with_suffix(".plist.tmp")
+    with temporary_path.open("wb") as stream:
+        plistlib.dump(
+            {
+                "runtimeEnvironment": merged["APP_RUNTIME_ENV"],
+                "runtimeConfigDigest": runtime_config_digest,
+                "dartDefinesDigest": dart_defines_digest,
+                "effectiveLaunchManifestDigest": effective_manifest_digest,
+                "launchTarget": launch_target,
+                "entrypoint": "lib/main_prod.dart",
+                "launchMode": runtime_defines.get("QWQ_APP_LAUNCH_MODE", ""),
+                "recoveryBaseURL": merged["CLOUD_GATEWAY_BASE_URL"],
+                "publicWebURL": merged["PUBLIC_WEB_BASE_URL"],
+            },
+            stream,
+            sort_keys=True,
+        )
+    temporary_path.replace(manifest_path)
+
 encoded_defines = [
     base64.b64encode(f"{key}={value}".encode("utf-8")).decode("ascii")
     for key, value in sorted(merged.items())
@@ -149,3 +233,7 @@ print(
 print("export DART_DEFINES=" + shlex.quote(",".join(encoded_defines)))
 print("export QWQ_IOS_DART_DEFINES_READY=1")
 PY
+
+if [[ "$DIRECT_ALPHA_HANDOFF_APPLIED" == "1" ]]; then
+  printf 'export FLUTTER_TARGET=%q\n' "$APP_DIR/lib/main_prod.dart"
+fi

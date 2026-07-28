@@ -415,16 +415,13 @@ def run_matrix_test(
         "--dart-define=ASSISTANT_SCENARIO_FIXTURE_JSON_B64="
         + assistant_scenario_fixture_b64(),
     ]
-    if env_name == "alpha":
-        command.append("--dart-define=APP_DATA_SOURCE=mock")
-    elif env_name in {"beta", "gamma"}:
+    if env_name in {"beta", "gamma"}:
         command.extend(
             [
-                "--dart-define=APP_DATA_SOURCE=remote",
                 f"--dart-define=CLOUD_GATEWAY_BASE_URL={device['gatewayBaseUrl']}",
             ]
         )
-    else:
+    elif env_name != "alpha":
         raise ValueError(f"unsupported env: {env_name}")
     command_path = write_json(
         run_dir / "command.json",

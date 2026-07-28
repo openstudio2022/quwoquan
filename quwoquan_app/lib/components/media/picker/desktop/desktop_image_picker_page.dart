@@ -114,7 +114,7 @@ class _DesktopImagePickerPageState
       }
       if (_selectedPaths.length >= widget.maxSelection) {
         HapticFeedback.selectionClick();
-        AppToast.show(context, UITextConstants.mediaPickerOverLimit);
+        AppToast.show(context, MediaText.mediaPickerOverLimit);
         return;
       }
       _selectedPaths.add(path);
@@ -177,7 +177,7 @@ class _DesktopImagePickerPageState
         ColorType.backgroundPrimary,
       ),
       navigationBar: AppNavigationBar(
-        middle: Text(UITextConstants.mediaPickerPhotoTitle),
+        middle: Text(MediaText.mediaPickerPhotoTitle),
         leading: AppNavigationBarIconButton(
           icon: CupertinoIcons.xmark,
           onPressed: () => Navigator.of(context).pop(),
@@ -187,7 +187,7 @@ class _DesktopImagePickerPageState
             : CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: _scanning ? null : () => unawaited(_pickDirectory()),
-                child: Text(UITextConstants.desktopPickerChangeFolder),
+                child: Text(MediaText.desktopPickerChangeFolder),
               ),
       ),
       child: SafeArea(child: _buildBody(isDark)),
@@ -199,8 +199,8 @@ class _DesktopImagePickerPageState
     if (!gateway.isSupported) {
       return _buildCenteredEmpty(
         icon: CupertinoIcons.device_desktop,
-        title: UITextConstants.desktopPickerUnsupportedTitle,
-        message: UITextConstants.desktopPickerUnsupportedHint,
+        title: MediaText.desktopPickerUnsupportedTitle,
+        message: MediaText.desktopPickerUnsupportedHint,
       );
     }
     if (_bootstrapping || _scanning) {
@@ -210,7 +210,7 @@ class _DesktopImagePickerPageState
           children: <Widget>[
             const CupertinoActivityIndicator(),
             SizedBox(height: AppSpacing.containerSm),
-            Text(UITextConstants.desktopPickerScanning, style: _subStyle()),
+            Text(MediaText.desktopPickerScanning, style: _subStyle()),
           ],
         ),
       );
@@ -227,7 +227,7 @@ class _DesktopImagePickerPageState
           child: images.isEmpty
               ? _buildCenteredEmpty(
                   icon: CupertinoIcons.photo,
-                  title: UITextConstants.desktopPickerNoImages,
+                  title: MediaText.desktopPickerNoImages,
                   message: '',
                 )
               : _buildGrid(images, isDark),
@@ -280,10 +280,10 @@ class _DesktopImagePickerPageState
             ),
           ),
           SizedBox(height: AppSpacing.containerSm),
-          Text(UITextConstants.desktopPickerEmptyTitle, style: _titleStyle()),
+          Text(MediaText.desktopPickerEmptyTitle, style: _titleStyle()),
           SizedBox(height: AppSpacing.intraGroupSm),
           Text(
-            UITextConstants.desktopPickerEmptyHint,
+            MediaText.desktopPickerEmptyHint,
             style: _subStyle(),
             textAlign: TextAlign.center,
           ),
@@ -291,7 +291,7 @@ class _DesktopImagePickerPageState
           CupertinoButton.filled(
             key: TestKeys.desktopPickerChooseFolderButton,
             onPressed: () => unawaited(_pickDirectory()),
-            child: Text(UITextConstants.desktopPickerChooseFolder),
+            child: Text(MediaText.desktopPickerChooseFolder),
           ),
         ],
       ),
@@ -320,7 +320,7 @@ class _DesktopImagePickerPageState
                   Flexible(
                     child: Text(
                       album?.name ??
-                          UITextConstants.mediaPickerAlbumSelectionTitle,
+                          MediaText.mediaPickerAlbumSelectionTitle,
                       style: _titleStyle(),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -354,7 +354,7 @@ class _DesktopImagePickerPageState
       context: context,
       anchorTop: anchorTop,
       scrimColor: AppColors.black.withValues(alpha: 0.4),
-      barrierLabel: UITextConstants.mediaPickerAlbumSelectionTitle,
+      barrierLabel: MediaText.mediaPickerAlbumSelectionTitle,
       builder: _buildAlbumDropdownPanel,
     );
     if (selected != null && mounted) {
@@ -591,8 +591,8 @@ class _DesktopImagePickerPageState
             onPressed: count == 0 ? null : _finish,
             child: Text(
               count == 0
-                  ? UITextConstants.mediaPickerComplete
-                  : '${UITextConstants.mediaPickerComplete} ($count)',
+                  ? MediaText.mediaPickerComplete
+                  : '${MediaText.mediaPickerComplete} ($count)',
             ),
           ),
         ),

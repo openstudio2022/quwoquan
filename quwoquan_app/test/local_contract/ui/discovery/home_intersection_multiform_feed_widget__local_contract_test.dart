@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-009
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_actor_evidence.g.dart';
@@ -32,7 +34,9 @@ import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../support/cloud_services/behavior_repository_double.dart';
 import '../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../support/cloud_services/content/mock_content_repository.dart';
 
@@ -560,7 +564,7 @@ void main() {
     final avatarCandidates =
         avatarImages.single.imageUrlCandidates ?? const <String>[];
     expect(avatarCandidates, <String>[
-      'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+      'https://cdn.alpha.quwoquan.com:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
     ]);
 
     final contentImages = tester
@@ -572,7 +576,7 @@ void main() {
       contentImages.any(
         (widget) =>
             widget.imageUrlCandidates?.contains(
-              'https://alpha-image.quwoquan-env.test:17100/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
+              'https://cdn.alpha.quwoquan.com:17100/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
             ) ??
             false,
       ),
@@ -587,7 +591,7 @@ void main() {
     );
     expect(
       player.deliveryReference.url,
-      'https://alpha-video.quwoquan-env.test:17100/media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+      'https://cdn.alpha.quwoquan.com:17100/media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
     );
     expect(player.deliveryReference.url, isNot(contains('https://10.0.2.2')));
   });
@@ -617,7 +621,7 @@ void main() {
       contentImages.any(
         (widget) =>
             widget.imageUrlCandidates?.contains(
-              'https://alpha-image.quwoquan-env.test:17100/$coverObjectKey',
+              'https://cdn.alpha.quwoquan.com:17100/$coverObjectKey',
             ) ??
             false,
       ),
@@ -653,7 +657,7 @@ void main() {
         .toList(growable: false);
     expect(avatarImages, isNotEmpty);
     expect(avatarImages.first.imageUrlCandidates, <String>[
-      'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+      'https://cdn.alpha.quwoquan.com:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
     ]);
   });
 
@@ -730,28 +734,112 @@ void main() {
 
     expect(find.byKey(const ValueKey('home-feed-skeleton')), findsOneWidget);
     expect(find.byKey(const ValueKey('home_feed_slow_hint')), findsOneWidget);
-    expect(find.text(UITextConstants.requestWaitSlow), findsOneWidget);
+    expect(find.text(FoundationText.requestWaitSlow), findsOneWidget);
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
   });
 
-  testWidgets('任务A·空态：加载完成无内容展示运营兜底文案与再试', (tester) async {
+  testWidgets('关注空态准确说明尚无动态且没有插画或错误重试', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      _buildFeedScope(notifier: _EmptyFeedMapNotifier.new),
+      _buildFeedScope(
+        notifier: _FollowingEmptyFeedMapNotifier.new,
+        channelId: 'following',
+      ),
     );
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('home-feed-empty')), findsOneWidget);
-    expect(find.text(DiscoveryFeedText.homeFeedEmptyTitle), findsOneWidget);
     expect(
-      find.text(DiscoveryFeedText.homeFeedEmptyDescription),
+      find.byKey(const ValueKey('home-following-feed-empty')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('home-feed-empty-retry')), findsOneWidget);
-    // 空态禁止落到空白滚动视图。
+    expect(
+      find.text(DiscoveryFeedText.followingFeedEmptyTitle),
+      findsOneWidget,
+    );
+    expect(
+      find.text(DiscoveryFeedText.followingFeedEmptyDescription),
+      findsOneWidget,
+    );
+    expect(find.byType(Icon), findsNothing);
+    expect(find.text('暂时没有推荐内容'), findsNothing);
+    expect(find.textContaining('关注更多内容后'), findsNothing);
+    expect(find.text(SearchText.reload), findsNothing);
     expect(find.byKey(const ValueKey('home-feed-skeleton')), findsNothing);
+  });
+
+  testWidgets('推荐空状态不能进入关注正常空态而是提供阻塞重载', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildFeedScope(notifier: _RecommendEmptyFeedMapNotifier.new),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('home-following-feed-empty')),
+      findsNothing,
+    );
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+    expect(find.text(SearchText.recoveryReloadLaterMessage), findsOneWidget);
+    expect(find.text(SearchText.reload), findsOneWidget);
+    expect(find.byType(Icon), findsNothing);
+    expect(find.text('暂时没有推荐内容'), findsNothing);
+    expect(find.textContaining('关注更多内容后'), findsNothing);
+  });
+
+  testWidgets('feed 离线、超时和依赖不可用使用准确恢复组且不展示技术字段', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final cases = <({RuntimeFailure failure, String title, String message})>[
+      (
+        failure: _feedFailure(
+          code: RuntimeFailureCodes.appNetworkOffline,
+          kind: RuntimeFailureKind.network,
+          reason: 'device_offline',
+        ),
+        title: SearchText.recoveryConnectNetworkTitle,
+        message: SearchText.recoveryConnectNetworkMessage,
+      ),
+      (
+        failure: _feedFailure(
+          code: RuntimeFailureCodes.appTimeoutRequestTimeout,
+          kind: RuntimeFailureKind.timeout,
+          reason: 'feed_timeout',
+        ),
+        title: SearchText.recoveryReloadLaterTitle,
+        message: SearchText.recoveryReloadLaterMessage,
+      ),
+      (
+        failure: _feedFailure(
+          code: ContentErrorCode.requiredDependencyUnavailable.code,
+          kind: RuntimeFailureKind.unavailable,
+          reason: 'feed_dependency_unavailable',
+        ),
+        title: SearchText.recoveryReloadLaterTitle,
+        message: SearchText.recoveryReloadLaterMessage,
+      ),
+    ];
+
+    for (final entry in cases) {
+      await tester.pumpWidget(
+        _buildFeedScope(
+          notifier: () => _BlockingErrorFeedMapNotifier(entry.failure),
+          scopeId: entry.failure.code,
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text(entry.title), findsOneWidget);
+      expect(find.text(entry.message), findsOneWidget);
+      expect(find.text(SearchText.reload), findsOneWidget);
+      expect(find.byType(Icon), findsNothing);
+      expect(find.textContaining(entry.failure.code), findsNothing);
+      expect(find.textContaining(entry.failure.semanticReason), findsNothing);
+      expect(find.textContaining('discovery_feed_provider'), findsNothing);
+    }
   });
 
   testWidgets('首页关注按钮登录态点击后同步为已关注', (tester) async {
@@ -761,7 +849,7 @@ void main() {
     await tester.pumpWidget(_buildFeed(_microPost(), authenticated: true));
     await tester.pump();
 
-    expect(find.text(UITextConstants.follow), findsOneWidget);
+    expect(find.text(FoundationText.follow), findsOneWidget);
     final followButton = find.byKey(
       const ValueKey<String>('home-post-author-follow-button'),
     );
@@ -770,10 +858,10 @@ void main() {
     expect(followWidth, AppSpacing.followButtonWidthCompact);
     expect(tester.getSize(followButton).height, AppSpacing.buttonHeightXs);
 
-    await tester.tap(find.text(UITextConstants.follow));
+    await tester.tap(find.text(FoundationText.follow));
     await tester.pump();
 
-    expect(find.text(UITextConstants.following), findsOneWidget);
+    expect(find.text(FoundationText.following), findsOneWidget);
     final followingButton = find.byKey(
       const ValueKey<String>('home-post-author-follow-button'),
     );
@@ -1551,6 +1639,7 @@ class _AuthenticatedSession extends AuthSessionController {
     return const AuthSessionState(
       status: AuthSessionStatus.authenticated,
       accessToken: 'test-token',
+      refreshToken: 'test-refresh-token',
       ownerId: 'test-user',
       activeSubAccountId: 'test-sub-account',
       accountState: 'active',
@@ -1576,7 +1665,19 @@ class _SinglePostFeedMapNotifier extends DiscoveryFeedMapNotifier {
   Future<void> load(String channelId, {bool force = false}) async {}
 }
 
-class _EmptyFeedMapNotifier extends DiscoveryFeedMapNotifier {
+class _FollowingEmptyFeedMapNotifier extends DiscoveryFeedMapNotifier {
+  @override
+  Map<String, AsyncValue<DiscoveryFeedState>> build() {
+    return <String, AsyncValue<DiscoveryFeedState>>{
+      'following': AsyncData(const DiscoveryFeedState(items: <PostBaseDto>[])),
+    };
+  }
+
+  @override
+  Future<void> load(String channelId, {bool force = false}) async {}
+}
+
+class _RecommendEmptyFeedMapNotifier extends DiscoveryFeedMapNotifier {
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
     return <String, AsyncValue<DiscoveryFeedState>>{
@@ -1586,6 +1687,41 @@ class _EmptyFeedMapNotifier extends DiscoveryFeedMapNotifier {
 
   @override
   Future<void> load(String channelId, {bool force = false}) async {}
+}
+
+class _BlockingErrorFeedMapNotifier extends DiscoveryFeedMapNotifier {
+  _BlockingErrorFeedMapNotifier(this.error);
+
+  final RuntimeFailure error;
+
+  @override
+  Map<String, AsyncValue<DiscoveryFeedState>> build() {
+    return <String, AsyncValue<DiscoveryFeedState>>{
+      'recommend': AsyncData(DiscoveryFeedState(blockingError: error)),
+    };
+  }
+
+  @override
+  Future<void> load(String channelId, {bool force = false}) async {}
+}
+
+RuntimeFailure _feedFailure({
+  required String code,
+  required RuntimeFailureKind kind,
+  required String reason,
+}) {
+  return RuntimeFailure(
+    code: code,
+    semanticReason: reason,
+    origin: RuntimeFailureOrigin.localClient,
+    kind: kind,
+    nature: RuntimeFailureNature.transient,
+    location: const RuntimeFailureLocation(
+      businessObject: 'content.discovery_feed',
+      functionModule: 'discovery_feed_provider',
+    ),
+    context: const RuntimeFailureContext(),
+  );
 }
 
 class _LoadingFeedMapNotifier extends DiscoveryFeedMapNotifier {
@@ -1617,8 +1753,11 @@ class _SlowLoadingFeedMapNotifier extends DiscoveryFeedMapNotifier {
 Widget _buildFeedScope({
   required DiscoveryFeedMapNotifier Function() notifier,
   bool disableAnimations = false,
+  String channelId = 'recommend',
+  String? scopeId,
 }) {
   return ProviderScope(
+    key: ValueKey<String>('feed-scope-${scopeId ?? channelId}'),
     overrides: [
       ...mockContentFacetOverrides(MockContentRepository()),
       discoveryFeedMapProvider.overrideWith(notifier),
@@ -1633,7 +1772,7 @@ Widget _buildFeedScope({
           ),
           child: HomeMultiFormFeed(
             isDark: false,
-            channelId: 'recommend',
+            channelId: channelId,
             template: 'single_column_multiform',
             onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
           ),

@@ -546,7 +546,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "https://alpha-avatar.quwoquan-env.test:17100",
       "key": "sys.chat-service.runtime.media.group_avatar_cdn_base_url",
       "reload": "restart",
       "rollout": "progressive",
@@ -2802,7 +2801,7 @@ _PLATFORM_CONFIG_JSON = r'''{
     },
     {
       "default": "",
-      "key": "sys.product-ops-service.app_release.ios.app_store_url",
+      "key": "sys.product-ops-service.app_release.android.min_android_version",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -2821,6 +2820,15 @@ _PLATFORM_CONFIG_JSON = r'''{
     {
       "default": "",
       "key": "sys.product-ops-service.app_release.ios.latest_version",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.ios.pwa_url",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -4337,7 +4345,7 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
-      "default": "quwoquan",
+      "default": "quwoquan_user",
       "key": "sys.user-service.mongodb.database",
       "reload": "restart",
       "rollout": "progressive",

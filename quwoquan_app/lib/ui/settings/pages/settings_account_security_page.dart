@@ -42,7 +42,7 @@ class _SettingsAccountSecurityPageState
     final isDark = ref.watch(isDarkProvider);
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
-      title: UITextConstants.settingsAccountSecurity,
+      title: SettingsText.settingsAccountSecurity,
       onBack: () => _goBack(context),
       body: WebPageMaxWidthFrame(
         child: SafeArea(
@@ -66,7 +66,7 @@ class _SettingsAccountSecurityPageState
                 );
               }
               if (!snapshot.hasData) {
-                return const Center(child: CupertinoActivityIndicator());
+                return AppRequestFeedback.section();
               }
               return _buildCredentials(
                 isDark,
@@ -90,11 +90,11 @@ class _SettingsAccountSecurityPageState
       children: <Widget>[
         SettingsInsetGroupedSection(
           isDark: isDark,
-          header: UITextConstants.settingsCredentialSection,
+          header: SettingsText.settingsCredentialSection,
           child: items.isEmpty
               ? SettingsInsetFormRow(
                   isDark: isDark,
-                  label: UITextConstants.settingsCredentialEmpty,
+                  label: SettingsText.settingsCredentialEmpty,
                   trailing: const SizedBox.shrink(),
                 )
               : Column(
@@ -105,7 +105,7 @@ class _SettingsAccountSecurityPageState
                         label: _credentialLabel(items[index].credentialType),
                         trailingText:
                             items[index].displayLabel ??
-                            UITextConstants.settingsCredentialBound,
+                            SettingsText.settingsCredentialBound,
                         isDestructive: true,
                         showChevron: false,
                         onTap: () => unawaited(_confirmUnbind(items[index])),
@@ -121,22 +121,20 @@ class _SettingsAccountSecurityPageState
           isDark: isDark,
           child: SettingsInsetNavigationRow(
             isDark: isDark,
-            label: UITextConstants.settingsCredentialBindPhone,
+            label: SettingsText.settingsCredentialBindPhone,
             onTap: () => context.push(AppRoutePaths.profileEdit),
           ),
         ),
         SizedBox(height: SettingsSemanticConstants.insetFormSectionVerticalGap),
         SettingsInsetGroupedSection(
           isDark: isDark,
-          header: UITextConstants.settingsCloseAccountSection,
+          header: SettingsText.settingsCloseAccountSection,
           child: SettingsInsetNavigationRow(
             isDark: isDark,
-            label: UITextConstants.settingsCloseAccountEntry,
+            label: SettingsText.settingsCloseAccountEntry,
             isDestructive: true,
             showChevron: false,
-            trailing: _closingAccount
-                ? const CupertinoActivityIndicator()
-                : null,
+            trailing: _closingAccount ? AppRequestFeedback.inline() : null,
             onTap: _closingAccount
                 ? null
                 : () => unawaited(_confirmCloseAccount()),
@@ -153,19 +151,17 @@ class _SettingsAccountSecurityPageState
     final confirmed = await showAppCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
-        title: const Text(UITextConstants.settingsCloseAccountConfirmTitle),
-        content: const Text(UITextConstants.settingsCloseAccountConfirmMessage),
+        title: const Text(SettingsText.settingsCloseAccountConfirmTitle),
+        content: const Text(SettingsText.settingsCloseAccountConfirmMessage),
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text(UITextConstants.cancel),
+            child: const Text(FoundationText.cancel),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text(
-              UITextConstants.settingsCloseAccountConfirmAction,
-            ),
+            child: const Text(SettingsText.settingsCloseAccountConfirmAction),
           ),
         ],
       ),
@@ -258,7 +254,7 @@ class _SettingsAccountSecurityPageState
     }
 
     if (!mounted) return;
-    AppToast.show(context, UITextConstants.settingsCloseAccountDoneToast);
+    AppToast.show(context, SettingsText.settingsCloseAccountDoneToast);
     context.go(AppRoutePaths.home);
   }
 
@@ -266,19 +262,19 @@ class _SettingsAccountSecurityPageState
     final confirmed = await showAppCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
-        title: const Text(UITextConstants.settingsCredentialUnbindConfirmTitle),
+        title: const Text(SettingsText.settingsCredentialUnbindConfirmTitle),
         content: const Text(
-          UITextConstants.settingsCredentialUnbindConfirmMessage,
+          SettingsText.settingsCredentialUnbindConfirmMessage,
         ),
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text(UITextConstants.cancel),
+            child: const Text(FoundationText.cancel),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text(UITextConstants.settingsCredentialUnbind),
+            child: const Text(SettingsText.settingsCredentialUnbind),
           ),
         ],
       ),
@@ -309,8 +305,8 @@ class _SettingsAccountSecurityPageState
   }
 
   String _credentialLabel(String type) => switch (type) {
-    'phone' => UITextConstants.settingsCredentialPhone,
-    'carrier_phone' => UITextConstants.settingsCredentialCarrierPhone,
+    'phone' => SettingsText.settingsCredentialPhone,
+    'carrier_phone' => SettingsText.settingsCredentialCarrierPhone,
     _ => type,
   };
 

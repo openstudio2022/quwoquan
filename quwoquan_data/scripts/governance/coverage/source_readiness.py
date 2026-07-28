@@ -12,7 +12,6 @@ from typing import Any
 from core.runtime_policy import active_runtime_policy
 from core.schema import assert_valid
 from core.source_digest import current_source_digest
-from governance.coverage.coverage_merge import _type_evidence
 from governance.coverage.coverage_runtime import coverage_workspace_root, now_iso
 from governance.coverage.source_readiness_candidates import (
     _dedupe_candidates,
@@ -20,6 +19,7 @@ from governance.coverage.source_readiness_candidates import (
     _qualify_candidate,
     _read_candidates,
     _readiness_key,
+    _source_ready_type_evidence,
     _wikipedia_evidence,
 )
 
@@ -38,7 +38,12 @@ def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
     os.replace(temporary, path)
 
 
-def _input_digest(paths: list[Path], *, include_master_list: bool) -> str:
+def _input_digest(
+    paths: list[Path],
+    *,
+    include_master_list: bool,
+    provinces: list[str],
+) -> str:
     digest = hashlib.sha256()
     for path in sorted(paths):
         digest.update(str(path.resolve()).encode("utf-8"))
@@ -46,6 +51,16 @@ def _input_digest(paths: list[Path], *, include_master_list: bool) -> str:
         digest.update(path.read_bytes())
         digest.update(b"\n")
     digest.update(f"includeMasterList={include_master_list}".encode("ascii"))
+    if include_master_list:
+        digest.update(b"\0")
+        digest.update(
+            json.dumps(
+                _master_candidates(provinces),
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
     return "sha256:" + digest.hexdigest()
 
 
@@ -97,10 +112,7 @@ def _balanced_frozen_targets(
             candidate = row.get("candidate") or {}
             if str(candidate.get("province") or "") != province:
                 continue
-            classified = _type_evidence(
-                [candidate],
-                str(candidate.get("name") or ""),
-            )
+            classified = _source_ready_type_evidence(candidate)
             if classified is None:
                 continue
             cell = (
@@ -183,6 +195,7 @@ def qualify_source_ready_candidates(
     input_digest = _input_digest(
         candidate_files,
         include_master_list=include_master_list,
+        provinces=provinces,
     )
     source_digest = current_source_digest().to_document()
     manifest = {

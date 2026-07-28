@@ -46,8 +46,7 @@
         "quwoquan_app/tool/cloud_codegen/generated_manifest.json"
       ],
       "consumers": [
-        "app-production-composition",
-        "app-alpha-composition"
+        "app-production-composition"
       ]
     },
     {
@@ -59,18 +58,6 @@
       "consumers": [
         "stackctl",
         "service-layout-governance"
-      ]
-    },
-    {
-      "id": "app-alpha-composition",
-      "owner": "app-cloud-governance",
-      "writePaths": [
-        "quwoquan_app/packages/quwoquan_cloud_mock/**",
-        "quwoquan_app/runners/alpha/**"
-      ],
-      "consumers": [
-        "app-alpha-runner",
-        "local-contract"
       ]
     }
   ],
@@ -90,10 +77,6 @@
     [
       "app-generated-output",
       "app-production-composition"
-    ],
-    [
-      "app-generated-output",
-      "app-alpha-composition"
     ]
   ],
   "forbiddenEdges": [
@@ -104,10 +87,6 @@
     [
       "app-only-emitter",
       "contract-graph-source"
-    ],
-    [
-      "app-production-composition",
-      "app-alpha-composition"
     ]
   ],
   "schema": "1"

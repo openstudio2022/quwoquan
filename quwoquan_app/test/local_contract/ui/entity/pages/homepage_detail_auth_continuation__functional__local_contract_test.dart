@@ -17,7 +17,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 const String _homepageId = 'homepage_sight_west_lake';
 
@@ -257,7 +257,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
+    expect(find.text(ProfileText.profileDirectMessage), findsOneWidget);
     final container = ProviderScope.containerOf(
       tester.element(find.byType(HomepageDetailPage)),
     );
@@ -329,7 +329,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(UITextConstants.homepageWishlistAction));
+    await tester.tap(find.text(ObjectHomepageText.homepageWishlistAction));
     await tester.pumpAndSettle();
 
     final loginContext = tester.element(
@@ -351,7 +351,7 @@ void main() {
       find.byKey(const ValueKey<String>('homepage-detail-login-close')),
       findsNothing,
     );
-    expect(find.text(UITextConstants.homepageWishlistAction), findsOneWidget);
+    expect(find.text(ObjectHomepageText.homepageWishlistAction), findsOneWidget);
     final container = ProviderScope.containerOf(
       tester.element(find.byType(HomepageDetailPage)),
     );

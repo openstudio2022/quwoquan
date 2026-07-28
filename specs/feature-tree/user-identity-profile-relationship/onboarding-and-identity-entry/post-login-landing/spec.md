@@ -43,6 +43,7 @@
 ### REQ-003 登录成功后恢复 owner/subAccount 上下文并进入目标态
 
 - 从欢迎页、评论、关注、消息、创作等登录入口完成登录后，不需要用户手动重复操作即可继续原目标态。
+- 只有 `AuthSessionGrant` 可以进入 `applyLoginResult` 与消费 `AuthContinuation`；社交 `phoneBindingRequired`、授权完成或 OTP 单项完成均不是登录成功终态。
 
 ## 4. 契约引用
 
@@ -66,6 +67,7 @@
 - GIVEN 用户从欢迎页、评论、关注、消息或创作入口被要求登录。
 - WHEN 登录成功并应用登录结果。
 - THEN owner 与 activeSubAccount 上下文恢复，且 AuthContinuation 将用户带回原目标态而无需重复操作。
+- AND 社交首登绑定手机号未完成时不写入 session、不进入目标态且 continuation 保持待续接。
 
 ## 6. 依赖
 

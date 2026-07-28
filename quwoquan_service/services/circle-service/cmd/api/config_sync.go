@@ -22,18 +22,22 @@ func startConfigSyncLoop(
 		baseURL = strings.TrimSpace(getenvOrDefault("VITE_PLATFORM_OPS_BASE_URL", ""))
 	}
 	if baseURL == "" {
+		if strings.EqualFold(strings.TrimSpace(appEnv), "prod") {
+			panic("circle-service PLATFORM_OPS_BASE_URL is required in prod (config sync/ACK loop)")
+		}
 		return
 	}
 	controlplane.RunConfigSyncLoop(controlplane.ConfigSyncLoopOptions{
-		BaseURL:       baseURL,
-		ServiceName:   serviceName,
-		AppEnv:        appEnv,
-		ClusterName:   circleconfig.DefaultClusterName(appEnv),
-		ConfigRoot:    configRoot,
-		ConfigVersion: configVersion,
-		ImageVersion:  imageVersion,
-		InstanceID:    instanceID,
-		HotStore:      hotStore,
-		RateLimiter:   rateLimiter,
+		BaseURL:               baseURL,
+		ServiceName:           serviceName,
+		AppEnv:                appEnv,
+		ClusterName:           circleconfig.DefaultClusterName(appEnv),
+		ConfigRoot:            configRoot,
+		ConfigVersion:         configVersion,
+		ImageVersion:          imageVersion,
+		ReleaseManifestDigest: strings.TrimSpace(getenvOrDefault("RELEASE_MANIFEST_DIGEST", "")),
+		InstanceID:            instanceID,
+		HotStore:              hotStore,
+		RateLimiter:           rateLimiter,
 	})
 }

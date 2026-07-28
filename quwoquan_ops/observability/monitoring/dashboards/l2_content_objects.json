@@ -245,6 +245,34 @@
           "mode": "markdown",
           "content": "权威小时漏斗为 SLS `app-product-telemetry-content-publication-funnel-hourly`（`rowKind=content_publication_funnel`），按 `publicationStage/contentType/objectState/surfaceId/result/backgroundRetryTerminal` 聚合；`correlationHash` 只用于 raw 明细关联，绝不进入 Prometheus label 或小时维度。预览轨道使用 `app-product-telemetry-video-preview-track-load-hourly`。Prometheus 面板仅用于近实时告警；缺少 beta/gamma/prod 的真实 series 时必须显示 unavailable，不能作为商业准出证据。"
         }
+      },
+      {
+        "title": "Article reader SLI",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 76 },
+        "targets": [
+          {
+            "expr": "sum(rate(ops_article_reader_events_total[5m])) by (stage, result)",
+            "legendFormat": "{{ stage }} / {{ result }}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ops_article_reader_enter_duration_seconds_bucket{result=\"success\"}[5m])) by (le))",
+            "legendFormat": "reader enter P95"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ops_article_reader_dwell_seconds_bucket{result=\"success\"}[5m])) by (le))",
+            "legendFormat": "sampled dwell P95"
+          }
+        ]
+      },
+      {
+        "title": "Article reader SLS authority",
+        "type": "text",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 76 },
+        "options": {
+          "mode": "markdown",
+          "content": "权威小时聚合为 SLS `app-product-telemetry-article-reader-lifecycle-hourly`（`rowKind=article_reader_lifecycle`）。`enter/exit/error/recovery` 全量采样，`dwell` 为 10% 采样；错误和恢复按 canonical `errorCode/recoveryAction` 下钻，`objectId` 仅存在于 raw 明细，`sessionId` 只生成 approximate distinct-session HLL；两者绝不进入 Prometheus label 或小时维度。SLO：成功 enter P95 ≤ 1.2s、enter 后错误率 < 1%；告警为 `product-article-reader-enter-p95-high`、`product-article-reader-error-rate-high`、`product-article-reader-recovery-failure`。"
+        }
       }
     ]
   }

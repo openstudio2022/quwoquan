@@ -31,14 +31,15 @@ func startConfigSyncLoop(
 		return
 	}
 	controlplane.RunConfigSyncLoop(controlplane.ConfigSyncLoopOptions{
-		BaseURL:       baseURL,
-		ServiceName:   serviceName,
-		AppEnv:        appEnv,
-		ClusterName:   getenvOrDefault("CLUSTER_NAME", appEnv+"-control-a"),
-		ConfigRoot:    configRoot,
-		ConfigVersion: configVersion,
-		ImageVersion:  imageVersion,
-		InstanceID:    instanceID,
-		HotStore:      hotStore,
+		BaseURL:               baseURL,
+		ServiceName:           serviceName,
+		AppEnv:                appEnv,
+		ClusterName:           getenvOrDefault("CLUSTER_NAME", appEnv+"-control-a"),
+		ConfigRoot:            configRoot,
+		ConfigVersion:         configVersion,
+		ImageVersion:          imageVersion,
+		ReleaseManifestDigest: strings.TrimSpace(os.Getenv("RELEASE_MANIFEST_DIGEST")),
+		InstanceID:            instanceID,
+		HotStore:              hotStore,
 	})
 }

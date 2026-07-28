@@ -8,7 +8,7 @@ extension _GlobalSearchPageStateHistory on _GlobalSearchPageState {
     required bool isDark,
   }) {
     if (state.isHydratingHistory && state.recentSearches.isEmpty) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
 
     final historyColumns = _historyGridColumns(context);
@@ -106,7 +106,7 @@ extension _GlobalSearchPageStateHistory on _GlobalSearchPageState {
   }) {
     final inspiration = state.inspiration;
     if (inspiration.isLoading && inspiration.isEmpty) {
-      return const <Widget>[Center(child: CupertinoActivityIndicator())];
+      return <Widget>[AppRequestFeedback.section()];
     }
     final availableTabs = <_SearchHomeTab>{
       if (inspiration.guessKeywords.isNotEmpty) _SearchHomeTab.guess,
@@ -127,7 +127,7 @@ extension _GlobalSearchPageStateHistory on _GlobalSearchPageState {
         onTap: (item) => _openNetworkResults(item.query, initialTabId: 'all'),
       ),
       _SearchHomeTab.circles => _DiscoverEntityListSection(
-        title: UITextConstants.searchHomeDiscoverCirclesTitle,
+        title: SearchText.searchHomeDiscoverCirclesTitle,
         items: inspiration.discoverCircles,
         isDark: isDark,
         showHeader: false,
@@ -137,7 +137,7 @@ extension _GlobalSearchPageStateHistory on _GlobalSearchPageState {
             _openNetworkResults(item.query ?? item.title, initialTabId: 'all'),
       ),
       _SearchHomeTab.locations => _DiscoverEntityListSection(
-        title: UITextConstants.searchHomeDiscoverLocationsTitle,
+        title: SearchText.searchHomeDiscoverLocationsTitle,
         items: inspiration.discoverLocations,
         isDark: isDark,
         showHeader: false,

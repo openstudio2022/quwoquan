@@ -15,7 +15,7 @@ type ObjectTagIndex struct {
 	VisibleFromReleaseID   string     `json:"-" bson:"visibleFromReleaseId"`
 	SourceOwner            string     `json:"-" bson:"sourceOwner"`
 	TaxonomyReleaseID      string     `json:"-" bson:"taxonomyReleaseId"`
-	SourceAggregateVersion string     `json:"-" bson:"sourceAggregateVersion"`
+	SourceAggregateVersion int64      `json:"-" bson:"sourceAggregateVersion"`
 	SourceEventID          string     `json:"-" bson:"sourceEventId"`
 	LifecycleStatus        string     `json:"-" bson:"lifecycleStatus"`
 	ReleaseUpdatedAt       *time.Time `json:"-" bson:"releaseUpdatedAt"`

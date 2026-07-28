@@ -50,15 +50,18 @@ api_routes:
   slo:
     latency_p95_ms: 1000
     availability_percent: 99.9
-  description: '落一条不可变 staged release（releaseId/sourceOwner/canonicalDigest/nodeCount）。
+  description: '落一条不可变 staged release（releaseId/sourceOwner/canonicalDigest/releaseKind/nodeCount）。
 
     canonicalDigest 唯一约束承载幂等：同 digest 重复 Stage 返回首次记录。
+
+    content 必须至少包含一个节点；release-bound empty_baseline 必须恰好为零节点。
 
     '
   request_fields:
   - releaseId
   - sourceOwner
   - canonicalDigest
+  - releaseKind
   - nodeCount
   response_entity: TagTaxonomyRelease
   security:
@@ -109,9 +112,10 @@ api_routes:
   slo:
     latency_p95_ms: 1000
     availability_percent: 99.9
-  description: '激活 staged release：服务端内部 CAS 完成单 active 切换（旧 active → retired）。
+  description: '激活 staged 或 retired immutable release：服务端内部 CAS 完成单 active 切换（旧 active → retired）。
 
-    目标已 active 时按 no-op receipt 重放安全；公开请求不携带版本字段。
+    目标已 active 时按 no-op receipt 重放安全；retired 允许 rollback replay，
+    历史 release 与 TagNode snapshot 不物理删除；公开请求不携带版本字段。
 
     '
   response_entity: TagTaxonomyRelease
@@ -142,3 +146,4 @@ contract_test:
         assertions:
         - 激活后旧 active release 变 retired，同一时刻只有一个 active
         - 重复激活 no-op 重放安全
+        - release-bound empty_baseline 零节点快照可激活并可重放 retired 历史快照

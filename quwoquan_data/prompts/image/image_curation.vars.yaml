@@ -6,6 +6,7 @@ system:
   optional: []
 task:
   required:
+    - execution_id
     - title
     - ref
     - carrier

@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/app/startup/startup_telemetry.dart';
+import 'package:quwoquan_app/app/startup/startup_telemetry_support.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
@@ -37,6 +38,7 @@ final class AppStartupRuntime {
   bool _homeFeedContentPainted = false;
   bool _nativeSegmentsHydrated = false;
   bool _productStartupReported = false;
+  String _startupAttemptId = '';
   String _startupFailureCode = '';
   AppTelemetryRecorder? _productTelemetry;
   Future<void>? _nativeSegmentsHydration;
@@ -83,6 +85,7 @@ final class AppStartupRuntime {
     _nativeSegmentsHydrated = false;
     _nativeSegmentsHydration = null;
     _productStartupReported = false;
+    _startupAttemptId = '';
     _startupFailureCode = '';
     _productTelemetry = null;
     _runAppMs = null;
@@ -110,6 +113,7 @@ final class AppStartupRuntime {
       return;
     }
     _bootstrapStarted = true;
+    _startupAttemptId = StartupTelemetrySupport.randomUrlSafeToken(24);
     _stopwatch.start();
     _recordPlatformStartupEvent(
       eventName: 'startup_attempt_started',
@@ -258,11 +262,31 @@ final class AppStartupRuntime {
         cancellationSignal: cancellationSignal,
       );
       if (segments != null) {
+        final deadlineBeforeHydration =
+            deadlineElapsedSinceProcessStart.inMilliseconds;
+        final dartElapsedAtHydration = _elapsedMs;
         _androidActivityOnCreateMs = segments.androidActivityOnCreateMs;
         _androidFlutterEngineConfiguredMs =
             segments.androidFlutterEngineConfiguredMs;
         _nativeElapsedSinceProcessStartMs = segments.elapsedSinceProcessStartMs;
-        _dartElapsedAtNativeHydrationMs = _elapsedMs;
+        _dartElapsedAtNativeHydrationMs = dartElapsedAtHydration;
+        final nativeAttemptId = segments.startupAttemptId?.trim() ?? '';
+        if (StartupTelemetrySupport.isValidAttemptId(nativeAttemptId)) {
+          _startupAttemptId = nativeAttemptId;
+        }
+        final nativeDeadline = segments.elapsedSinceProcessStartMs;
+        if (nativeDeadline != null &&
+            nativeDeadline > deadlineBeforeHydration) {
+          // Native process time can only consume more of the existing budget.
+          // A delayed/stale bridge response must never move the absolute
+          // deadline backwards and grant a second startup window.
+          _deadlineElapsedAtBootstrapMs = nativeDeadline;
+          _dartElapsedAtDeadlineArmMs = dartElapsedAtHydration;
+          final nativeOrigin = segments.deadlineOrigin ?? '';
+          _deadlineOrigin = nativeOrigin.isEmpty
+              ? 'nativeProcess'
+              : nativeOrigin;
+        }
       }
       _nativeSegmentsHydrated = true;
     } catch (_) {
@@ -331,8 +355,9 @@ final class AppStartupRuntime {
     return Duration(milliseconds: _elapsedMs);
   }
 
-  /// 单次启动的 deadline clock 在 bootstrap 时确定。异步 native bridge 只补充诊断
-  /// 段，绝不能把已 arm 的 Dart deadline 改写成另一个时间基准。
+  /// 单次启动的 deadline 只能被 native process clock 向前收紧。
+  ///
+  /// 异步 bridge 返回较小或陈旧的时间时继续使用已经 arm 的 Dart 边界，绝不延长预算。
   Duration get deadlineElapsedSinceProcessStart {
     final nativeAtBootstrap = _deadlineElapsedAtBootstrapMs;
     final elapsedSinceArm = (_elapsedMs - _dartElapsedAtDeadlineArmMs).clamp(
@@ -346,6 +371,8 @@ final class AppStartupRuntime {
   }
 
   String get deadlineOrigin => _deadlineOrigin;
+
+  String get startupAttemptId => _startupAttemptId;
 
   void markWelcomeWindowInitStarted() {
     _welcomeWindowInitMs ??= _elapsedMs;
@@ -654,6 +681,7 @@ final class AppStartupRuntime {
     final missingDefineKeys = runtimeSummary['missingKeys'] ?? '';
     return <String, dynamic>{
       'phase': phase,
+      if (_startupAttemptId.isNotEmpty) 'attemptId': _startupAttemptId,
       'runtimeEnv': runtimeSummary['runtimeEnv'],
       'launchMode': runtimeSummary['launchMode'],
       'configurationState': runtimeSummary['configurationState'],

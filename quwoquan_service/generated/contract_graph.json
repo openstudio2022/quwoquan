@@ -579,6 +579,16 @@
       "dddLayerMapping": {}
     },
     {
+      "id": "ops.config_instance_report",
+      "domain": "ops",
+      "name": "ConfigInstanceReport",
+      "kind": "aggregate_root",
+      "kindExplicit": true,
+      "storageBackend": "postgres",
+      "sourcePath": "ops/platform_ops/config_instance_report/object.yaml",
+      "dddLayerMapping": {}
+    },
+    {
       "id": "ops.config_snapshot",
       "domain": "ops",
       "name": "ConfigSnapshot",
@@ -11938,8 +11948,12 @@
       },
       "concurrency": {},
       "errorCodes": [
+        "CONTENT.USER.unauthorized",
         "CONTENT.USER.invalid_argument",
+        "CONTENT.USER.rate_limited",
         "CONTENT.SYSTEM.storage_read_failed",
+        "CONTENT.SYSTEM.required_dependency_unavailable",
+        "CONTENT.MIDDLEWARE.upstream_timeout",
         "CONTENT.SYSTEM.internal_error"
       ],
       "privacy": {
@@ -11960,6 +11974,13 @@
       "slo": {
         "latencyP95Milliseconds": 500,
         "availabilityPercent": 99.9
+      },
+      "clientContract": {
+        "dartImport": "../content/post_reader_queries.dart",
+        "requestType": "ContentDiscoveryFeedQuery",
+        "responseType": "ContentDiscoveryFeedPageSlice",
+        "requestEncoder": "encodeContentDiscoveryFeedQuery",
+        "responseDecoder": "decodeContentDiscoveryFeedPageSlice"
       }
     },
     {
@@ -17009,6 +17030,137 @@
       }
     },
     {
+      "id": "ops.config_instance_report.ListConfigInstanceReports",
+      "localId": "ListConfigInstanceReports",
+      "domain": "ops",
+      "objectId": "ops.config_instance_report",
+      "method": "GET",
+      "pathTemplate": "/control-plane/platform/configs/instances",
+      "kind": "query",
+      "kindExplicit": true,
+      "facet": "ConfigInstanceReportQueryFacade",
+      "facadeMethod": "listConfigInstanceReports",
+      "reader": "ConfigInstanceReportReader",
+      "slice": "ConfigInstanceReportSlice",
+      "actorRequirement": "account",
+      "responseEntity": "ConfigInstanceReportSlice",
+      "sourcePath": "ops/platform_ops/config_instance_report/operations.yaml",
+      "security": {
+        "auth_mode": "required"
+      },
+      "authMode": "required",
+      "principal": "operator",
+      "scopes": [
+        "ops.platform.config.read"
+      ],
+      "ownershipPolicy": "operator_scope",
+      "commercial": {
+        "status": "ready",
+        "explicit": true
+      },
+      "reliability": {
+        "timeoutMilliseconds": 1000,
+        "cancellation": "supported",
+        "retryMode": "idempotent",
+        "maxAttempts": 2,
+        "idempotency": "none"
+      },
+      "concurrency": {},
+      "errorCodes": [
+        "OPS.USER.unauthorized",
+        "OPS.USER.forbidden",
+        "OPS.SYSTEM.config_instance_report_storage_failed"
+      ],
+      "privacy": {
+        "requestClassification": "INTERNAL",
+        "responseClassification": "INTERNAL",
+        "logPolicy": "redacted"
+      },
+      "telemetry": {
+        "metric": "ops_platform_config_instance_reports",
+        "trace": true,
+        "attributes": [
+          "operation",
+          "outcome"
+        ]
+      },
+      "slo": {
+        "latencyP95Milliseconds": 500,
+        "availabilityPercent": 99.9
+      }
+    },
+    {
+      "id": "ops.config_instance_report.ReportConfigInstance",
+      "localId": "ReportConfigInstance",
+      "domain": "ops",
+      "objectId": "ops.config_instance_report",
+      "method": "POST",
+      "pathTemplate": "/control-plane/platform/configs/instances/{instanceId}:report",
+      "kind": "command",
+      "kindExplicit": true,
+      "facet": "ConfigInstanceReportCommandFacade",
+      "facadeMethod": "reportConfigInstance",
+      "aggregateOwner": "ConfigInstanceReport",
+      "mutationTarget": "ConfigInstanceReport",
+      "invariantTarget": "ConfigInstanceReport",
+      "actorRequirement": "account",
+      "requestEntity": "ConfigInstanceReport",
+      "responseEntity": "ConfigInstanceReport",
+      "sourcePath": "ops/platform_ops/config_instance_report/operations.yaml",
+      "security": {
+        "anonymous_policy": "deny",
+        "auth_mode": "required",
+        "principal": "service",
+        "token_transport": "bearer",
+        "visibility": "internal"
+      },
+      "authMode": "required",
+      "principal": "service",
+      "scopes": [
+        "ops.platform.config.ack"
+      ],
+      "ownershipPolicy": "service_instance_bound",
+      "commercial": {
+        "status": "ready",
+        "explicit": true
+      },
+      "reliability": {
+        "timeoutMilliseconds": 1200,
+        "cancellation": "supported",
+        "retryMode": "idempotent",
+        "maxAttempts": 2,
+        "idempotency": "required"
+      },
+      "concurrency": {},
+      "errorCodes": [
+        "OPS.USER.unauthorized",
+        "OPS.USER.forbidden",
+        "OPS.USER.config_instance_report_invalid",
+        "OPS.USER.config_instance_report_conflict",
+        "OPS.SYSTEM.config_instance_report_candidate_unavailable",
+        "OPS.SYSTEM.config_instance_report_storage_failed"
+      ],
+      "privacy": {
+        "requestClassification": "INTERNAL",
+        "responseClassification": "INTERNAL",
+        "logPolicy": "redacted"
+      },
+      "telemetry": {
+        "metric": "ops_platform_config_instance_ack",
+        "trace": true,
+        "attributes": [
+          "operation",
+          "environment",
+          "service",
+          "outcome"
+        ]
+      },
+      "slo": {
+        "latencyP95Milliseconds": 700,
+        "availabilityPercent": 99.9
+      }
+    },
+    {
       "id": "ops.config_snapshot.GetConfigSnapshot",
       "localId": "GetConfigSnapshot",
       "domain": "ops",
@@ -21803,6 +21955,7 @@
         "USER.AUTH.alipay_auth_failed",
         "USER.AUTH.social_provider_cancelled",
         "USER.AUTH.social_provider_unavailable",
+        "USER.AUTH.consent_required",
         "USER.AUTH.credential_conflict",
         "USER.AUTH.account_suspended",
         "USER.AUTH.account_deleted",
@@ -21830,9 +21983,9 @@
       "clientContract": {
         "dartImport": "../user/account_session_contracts.dart",
         "requestType": "LoginWithAlipayCommand",
-        "responseType": "AuthSessionGrant",
+        "responseType": "FederatedLoginOutcome",
         "requestEncoder": "encodeLoginWithAlipayCommand",
-        "responseDecoder": "decodeAuthSessionGrant"
+        "responseDecoder": "decodeFederatedLoginOutcome"
       }
     },
     {
@@ -21958,6 +22111,7 @@
         "USER.AUTH.qq_auth_failed",
         "USER.AUTH.social_provider_cancelled",
         "USER.AUTH.social_provider_unavailable",
+        "USER.AUTH.consent_required",
         "USER.AUTH.credential_conflict",
         "USER.AUTH.account_suspended",
         "USER.AUTH.account_deleted",
@@ -21985,9 +22139,9 @@
       "clientContract": {
         "dartImport": "../user/account_session_contracts.dart",
         "requestType": "LoginWithQqCommand",
-        "responseType": "AuthSessionGrant",
+        "responseType": "FederatedLoginOutcome",
         "requestEncoder": "encodeLoginWithQqCommand",
-        "responseDecoder": "decodeAuthSessionGrant"
+        "responseDecoder": "decodeFederatedLoginOutcome"
       }
     },
     {
@@ -22036,6 +22190,7 @@
         "USER.AUTH.wechat_auth_failed",
         "USER.AUTH.social_provider_cancelled",
         "USER.AUTH.social_provider_unavailable",
+        "USER.AUTH.consent_required",
         "USER.AUTH.credential_conflict",
         "USER.AUTH.account_suspended",
         "USER.AUTH.account_deleted",
@@ -22063,9 +22218,9 @@
       "clientContract": {
         "dartImport": "../user/account_session_contracts.dart",
         "requestType": "LoginWithWechatCommand",
-        "responseType": "AuthSessionGrant",
+        "responseType": "FederatedLoginOutcome",
         "requestEncoder": "encodeLoginWithWechatCommand",
-        "responseDecoder": "decodeAuthSessionGrant"
+        "responseDecoder": "decodeFederatedLoginOutcome"
       }
     },
     {
@@ -22771,6 +22926,87 @@
         "responseType": "CredentialBindingCommandResult",
         "requestEncoder": "encodeBindPhoneCredentialCommand",
         "responseDecoder": "decodeCredentialBindingCommandResult"
+      }
+    },
+    {
+      "id": "user.credential_binding.CompleteFederatedPhoneBinding",
+      "localId": "CompleteFederatedPhoneBinding",
+      "domain": "user",
+      "objectId": "user.credential_binding",
+      "method": "POST",
+      "pathTemplate": "/auth/login/social/phone/complete",
+      "kind": "command",
+      "kindExplicit": true,
+      "facet": "CredentialCommandFacade",
+      "facadeMethod": "completeFederatedPhoneBinding",
+      "aggregateOwner": "CredentialBinding",
+      "mutationTarget": "CredentialBinding",
+      "invariantTarget": "CredentialBinding",
+      "actorRequirement": "none",
+      "sourcePath": "user/account/credential_binding/operations.yaml",
+      "security": {
+        "anonymous_policy": "allow",
+        "auth_mode": "public",
+        "principal": "public",
+        "token_transport": "none",
+        "visibility": "private"
+      },
+      "authMode": "public",
+      "principal": "public",
+      "ownershipPolicy": "federated_phone_binding_ticket_holder",
+      "commercial": {
+        "status": "blocked",
+        "explicit": true,
+        "blockReason": "prod federated providers and real-device binding evidence are not injected",
+        "gapId": "R_AUTH_001",
+        "targetStory": "four-environment-commercial-login-maturity"
+      },
+      "reliability": {
+        "timeoutMilliseconds": 1500,
+        "cancellation": "supported",
+        "retryMode": "none",
+        "maxAttempts": 1,
+        "idempotency": "none"
+      },
+      "concurrency": {},
+      "errorCodes": [
+        "USER.USER.invalid_argument",
+        "USER.AUTH.consent_required",
+        "USER.AUTH.otp_expired",
+        "USER.AUTH.otp_mismatch",
+        "USER.AUTH.otp_attempts_exceeded",
+        "USER.AUTH.challenge_consumed",
+        "USER.AUTH.credential_conflict",
+        "USER.AUTH.account_suspended",
+        "USER.AUTH.account_deleted",
+        "USER.SYSTEM.internal_error"
+      ],
+      "privacy": {
+        "requestClassification": "SECRET",
+        "responseClassification": "SECRET",
+        "logPolicy": "none"
+      },
+      "telemetry": {
+        "metric": "user_federated_phone_binding_complete",
+        "trace": true,
+        "attributes": [
+          "environment",
+          "platform",
+          "provider",
+          "outcome",
+          "error_code"
+        ]
+      },
+      "slo": {
+        "latencyP95Milliseconds": 1500,
+        "availabilityPercent": 99.9
+      },
+      "clientContract": {
+        "dartImport": "../user/credential_binding_contracts.dart",
+        "requestType": "CompleteFederatedPhoneBindingCommand",
+        "responseType": "AuthSessionGrant",
+        "requestEncoder": "encodeCompleteFederatedPhoneBindingCommand",
+        "responseDecoder": "decodeAuthSessionGrant"
       }
     },
     {
@@ -34000,6 +34236,73 @@
           }
         },
         {
+          "canonicalObject": "ConfigInstanceReport",
+          "boundedContext": "PlatformOps",
+          "objectKind": "aggregate_root",
+          "identity": {
+            "fields": [
+              "instanceId"
+            ],
+            "versionSource": "store_commit"
+          },
+          "invariantRefs": [
+            "ops/platform_ops/config_instance_report/object.yaml#business_rules"
+          ],
+          "memberBounds": {},
+          "storageRole": "authoritative",
+          "storageBackend": "postgres",
+          "mutationEntrypoints": [
+            "ReportConfigInstance"
+          ],
+          "eventConsumers": [],
+          "lifecycleRefs": [
+            "ops/platform_ops/config_instance_report/object.yaml#lifecycle"
+          ],
+          "sourceDocument": "ops/platform_ops/config_instance_report/fields.yaml",
+          "sourceEntity": "ConfigInstanceReport",
+          "access": {
+            "commands": "aggregate_facade",
+            "queries": "named_reader",
+            "crossContext": "public_contract_only"
+          },
+          "relationships": [
+            {
+              "name": "desiredSnapshot",
+              "targetObject": "ops.ConfigSnapshot",
+              "referenceFields": [
+                "environment",
+                "service"
+              ],
+              "kind": "reference",
+              "cardinality": "N:1",
+              "consistency": "eventual",
+              "access": "named_reader",
+              "onDelete": "retain"
+            }
+          ],
+          "fieldRoles": {
+            "append_only_fact": [],
+            "authoritative_state": [
+              "instanceId",
+              "environment",
+              "cluster",
+              "service",
+              "releaseManifestDigest",
+              "desiredHash",
+              "effectiveHash"
+            ],
+            "owned_value": [],
+            "projection": [
+              "inSync"
+            ],
+            "reference": [
+              "environment",
+              "service"
+            ],
+            "transport_only": []
+          }
+        },
+        {
           "canonicalObject": "ConfigSnapshot",
           "boundedContext": "PlatformOps",
           "objectKind": "external_reference",
@@ -35658,6 +35961,7 @@
               "releaseId",
               "sourceOwner",
               "canonicalDigest",
+              "releaseKind",
               "nodeCount",
               "status",
               "importedAt",
@@ -35995,7 +36299,9 @@
               "bio",
               "slogan",
               "avatarUrl",
-              "avatarObjectKey",
+              "avatarAssetId",
+              "avatarVersion",
+              "avatarPublicSliceKey",
               "avatarSha256",
               "coverUrl",
               "coverObjectKey",
@@ -36032,6 +36338,7 @@
             "transport_only": []
           },
           "localIdentityReasons": {
+            "avatarAssetId": "immutable release MediaAsset authority reference; validated against media_manifest.json and never used as a CreatorRuntimeProfile aggregate identity",
             "preferredBlueprintIds": "stable catalog or release key; resolved through its typed catalog reader and never used as an aggregate Store identity",
             "releaseId": "stable catalog or release key; resolved through its typed catalog reader and never used as an aggregate Store identity"
           }
@@ -36056,6 +36363,7 @@
           "mutationEntrypoints": [
             "BindCarrierPhoneCredential",
             "BindPhoneCredential",
+            "CompleteFederatedPhoneBinding",
             "UnbindCredential"
           ],
           "eventConsumers": [],
@@ -37665,6 +37973,17 @@
       ]
     },
     {
+      "objectId": "ops.config_instance_report",
+      "stage": "contract-ready",
+      "modeled": true,
+      "contractReady": true,
+      "implemented": false,
+      "commercialReady": false,
+      "missing": [
+        "readiness.evidence"
+      ]
+    },
+    {
       "objectId": "ops.config_snapshot",
       "stage": "contract-ready",
       "modeled": true,
@@ -38101,7 +38420,7 @@
   "sources": [
     {
       "path": "_control_plane/platform/control_plane.yaml",
-      "sha256": "bdc8ea312cbbbc71612a6ff8151d009baabf1595af5686bde6465fa50b46a58f"
+      "sha256": "3bdac2dbd00fcf7b42e43f9e2f4606237bf3edfa34757b9b7ec4a9d636637c02"
     },
     {
       "path": "_control_plane/portal_menu.yaml",
@@ -38109,7 +38428,7 @@
     },
     {
       "path": "_control_plane/portal_shell.yaml",
-      "sha256": "2ab6184a782077a0c02eefe0b7379a161a25c6245ebf7876169d3b9c40f680a5"
+      "sha256": "b0357b1166028162e2c02940ac9e2706d98e41b86ca204192cde10bbc7b65826"
     },
     {
       "path": "_control_plane/product/audit_schema.yaml",
@@ -38161,11 +38480,11 @@
     },
     {
       "path": "_shared/app_remote_config_catalog.yaml",
-      "sha256": "42c41ffcb317ef286110b1e8ccb6af445302193088d6a0e559a19ed61de70a1b"
+      "sha256": "2b2017f12c2d6fae03d035029a09148efe13800aa16da438e1b703324f9e44d5"
     },
     {
       "path": "_shared/app_routes.yaml",
-      "sha256": "e85fd00c02ca349487262c9c8c0f16d50bb2f4bd53d797d2886eb8d3ac4c30f2"
+      "sha256": "4c0abc0a2aee5fd36ab5cd8fd5f9e3ab18f7ead66775f7abcdea96e6587e3ae0"
     },
     {
       "path": "_shared/audit_schema.yaml",
@@ -38197,7 +38516,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "8a04c1195e0b64255cb71d684509b1a01e832d923410fc82793f54973feb4985"
+      "sha256": "d82a1072c9d6e2bed4b3acd832df30665cd914826d90cd672cd26230f60254e9"
     },
     {
       "path": "_shared/redis_keyspace.yaml",
@@ -38233,7 +38552,7 @@
     },
     {
       "path": "_shared/test_fixtures/app_gamma_seed_manifest.json",
-      "sha256": "67c8a034c7df92d1828764924139d5fe780d74c521c199cc206a3052cf769e5b"
+      "sha256": "19b98cd635cdabb42771f157d9b3ae80c9c99193772f2db18803f5d8cb6a33f6"
     },
     {
       "path": "_shared/test_fixtures/composition_rules.json",
@@ -38297,7 +38616,7 @@
     },
     {
       "path": "_shared/ui_surfaces.yaml",
-      "sha256": "a6c6ce510f1cadd20c1f919436df9e791a0651ee008de122ac30a62dc9761e44"
+      "sha256": "864ad05329e553ad6524f955ee0f613687c9ae3d6269cdf8daa31d05bab2559d"
     },
     {
       "path": "_shared/workflow.yaml",
@@ -39213,7 +39532,7 @@
     },
     {
       "path": "content/content/post/errors.yaml",
-      "sha256": "b1ef8df0892b9af0af29d0945345cd39c62f607f40f36b37ab67557f6bf5f4ed"
+      "sha256": "0016da6ff53bcb89bf552eb33289871da747f264a22be95581427a5315e193f1"
     },
     {
       "path": "content/content/post/events.yaml",
@@ -39229,7 +39548,7 @@
     },
     {
       "path": "content/content/post/operations.yaml",
-      "sha256": "faf2a5c014c77d77c9965ab9790915be57f3cb73e643b482a66438b4edf2b977"
+      "sha256": "d5e3e59e9703e489a2f572a7d0a2a8e4a12857fe4095d04d35ef0cff41e4d081"
     },
     {
       "path": "content/content/post/privacy.yaml",
@@ -40021,7 +40340,27 @@
     },
     {
       "path": "ops/openapi.yaml",
-      "sha256": "1b74a334088ab4cf62fb76d40a2175605c8d1e32eb54b15825f22973c1700797"
+      "sha256": "b736eea9e546404fc4c870f8db336214c874b21fe6e02993a65409f92a042d65"
+    },
+    {
+      "path": "ops/platform_ops/config_instance_report/errors.yaml",
+      "sha256": "a6d128142d0456b654409283dbe3327181818f941c99133ceef47316a954a53d"
+    },
+    {
+      "path": "ops/platform_ops/config_instance_report/fields.yaml",
+      "sha256": "1590bcc54647316ad422e6e5b932b6fbeeb745bfea8eb344894249d7285e0c91"
+    },
+    {
+      "path": "ops/platform_ops/config_instance_report/object.yaml",
+      "sha256": "c3e2c63e10c9a640b82a836a654221a11604aec281d458bce6e8bffbd4acc05f"
+    },
+    {
+      "path": "ops/platform_ops/config_instance_report/operations.yaml",
+      "sha256": "65bca3aad4383d12c514d6f04e34a7a58d8824feb6db2c0a7639851202432954"
+    },
+    {
+      "path": "ops/platform_ops/config_instance_report/storage.yaml",
+      "sha256": "3d070aae26e2b42a3aaa63836ed37f90646baf61eacff5f9de5e142a77cfe035"
     },
     {
       "path": "ops/platform_ops/config_snapshot/errors.yaml",
@@ -40049,15 +40388,15 @@
     },
     {
       "path": "ops/product_ops/app_release/fields.yaml",
-      "sha256": "9304def41fc5fb42e80dc09ff3e535a09dbe667fd09c2235be6b6aa443a37e68"
+      "sha256": "5057aa2140f0a3843fb43f0f2919b539f2bde8d6e6807a74e876f993dd17a700"
     },
     {
       "path": "ops/product_ops/app_release/object.yaml",
-      "sha256": "45fd696a8dce9af6cc62fb75c024effa604062e363bb33385491afbb1d066dac"
+      "sha256": "bf08320fa2d8709d61297153a14a2abe72f20904794abe766e22b1dbf1631b20"
     },
     {
       "path": "ops/product_ops/app_release/operations.yaml",
-      "sha256": "e86174e8d4118ec18cb4bb3c4cfb65da7c4d0146800e0823ee2083a329bd8ce2"
+      "sha256": "17cc23a58ae1f9be190afc664a49b90b8d8fc902ca6035b0b1c7984d37ebb5e3"
     },
     {
       "path": "ops/product_ops/app_release/projections/app_release_recovery_view.yaml",
@@ -40073,7 +40412,7 @@
     },
     {
       "path": "ops/product_ops/event_record/event_catalog.yaml",
-      "sha256": "9eaa68642675e3498b84728ecfe104f432b648ef853cc1fc8c43ab7681a87088"
+      "sha256": "603ae8f2817a6623f6021a151e17807c79f10d0d2b53929fe074c29beb65b745"
     },
     {
       "path": "ops/product_ops/event_record/events.yaml",
@@ -40205,7 +40544,7 @@
     },
     {
       "path": "platform/config.yaml",
-      "sha256": "bf4921590781cf24410e985f0b7ba32e23ae436e125b6ea7859734eeedc2571e"
+      "sha256": "1dc31291e37da7be135db7b922a4098ff3ddb905cbcbff463c0b330ac63fd6d2"
     },
     {
       "path": "realtime/openapi.yaml",
@@ -40629,19 +40968,19 @@
     },
     {
       "path": "tag/tag/tag_taxonomy_release/events.yaml",
-      "sha256": "97ac56188ea91e1ea70374d2066b83ec624921a9fda9e422b21b6320b76f7a58"
+      "sha256": "bc4312aba9cb0c5b8b05fb6a057fdc993571948cea19ab1b2d22d3eb8decedda"
     },
     {
       "path": "tag/tag/tag_taxonomy_release/fields.yaml",
-      "sha256": "05e7c1230018d78176fe97a0c056256939ae40d8888416eb1b808d8fdb5638b1"
+      "sha256": "63cab4ae41dc795dcf208fb16fc986aca661f403b5226c944c11c76b7fa19ac1"
     },
     {
       "path": "tag/tag/tag_taxonomy_release/object.yaml",
-      "sha256": "2283836ea3ca306902a77f40e533ac5d22933fa9ae89eb9c5e26e905091c1049"
+      "sha256": "3a8bdd10a247150d58986f1a0c66d2fb1f4ae27b5a306a0a84068b22a3eafb0d"
     },
     {
       "path": "tag/tag/tag_taxonomy_release/operations.yaml",
-      "sha256": "ac88646b0e6f10e90a328882a6ee9d46f35a152d31d5e43afd1c81b793b63249"
+      "sha256": "03bce307808f168e384e121bec988a7a47c9ff7663783597a7ec9382bbd0d2e5"
     },
     {
       "path": "tag/tag/tag_taxonomy_release/storage.yaml",
@@ -40649,7 +40988,7 @@
     },
     {
       "path": "user/account/account_session/errors.yaml",
-      "sha256": "b92e1e9f74629fb3e2906a2497b84951a87da69acb80e486ef9796ac16690264"
+      "sha256": "d3744a88a205c3ad2d70fa26bd22b3d3f2db9a7778bbdf3a7c5028e6c8fe64a4"
     },
     {
       "path": "user/account/account_session/events.yaml",
@@ -40665,7 +41004,7 @@
     },
     {
       "path": "user/account/account_session/operations.yaml",
-      "sha256": "5d0749d3533861665e1544d46414cb1f51fce5528a632bf58059db5d88c71cc0"
+      "sha256": "0afaeba99b9957aacca64487e1d20de727c1064c0df5b2908baf705d77a04c94"
     },
     {
       "path": "user/account/account_session/storage.yaml",
@@ -40673,7 +41012,7 @@
     },
     {
       "path": "user/account/authentication_challenge/errors.yaml",
-      "sha256": "8eeaa06cd56145e4c24a98baf82a95778920b48342ca7959b20e560334edcdd2"
+      "sha256": "395d522ccf9cdfb05f9eedfcc59bb195c481f218c4616ef11b907af8734ca23a"
     },
     {
       "path": "user/account/authentication_challenge/events.yaml",
@@ -40689,7 +41028,7 @@
     },
     {
       "path": "user/account/authentication_challenge/operations.yaml",
-      "sha256": "3f6c0a785fa2f5d8d7b702292a9ceff5ba77b17745762de7fab3b1bd9a8a4b22"
+      "sha256": "490de624924a9f47dc079a9d9b4f1f5911d23453a1e554e400696971edb0fb91"
     },
     {
       "path": "user/account/authentication_challenge/storage.yaml",
@@ -40701,7 +41040,7 @@
     },
     {
       "path": "user/account/credential_binding/errors.yaml",
-      "sha256": "3c8607d1bd85ebad4fa6dff4a59e08ae6835c851d55a990f559a01e7c2fdbcdc"
+      "sha256": "0493964fd96bcca1acaf1bef95ee9f5e7922e0bd55999b433eaef3751b472d22"
     },
     {
       "path": "user/account/credential_binding/events.yaml",
@@ -40717,7 +41056,7 @@
     },
     {
       "path": "user/account/credential_binding/operations.yaml",
-      "sha256": "88e11578d838e38239ae662cd5500d66f947c89c772d4e80097801abf7d81f3a"
+      "sha256": "f6aa924614f5366857b7f181010ffb79902246946255d7793ff922da7ff0c9d1"
     },
     {
       "path": "user/account/credential_binding/storage.yaml",
@@ -40789,7 +41128,7 @@
     },
     {
       "path": "user/account/user_account/operations.yaml",
-      "sha256": "c65da6f76b2ded12ec54ad9e74b90437eb3c2d4d72784b251c0c0b453bdbb87a"
+      "sha256": "fccd1daa48eefe8f165d75fa4ae587625e1ac50567e2107fde85b116efde1ce7"
     },
     {
       "path": "user/account/user_account/privacy.yaml",
@@ -40945,7 +41284,7 @@
     },
     {
       "path": "user/openapi.yaml",
-      "sha256": "db0c0da7ca2399ee0fd9f1ba5a0438fe88f8425f402705ceff88e55b370ddd41"
+      "sha256": "99b94216938faf4d4948d004bc8f8f438600333269939a38c6417db761d24dad"
     },
     {
       "path": "user/persona_management/context.yaml",
@@ -41021,11 +41360,11 @@
     },
     {
       "path": "user/profile_projection/creator_runtime_profile/fields.yaml",
-      "sha256": "3572aa17f04e6b24de93d95743e18cba63a1426b704e623ca77854966c7a875f"
+      "sha256": "d3352c1eaeb72f9088aaa491e59bf0b7bda2c258e10dbf2136bfefc58a5bf9ef"
     },
     {
       "path": "user/profile_projection/creator_runtime_profile/object.yaml",
-      "sha256": "081a839736cc940f8740d92016dd66f96168db984d036a9caceb3c354b8c0b5a"
+      "sha256": "9366b7716b5f8169e04061ca75cddc607ae0e09cf842d052db167b26a45069b4"
     },
     {
       "path": "user/profile_projection/creator_runtime_profile/operations.yaml",
@@ -41211,7 +41550,7 @@
   "documents": [
     {
       "path": "_control_plane/platform/control_plane.yaml",
-      "sha256": "bdc8ea312cbbbc71612a6ff8151d009baabf1595af5686bde6465fa50b46a58f",
+      "sha256": "3bdac2dbd00fcf7b42e43f9e2f4606237bf3edfa34757b9b7ec4a9d636637c02",
       "mediaType": "application/yaml",
       "content": {
         "dashboard": {
@@ -41319,31 +41658,12 @@
             "deployment_profile": "audit_heavy",
             "label": "实例配置报告",
             "object_type": "config_instance_report",
-            "operations": [
+            "operation_refs": [
               {
-                "actor": "account",
-                "auth_mode": "required",
-                "method": "GET",
-                "operation": "ListConfigInstanceReports",
-                "ownership_policy": "operator_scope",
-                "path": "/control-plane/platform/configs/instances",
-                "principal": "operator",
-                "scopes": [
-                  "ops.platform.config.read"
-                ]
+                "operation_id": "ops.config_instance_report.ListConfigInstanceReports"
               },
               {
-                "actor": "account",
-                "auth_mode": "required",
-                "idempotency": "payload_digest_server_side",
-                "method": "POST",
-                "operation": "ReportConfigInstance",
-                "ownership_policy": "service_instance_bound",
-                "path": "/control-plane/platform/configs/instances/{instanceId}:report",
-                "principal": "service",
-                "scopes": [
-                  "ops.platform.config.ack"
-                ]
+                "operation_id": "ops.config_instance_report.ReportConfigInstance"
               }
             ],
             "risk_level": "high",
@@ -41364,12 +41684,12 @@
               }
             ],
             "deployment_profile": "batch_heavy",
-            "label": "配置发布单",
-            "object_type": "config_release",
+            "label": "发布候选 ACK",
+            "object_type": "release_candidate",
             "operations": [
               {
                 "method": "GET",
-                "operation": "ListConfigReleases",
+                "operation": "ListReleaseCandidateAcks",
                 "path": "/control-plane/platform/releases",
                 "scopes": [
                   "ops.platform.rollout.read"
@@ -41385,9 +41705,9 @@
               }
             ],
             "risk_level": "critical",
-            "source_entity": "ConfigRelease",
-            "view_kind": "release",
-            "view_model": "ConfigRelease"
+            "source_entity": "ConfigInstanceReport",
+            "view_kind": "snapshot",
+            "view_model": "ReleaseManifestCandidate"
           },
           {
             "deployment_profile": "audit_heavy",
@@ -41789,30 +42109,9 @@
     },
     {
       "path": "_control_plane/portal_shell.yaml",
-      "sha256": "2ab6184a782077a0c02eefe0b7379a161a25c6245ebf7876169d3b9c40f680a5",
+      "sha256": "b0357b1166028162e2c02940ac9e2706d98e41b86ca204192cde10bbc7b65826",
       "mediaType": "application/yaml",
       "content": {
-        "context_switchers": [
-          "environment",
-          "tenant",
-          "release-window"
-        ],
-        "dashboard_defaults": {
-          "overview": {
-            "charts": [
-              "moderation_case_trend",
-              "recommendation_guardrail",
-              "config_release_health"
-            ],
-            "kpis": [
-              "moderation_pending",
-              "recovery_sla_risk",
-              "experiment_running",
-              "rollout_failure_rate"
-            ]
-          }
-        },
-        "default_domain": "product-ops",
         "default_environment": "beta",
         "domains": [
           {
@@ -41831,26 +42130,6 @@
             "label": "Product Ops"
           }
         ],
-        "global_search": {
-          "enabled": true,
-          "object_types": [
-            "moderation_case",
-            "recovery_case",
-            "experiment",
-            "recommendation_policy",
-            "config_release",
-            "user_profile",
-            "content_report"
-          ],
-          "placeholder": "搜索 case、实验、配置项、发布单、用户、内容"
-        },
-        "notification_channels": [
-          "audit",
-          "approval",
-          "sla",
-          "rollout",
-          "guardrail"
-        ],
         "portal_id": "ops-portal",
         "supported_environments": [
           "alpha",
@@ -41858,29 +42137,7 @@
           "gamma",
           "prod"
         ],
-        "title": "趣我圈运营与平台门户",
-        "workbench_views": [
-          {
-            "id": "my-initiated",
-            "label": "我发起的"
-          },
-          {
-            "id": "pending-approval",
-            "label": "待我审批"
-          },
-          {
-            "id": "over-sla",
-            "label": "超 SLA"
-          },
-          {
-            "id": "rollout-watch",
-            "label": "灰度观察"
-          },
-          {
-            "id": "guardrail-alert",
-            "label": "指标告警"
-          }
-        ]
+        "title": "趣我圈运营与平台门户"
       }
     },
     {
@@ -43304,7 +43561,7 @@
     },
     {
       "path": "_shared/app_remote_config_catalog.yaml",
-      "sha256": "42c41ffcb317ef286110b1e8ccb6af445302193088d6a0e559a19ed61de70a1b",
+      "sha256": "2b2017f12c2d6fae03d035029a09148efe13800aa16da438e1b703324f9e44d5",
       "mediaType": "application/yaml",
       "content": {
         "categories": [
@@ -43315,7 +43572,7 @@
               {
                 "activation_policy": "restart_only",
                 "expiry": "never",
-                "fallback": "alpha",
+                "fallback": "required",
                 "key": "APP_RUNTIME_ENV",
                 "owner": "runtime",
                 "reload_policy": "restart_only",
@@ -43324,7 +43581,7 @@
               {
                 "activation_policy": "restart_only",
                 "expiry": "never",
-                "fallback": "http://127.0.0.1:17000",
+                "fallback": "required",
                 "key": "CLOUD_GATEWAY_BASE_URL",
                 "owner": "runtime",
                 "reload_policy": "restart_only",
@@ -43333,8 +43590,62 @@
               {
                 "activation_policy": "restart_only",
                 "expiry": "never",
-                "fallback": "https://127.0.0.1:17100",
+                "fallback": "required",
+                "key": "APP_LEGAL_BASE_URL",
+                "owner": "runtime",
+                "reload_policy": "restart_only",
+                "risk_level": "critical"
+              },
+              {
+                "activation_policy": "restart_only",
+                "expiry": "never",
+                "fallback": "required",
+                "key": "PUBLIC_WEB_BASE_URL",
+                "owner": "runtime",
+                "reload_policy": "restart_only",
+                "risk_level": "critical"
+              },
+              {
+                "activation_policy": "restart_only",
+                "expiry": "never",
+                "fallback": "required",
+                "key": "MEDIA_AVATAR_CDN_BASE_URL",
+                "owner": "runtime-media",
+                "reload_policy": "restart_only",
+                "risk_level": "critical"
+              },
+              {
+                "activation_policy": "restart_only",
+                "expiry": "never",
+                "fallback": "required",
                 "key": "MEDIA_IMAGE_CDN_BASE_URL",
+                "owner": "runtime-media",
+                "reload_policy": "restart_only",
+                "risk_level": "critical"
+              },
+              {
+                "activation_policy": "restart_only",
+                "expiry": "never",
+                "fallback": "required",
+                "key": "MEDIA_VIDEO_CDN_BASE_URL",
+                "owner": "runtime-media",
+                "reload_policy": "restart_only",
+                "risk_level": "critical"
+              },
+              {
+                "activation_policy": "restart_only",
+                "expiry": "never",
+                "fallback": "required",
+                "key": "MEDIA_UPLOAD_BASE_URL",
+                "owner": "runtime-media",
+                "reload_policy": "restart_only",
+                "risk_level": "critical"
+              },
+              {
+                "activation_policy": "restart_only",
+                "expiry": "never",
+                "fallback": "required",
+                "key": "RTC_MEDIA_CONNECTION_URL",
                 "owner": "runtime-media",
                 "reload_policy": "restart_only",
                 "risk_level": "critical"
@@ -43553,7 +43864,7 @@
     },
     {
       "path": "_shared/app_routes.yaml",
-      "sha256": "e85fd00c02ca349487262c9c8c0f16d50bb2f4bd53d797d2886eb8d3ac4c30f2",
+      "sha256": "4c0abc0a2aee5fd36ab5cd8fd5f9e3ab18f7ead66775f7abcdea96e6587e3ae0",
       "mediaType": "application/yaml",
       "content": {
         "routes": [
@@ -43665,7 +43976,13 @@
               "filter",
               "source",
               "index",
-              "sourceTheme"
+              "sourceTheme",
+              "openComments",
+              "commentEntrySource",
+              "targetCommentId",
+              "targetParentCommentId",
+              "targetReplyId",
+              "replyToCommentId"
             ]
           },
           {
@@ -45379,7 +45696,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "8a04c1195e0b64255cb71d684509b1a01e832d923410fc82793f54973feb4985",
+      "sha256": "d82a1072c9d6e2bed4b3acd832df30665cd914826d90cd672cd26230f60254e9",
       "mediaType": "application/yaml",
       "content": {
         "contract_id": "app_page_object_contract",
@@ -45965,7 +46282,8 @@
             ],
             "route_id": "assistantPersonal",
             "route_registration_evidence": [
-              "lib/app/navigation/app_router.dart"
+              "lib/app/navigation/app_router.dart",
+              "lib/app/navigation/app_router_chat_routes.dart"
             ],
             "source_path": "lib/ui/assistant/pages/personal_assistant_conversation_page.dart",
             "surface_ids": [
@@ -46015,7 +46333,7 @@
             ],
             "route_id": "chatDetail",
             "route_registration_evidence": [
-              "lib/app/navigation/app_router.dart"
+              "lib/app/navigation/app_router_chat_routes.dart"
             ],
             "source_path": "lib/ui/chat/pages/chat_conversation_page.dart",
             "surface_ids": [
@@ -46153,7 +46471,7 @@
             ],
             "route_id": "chatSettings",
             "route_registration_evidence": [
-              "lib/app/navigation/app_router.dart"
+              "lib/app/navigation/app_router_chat_routes.dart"
             ],
             "source_path": "lib/ui/chat/pages/chat_settings_page.dart",
             "surface_ids": [
@@ -46196,7 +46514,7 @@
             ],
             "route_id": "chatAnnouncement",
             "route_registration_evidence": [
-              "lib/app/navigation/app_router.dart"
+              "lib/app/navigation/app_router_chat_routes.dart"
             ],
             "source_path": "lib/ui/chat/pages/chat_announcement_page.dart",
             "surface_ids": [
@@ -46237,7 +46555,7 @@
             ],
             "route_id": "chatAdmins",
             "route_registration_evidence": [
-              "lib/app/navigation/app_router.dart"
+              "lib/app/navigation/app_router_chat_routes.dart"
             ],
             "source_path": "lib/ui/chat/pages/group_admins_page.dart",
             "surface_ids": [
@@ -46278,7 +46596,7 @@
             ],
             "route_id": "chatManage",
             "route_registration_evidence": [
-              "lib/app/navigation/app_router.dart"
+              "lib/app/navigation/app_router_chat_routes.dart"
             ],
             "source_path": "lib/ui/chat/pages/group_manage_page.dart",
             "surface_ids": [
@@ -46319,7 +46637,7 @@
             ],
             "route_id": "chatMemberSearch",
             "route_registration_evidence": [
-              "lib/app/navigation/app_router.dart"
+              "lib/app/navigation/app_router_chat_routes.dart"
             ],
             "source_path": "lib/ui/chat/pages/group_member_search_page.dart",
             "surface_ids": [
@@ -46369,7 +46687,8 @@
             ],
             "route_id": "startGroupChat",
             "route_registration_evidence": [
-              "lib/app/navigation/app_router.dart"
+              "lib/app/navigation/app_router.dart",
+              "lib/app/navigation/app_router_chat_routes.dart"
             ],
             "source_path": "lib/ui/chat/pages/start_group_chat_page.dart",
             "surface_ids": [
@@ -46412,7 +46731,7 @@
             ],
             "route_id": "chatTransferOwnership",
             "route_registration_evidence": [
-              "lib/app/navigation/app_router.dart"
+              "lib/app/navigation/app_router_chat_routes.dart"
             ],
             "source_path": "lib/ui/chat/pages/transfer_ownership_page.dart",
             "surface_ids": [
@@ -48732,6 +49051,7 @@
             "object_ids": [
               "user.account_session",
               "user.authentication_challenge",
+              "user.credential_binding",
               "user.user_account"
             ],
             "page_id": "user.login",
@@ -48752,14 +49072,21 @@
               "event_namespace": "page.user.login",
               "lifecycle": [
                 "enter",
+                "state_change",
+                "consent",
+                "otp_send",
+                "otp_verify",
+                "social_authorization",
+                "phone_binding",
                 "exit",
                 "login_success",
                 "login_failure"
               ]
             },
             "typed_presentation": [
-              "AuthLoginResultDto",
-              "OneTapLoginHintDto"
+              "FederatedLoginOutcome",
+              "OtpChallengeIssueResult",
+              "OneTapLoginHint"
             ]
           },
           {
@@ -52899,7 +53226,7 @@
     },
     {
       "path": "_shared/ui_surfaces.yaml",
-      "sha256": "a6c6ce510f1cadd20c1f919436df9e791a0651ee008de122ac30a62dc9761e44",
+      "sha256": "864ad05329e553ad6524f955ee0f613687c9ae3d6269cdf8daa31d05bab2559d",
       "mediaType": "application/yaml",
       "content": {
         "surfaces": [
@@ -53494,6 +53821,7 @@
             "description": "首页推荐与关注内容流",
             "id": "homeFeed",
             "operation_ids": [
+              "GetFeed",
               "CreateReport",
               "LikePost",
               "UnlikePost",
@@ -103347,7 +103675,7 @@
     },
     {
       "path": "content/content/post/errors.yaml",
-      "sha256": "b1ef8df0892b9af0af29d0945345cd39c62f607f40f36b37ab67557f6bf5f4ed",
+      "sha256": "0016da6ff53bcb89bf552eb33289871da747f264a22be95581427a5315e193f1",
       "mediaType": "application/yaml",
       "content": {
         "aggregate": "Post",
@@ -103681,8 +104009,8 @@
             "recovery_action": "retry",
             "recovery_after_seconds": 10,
             "user_message": {
-              "en": "Request timed out, please check your connection",
-              "zh": "请求超时，请检查网络后重试"
+              "en": "The content service timed out, please try again later",
+              "zh": "内容服务响应超时，请稍后重试"
             }
           }
         ]
@@ -106090,7 +106418,7 @@
     },
     {
       "path": "content/content/post/operations.yaml",
-      "sha256": "faf2a5c014c77d77c9965ab9790915be57f3cb73e643b482a66438b4edf2b977",
+      "sha256": "d5e3e59e9703e489a2f572a7d0a2a8e4a12857fe4095d04d35ef0cff41e4d081",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -106107,13 +106435,24 @@
               "ownership_policy": "public_discovery_feed",
               "principal": "public"
             },
+            "client_contract": {
+              "dart_import": "../content/post_reader_queries.dart",
+              "request_encoder": "encodeContentDiscoveryFeedQuery",
+              "request_type": "ContentDiscoveryFeedQuery",
+              "response_decoder": "decodeContentDiscoveryFeedPageSlice",
+              "response_type": "ContentDiscoveryFeedPageSlice"
+            },
             "commercial": {
               "status": "ready"
             },
             "description": "发现流首页推荐唯一主链路（sort=recommend）。cursor 为 opaque token，仅用于 future window。\nfeedRequestId 为服务端权威生成的归因 id：随响应 envelope 下发；客户端首刷不传，\n分页/继续加载时回显服务端下发的 feedRequestId 以保持同一 feed 会话的归因连续，\n并透传给后续行为事件（曝光/点击/停留/负反馈）。\nchannelId 为首页频道路由标识（home_channels.feed_query.channel 真相源）：\nfollowing 走关注召回主路（FeedFollow，fail-closed，关注为空返回空列表）；\ntravel 走 travel_photography 垂类；其余频道走推荐引擎并按 channelId 归因。\n携带 identity/type 的请求是发现页浏览流（时间线具名查询），与频道推荐主链路互斥。\n",
             "error_codes": [
+              "CONTENT.USER.unauthorized",
               "CONTENT.USER.invalid_argument",
+              "CONTENT.USER.rate_limited",
               "CONTENT.SYSTEM.storage_read_failed",
+              "CONTENT.SYSTEM.required_dependency_unavailable",
+              "CONTENT.MIDDLEWARE.upstream_timeout",
               "CONTENT.SYSTEM.internal_error"
             ],
             "method": "GET",
@@ -144179,7 +144518,7 @@
     },
     {
       "path": "ops/openapi.yaml",
-      "sha256": "1b74a334088ab4cf62fb76d40a2175605c8d1e32eb54b15825f22973c1700797",
+      "sha256": "b736eea9e546404fc4c870f8db336214c874b21fe6e02993a65409f92a042d65",
       "mediaType": "application/yaml",
       "content": {
         "components": {
@@ -144188,6 +144527,18 @@
               "description": "字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。",
               "type": "object",
               "x-contract-entity": "ConfigDomainSlice",
+              "x-contract-placeholder": true
+            },
+            "ConfigInstanceReport": {
+              "description": "字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。",
+              "type": "object",
+              "x-contract-entity": "ConfigInstanceReport",
+              "x-contract-placeholder": true
+            },
+            "ConfigInstanceReportSlice": {
+              "description": "字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。",
+              "type": "object",
+              "x-contract-entity": "ConfigInstanceReportSlice",
               "x-contract-placeholder": true
             },
             "ConfigKeyCatalogSlice": {
@@ -144405,6 +144756,118 @@
               },
               "x-contract-operation-id": "ops.config_snapshot.ListConfigDomains",
               "x-object-id": "ops.config_snapshot"
+            }
+          },
+          "/control-plane/platform/configs/instances": {
+            "get": {
+              "operationId": "ListConfigInstanceReports",
+              "responses": {
+                "200": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/ConfigInstanceReportSlice"
+                      }
+                    }
+                  },
+                  "description": "OK"
+                },
+                "default": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "../_shared/openapi_common.yaml#/components/schemas/ErrorResponse"
+                      }
+                    }
+                  },
+                  "description": "Runtime failure"
+                }
+              },
+              "security": [
+                {
+                  "bearerAuth": []
+                }
+              ],
+              "x-actor": "account",
+              "x-application": {
+                "facet": "ConfigInstanceReportQueryFacade",
+                "kind": "query",
+                "method": "listConfigInstanceReports",
+                "reader": "ConfigInstanceReportReader",
+                "slice": "ConfigInstanceReportSlice"
+              },
+              "x-contract-operation-id": "ops.config_instance_report.ListConfigInstanceReports",
+              "x-object-id": "ops.config_instance_report"
+            }
+          },
+          "/control-plane/platform/configs/instances/{instanceId}:report": {
+            "post": {
+              "operationId": "ReportConfigInstance",
+              "parameters": [
+                {
+                  "in": "path",
+                  "name": "instanceId",
+                  "required": true,
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "description": "Stable business replay identity; distinct from X-Request-Id.",
+                  "in": "header",
+                  "name": "Idempotency-Key",
+                  "required": true,
+                  "schema": {
+                    "type": "string"
+                  }
+                }
+              ],
+              "requestBody": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/ConfigInstanceReport"
+                    }
+                  }
+                },
+                "required": true
+              },
+              "responses": {
+                "200": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/ConfigInstanceReport"
+                      }
+                    }
+                  },
+                  "description": "OK"
+                },
+                "default": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "../_shared/openapi_common.yaml#/components/schemas/ErrorResponse"
+                      }
+                    }
+                  },
+                  "description": "Runtime failure"
+                }
+              },
+              "security": [
+                {
+                  "bearerAuth": []
+                }
+              ],
+              "x-actor": "account",
+              "x-application": {
+                "aggregateOwner": "ConfigInstanceReport",
+                "facet": "ConfigInstanceReportCommandFacade",
+                "kind": "command",
+                "method": "reportConfigInstance"
+              },
+              "x-contract-operation-id": "ops.config_instance_report.ReportConfigInstance",
+              "x-object-id": "ops.config_instance_report"
             }
           },
           "/control-plane/platform/configs/resolve": {
@@ -145390,6 +145853,677 @@
       }
     },
     {
+      "path": "ops/platform_ops/config_instance_report/errors.yaml",
+      "sha256": "a6d128142d0456b654409283dbe3327181818f941c99133ceef47316a954a53d",
+      "mediaType": "application/yaml",
+      "content": {
+        "aggregate": "ConfigInstanceReport",
+        "description": "实例配置 ACK 的身份、候选版本与存储失败语义。",
+        "domain": "OPS",
+        "errors": [
+          {
+            "code": "OPS.USER.config_instance_report_invalid",
+            "dart_const": "configInstanceReportInvalid",
+            "go_const": "ErrConfigInstanceReportInvalid",
+            "http_status": 400,
+            "kind": "USER",
+            "reason": "config_instance_report_invalid",
+            "recovery_action": "configure",
+            "user_message": {
+              "en": "The instance config report is invalid",
+              "zh": "实例配置报告无效"
+            }
+          },
+          {
+            "code": "OPS.USER.config_instance_report_conflict",
+            "dart_const": "configInstanceReportConflict",
+            "go_const": "ErrConfigInstanceReportConflict",
+            "http_status": 409,
+            "kind": "USER",
+            "reason": "config_instance_report_conflict",
+            "recovery_action": "refresh",
+            "user_message": {
+              "en": "The instance config report conflicts with the current candidate",
+              "zh": "实例配置报告与当前候选版本不一致"
+            }
+          },
+          {
+            "code": "OPS.SYSTEM.config_instance_report_candidate_unavailable",
+            "dart_const": "configInstanceReportCandidateUnavailable",
+            "go_const": "ErrConfigInstanceReportCandidateUnavailable",
+            "http_status": 503,
+            "kind": "SYSTEM",
+            "reason": "config_instance_report_candidate_unavailable",
+            "recovery_action": "retry",
+            "recovery_after_seconds": 2,
+            "user_message": {
+              "en": "The current release candidate is not ready",
+              "zh": "当前发布候选尚未就绪"
+            }
+          },
+          {
+            "code": "OPS.SYSTEM.config_instance_report_storage_failed",
+            "dart_const": "configInstanceReportStorageFailed",
+            "go_const": "ErrConfigInstanceReportStorageFailed",
+            "http_status": 500,
+            "kind": "SYSTEM",
+            "reason": "config_instance_report_storage_failed",
+            "recovery_action": "retry",
+            "recovery_after_seconds": 2,
+            "user_message": {
+              "en": "The instance config report could not be stored",
+              "zh": "实例配置报告保存失败"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "path": "ops/platform_ops/config_instance_report/fields.yaml",
+      "sha256": "1590bcc54647316ad422e6e5b932b6fbeeb745bfea8eb344894249d7285e0c91",
+      "mediaType": "application/yaml",
+      "content": {
+        "description": "运行实例配置 ACK 与同候选版本漂移投影。",
+        "fields": [
+          {
+            "api_exposure": "drop",
+            "classification": "INTERNAL",
+            "constraints": [
+              "PK"
+            ],
+            "log_policy": "allow",
+            "name": "instanceId",
+            "ops_exposure": "read",
+            "role": "authoritative_state",
+            "source": "instanceId",
+            "type": "string"
+          },
+          {
+            "api_exposure": "drop",
+            "classification": "INTERNAL",
+            "constraints": [
+              "NOT_NULL"
+            ],
+            "log_policy": "allow",
+            "name": "environment",
+            "ops_exposure": "read",
+            "reference": true,
+            "role": "authoritative_state",
+            "source": "environment",
+            "type": "string"
+          },
+          {
+            "api_exposure": "drop",
+            "classification": "INTERNAL",
+            "constraints": [
+              "NOT_NULL"
+            ],
+            "log_policy": "allow",
+            "name": "cluster",
+            "ops_exposure": "read",
+            "role": "authoritative_state",
+            "source": "cluster",
+            "type": "string"
+          },
+          {
+            "api_exposure": "drop",
+            "classification": "INTERNAL",
+            "constraints": [
+              "NOT_NULL"
+            ],
+            "log_policy": "allow",
+            "name": "service",
+            "ops_exposure": "read",
+            "reference": true,
+            "role": "authoritative_state",
+            "source": "service",
+            "type": "string"
+          },
+          {
+            "api_exposure": "drop",
+            "classification": "INTERNAL",
+            "constraints": [
+              "NOT_NULL"
+            ],
+            "log_policy": "allow",
+            "name": "releaseManifestDigest",
+            "ops_exposure": "read",
+            "role": "authoritative_state",
+            "source": "releaseManifestDigest",
+            "type": "string"
+          },
+          {
+            "api_exposure": "drop",
+            "classification": "INTERNAL",
+            "constraints": [
+              "NOT_NULL"
+            ],
+            "log_policy": "allow",
+            "name": "desiredHash",
+            "ops_exposure": "read",
+            "role": "authoritative_state",
+            "source": "desiredHash",
+            "type": "string"
+          },
+          {
+            "api_exposure": "drop",
+            "classification": "INTERNAL",
+            "constraints": [
+              "NOT_NULL"
+            ],
+            "log_policy": "allow",
+            "name": "effectiveHash",
+            "ops_exposure": "read",
+            "role": "authoritative_state",
+            "source": "effectiveHash",
+            "type": "string"
+          },
+          {
+            "api_exposure": "drop",
+            "classification": "INTERNAL",
+            "constraints": [
+              "NOT_NULL"
+            ],
+            "log_policy": "allow",
+            "name": "inSync",
+            "ops_exposure": "read",
+            "role": "projection",
+            "source": "inSync",
+            "type": "boolean"
+          }
+        ],
+        "types": {
+          "ConfigInstanceReport": {
+            "description": "单个实例对当前候选版本和有效配置的 ACK。",
+            "fields": [
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "id",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "environment",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "cluster",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "service",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "instanceId",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "log_policy": "allow",
+                "name": "configVersion",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "log_policy": "allow",
+                "name": "imageVersion",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "releaseManifestDigest",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "desiredHash",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "effectiveHash",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "inSync",
+                "ops_exposure": "read",
+                "type": "boolean"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "log_policy": "allow",
+                "name": "source",
+                "ops_exposure": "read",
+                "type": "string"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "updatedAt",
+                "ops_exposure": "read",
+                "type": "timestamp"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "log_policy": "redacted",
+                "name": "lastError",
+                "ops_exposure": "read",
+                "type": "string"
+              }
+            ]
+          },
+          "ConfigInstanceReportSlice": {
+            "description": "当前候选版本的实例 ACK 与漂移汇总。",
+            "fields": [
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "redacted",
+                "name": "items",
+                "ops_exposure": "read",
+                "type": "array"
+              },
+              {
+                "api_exposure": "drop",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "metadata_only",
+                "name": "summary",
+                "ops_exposure": "read",
+                "type": "object"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "path": "ops/platform_ops/config_instance_report/object.yaml",
+      "sha256": "c3e2c63e10c9a640b82a836a654221a11604aec281d458bce6e8bffbd4acc05f",
+      "mediaType": "application/yaml",
+      "content": {
+        "access": {
+          "commands": "aggregate_facade",
+          "cross_context": "public_contract_only",
+          "queries": "named_reader"
+        },
+        "business_rules": [
+          "只有已验证的 service principal 可上报，principal 必须绑定 service@environment，instanceId 必须位于该 service namespace。",
+          "releaseManifestDigest 必须等于控制面当前候选清单摘要；desiredHash 由 ConfigSnapshot 读取并覆盖调用方值。",
+          "ACK 的 effectiveHash 等于 desiredHash 才可记为 inSync；调用方不能直接上报 inSync 伪造一致。",
+          "发布门只读取 hosted orchestrator 的期望实例集合；缺实例、摘要漂移、过期 ACK 或错误 service principal 均阻断。"
+        ],
+        "capabilities": [
+          "queryable",
+          "auditable",
+          "idempotent_commands"
+        ],
+        "description": "运行实例对当前候选 ReleaseManifest 与有效配置摘要的受信 ACK；它引用 ConfigSnapshot 的 desiredHash，但不修改只读配置快照。",
+        "identity": {
+          "fields": [
+            "instanceId"
+          ],
+          "version_source": "store_commit"
+        },
+        "kind": "aggregate_root",
+        "lifecycle": {
+          "idempotency": "payload_digest_server_side",
+          "initial": "reported",
+          "optimistic_concurrency": "store_commit",
+          "states": [
+            "reported"
+          ],
+          "transitions": []
+        },
+        "relationships": [
+          {
+            "access": "named_reader",
+            "cardinality": "N:1",
+            "consistency": "eventual",
+            "kind": "reference",
+            "name": "desiredSnapshot",
+            "on_delete": "retain",
+            "reference_fields": [
+              "environment",
+              "service"
+            ],
+            "target_object": "ops.ConfigSnapshot"
+          }
+        ],
+        "taggable": false,
+        "vector_enabled": false
+      }
+    },
+    {
+      "path": "ops/platform_ops/config_instance_report/operations.yaml",
+      "sha256": "65bca3aad4383d12c514d6f04e34a7a58d8824feb6db2c0a7639851202432954",
+      "mediaType": "application/yaml",
+      "content": {
+        "api_routes": [
+          {
+            "actor": "account",
+            "application": {
+              "facet": "ConfigInstanceReportQueryFacade",
+              "kind": "query",
+              "method": "listConfigInstanceReports",
+              "reader": "ConfigInstanceReportReader",
+              "slice": "ConfigInstanceReportSlice"
+            },
+            "authorization": {
+              "ownership_policy": "operator_scope",
+              "principal": "operator",
+              "scopes": [
+                "ops.platform.config.read"
+              ]
+            },
+            "commercial": {
+              "status": "ready"
+            },
+            "error_codes": [
+              "OPS.USER.unauthorized",
+              "OPS.USER.forbidden",
+              "OPS.SYSTEM.config_instance_report_storage_failed"
+            ],
+            "method": "GET",
+            "operation": "ListConfigInstanceReports",
+            "path": "/control-plane/platform/configs/instances",
+            "privacy": {
+              "log_policy": "redacted",
+              "request_classification": "INTERNAL",
+              "response_classification": "INTERNAL"
+            },
+            "reliability": {
+              "cancellation": "supported",
+              "idempotency": "none",
+              "max_attempts": 2,
+              "retry_mode": "idempotent",
+              "timeout_ms": 1000
+            },
+            "response_entity": "ConfigInstanceReportSlice",
+            "security": {
+              "auth_mode": "required"
+            },
+            "slo": {
+              "availability_percent": 99.9,
+              "latency_p95_ms": 500
+            },
+            "telemetry": {
+              "attributes": [
+                "operation",
+                "outcome"
+              ],
+              "metric": "ops_platform_config_instance_reports",
+              "trace": true
+            }
+          },
+          {
+            "actor": "account",
+            "application": {
+              "aggregate_owner": "ConfigInstanceReport",
+              "facet": "ConfigInstanceReportCommandFacade",
+              "invariant_target": "ConfigInstanceReport",
+              "kind": "command",
+              "method": "reportConfigInstance",
+              "mutation_target": "ConfigInstanceReport"
+            },
+            "authorization": {
+              "ownership_policy": "service_instance_bound",
+              "principal": "service",
+              "scopes": [
+                "ops.platform.config.ack"
+              ]
+            },
+            "commercial": {
+              "status": "ready"
+            },
+            "error_codes": [
+              "OPS.USER.unauthorized",
+              "OPS.USER.forbidden",
+              "OPS.USER.config_instance_report_invalid",
+              "OPS.USER.config_instance_report_conflict",
+              "OPS.SYSTEM.config_instance_report_candidate_unavailable",
+              "OPS.SYSTEM.config_instance_report_storage_failed"
+            ],
+            "method": "POST",
+            "operation": "ReportConfigInstance",
+            "path": "/control-plane/platform/configs/instances/{instanceId}:report",
+            "privacy": {
+              "log_policy": "redacted",
+              "request_classification": "INTERNAL",
+              "response_classification": "INTERNAL"
+            },
+            "reliability": {
+              "cancellation": "supported",
+              "idempotency": "required",
+              "max_attempts": 2,
+              "retry_mode": "idempotent",
+              "timeout_ms": 1200
+            },
+            "request_entity": "ConfigInstanceReport",
+            "request_fields": [
+              "environment",
+              "cluster",
+              "service",
+              "instanceId",
+              "configVersion",
+              "imageVersion",
+              "releaseManifestDigest",
+              "effectiveHash",
+              "source",
+              "lastError"
+            ],
+            "response_entity": "ConfigInstanceReport",
+            "security": {
+              "anonymous_policy": "deny",
+              "auth_mode": "required",
+              "principal": "service",
+              "token_transport": "bearer",
+              "visibility": "internal"
+            },
+            "slo": {
+              "availability_percent": 99.9,
+              "latency_p95_ms": 700
+            },
+            "telemetry": {
+              "attributes": [
+                "operation",
+                "environment",
+                "service",
+                "outcome"
+              ],
+              "metric": "ops_platform_config_instance_ack",
+              "trace": true
+            }
+          }
+        ],
+        "consumers": [
+          {
+            "capabilities": [
+              "list_config_instance_reports",
+              "report_config_instance"
+            ],
+            "name": "platform-ops"
+          }
+        ],
+        "contract_test": {
+          "coverage_requirements": [
+            "ACK 只接受绑定 service/environment/instance namespace 的已验证 service principal。",
+            "ACK 必须绑定 canonical ReleaseManifest digest，desiredHash 只能来自 ConfigSnapshot。"
+          ],
+          "current_evidence": {
+            "api_integration": [
+              "control-plane/platform-ops/tests/api_integration/ops/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go"
+            ],
+            "local_contract": [
+              "control-plane/platform-ops/cmd/api/main__local_contract_test.go"
+            ],
+            "real_engines": {
+              "postgres": "embedded-postgres"
+            }
+          }
+        },
+        "description": "由 service principal 上报并由 operator 只读查看的实例配置 ACK。"
+      }
+    },
+    {
+      "path": "ops/platform_ops/config_instance_report/storage.yaml",
+      "sha256": "3d070aae26e2b42a3aaa63836ed37f90646baf61eacff5f9de5e142a77cfe035",
+      "mediaType": "application/yaml",
+      "content": {
+        "backend": "postgres",
+        "role": "authoritative",
+        "tables": {
+          "control_plane_documents": {
+            "columns": [
+              {
+                "constraints": [
+                  "PK",
+                  "NOT_NULL"
+                ],
+                "name": "scope",
+                "type": "TEXT"
+              },
+              {
+                "constraints": [
+                  "PK",
+                  "NOT_NULL"
+                ],
+                "name": "namespace",
+                "type": "TEXT"
+              },
+              {
+                "constraints": [
+                  "PK",
+                  "NOT_NULL"
+                ],
+                "name": "document_id",
+                "type": "TEXT"
+              },
+              {
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "name": "body",
+                "type": "JSONB"
+              },
+              {
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "default": "NOW()",
+                "name": "updated_at",
+                "type": "TIMESTAMPTZ"
+              }
+            ],
+            "description": "platform-ops scope 下 namespace=config_instance_reports 的运行实例配置 ACK；body 保存经服务身份和候选 ReleaseManifest 摘要校验后的规范文档。",
+            "entity": "ConfigInstanceReport",
+            "indexes": [
+              {
+                "columns": [
+                  "scope",
+                  "namespace",
+                  "document_id"
+                ],
+                "name": "idx_control_plane_documents_namespace"
+              }
+            ],
+            "optimistic_lock": "updated_at",
+            "pk": [
+              "scope",
+              "namespace",
+              "document_id"
+            ],
+            "role": "authoritative"
+          }
+        }
+      }
+    },
+    {
       "path": "ops/platform_ops/config_snapshot/errors.yaml",
       "sha256": "9ce3c8ec036554320da786319867555af73a713777aa948cab3f66a45e6ff10f",
       "mediaType": "application/yaml",
@@ -146196,7 +147330,7 @@
     },
     {
       "path": "ops/product_ops/app_release/fields.yaml",
-      "sha256": "9304def41fc5fb42e80dc09ff3e535a09dbe667fd09c2235be6b6aa443a37e68",
+      "sha256": "5057aa2140f0a3843fb43f0f2919b539f2bde8d6e6807a74e876f993dd17a700",
       "mediaType": "application/yaml",
       "content": {
         "fields": [
@@ -146245,7 +147379,7 @@
             "api_exposure": "read",
             "classification": "PUBLIC",
             "constraints": [
-              "NOT_NULL",
+              "NULLABLE",
               "HTTPS_URL"
             ],
             "log_policy": "metadata_only",
@@ -146340,7 +147474,7 @@
     },
     {
       "path": "ops/product_ops/app_release/object.yaml",
-      "sha256": "45fd696a8dce9af6cc62fb75c024effa604062e363bb33385491afbb1d066dac",
+      "sha256": "bf08320fa2d8709d61297153a14a2abe72f20904794abe766e22b1dbf1631b20",
       "mediaType": "application/yaml",
       "content": {
         "access": {
@@ -146350,7 +147484,7 @@
         },
         "business_rules": [
           "每个平台同时只有一个 current release，Build 为正十进制整数且只增不减",
-          "iOS 更新地址只能是 Apple 官方 App Store HTTPS 产品页",
+          "公众 iOS 不提供原生更新地址，恢复地址只能是趣我圈官方 PWA；受控 Ad Hoc 地址不得进入公众版本接口",
           "Android updateUrl 只能是趣我圈官网 HTTPS 下载端点，APK URL 只能属于官方 CDN 白名单",
           "Android latest 指针只能在生产签名、包名、Build、证书摘要、文件大小和 SHA-256 全部验证后切换"
         ],
@@ -146379,7 +147513,7 @@
     },
     {
       "path": "ops/product_ops/app_release/operations.yaml",
-      "sha256": "e86174e8d4118ec18cb4bb3c4cfb65da7c4d0146800e0823ee2083a329bd8ce2",
+      "sha256": "17cc23a58ae1f9be190afc664a49b90b8d8fc902ca6035b0b1c7984d37ebb5e3",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -146486,11 +147620,12 @@
                 },
                 {
                   "assertions": [
-                    "official_app_store_url",
+                    "empty_update_url",
+                    "official_pwa_recovery_url",
                     "current_release_build"
                   ],
                   "command": "GetAppRecoveryVersion platform=ios",
-                  "name": "ios_app_store"
+                  "name": "ios_pwa_recovery"
                 }
               ]
             }
@@ -146738,7 +147873,7 @@
     },
     {
       "path": "ops/product_ops/event_record/event_catalog.yaml",
-      "sha256": "9eaa68642675e3498b84728ecfe104f432b648ef853cc1fc8c43ab7681a87088",
+      "sha256": "603ae8f2817a6623f6021a151e17807c79f10d0d2b53929fe074c29beb65b745",
       "mediaType": "application/yaml",
       "content": {
         "common_fields": [
@@ -146888,6 +148023,55 @@
             ]
           },
           {
+            "event_type": "login_funnel",
+            "internal_priority": "critical",
+            "log_type": "event",
+            "normal_sample_rate": 1,
+            "optional_extensions": [
+              "entryMode",
+              "fromStep",
+              "toStep",
+              "provider",
+              "otpPurpose",
+              "consentState",
+              "durationMs",
+              "attemptIndex",
+              "countdownBucket",
+              "motionReduced",
+              "dismissPolicy"
+            ],
+            "required_extensions": [
+              "action",
+              "flowId",
+              "step",
+              "result"
+            ]
+          },
+          {
+            "event_type": "login_operation",
+            "internal_priority": "critical",
+            "log_type": "event",
+            "normal_sample_rate": 1,
+            "optional_extensions": [
+              "flowId",
+              "step",
+              "provider",
+              "otpPurpose",
+              "failReasonCode",
+              "failureKind",
+              "recoveryAction",
+              "durationMs",
+              "attemptIndex",
+              "requestId",
+              "traceId"
+            ],
+            "required_extensions": [
+              "operationId",
+              "surfaceId",
+              "result"
+            ]
+          },
+          {
             "event_type": "chat_interaction_outcome",
             "internal_priority": "critical",
             "log_type": "event",
@@ -146932,6 +148116,8 @@
             "log_type": "event",
             "normal_sample_rate": 1,
             "optional_extensions": [
+              "surfaceId",
+              "hasCache",
               "durationMs",
               "failReasonCode",
               "recoveryAction",
@@ -146979,6 +148165,82 @@
               "contentType",
               "objectState",
               "surfaceId",
+              "result"
+            ]
+          },
+          {
+            "event_type": "article_reader_enter",
+            "internal_priority": "critical",
+            "log_type": "event",
+            "normal_sample_rate": 1,
+            "optional_extensions": [],
+            "required_extensions": [
+              "surfaceId",
+              "objectType",
+              "objectId",
+              "durationMs",
+              "result"
+            ]
+          },
+          {
+            "event_type": "article_reader_dwell",
+            "internal_priority": "normal",
+            "log_type": "event",
+            "normal_sample_rate": 0.1,
+            "optional_extensions": [],
+            "required_extensions": [
+              "surfaceId",
+              "objectType",
+              "objectId",
+              "durationMs",
+              "result"
+            ]
+          },
+          {
+            "event_type": "article_reader_exit",
+            "internal_priority": "critical",
+            "log_type": "event",
+            "normal_sample_rate": 1,
+            "optional_extensions": [],
+            "required_extensions": [
+              "surfaceId",
+              "objectType",
+              "objectId",
+              "durationMs",
+              "result"
+            ]
+          },
+          {
+            "event_type": "article_reader_error",
+            "internal_priority": "error",
+            "log_type": "event",
+            "normal_sample_rate": 1,
+            "optional_extensions": [
+              "durationMs"
+            ],
+            "required_extensions": [
+              "surfaceId",
+              "objectType",
+              "objectId",
+              "errorCode",
+              "recoveryAction",
+              "result"
+            ]
+          },
+          {
+            "event_type": "article_reader_recovery",
+            "internal_priority": "critical",
+            "log_type": "event",
+            "normal_sample_rate": 1,
+            "optional_extensions": [
+              "durationMs",
+              "errorCode"
+            ],
+            "required_extensions": [
+              "surfaceId",
+              "objectType",
+              "objectId",
+              "recoveryAction",
               "result"
             ]
           },
@@ -147176,6 +148438,10 @@
             "max_length": 128,
             "type": "string"
           },
+          "attemptIndex": {
+            "minimum": 0,
+            "type": "int"
+          },
           "audioUnderrunCount": {
             "minimum": 0,
             "type": "int"
@@ -147261,6 +148527,10 @@
             "minimum": 0,
             "type": "int"
           },
+          "consentState": {
+            "max_length": 32,
+            "type": "string"
+          },
           "contentType": {
             "enum": [
               "micro",
@@ -147273,6 +148543,10 @@
           },
           "correlationHash": {
             "max_length": 64,
+            "type": "string"
+          },
+          "countdownBucket": {
+            "max_length": 32,
             "type": "string"
           },
           "declaredDurationMs": {
@@ -147313,6 +148587,10 @@
             "max_length": 128,
             "type": "string"
           },
+          "dismissPolicy": {
+            "max_length": 64,
+            "type": "string"
+          },
           "droppedFrames": {
             "minimum": 0,
             "type": "int"
@@ -147327,6 +148605,10 @@
           "effectivePlaybackMs": {
             "minimum": 0,
             "type": "int"
+          },
+          "entryMode": {
+            "max_length": 64,
+            "type": "string"
           },
           "environment": {
             "enum": [
@@ -147345,6 +148627,18 @@
             "max_length": 128,
             "type": "string"
           },
+          "failureKind": {
+            "max_length": 64,
+            "type": "string"
+          },
+          "flowId": {
+            "max_length": 96,
+            "type": "string"
+          },
+          "fromStep": {
+            "max_length": 64,
+            "type": "string"
+          },
           "governanceAction": {
             "enum": [
               "none",
@@ -147356,6 +148650,9 @@
               "member_leave"
             ],
             "type": "string"
+          },
+          "hasCache": {
+            "type": "bool"
           },
           "hasError": {
             "type": "bool"
@@ -147400,6 +148697,9 @@
             ],
             "type": "string"
           },
+          "motionReduced": {
+            "type": "bool"
+          },
           "networkQuality": {
             "enum": [
               "excellent",
@@ -147437,6 +148737,10 @@
             "max_length": 128,
             "type": "string"
           },
+          "otpPurpose": {
+            "max_length": 32,
+            "type": "string"
+          },
           "participantCount": {
             "minimum": 0,
             "type": "int"
@@ -147448,6 +148752,10 @@
           "processedVideoFrames": {
             "minimum": 0,
             "type": "int"
+          },
+          "provider": {
+            "max_length": 32,
+            "type": "string"
           },
           "publicationStage": {
             "enum": [
@@ -147543,6 +148851,10 @@
             "minimum": 0,
             "type": "int"
           },
+          "step": {
+            "max_length": 64,
+            "type": "string"
+          },
           "surfaceId": {
             "max_length": 128,
             "type": "string"
@@ -147577,6 +148889,10 @@
               "empty",
               "error"
             ],
+            "type": "string"
+          },
+          "toStep": {
+            "max_length": 64,
             "type": "string"
           },
           "traceId": {
@@ -152365,7 +153681,7 @@
     },
     {
       "path": "platform/config.yaml",
-      "sha256": "bf4921590781cf24410e985f0b7ba32e23ae436e125b6ea7859734eeedc2571e",
+      "sha256": "1dc31291e37da7be135db7b922a4098ff3ddb905cbcbff463c0b330ac63fd6d2",
       "mediaType": "application/yaml",
       "content": {
         "configs": [
@@ -152911,7 +154227,6 @@
             "type": "int"
           },
           {
-            "default": "https://alpha-avatar.quwoquan-env.test:17100",
             "key": "sys.chat-service.runtime.media.group_avatar_cdn_base_url",
             "reload": "restart",
             "rollout": "progressive",
@@ -155167,7 +156482,7 @@
           },
           {
             "default": "",
-            "key": "sys.product-ops-service.app_release.ios.app_store_url",
+            "key": "sys.product-ops-service.app_release.android.min_android_version",
             "reload": "restart",
             "rollout": "progressive",
             "scope": "workload",
@@ -155186,6 +156501,15 @@
           {
             "default": "",
             "key": "sys.product-ops-service.app_release.ios.latest_version",
+            "reload": "restart",
+            "rollout": "progressive",
+            "scope": "workload",
+            "sensitive": false,
+            "type": "string"
+          },
+          {
+            "default": "",
+            "key": "sys.product-ops-service.app_release.ios.pwa_url",
             "reload": "restart",
             "rollout": "progressive",
             "scope": "workload",
@@ -156702,7 +158026,7 @@
             "type": "string"
           },
           {
-            "default": "quwoquan",
+            "default": "quwoquan_user",
             "key": "sys.user-service.mongodb.database",
             "reload": "restart",
             "rollout": "progressive",
@@ -174858,7 +176182,7 @@
     },
     {
       "path": "tag/tag/tag_taxonomy_release/events.yaml",
-      "sha256": "97ac56188ea91e1ea70374d2066b83ec624921a9fda9e422b21b6320b76f7a58",
+      "sha256": "bc4312aba9cb0c5b8b05fb6a057fdc993571948cea19ab1b2d22d3eb8decedda",
       "mediaType": "application/yaml",
       "content": {
         "events": [
@@ -174870,6 +176194,7 @@
             "payload_fields": [
               "releaseId",
               "canonicalDigest",
+              "releaseKind",
               "nodeCount",
               "status",
               "importedAt"
@@ -174884,6 +176209,7 @@
             "payload_fields": [
               "releaseId",
               "canonicalDigest",
+              "releaseKind",
               "nodeCount",
               "status",
               "activatedAt"
@@ -174895,7 +176221,7 @@
     },
     {
       "path": "tag/tag/tag_taxonomy_release/fields.yaml",
-      "sha256": "05e7c1230018d78176fe97a0c056256939ae40d8888416eb1b808d8fdb5638b1",
+      "sha256": "63cab4ae41dc795dcf208fb16fc986aca661f403b5226c944c11c76b7fa19ac1",
       "mediaType": "application/yaml",
       "content": {
         "description": "数据工程 taxonomy 的不可变发布批次及激活状态",
@@ -174932,6 +176258,18 @@
             ],
             "log_policy": "allow",
             "name": "canonicalDigest",
+            "ops_exposure": "read",
+            "role": "authoritative_state",
+            "type": "string"
+          },
+          {
+            "api_exposure": "read",
+            "classification": "PUBLIC",
+            "constraints": [
+              "NOT_NULL"
+            ],
+            "log_policy": "allow",
+            "name": "releaseKind",
             "ops_exposure": "read",
             "role": "authoritative_state",
             "type": "string"
@@ -174989,7 +176327,7 @@
     },
     {
       "path": "tag/tag/tag_taxonomy_release/object.yaml",
-      "sha256": "2283836ea3ca306902a77f40e533ac5d22933fa9ae89eb9c5e26e905091c1049",
+      "sha256": "3a8bdd10a247150d58986f1a0c66d2fb1f4ae27b5a306a0a84068b22a3eafb0d",
       "mediaType": "application/yaml",
       "content": {
         "access": {
@@ -174999,8 +176337,10 @@
         },
         "business_rules": [
           "releaseId、contentDigest 和 parent graph 创建后不可变",
+          "content release 至少包含一个节点；release-bound empty_baseline 是合法的零节点 snapshot",
           "taxonomy 必须无环且所有 node path、alias 和 canonical id 唯一",
           "同一 taxonomy 只能有一个 active release",
+          "retired release 可作为 rollback/replay 目标再次激活，历史 release 与 TagNode snapshot 不物理删除",
           "在线服务不得直接修改 TagNodeView，只能切换已验证 release"
         ],
         "capabilities": [
@@ -175030,7 +176370,7 @@
     },
     {
       "path": "tag/tag/tag_taxonomy_release/operations.yaml",
-      "sha256": "ac88646b0e6f10e90a328882a6ee9d46f35a152d31d5e43afd1c81b793b63249",
+      "sha256": "03bce307808f168e384e121bec988a7a47c9ff7663783597a7ec9382bbd0d2e5",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -175051,7 +176391,7 @@
             "commercial": {
               "status": "ready"
             },
-            "description": "落一条不可变 staged release（releaseId/sourceOwner/canonicalDigest/nodeCount）。\ncanonicalDigest 唯一约束承载幂等：同 digest 重复 Stage 返回首次记录。\n",
+            "description": "落一条不可变 staged release（releaseId/sourceOwner/canonicalDigest/releaseKind/nodeCount）。\ncanonicalDigest 唯一约束承载幂等：同 digest 重复 Stage 返回首次记录。\ncontent 必须至少包含一个节点；release-bound empty_baseline 必须恰好为零节点。\n",
             "error_codes": [
               "TAG.USER.release_invalid_argument",
               "TAG.USER.release_idempotency_conflict",
@@ -175076,6 +176416,7 @@
               "releaseId",
               "sourceOwner",
               "canonicalDigest",
+              "releaseKind",
               "nodeCount"
             ],
             "response_entity": "TagTaxonomyRelease",
@@ -175116,7 +176457,7 @@
             "commercial": {
               "status": "ready"
             },
-            "description": "激活 staged release：服务端内部 CAS 完成单 active 切换（旧 active → retired）。\n目标已 active 时按 no-op receipt 重放安全；公开请求不携带版本字段。\n",
+            "description": "激活 staged 或 retired immutable release：服务端内部 CAS 完成单 active 切换（旧 active → retired）。\n目标已 active 时按 no-op receipt 重放安全；retired 允许 rollback replay， 历史 release 与 TagNode snapshot 不物理删除；公开请求不携带版本字段。\n",
             "error_codes": [
               "TAG.USER.release_not_found",
               "TAG.USER.release_invalid_transition",
@@ -175195,7 +176536,8 @@
                 {
                   "assertions": [
                     "激活后旧 active release 变 retired，同一时刻只有一个 active",
-                    "重复激活 no-op 重放安全"
+                    "重复激活 no-op 重放安全",
+                    "release-bound empty_baseline 零节点快照可激活并可重放 retired 历史快照"
                   ],
                   "name": "activate_single_active_cas",
                   "route": "POST /internal/tag/taxonomy-releases/{releaseId}:activate"
@@ -175250,7 +176592,7 @@
     },
     {
       "path": "user/account/account_session/errors.yaml",
-      "sha256": "b92e1e9f74629fb3e2906a2497b84951a87da69acb80e486ef9796ac16690264",
+      "sha256": "d3744a88a205c3ad2d70fa26bd22b3d3f2db9a7778bbdf3a7c5028e6c8fe64a4",
       "mediaType": "application/yaml",
       "content": {
         "aggregate": "AccountSession",
@@ -175305,8 +176647,8 @@
               "disruptionLevel": "inlineCard"
             },
             "user_message": {
-              "en": "WeChat authorization failed, please try again",
-              "zh": "微信授权失败，请重试"
+              "en": "Authorization was not completed",
+              "zh": "授权未完成"
             }
           },
           {
@@ -175322,8 +176664,8 @@
               "disruptionLevel": "inlineCard"
             },
             "user_message": {
-              "en": "Alipay authorization failed, please try again",
-              "zh": "支付宝授权失败，请重试"
+              "en": "Authorization was not completed",
+              "zh": "授权未完成"
             }
           },
           {
@@ -175339,8 +176681,8 @@
               "disruptionLevel": "inlineCard"
             },
             "user_message": {
-              "en": "QQ authorization failed, please try again",
-              "zh": "QQ 授权失败，请重试"
+              "en": "Authorization was not completed",
+              "zh": "授权未完成"
             }
           },
           {
@@ -175373,8 +176715,8 @@
               "disruptionLevel": "inlineCard"
             },
             "user_message": {
-              "en": "Third-party login is unavailable, please use another method",
-              "zh": "第三方登录暂不可用，请使用其他方式登录"
+              "en": "Authorization was not completed",
+              "zh": "授权未完成"
             }
           },
           {
@@ -175757,7 +177099,7 @@
     },
     {
       "path": "user/account/account_session/operations.yaml",
-      "sha256": "5d0749d3533861665e1544d46414cb1f51fce5528a632bf58059db5d88c71cc0",
+      "sha256": "0afaeba99b9957aacca64487e1d20de727c1064c0df5b2908baf705d77a04c94",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -175875,8 +177217,8 @@
               "dart_import": "../user/account_session_contracts.dart",
               "request_encoder": "encodeLoginWithWechatCommand",
               "request_type": "LoginWithWechatCommand",
-              "response_decoder": "decodeAuthSessionGrant",
-              "response_type": "AuthSessionGrant"
+              "response_decoder": "decodeFederatedLoginOutcome",
+              "response_type": "FederatedLoginOutcome"
             },
             "commercial": {
               "block_reason": "prod WeChat credentials and real-device SDK evidence are not injected",
@@ -175890,6 +177232,7 @@
               "USER.AUTH.wechat_auth_failed",
               "USER.AUTH.social_provider_cancelled",
               "USER.AUTH.social_provider_unavailable",
+              "USER.AUTH.consent_required",
               "USER.AUTH.credential_conflict",
               "USER.AUTH.account_suspended",
               "USER.AUTH.account_deleted",
@@ -175914,19 +177257,16 @@
               "wechatCode",
               "deviceId",
               "platform",
-              "appVersion"
+              "appVersion",
+              "agreementVersion",
+              "privacyVersion"
             ],
             "response_fields": [
-              "accessToken",
-              "refreshToken",
-              "ownerId",
-              "activeSub",
-              "subAccountCount",
-              "accountState",
-              "identityOrigin",
-              "logicalShard",
-              "anonymousRetentionPolicy",
-              "sessionRememberTtlSeconds"
+              "status",
+              "session",
+              "bindingTicket",
+              "provider",
+              "expiresInSeconds"
             ],
             "security": {
               "anonymous_policy": "allow",
@@ -175968,8 +177308,8 @@
               "dart_import": "../user/account_session_contracts.dart",
               "request_encoder": "encodeLoginWithAlipayCommand",
               "request_type": "LoginWithAlipayCommand",
-              "response_decoder": "decodeAuthSessionGrant",
-              "response_type": "AuthSessionGrant"
+              "response_decoder": "decodeFederatedLoginOutcome",
+              "response_type": "FederatedLoginOutcome"
             },
             "commercial": {
               "block_reason": "prod Alipay credentials and real-device SDK evidence are not injected",
@@ -175983,6 +177323,7 @@
               "USER.AUTH.alipay_auth_failed",
               "USER.AUTH.social_provider_cancelled",
               "USER.AUTH.social_provider_unavailable",
+              "USER.AUTH.consent_required",
               "USER.AUTH.credential_conflict",
               "USER.AUTH.account_suspended",
               "USER.AUTH.account_deleted",
@@ -176007,19 +177348,16 @@
               "alipayAuthCode",
               "deviceId",
               "platform",
-              "appVersion"
+              "appVersion",
+              "agreementVersion",
+              "privacyVersion"
             ],
             "response_fields": [
-              "accessToken",
-              "refreshToken",
-              "ownerId",
-              "activeSub",
-              "subAccountCount",
-              "accountState",
-              "identityOrigin",
-              "logicalShard",
-              "anonymousRetentionPolicy",
-              "sessionRememberTtlSeconds"
+              "status",
+              "session",
+              "bindingTicket",
+              "provider",
+              "expiresInSeconds"
             ],
             "security": {
               "anonymous_policy": "allow",
@@ -176061,8 +177399,8 @@
               "dart_import": "../user/account_session_contracts.dart",
               "request_encoder": "encodeLoginWithQqCommand",
               "request_type": "LoginWithQqCommand",
-              "response_decoder": "decodeAuthSessionGrant",
-              "response_type": "AuthSessionGrant"
+              "response_decoder": "decodeFederatedLoginOutcome",
+              "response_type": "FederatedLoginOutcome"
             },
             "commercial": {
               "block_reason": "prod QQ credentials and real-device SDK evidence are not injected",
@@ -176076,6 +177414,7 @@
               "USER.AUTH.qq_auth_failed",
               "USER.AUTH.social_provider_cancelled",
               "USER.AUTH.social_provider_unavailable",
+              "USER.AUTH.consent_required",
               "USER.AUTH.credential_conflict",
               "USER.AUTH.account_suspended",
               "USER.AUTH.account_deleted",
@@ -176100,19 +177439,16 @@
               "qqAuthCode",
               "deviceId",
               "platform",
-              "appVersion"
+              "appVersion",
+              "agreementVersion",
+              "privacyVersion"
             ],
             "response_fields": [
-              "accessToken",
-              "refreshToken",
-              "ownerId",
-              "activeSub",
-              "subAccountCount",
-              "accountState",
-              "identityOrigin",
-              "logicalShard",
-              "anonymousRetentionPolicy",
-              "sessionRememberTtlSeconds"
+              "status",
+              "session",
+              "bindingTicket",
+              "provider",
+              "expiresInSeconds"
             ],
             "security": {
               "anonymous_policy": "allow",
@@ -176595,7 +177931,7 @@
     },
     {
       "path": "user/account/authentication_challenge/errors.yaml",
-      "sha256": "8eeaa06cd56145e4c24a98baf82a95778920b48342ca7959b20e560334edcdd2",
+      "sha256": "395d522ccf9cdfb05f9eedfcc59bb195c481f218c4616ef11b907af8734ca23a",
       "mediaType": "application/yaml",
       "content": {
         "aggregate": "AuthenticationChallenge",
@@ -176615,8 +177951,8 @@
               "disruptionLevel": "inlineCard"
             },
             "user_message": {
-              "en": "Verification code expired, please request a new one",
-              "zh": "验证码已过期，请重新获取"
+              "en": "Verification code is no longer valid",
+              "zh": "验证码已失效"
             }
           },
           {
@@ -176632,8 +177968,8 @@
               "disruptionLevel": "inlineCard"
             },
             "user_message": {
-              "en": "Incorrect verification code, please try again",
-              "zh": "验证码错误，请重新输入"
+              "en": "Verification code is incorrect",
+              "zh": "验证码不正确"
             }
           },
           {
@@ -176650,8 +177986,8 @@
               "disruptionLevel": "inlineCard"
             },
             "user_message": {
-              "en": "Too many incorrect attempts, please request a new code",
-              "zh": "验证码错误次数过多，请重新获取"
+              "en": "Too many attempts",
+              "zh": "尝试次数较多"
             }
           },
           {
@@ -176668,8 +178004,8 @@
               "disruptionLevel": "inlineCard"
             },
             "user_message": {
-              "en": "Verification code requests are too frequent, please retry later",
-              "zh": "操作过于频繁，请稍后重试"
+              "en": "Too many attempts",
+              "zh": "尝试次数较多"
             }
           },
           {
@@ -176685,8 +178021,8 @@
               "disruptionLevel": "inlineCard"
             },
             "user_message": {
-              "en": "Failed to send verification code, please retry or use another method",
-              "zh": "验证码发送失败，请稍后重试"
+              "en": "Verification code could not be sent",
+              "zh": "验证码发送失败"
             }
           },
           {
@@ -176702,8 +178038,8 @@
               "disruptionLevel": "inlineCard"
             },
             "user_message": {
-              "en": "Verification code already used, please request a new one",
-              "zh": "验证码已被使用，请重新获取"
+              "en": "Verification code is no longer valid",
+              "zh": "验证码已失效"
             }
           }
         ]
@@ -176877,7 +178213,7 @@
     },
     {
       "path": "user/account/authentication_challenge/operations.yaml",
-      "sha256": "3f6c0a785fa2f5d8d7b702292a9ceff5ba77b17745762de7fab3b1bd9a8a4b22",
+      "sha256": "490de624924a9f47dc079a9d9b4f1f5911d23453a1e554e400696971edb0fb91",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -176932,7 +178268,8 @@
               "deviceId",
               "platform",
               "appVersion",
-              "sourceOperation"
+              "sourceOperation",
+              "bindingTicket"
             ],
             "response_fields": [
               "maskedPhone",
@@ -177176,7 +178513,7 @@
     },
     {
       "path": "user/account/credential_binding/errors.yaml",
-      "sha256": "3c8607d1bd85ebad4fa6dff4a59e08ae6835c851d55a990f559a01e7c2fdbcdc",
+      "sha256": "0493964fd96bcca1acaf1bef95ee9f5e7922e0bd55999b433eaef3751b472d22",
       "mediaType": "application/yaml",
       "content": {
         "aggregate": "CredentialBinding",
@@ -177196,8 +178533,8 @@
               "disruptionLevel": "inlineCard"
             },
             "user_message": {
-              "en": "This account is already linked to another user",
-              "zh": "该账号已被其他用户绑定"
+              "en": "This phone number is linked to another account",
+              "zh": "这个手机号已绑定其他账号"
             }
           },
           {
@@ -177516,7 +178853,7 @@
     },
     {
       "path": "user/account/credential_binding/operations.yaml",
-      "sha256": "88e11578d838e38239ae662cd5500d66f947c89c772d4e80097801abf7d81f3a",
+      "sha256": "f6aa924614f5366857b7f181010ffb79902246946255d7793ff922da7ff0c9d1",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -177672,6 +179009,108 @@
                 "error_code"
               ],
               "metric": "user_credential_phone_bind",
+              "trace": true
+            }
+          },
+          {
+            "actor": "none",
+            "application": {
+              "aggregate_owner": "CredentialBinding",
+              "facet": "CredentialCommandFacade",
+              "invariant_target": "CredentialBinding",
+              "kind": "command",
+              "method": "completeFederatedPhoneBinding",
+              "mutation_target": "CredentialBinding"
+            },
+            "authorization": {
+              "ownership_policy": "federated_phone_binding_ticket_holder",
+              "principal": "public"
+            },
+            "client_contract": {
+              "dart_import": "../user/credential_binding_contracts.dart",
+              "request_encoder": "encodeCompleteFederatedPhoneBindingCommand",
+              "request_type": "CompleteFederatedPhoneBindingCommand",
+              "response_decoder": "decodeAuthSessionGrant",
+              "response_type": "AuthSessionGrant"
+            },
+            "commercial": {
+              "block_reason": "prod federated providers and real-device binding evidence are not injected",
+              "gap_id": "R_AUTH_001",
+              "status": "blocked",
+              "target_story": "four-environment-commercial-login-maturity"
+            },
+            "description": "消费一次性社交 binding ticket 与 bind_phone OTP，原子创建或恢复账号、绑定社交和手机号凭证并签发会话",
+            "error_codes": [
+              "USER.USER.invalid_argument",
+              "USER.AUTH.consent_required",
+              "USER.AUTH.otp_expired",
+              "USER.AUTH.otp_mismatch",
+              "USER.AUTH.otp_attempts_exceeded",
+              "USER.AUTH.challenge_consumed",
+              "USER.AUTH.credential_conflict",
+              "USER.AUTH.account_suspended",
+              "USER.AUTH.account_deleted",
+              "USER.SYSTEM.internal_error"
+            ],
+            "method": "POST",
+            "operation": "CompleteFederatedPhoneBinding",
+            "path": "/auth/login/social/phone/complete",
+            "privacy": {
+              "log_policy": "none",
+              "request_classification": "SECRET",
+              "response_classification": "SECRET"
+            },
+            "reliability": {
+              "cancellation": "supported",
+              "idempotency": "none",
+              "max_attempts": 1,
+              "retry_mode": "none",
+              "timeout_ms": 1500
+            },
+            "request_fields": [
+              "bindingTicket",
+              "phone",
+              "otpCode",
+              "challengeId",
+              "deviceId",
+              "platform",
+              "appVersion",
+              "agreementVersion",
+              "privacyVersion"
+            ],
+            "response_fields": [
+              "accessToken",
+              "refreshToken",
+              "ownerId",
+              "activeSub",
+              "subAccountCount",
+              "accountState",
+              "identityOrigin",
+              "logicalShard",
+              "anonymousRetentionPolicy",
+              "accountHint",
+              "sessionRememberTtlSeconds"
+            ],
+            "security": {
+              "anonymous_policy": "allow",
+              "auth_mode": "public",
+              "principal": "public",
+              "token_transport": "none",
+              "visibility": "private"
+            },
+            "slo": {
+              "availability_percent": 99.9,
+              "latency_p95_ms": 1500
+            },
+            "telemetry": {
+              "attributes": [
+                "environment",
+                "platform",
+                "provider",
+                "outcome",
+                "error_code"
+              ],
+              "metric": "user_federated_phone_binding_complete",
               "trace": true
             }
           },
@@ -184658,7 +186097,7 @@
     },
     {
       "path": "user/account/user_account/operations.yaml",
-      "sha256": "c65da6f76b2ded12ec54ad9e74b90437eb3c2d4d72784b251c0c0b453bdbb87a",
+      "sha256": "fccd1daa48eefe8f165d75fa4ae587625e1ac50567e2107fde85b116efde1ce7",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -184997,7 +186436,7 @@
             "commercial": {
               "status": "ready"
             },
-            "description": "公开用户主页（按 userHandle 读取，兼容既有分身 ID 引用）",
+            "description": "公开用户主页按 canonical public identity 读取；普通 Persona 接受 userHandle/subAccountId，release CreatorRuntimeProfile 接受 subAccountId 或内容 creatorProfileId 对应的 creatorId，不接受 creator handle 别名",
             "error_codes": [
               "USER.SUB_ACCOUNT.not_found",
               "USER.SYSTEM.internal_error"
@@ -191290,7 +192729,7 @@
     },
     {
       "path": "user/openapi.yaml",
-      "sha256": "db0c0da7ca2399ee0fd9f1ba5a0438fe88f8425f402705ceff88e55b370ddd41",
+      "sha256": "99b94216938faf4d4948d004bc8f8f438600333269939a38c6417db761d24dad",
       "mediaType": "application/yaml",
       "content": {
         "components": {
@@ -191413,6 +192852,12 @@
               "description": "字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。",
               "type": "object",
               "x-contract-entity": "CloseAccountResultWire",
+              "x-contract-placeholder": true
+            },
+            "CompleteFederatedPhoneBindingRequest": {
+              "description": "字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。",
+              "type": "object",
+              "x-contract-entity": "CompleteFederatedPhoneBindingRequest",
               "x-contract-placeholder": true
             },
             "ConfirmProposalRequest": {
@@ -192114,6 +193559,45 @@
               },
               "x-contract-operation-id": "user.account_session.LoginWithQq",
               "x-object-id": "user.account_session"
+            }
+          },
+          "/auth/login/social/phone/complete": {
+            "post": {
+              "operationId": "CompleteFederatedPhoneBinding",
+              "requestBody": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/CompleteFederatedPhoneBindingRequest"
+                    }
+                  }
+                },
+                "required": false
+              },
+              "responses": {
+                "204": {
+                  "description": "No Content"
+                },
+                "default": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "../_shared/openapi_common.yaml#/components/schemas/ErrorResponse"
+                      }
+                    }
+                  },
+                  "description": "Runtime failure"
+                }
+              },
+              "x-actor": "none",
+              "x-application": {
+                "aggregateOwner": "CredentialBinding",
+                "facet": "CredentialCommandFacade",
+                "kind": "command",
+                "method": "completeFederatedPhoneBinding"
+              },
+              "x-contract-operation-id": "user.credential_binding.CompleteFederatedPhoneBinding",
+              "x-object-id": "user.credential_binding"
             }
           },
           "/auth/login/wechat": {
@@ -200128,7 +201612,7 @@
     },
     {
       "path": "user/profile_projection/creator_runtime_profile/fields.yaml",
-      "sha256": "3572aa17f04e6b24de93d95743e18cba63a1426b704e623ca77854966c7a875f",
+      "sha256": "d3352c1eaeb72f9088aaa491e59bf0b7bda2c258e10dbf2136bfefc58a5bf9ef",
       "mediaType": "application/yaml",
       "content": {
         "fields": [
@@ -200244,11 +201728,37 @@
             "constraints": [
               "NOT_NULL"
             ],
-            "log_policy": "redact",
-            "name": "avatarObjectKey",
+            "log_policy": "hash",
+            "name": "avatarAssetId",
             "ops_exposure": "read",
             "role": "projection",
-            "source": "avatarObjectKey",
+            "source": "avatarAssetId",
+            "type": "string"
+          },
+          {
+            "api_exposure": "none",
+            "classification": "INTERNAL",
+            "constraints": [
+              "NOT_NULL"
+            ],
+            "log_policy": "allow",
+            "name": "avatarVersion",
+            "ops_exposure": "read",
+            "role": "projection",
+            "source": "avatarVersion",
+            "type": "int"
+          },
+          {
+            "api_exposure": "none",
+            "classification": "INTERNAL",
+            "constraints": [
+              "NOT_NULL"
+            ],
+            "log_policy": "redact",
+            "name": "avatarPublicSliceKey",
+            "ops_exposure": "read",
+            "role": "projection",
+            "source": "avatarPublicSliceKey",
             "type": "string"
           },
           {
@@ -200633,7 +202143,7 @@
     },
     {
       "path": "user/profile_projection/creator_runtime_profile/object.yaml",
-      "sha256": "081a839736cc940f8740d92016dd66f96168db984d036a9caceb3c354b8c0b5a",
+      "sha256": "9366b7716b5f8169e04061ca75cddc607ae0e09cf842d052db167b26a45069b4",
       "mediaType": "application/yaml",
       "content": {
         "access": {
@@ -200650,6 +202160,7 @@
         },
         "kind": "projection",
         "local_identity_reasons": {
+          "avatarAssetId": "immutable release MediaAsset authority reference; validated against media_manifest.json and never used as a CreatorRuntimeProfile aggregate identity",
           "preferredBlueprintIds": "stable catalog or release key; resolved through its typed catalog reader and never used as an aggregate Store identity",
           "releaseId": "stable catalog or release key; resolved through its typed catalog reader and never used as an aggregate Store identity"
         },

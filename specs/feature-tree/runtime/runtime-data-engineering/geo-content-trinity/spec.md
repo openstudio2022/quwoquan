@@ -28,11 +28,13 @@
 ### REQ-001 多内容类型复用同一来源与权利合同
 
 - 图片来源、下载字节、授权与发布引用均可回放。
+- creator/avatar、实体主页、文章、图片作品、真实视频与 poster 共享同一 execution/release 引用闭包，公开消费者只接收按 kind 物化的 public slice。
 
 <a id="req-002"></a>
 ### REQ-002 失败对象隔离与成功对象独立发布
 
-- release-first ship 与 operator journey 契约通过。
+- release-first ship 与 operator journey 契约通过；同一 release digest 依次在 alpha/beta/gamma/prod 形成 import/API/media/rollback receipt。
+- homepage、article、image、video 共享冻结 entity catalog，但各自使用 immutable execution、quota 与失败终态；post 不依赖 homepage execution 或 publish 结果。
 
 ## 4. 契约引用
 
@@ -40,6 +42,9 @@
 - canonical：`quwoquan_data/verticals/travel/rights/license_policy.yaml`
 - canonical：`quwoquan_data/scripts/content/release/canonical/gate.py`
 - canonical：`quwoquan_data/scripts/content/review/publish_filter.py`
+- release media authority：`quwoquan_data/schema/release/media_manifest.schema.json`
+- MediaAsset authority：`quwoquan_service/services/content-service/contracts/media/media_asset/fields.yaml`
+- public slice authority：`quwoquan_service/runtime/media/asset_ref.go`
 
 ## 5. 验收场景
 
@@ -54,9 +59,9 @@
 <a id="gwt-002"></a>
 ### GWT-002 失败对象隔离与成功对象独立发布
 
-- GIVEN 同一 execution 中部分对象在来源、质量、权利或 review 门失败。
-- WHEN 生成 canonical publish 与 immutable release。
-- THEN release 只包含 approved 对象，失败对象保留在 execution evidence。
+- GIVEN 四个 carrier execution 共享同一 commit、source digest 与 entity catalog digest，且部分对象在来源、质量、权利或 review 门失败。
+- WHEN 四个 execution 并行生成 canonical publish 与 immutable release。
+- THEN 每个 carrier 按自身 quota 隔离失败对象，post 不等待 homepage；release 只包含 approved 对象，失败对象保留在所属 execution evidence。
 - THEN 下游不得看到悬挂 entity、creator、tag 或 media 引用。
 
 ## 6. 依赖
@@ -71,16 +76,16 @@
 ### OPEN-001 多内容类型复用同一来源与权利合同
 
 - 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：图片来源、下载字节、授权与发布引用均可回放。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前 creator/avatar 与 post/entity media 尚未形成 private CAS → MediaAsset → public slice 的同源 release 闭包，图片来源、下载字节、授权和消费者引用不能完整回放。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 覆盖 creator/avatar、entity、article/image/video 与 poster。
 
 <a id="open-002"></a>
 ### OPEN-002 失败对象隔离与成功对象独立发布
 
 - 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：release-first ship 与 operator journey 契约通过。
-- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺同一 release 的 tag/creator/content/homepage importer、四环境 activation、API/media consumer 与 rollback/replay；直接 seed 仍可绕过主线。
+- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 覆盖 Alpha → Beta → Gamma → Prod 晋级。

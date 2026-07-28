@@ -4,36 +4,12 @@ import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
 /// 面向用户/站外分享的公网链接。
 ///
 /// - **路径形态** 由 metadata `link_templates.yaml` codegen（[AppLinkTemplates]）提供；本类只读 **运行时 origin**。
-/// - `quwoquan.com` 申请完成前默认复用当前环境 IP gateway；正式域名通过
-///   `--dart-define=PUBLIC_WEB_BASE_URL=https://quwoquan.com` 单点覆盖。
+/// - 四环境官方 Web origin 由 [CloudRuntimeConfig.publicWebBaseUrl] 单点注入。
 class AppPublicContentLinks {
   AppPublicContentLinks._();
 
-  static const String _publicWebBaseUrlOverride = String.fromEnvironment(
-    AppLinkTemplates.publicWebDartDefineKey,
-    defaultValue: '',
-  );
-
   /// 公网站点根 URL（无尾斜杠；与 [publicWebUrlForPath] / [postWebUrl] 组合规则一致）。
-  ///
-  /// 站外分享/PC Web 链接面向公网浏览器，必须是 HTTPS：override 通常已是
-  /// `https://quwoquan.com`；过渡期回退当前环境 gateway 时，把开发态的
-  /// `http://` origin 升级为 `https://`，避免对外暴露明文 http 公链。
-  static String get publicWebBaseUrl {
-    final override = _publicWebBaseUrlOverride.trim();
-    if (override.isNotEmpty) {
-      return override;
-    }
-    return _forceHttpsOrigin(CloudRuntimeConfig.gatewayBaseUrl);
-  }
-
-  static String _forceHttpsOrigin(String base) {
-    final value = base.trim();
-    if (value.toLowerCase().startsWith('http://')) {
-      return 'https://${value.substring('http://'.length)}';
-    }
-    return value;
-  }
+  static String get publicWebBaseUrl => CloudRuntimeConfig.publicWebBaseUrl;
 
   static String _normalizedBase() {
     return publicWebBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');

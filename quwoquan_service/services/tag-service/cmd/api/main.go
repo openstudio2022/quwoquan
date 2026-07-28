@@ -16,6 +16,7 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	configrelease "quwoquan_service/runtime/configrelease"
+	"quwoquan_service/runtime/controlplane"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
@@ -78,6 +79,9 @@ func main() {
 	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
 		log.Fatalf("tag-service config compatibility failed: %v", err)
 	}
+	controlplane.StartReleaseConfigAttestation(
+		serviceName, appEnv, configRoot, configVersion, imageVersion,
+	)
 
 	configProvider := runtimeconfig.EnvRuntimeConfigProvider{}
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(configProvider)
@@ -227,14 +231,18 @@ func main() {
 		return mongoClient.Ping(hctx, nil)
 	})
 	healthChecker.Register("taxonomy-projection", func(hctx context.Context) error {
-		releaseID, found, err := releaseStore.ActiveReleaseID(hctx)
+		release, found, err := releaseStore.FindActive(hctx)
 		if err != nil {
 			return err
 		}
 		if !found {
 			return fmt.Errorf("active taxonomy release is missing")
 		}
-		return tagNodeStore.ValidateReleaseProjection(hctx, releaseID)
+		return tagNodeStore.ValidateReleaseProjection(
+			hctx,
+			release.ReleaseID,
+			release.NodeCount,
+		)
 	})
 	healthChecker.Register("redis", redisRouter.PingAll)
 	healthChecker.Register("profile-tag-consumer", func(context.Context) error {

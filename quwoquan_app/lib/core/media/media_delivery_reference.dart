@@ -66,12 +66,23 @@ class MediaEndpointConfig {
         '未注入 ${kind.name} 媒体交付端点',
       );
     }
+    if (kind == MediaDeliveryKind.background ||
+        kind == MediaDeliveryKind.attachment) {
+      return base.replace(path: '');
+    }
     return base;
   }
 
   bool allowsOrigin(MediaDeliveryKind kind, Uri candidate) {
     final base = _bases[kind];
-    return base != null && _sameOrigin(base, candidate);
+    if (base == null || !_sameOrigin(base, candidate)) {
+      return false;
+    }
+    if (kind == MediaDeliveryKind.background ||
+        kind == MediaDeliveryKind.attachment) {
+      return true;
+    }
+    return _pathHasPrefix(candidate.pathSegments, base.pathSegments);
   }
 
   static Map<MediaDeliveryKind, Uri> _availableBases({
@@ -272,8 +283,12 @@ class MediaDeliveryResolver {
       parsed.queryParameters,
     );
     final base = endpointConfig.baseFor(endpointKind);
+    final relativeSegments = _withoutExistingBasePrefix(
+      segments,
+      base.pathSegments,
+    );
     final uri = base.replace(
-      pathSegments: <String>[...base.pathSegments, ...segments],
+      pathSegments: <String>[...base.pathSegments, ...relativeSegments],
       queryParameters: parsed.queryParameters.isEmpty
           ? null
           : parsed.queryParameters,
@@ -396,4 +411,31 @@ int _effectivePort(Uri uri) {
     return uri.port;
   }
   return uri.scheme.toLowerCase() == 'https' ? 443 : 80;
+}
+
+bool _pathHasPrefix(List<String> path, List<String> prefix) {
+  final normalizedPrefix = prefix.where((segment) => segment.isNotEmpty).toList();
+  if (normalizedPrefix.isEmpty) {
+    return true;
+  }
+  if (path.length < normalizedPrefix.length) {
+    return false;
+  }
+  for (var index = 0; index < normalizedPrefix.length; index++) {
+    if (path[index] != normalizedPrefix[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+List<String> _withoutExistingBasePrefix(
+  List<String> path,
+  List<String> prefix,
+) {
+  final normalizedPrefix = prefix.where((segment) => segment.isNotEmpty).toList();
+  if (!_pathHasPrefix(path, normalizedPrefix)) {
+    return path;
+  }
+  return path.sublist(normalizedPrefix.length);
 }

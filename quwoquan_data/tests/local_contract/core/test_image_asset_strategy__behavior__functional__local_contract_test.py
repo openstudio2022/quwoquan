@@ -102,7 +102,32 @@ def test_open_license_scale_requires_prescreened_pool_or_publish_strategy():
     assert len(issues) == 1
     assert "open_license_scale_proof.json" in issues[0]
     assert "preScreenedEntityCount>=100" in issues[0]
-    assert "publishableImageAssets>=200" not in issues[0]
+    assert "publishableImageAssets>=100" in issues[0]
+
+
+def test_one_image_per_target_cannot_bypass_commercial_scale_proof():
+    spec = {
+        "scope": {
+            "coverageTargets": [
+                {"entityType": "地点/景区", "name": f"景区{i}"}
+                for i in range(100)
+            ]
+        },
+        "content": {
+            "quotas": {"imageWorksPerTarget": 1},
+            "research": {
+                "imageAssetStrategy": "open_license_publish",
+                "imageCountPolicy": "score_bonus",
+                "allowAiImages": False,
+            },
+        },
+        "acceptance": {"minEntities": 100},
+    }
+
+    issues = image_asset_strategy_scale_issues(spec)
+
+    assert len(issues) == 1
+    assert "publishableImageAssets>=100" in issues[0]
 
 
 def test_homepage_scale_requires_one_publishable_image_per_target():

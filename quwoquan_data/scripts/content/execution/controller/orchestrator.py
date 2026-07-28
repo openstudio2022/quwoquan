@@ -1,7 +1,6 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 import os
-import traceback
 
 from core.control_types import ExecutionStage, ExecutionStateStatus, StageStatus
 from core.runtime_observability import (
@@ -10,27 +9,12 @@ from core.runtime_observability import (
     default_data_exception_code,
 )
 from content.execution.support import CHECKPOINT, DataIssueCode, DataIssueError, DataIssueStage, DataRecoveryAction, ExecutionContext, MAX_REACT_REWINDS, StageResult, _active_spec, _write_execution_packet, data_issue, ensure_execution_command_layout, load_execution_state, save_execution_state, store, sys
+from content.execution.diagnostics import unexpected_stage_issue
 
 
 def _unexpected_stage_issue(stage_name: str, exc: Exception):
     """Render an internal exception as a bounded, non-secret typed issue."""
-    message = " ".join(str(exc).split())[:400] or type(exc).__name__
-    frames = traceback.extract_tb(exc.__traceback__)
-    location = ""
-    if frames:
-        frame = frames[-1]
-        location = f"{frame.filename.rsplit('/', 1)[-1]}:{frame.lineno}:{frame.name}"
-    return data_issue(
-        DataIssueCode.INTERNAL_UNEXPECTED,
-        stage=DataIssueStage(stage_name),
-        recovery=DataRecoveryAction.STOP,
-        message="execution stage raised an unexpected exception",
-        attributes={
-            "errorType": type(exc).__name__,
-            "errorMessage": message,
-            "errorLocation": location,
-        },
-    )
+    return unexpected_stage_issue(stage_name, exc)
 
 def _execution_runtime_logger(ctx: ExecutionContext) -> DataRuntimeLogger:
     from core.paths import OUTPUT_ROOT

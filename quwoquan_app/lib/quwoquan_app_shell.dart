@@ -309,6 +309,16 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     if (startup.phase == StartupRootPhase.welcome) {
       return _buildStartupWelcomeApp(startupWelcomeAppearanceSnapshot());
     }
+    if (startup.phase == StartupRootPhase.routerLoading) {
+      // Router loading (including an exhausted performance deadline) is not a
+      // fatal recovery condition. Keep the completed welcome frame visible
+      // until the real shell can paint; never mount StartupRecoveryPage as a
+      // hidden underlay for a pure timeout.
+      return _buildStartupWelcomeApp(
+        startupWelcomeAppearanceSnapshot(),
+        frozen: true,
+      );
+    }
 
     final snapshot = ref.watch(appearanceSnapshotProvider);
     if (startup.phase == StartupRootPhase.safeRecovery) {
@@ -489,6 +499,12 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       await AppStartupRuntime.instance.hydrateNativeProcessSegments(
         cancellationSignal: _disposeSignal.future,
       );
+      if (mounted && !_routerShellFirstPainted) {
+        // Hydrated native process time may only consume more of the existing
+        // budget. Refresh the timer immediately; never leave the longer
+        // Dart-only deadline armed.
+        _armStartupDeadline();
+      }
     } catch (error, stack) {
       // Native timing bridge 是绝对时间校准的增强项；不可用时继续保留 Dart
       // fallback deadline，不能让 bridge 错误影响首帧或安全终态。
@@ -542,6 +558,18 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
           'hintHeightPx': event.hintVisible ? AppSpacing.radiusTwentyFour : 0,
         },
       );
+      assert(() {
+        if (event.phase == WelcomeMotionPhase.finished) {
+          debugPrint(
+            'QWQStartup startup_probe phase=finished '
+            'welcomeExitMs=${event.elapsedSinceProcessStart.inMilliseconds} '
+            'exitReason=${event.exitReason?.wireName ?? ''} '
+            'motionSpec=${WelcomeSequenceEvent.motionSpec} '
+            'replayCount=${event.replayCount}',
+          );
+        }
+        return true;
+      }());
     } catch (error, stack) {
       logQuwoquanAppException(
         source: 'startup_welcome_sequence_observer',
@@ -645,6 +673,9 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       await AppStartupRuntime.instance.hydrateNativeProcessSegments(
         cancellationSignal: _disposeSignal.future,
       );
+      if (mounted && !_routerShellFirstPainted) {
+        _armStartupDeadline();
+      }
     } catch (error, stack) {
       if (!mounted) {
         return;

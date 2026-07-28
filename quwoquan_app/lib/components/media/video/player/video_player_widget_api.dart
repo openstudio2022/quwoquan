@@ -15,6 +15,7 @@ class VideoPlayerWidget extends ConsumerStatefulWidget {
   final bool showControls;
   final VoidCallback? onTap;
   final VoidCallback? onFullScreen;
+  final VoidCallback? onExit;
   final Function(VideoPlayerController)? onControllerCreated;
   final VideoPlaybackSession? playbackSession;
   final ValueChanged<VideoPlaybackSession>? onPlaybackSessionCreated;
@@ -40,6 +41,7 @@ class VideoPlayerWidget extends ConsumerStatefulWidget {
     this.showControls = true,
     this.onTap,
     this.onFullScreen,
+    this.onExit,
     this.onControllerCreated,
     this.playbackSession,
     this.onPlaybackSessionCreated,

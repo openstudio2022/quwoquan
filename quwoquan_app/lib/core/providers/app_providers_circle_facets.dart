@@ -25,11 +25,6 @@ CloudOperationInvocationContext _circleOperationInvocationContext(
 }
 
 T _circlePort<T>(Ref ref, AppUiSurface surface, AppProductionAdapter adapter) {
-  if (ref.watch(appDataSourceModeProvider) != AppDataSourceMode.remote) {
-    throw StateError(
-      'Circle ports are Remote-only in production composition; alpha must override them from quwoquan_cloud_mock',
-    );
-  }
   return AppProductionComposition.generatedAdapter<T>(
     adapter,
     client: ref.watch(generatedCloudOperationClientProvider),
@@ -80,11 +75,6 @@ final circleDetailFeedQueryProvider = Provider<CircleFeedQueryReader>(
 
 final circleDetailPostPlacementCommandWriterProvider =
     Provider<CirclePostPlacementCommandWriter>((ref) {
-      if (ref.watch(appDataSourceModeProvider) != AppDataSourceMode.remote) {
-        throw StateError(
-          'CirclePostPlacementCommandWriter is Remote-only in production composition; alpha must override it from quwoquan_cloud_mock',
-        );
-      }
       return AppProductionComposition.generatedAdapter<
         CirclePostPlacementCommandWriter
       >(
@@ -244,22 +234,18 @@ final userProfileCircleMembershipQueryProvider =
       ),
     );
 
-final circleDetailBehaviorFactWriterProvider = Provider<CircleBehaviorFactWriter>((
-  ref,
-) {
-  if (ref.watch(appDataSourceModeProvider) != AppDataSourceMode.remote) {
-    throw StateError(
-      'CircleBehaviorFactWriter is Remote-only in production composition; alpha must override it from quwoquan_cloud_mock',
-    );
-  }
-  return AppProductionComposition.generatedAdapter<CircleBehaviorFactWriter>(
-    AppProductionAdapter.circleBehaviorFact,
-    client: ref.watch(generatedCloudOperationClientProvider),
-    invocationContext: (clientPageId) => _circleOperationInvocationContext(
-      ref,
-      surface: AppUiSurfaces.circleDetail,
-      clientPageId: clientPageId,
-      command: true,
-    ),
-  );
-});
+final circleDetailBehaviorFactWriterProvider =
+    Provider<CircleBehaviorFactWriter>((ref) {
+      return AppProductionComposition.generatedAdapter<
+        CircleBehaviorFactWriter
+      >(
+        AppProductionAdapter.circleBehaviorFact,
+        client: ref.watch(generatedCloudOperationClientProvider),
+        invocationContext: (clientPageId) => _circleOperationInvocationContext(
+          ref,
+          surface: AppUiSurfaces.circleDetail,
+          clientPageId: clientPageId,
+          command: true,
+        ),
+      );
+    });

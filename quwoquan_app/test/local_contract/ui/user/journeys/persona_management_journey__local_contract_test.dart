@@ -346,14 +346,14 @@ void main() {
     expect(
       find.descendant(
         of: primaryStatus,
-        matching: find.text(UITextConstants.personaCurrentUsing),
+        matching: find.text(ProfileText.personaCurrentUsing),
       ),
       findsOneWidget,
     );
     expect(
       find.descendant(
         of: photoStatus,
-        matching: find.text(UITextConstants.personaCurrentUsing),
+        matching: find.text(ProfileText.personaCurrentUsing),
       ),
       findsNothing,
     );
@@ -366,21 +366,21 @@ void main() {
       find.byType(CupertinoTextField).at(0),
       'main_synced',
     );
-    await tester.tap(find.text(UITextConstants.editProfileSaveAction));
+    await tester.tap(find.text(ProfileText.editProfileSaveAction));
     await tester.pumpAndSettle();
 
     expect(
-      find.text(UITextConstants.personaSyncSuggestionTitle),
+      find.text(ProfileText.personaSyncSuggestionTitle),
       findsOneWidget,
     );
 
-    await tester.tap(find.text(UITextConstants.personaSyncApplyAll));
+    await tester.tap(find.text(ProfileText.personaSyncApplyAll));
     await tester.pumpAndSettle();
 
     expect(store.syncAppliedCount, 1);
     expect(store.persona('persona_photo')['displayName'], 'main_synced');
     expect(store.persona('persona_photo')['userHandle'], 'photo_handle');
-    expect(find.text(UITextConstants.personaSyncSuggestionTitle), findsNothing);
+    expect(find.text(ProfileText.personaSyncSuggestionTitle), findsNothing);
 
     await tester.tap(
       find.byKey(const ValueKey<String>('persona-activate-persona_photo')),
@@ -391,14 +391,14 @@ void main() {
     expect(
       find.descendant(
         of: primaryStatus,
-        matching: find.text(UITextConstants.personaCurrentUsing),
+        matching: find.text(ProfileText.personaCurrentUsing),
       ),
       findsNothing,
     );
     expect(
       find.descendant(
         of: photoStatus,
-        matching: find.text(UITextConstants.personaCurrentUsing),
+        matching: find.text(ProfileText.personaCurrentUsing),
       ),
       findsOneWidget,
     );
@@ -409,10 +409,10 @@ void main() {
     await tester.pumpWidget(_wrap(store));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(UITextConstants.personaRetire));
+    await tester.tap(find.text(ProfileText.personaRetire));
     await tester.pumpAndSettle();
     await tester.tap(
-      find.widgetWithText(CupertinoDialogAction, UITextConstants.personaRetire),
+      find.widgetWithText(CupertinoDialogAction, ProfileText.personaRetire),
     );
     await tester.pumpAndSettle();
 
@@ -421,10 +421,10 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey<String>('persona-status-persona_photo')),
-        matching: find.text(UITextConstants.personaRetired),
+        matching: find.text(ProfileText.personaRetired),
       ),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.personaRetire), findsNothing);
+    expect(find.text(ProfileText.personaRetire), findsNothing);
   });
 }

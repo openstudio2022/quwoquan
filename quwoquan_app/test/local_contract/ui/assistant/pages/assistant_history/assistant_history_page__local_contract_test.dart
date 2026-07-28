@@ -33,6 +33,7 @@ import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/di/ops_event_dependencies.dart'
     show actorQueueStorageProvider;
 import 'package:quwoquan_app/core/models/visit_models.dart';
@@ -200,10 +201,7 @@ void main() {
     expect(state.historyInitialized, isFalse);
     expect(state.historyLoading, isFalse);
     expect(state.retryAvailable, isTrue);
-    expect(
-      state.errorMessage,
-      AssistantErrorCode.runStorageUnavailable.defaultMessage,
-    );
+    expect(state.errorMessage, SearchText.recoveryReloadLaterMessage);
     expect(state.transcript, isEmpty);
     expect(
       find.textContaining(_historyQuestion, findRichText: true),

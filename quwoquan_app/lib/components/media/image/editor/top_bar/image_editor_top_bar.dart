@@ -131,7 +131,7 @@ class ImageEditorTopBar extends StatelessWidget {
                   ),
                   onPressed: onDone,
                   child: Text(
-                    UITextConstants.imageEditDone,
+                    MediaText.imageEditDone,
                     style: TextStyle(
                       color: foregroundColor,
                       fontSize: AppTypography.base,

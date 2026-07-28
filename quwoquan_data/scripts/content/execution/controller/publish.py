@@ -112,6 +112,22 @@ def _publishable_homepage_refs(ctx: ExecutionContext) -> set[str]:
             refs.add(ref)
     return refs
 
+def _publishable_homepage_names(ctx: ExecutionContext) -> set[str]:
+    """本次准出集合的对象名，与 source 资格判定共用同一口径。"""
+    from core.entity_object import collect_execution_entity_objects
+    names: set[str] = set()
+    for row in collect_execution_entity_objects(
+        ctx.execution_id,
+        approved_only=True,
+        enforce_type_consistency=True,
+    ):
+        entity_dir = Path(str(row.get("entityDir") or ""))
+        if not (entity_dir / "page.md").is_file():
+            continue
+        if entity_dir.name:
+            names.add(entity_dir.name)
+    return names
+
 def _run_publish(ctx: ExecutionContext) -> StageResult:
     from content.execution.recovery.post_recovery import _purge_stale_author_queue
     from content.post import object_index as content_object
@@ -121,7 +137,10 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
         from content.execution.qualification import finalize_execution_qualification
 
         try:
-            qualification = finalize_execution_qualification(ctx.execution_id)
+            qualification = finalize_execution_qualification(
+                ctx.execution_id,
+                publishable_names=_publishable_homepage_names(ctx),
+            )
         except (OSError, TypeError, ValueError) as exc:
             return StageResult(
                 ExecutionStage.PUBLISH,
@@ -150,8 +169,38 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
                     recovery=DataRecoveryAction.REWIND_COMPOSE,
                 ),
             )
-    summary = materialize_task_publish_inputs(ctx.execution_id)
     homepage_only = _is_homepage_only_execution(ctx)
+    qualified_post_refs: set[str] | None = None
+    if not homepage_only:
+        from content.execution.post_review_closure import (
+            indexed_post_targets,
+            load_post_review_closure,
+        )
+
+        try:
+            post_closure = load_post_review_closure(
+                ctx.execution_id,
+                expected_object_targets=indexed_post_targets(ctx.execution_id),
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            return StageResult(
+                ExecutionStage.PUBLISH,
+                AUTO,
+                StageStatus.FAILED,
+                f"post publish closure is invalid: {exc}",
+                fallback_stage=ExecutionStage.POST_REVIEW,
+                issue_records=stage_issues(
+                    ExecutionStage.PUBLISH,
+                    [str(exc)],
+                    code=DataIssueCode.CONTRACT_INVALID,
+                    recovery=DataRecoveryAction.REWIND_COMPOSE,
+                ),
+            )
+        qualified_post_refs = set(post_closure.qualified_publish_refs)
+    summary = materialize_task_publish_inputs(
+        ctx.execution_id,
+        qualified_post_refs=qualified_post_refs,
+    )
     homepage_refs: set[str] = set()
     if homepage_only:
         homepage_refs = _publishable_homepage_refs(ctx)

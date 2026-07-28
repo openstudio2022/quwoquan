@@ -106,7 +106,7 @@ class RtcMediaTopologyContractTest(unittest.TestCase):
         self.assertIn("rtc", URL_FIELDS)
         self.assertEqual(
             topology["targets"]["gamma-local"]["publicBases"]["rtc"],
-            "wss://gamma-rtc.quwoquan-env.test:19000",
+            "wss://rtc.gamma.quwoquan.com:19000",
         )
         self.assertEqual(
             topology["targets"]["prod-hosted"]["publicBases"]["rtc"],

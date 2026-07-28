@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "releaseId",
+    "sourceOwner",
+    "assets",
+    "issues",
+    "counts"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.release_media_manifest"
+    },
+    "releaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceOwner": {
+      "const": "qwq_data"
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "assetId",
+          "kind",
+          "version",
+          "contentType",
+          "publicSliceKey",
+          "sha256",
+          "bytes",
+          "ownerRefs",
+          "rightsSnapshotRefs"
+        ],
+        "properties": {
+          "assetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": ["avatar", "image", "video"]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "contentType": {
+            "enum": [
+              "image/gif",
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "video/mp4",
+              "video/webm"
+            ]
+          },
+          "publicSliceKey": {
+            "type": "string",
+            "pattern": "^media/(avatar|image|video)/s/asset/[A-Za-z0-9][A-Za-z0-9._-]*/v[1-9][0-9]*/source\\.[a-z0-9]+$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "ownerRefs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "rightsSnapshotRefs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assets", "issues"],
+      "properties": {
+        "assets": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "issues": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

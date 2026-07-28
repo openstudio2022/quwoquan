@@ -111,7 +111,7 @@ class BootstrapRecoveryApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: UITextConstants.welcomeTitle,
+      title: FoundationText.welcomeTitle,
       home: const StartupRecoveryPage(),
     );
   }

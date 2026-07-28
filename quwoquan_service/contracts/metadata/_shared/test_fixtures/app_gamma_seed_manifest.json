@@ -4,6 +4,13 @@
     "ownerId": "fixture_user_current",
     "personaId": "fixture_user_current"
   },
+  "domainVerificationPrincipals": {
+    "content": {
+      "ownerId": "fixture_user_outdoor_01",
+      "personaId": "fixture_user_outdoor_01",
+      "purpose": "isolate_content_readback_from_app_acceptance_recommendation_exposure"
+    }
+  },
   "description": "gamma 云侧精简清单：只装载声明的 curated 业务对象及其完整媒体闭包，alpha/beta 继续保持全量共享池。",
   "releaseInputs": [
     {
@@ -296,6 +303,49 @@
           "domain": "content",
           "path": "/content/feed?sort=recommend&channelId=recommend&limit=24",
           "assertion": "home_feed_object_cards"
+        }
+      ]
+    },
+    "app-core-readback": {
+      "description": "以 production Remote composition 验证首页、视频书、消息契约与我的主页核心读链；Chat 由同次 T3 的 generated API contract 创建并回读会话。",
+      "domains": [
+        "content",
+        "chat",
+        "user"
+      ],
+      "verificationPrincipal": {
+        "mode": "ephemeral",
+        "subjectPrefix": "app-core-readback"
+      },
+      "probeMode": "strictEndpointsOnly",
+      "runtimeRefs": {
+        "{viewerId}": "fixture_user_current"
+      },
+      "strictEndpoints": [
+        {
+          "domain": "content",
+          "path": "/content/feed?sort=recommend&channelId=recommend&limit=24",
+          "assertion": "home_feed_page",
+          "requireObjectCards": true
+        },
+        {
+          "domain": "content",
+          "path": "/content/feed?identity=work&type=video&sort=recommend&limit=20",
+          "assertion": "video_feed_page"
+        },
+        {
+          "domain": "chat",
+          "path": "/chat/inbox",
+          "assertion": "chat_inbox_page",
+          "expectedConversationId": "{coreConversationId}",
+          "expectedMessageText": "{coreMessageText}"
+        },
+        {
+          "domain": "user",
+          "path": "/me",
+          "assertion": "my_profile",
+          "expectedOwnerUserId": "{activeOwnerId}",
+          "expectedSubAccountId": "{activePersonaId}"
         }
       ]
     }

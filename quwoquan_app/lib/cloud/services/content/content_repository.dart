@@ -67,6 +67,6 @@ export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         ReactToContentCommentCommand;
 
 // 生产组合根 Remote-only：Mock 聚合替身已物理迁至
-// test/support/cloud_services/content/mock_content_repository.dart（测试）
-// 与 runners/alpha 的 fixture 回放实现（alpha 设备），生产 lib 不再包含。
+// test/support/cloud_services/content/mock_content_repository.dart（测试），
+// 四环境 production lib 不包含 fixture 回放。
 part 'content_repository_remote.dart';

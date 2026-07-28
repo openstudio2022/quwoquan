@@ -393,7 +393,7 @@ class AppCachedNetworkImage extends ConsumerWidget {
                       ),
                       SizedBox(height: AppSpacing.xs),
                       Text(
-                        UITextConstants.imageLoadFailed,
+                        ContentText.imageLoadFailed,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(

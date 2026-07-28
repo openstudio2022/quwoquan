@@ -11,21 +11,63 @@ categories:
         risk_level: critical
         reload_policy: restart_only
         activation_policy: restart_only
-        fallback: alpha
+        fallback: required
         expiry: never
       - key: CLOUD_GATEWAY_BASE_URL
         owner: runtime
         risk_level: critical
         reload_policy: restart_only
         activation_policy: restart_only
-        fallback: http://127.0.0.1:17000
+        fallback: required
+        expiry: never
+      - key: APP_LEGAL_BASE_URL
+        owner: runtime
+        risk_level: critical
+        reload_policy: restart_only
+        activation_policy: restart_only
+        fallback: required
+        expiry: never
+      - key: PUBLIC_WEB_BASE_URL
+        owner: runtime
+        risk_level: critical
+        reload_policy: restart_only
+        activation_policy: restart_only
+        fallback: required
+        expiry: never
+      - key: MEDIA_AVATAR_CDN_BASE_URL
+        owner: runtime-media
+        risk_level: critical
+        reload_policy: restart_only
+        activation_policy: restart_only
+        fallback: required
         expiry: never
       - key: MEDIA_IMAGE_CDN_BASE_URL
         owner: runtime-media
         risk_level: critical
         reload_policy: restart_only
         activation_policy: restart_only
-        fallback: https://127.0.0.1:17100
+        fallback: required
+        expiry: never
+      - key: MEDIA_VIDEO_CDN_BASE_URL
+        owner: runtime-media
+        risk_level: critical
+        reload_policy: restart_only
+        activation_policy: restart_only
+        fallback: required
+        expiry: never
+      - key: MEDIA_UPLOAD_BASE_URL
+        owner: runtime-media
+        risk_level: critical
+        reload_policy: restart_only
+        activation_policy: restart_only
+        fallback: required
+        expiry: never
+      - key: RTC_MEDIA_CONNECTION_URL
+        owner: runtime-media
+        risk_level: critical
+        reload_policy: restart_only
+        activation_policy: restart_only
+        fallback: required
         expiry: never
   - id: app_remote_config
     source: GET /config/app

@@ -38,9 +38,6 @@ class VideoFileRenderer implements VideoSink, SamplesReadyCallback {
     private final Handler audioThreadHandler;
     private int outputFileWidth = -1;
     private int outputFileHeight = -1;
-    private ByteBuffer[] encoderOutputBuffers;
-    private ByteBuffer[] audioInputBuffers;
-    private ByteBuffer[] audioOutputBuffers;
     private EglBase eglBase;
     private final EglBase.Context sharedContext;
     private VideoFrameDrawer frameDrawer;
@@ -132,7 +129,6 @@ class VideoFileRenderer implements VideoSink, SamplesReadyCallback {
     private boolean startEncoder() {
         try {
             encoder.start();
-            encoderOutputBuffers = encoder.getOutputBuffers();
             Log.d(TAG, "Encoder started successfully");
             return true;
         } catch (Exception e) {
@@ -376,10 +372,6 @@ class VideoFileRenderer implements VideoSink, SamplesReadyCallback {
             int encoderStatus = encoder.dequeueOutputBuffer(bufferInfo, 10000);
             if (encoderStatus == MediaCodec.INFO_TRY_AGAIN_LATER) {
                 break;
-            } else if (encoderStatus == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED) {
-                // not expected for an encoder
-                encoderOutputBuffers = encoder.getOutputBuffers();
-                Log.e(TAG, "encoder output buffers changed");
             } else if (encoderStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                 // not expected for an encoder
                 MediaFormat newFormat = encoder.getOutputFormat();
@@ -398,7 +390,7 @@ class VideoFileRenderer implements VideoSink, SamplesReadyCallback {
                 Log.e(TAG, "unexpected result fr om encoder.dequeueOutputBuffer: " + encoderStatus);
             } else { // encoderStatus >= 0
                 try {
-                    ByteBuffer encodedData = encoderOutputBuffers[encoderStatus];
+                    ByteBuffer encodedData = encoder.getOutputBuffer(encoderStatus);
                     if (encodedData == null) {
                         Log.e(TAG, "encoderOutputBuffer " + encoderStatus + " was null");
                         break;
@@ -438,10 +430,6 @@ class VideoFileRenderer implements VideoSink, SamplesReadyCallback {
 
             if (encoderStatus == MediaCodec.INFO_TRY_AGAIN_LATER) {
                 break;
-            } else if (encoderStatus == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED) {
-                // not expected for an encoder
-                audioOutputBuffers = audioEncoder.getOutputBuffers();
-                Log.w(TAG, "encoder output buffers changed");
             } else if (encoderStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                 // not expected for an encoder
                 MediaFormat newFormat = audioEncoder.getOutputFormat();
@@ -461,7 +449,7 @@ class VideoFileRenderer implements VideoSink, SamplesReadyCallback {
             } else { // encoderStatus >= 0
 
                 try {
-                    ByteBuffer encodedData = audioOutputBuffers[encoderStatus];
+                    ByteBuffer encodedData = audioEncoder.getOutputBuffer(encoderStatus);
                     if (encodedData == null) {
                         Log.e(TAG, "encoderOutputBuffer " + encoderStatus + " was null");
                         break;
@@ -504,15 +492,17 @@ class VideoFileRenderer implements VideoSink, SamplesReadyCallback {
                 format.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
                 audioEncoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
                 audioEncoder.start();
-                audioInputBuffers = audioEncoder.getInputBuffers();
-                audioOutputBuffers = audioEncoder.getOutputBuffers();
             } catch (IOException exception) {
                 Log.wtf(TAG, exception);
             }
 
             int bufferIndex = audioEncoder.dequeueInputBuffer(0);
             if (bufferIndex >= 0) {
-                ByteBuffer buffer = audioInputBuffers[bufferIndex];
+                ByteBuffer buffer = audioEncoder.getInputBuffer(bufferIndex);
+                if (buffer == null) {
+                    Log.e(TAG, "audio encoder input buffer " + bufferIndex + " was null");
+                    return;
+                }
                 buffer.clear();
                 byte[] data = audioSamples.getData();
                 buffer.put(data);

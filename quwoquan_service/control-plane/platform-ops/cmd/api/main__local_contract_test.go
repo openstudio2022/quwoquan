@@ -8,10 +8,12 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	generatedcontrolplane "quwoquan_service/generated/control_plane"
 	"quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/controlplane"
 	controlplanetest "quwoquan_service/runtime/controlplane/testsupport"
 	"quwoquan_service/runtime/operation"
 )
@@ -68,6 +70,7 @@ func newTestPlatformService(t *testing.T) *platformService {
 	service := &platformService{
 		repoRoot: repoRoot, store: controlplanetest.NewFileStore(t.TempDir() + "/platform-ops-state.json"),
 		configLayer: configLayer, configLayers: configLayers, health: func(context.Context) error { return nil },
+		releaseManifestDigest: "sha256:" + strings.Repeat("a", 64),
 	}
 	if err := seedTestPlatformService(service); err != nil {
 		t.Fatalf("seed platform test fixture: %v", err)
@@ -427,7 +430,7 @@ func TestPlatformConfigResolveAndInstanceReports(t *testing.T) {
 	reportReq := httptest.NewRequest(
 		http.MethodPost,
 		"/control-plane/platform/configs/instances/product-ops-service-beta-control-a-0:report",
-		bytes.NewBufferString(`{"environment":"beta","cluster":"beta-control-a","service":"product-ops-service","effectiveHash":"hash-b","source":"disk-fallback"}`),
+		bytes.NewBufferString(`{"environment":"beta","cluster":"beta-control-a","service":"product-ops-service","releaseManifestDigest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","effectiveHash":"hash-b","source":"disk-fallback"}`),
 	)
 	reportReq.Header.Set("Content-Type", "application/json")
 	reportReq = requestAsConfigAckService(reportReq, "product-ops-service", "beta")
@@ -456,6 +459,264 @@ func TestPlatformConfigResolveAndInstanceReports(t *testing.T) {
 	}
 	if _, ok := instancePayload.Summary["outOfSyncInstances"]; !ok {
 		t.Fatalf("expected drift summary, got %+v", instancePayload.Summary)
+	}
+}
+
+func TestConfigInstanceReportRejectsForgedIdentityAndDesiredHash(t *testing.T) {
+	service := newTestPlatformService(t)
+	server := newServerMux(service)
+	path := "/control-plane/platform/configs/instances/product-ops-service-prod-control-a-0:report"
+	body := `{"environment":"prod","cluster":"prod-control-a","service":"product-ops-service","desiredHash":"forged","effectiveHash":"forged","source":"config-center"}`
+
+	for _, testCase := range []struct {
+		name        string
+		service     string
+		environment string
+		status      int
+	}{
+		{
+			name:    "cross-service impersonation",
+			service: "circle-service", environment: "prod", status: http.StatusUnauthorized,
+		},
+		{
+			name:    "cross-environment impersonation",
+			service: "product-ops-service", environment: "gamma", status: http.StatusUnauthorized,
+		},
+		{
+			name:    "tampered desired hash",
+			service: "product-ops-service", environment: "prod", status: http.StatusConflict,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(body))
+			request.Header.Set("Content-Type", "application/json")
+			request = requestAsConfigAckService(request, testCase.service, testCase.environment)
+			recorder := httptest.NewRecorder()
+			server.ServeHTTP(recorder, request)
+			if recorder.Code != testCase.status {
+				t.Fatalf("status=%d want=%d body=%s", recorder.Code, testCase.status, recorder.Body.String())
+			}
+		})
+	}
+}
+
+func TestConfigInstanceReportPrincipalRequiresBoundServiceEnvironmentAndInstance(t *testing.T) {
+	valid := rtauth.Principal{
+		Claims: rtauth.Claims{Roles: []string{"service"}},
+		Actor:  operation.ActorContext{AccountID: "service:content-service@prod"},
+	}
+	for _, testCase := range []struct {
+		name        string
+		principal   rtauth.Principal
+		instanceID  string
+		service     string
+		environment string
+		wantErr     bool
+	}{
+		{
+			name:      "valid",
+			principal: valid, instanceID: "content-service-prod-control-a-0",
+			service: "content-service", environment: "prod",
+		},
+		{
+			name: "legacy unbound service identity",
+			principal: rtauth.Principal{
+				Claims: rtauth.Claims{Roles: []string{"service"}},
+				Actor:  operation.ActorContext{AccountID: "service:content-service"},
+			},
+			instanceID: "content-service-prod-control-a-0",
+			service:    "content-service", environment: "prod", wantErr: true,
+		},
+		{
+			name:      "instance namespace forgery",
+			principal: valid, instanceID: "user-service-prod-control-a-0",
+			service: "content-service", environment: "prod", wantErr: true,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := validateConfigInstanceReportPrincipal(
+				testCase.principal,
+				testCase.instanceID,
+				testCase.service,
+				testCase.environment,
+			)
+			if (err != nil) != testCase.wantErr {
+				t.Fatalf("error=%v wantErr=%t", err, testCase.wantErr)
+			}
+		})
+	}
+}
+
+func TestConfigAckConvergenceRequiresEveryFreshInSyncBoundInstance(t *testing.T) {
+	service := newTestPlatformService(t)
+	required := []string{
+		"content-service-prod-gray-control-a-0",
+		"product-ops-service-prod-gray-control-a-0",
+	}
+	t.Setenv(configAckRequiredInstancesEnv, strings.Join(required, ","))
+	t.Setenv(configAckMaxAgeSecondsEnv, "120")
+	for _, instanceID := range required {
+		serviceName := strings.Split(instanceID, "-prod-gray-control-a-0")[0]
+		if err := service.store.PutDocument("config_instance_reports", instanceID, controlplane.Document{
+			"id":                    instanceID,
+			"instanceId":            instanceID,
+			"service":               serviceName,
+			"environment":           "prod",
+			"source":                "config-center",
+			"desiredHash":           "expected",
+			"effectiveHash":         "expected",
+			"inSync":                true,
+			"releaseManifestDigest": service.releaseManifestDigest,
+			"updatedAt":             time.Now().UTC().Format(time.RFC3339),
+		}); err != nil {
+			t.Fatalf("seed %s: %v", instanceID, err)
+		}
+	}
+	server := newServerMux(service)
+	ready := httptest.NewRecorder()
+	server.ServeHTTP(ready, httptest.NewRequest(http.MethodGet, "/readyz/config-convergence", nil))
+	if ready.Code != http.StatusOK {
+		t.Fatalf("converged status=%d body=%s", ready.Code, ready.Body.String())
+	}
+
+	stale := controlplane.Document{
+		"id":                    required[0],
+		"instanceId":            required[0],
+		"service":               "content-service",
+		"environment":           "prod",
+		"source":                "config-center",
+		"desiredHash":           "expected",
+		"effectiveHash":         "expected",
+		"inSync":                true,
+		"releaseManifestDigest": service.releaseManifestDigest,
+		"updatedAt":             time.Now().UTC().Add(-3 * time.Minute).Format(time.RFC3339),
+	}
+	if err := service.store.PutDocument("config_instance_reports", required[0], stale); err != nil {
+		t.Fatalf("seed stale report: %v", err)
+	}
+	blocked := httptest.NewRecorder()
+	server.ServeHTTP(blocked, httptest.NewRequest(http.MethodGet, "/readyz/config-convergence", nil))
+	if blocked.Code != http.StatusServiceUnavailable {
+		t.Fatalf("stale ACK must block, status=%d body=%s", blocked.Code, blocked.Body.String())
+	}
+	if strings.Contains(blocked.Body.String(), required[0]) {
+		t.Fatalf("public readiness must not expose instance topology: %s", blocked.Body.String())
+	}
+}
+
+func TestPlatformConfigInstanceReportRejectsDifferentReleaseManifest(t *testing.T) {
+	service := newTestPlatformService(t)
+	server := newServerMux(service)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/control-plane/platform/configs/instances/product-ops-service-beta-control-a-1:report",
+		bytes.NewBufferString(`{"environment":"beta","cluster":"beta-control-a","service":"product-ops-service","releaseManifestDigest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","effectiveHash":"hash-b"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	request = requestAsConfigAckService(request, "product-ops-service", "beta")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusConflict {
+		t.Fatalf("mismatched candidate digest status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"code":"OPS.USER.config_instance_report_conflict"`) {
+		t.Fatalf("mismatched candidate digest must use contract error: %s", response.Body.String())
+	}
+	if _, found, err := service.store.GetDocument("config_instance_reports", "product-ops-service-beta-control-a-1"); err != nil {
+		t.Fatalf("read rejected report: %v", err)
+	} else if found {
+		t.Fatal("mismatched candidate digest must not persist an ACK")
+	}
+}
+
+func TestPlatformConfigInstanceReportRequiresControlPlaneCandidate(t *testing.T) {
+	service := newTestPlatformService(t)
+	service.releaseManifestDigest = ""
+	server := newServerMux(service)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/control-plane/platform/configs/instances/product-ops-service-beta-control-a-1:report",
+		bytes.NewBufferString(`{"environment":"beta","cluster":"beta-control-a","service":"product-ops-service","releaseManifestDigest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","effectiveHash":"hash-b"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	request = requestAsConfigAckService(request, "product-ops-service", "beta")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("missing control-plane candidate status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"code":"OPS.SYSTEM.config_instance_report_candidate_unavailable"`) {
+		t.Fatalf("missing candidate must use contract error: %s", response.Body.String())
+	}
+}
+
+func TestPlatformReleaseCandidateListsOnlyCurrentInstanceACKs(t *testing.T) {
+	service := newTestPlatformService(t)
+	for instanceID, report := range map[string]controlplane.Document{
+		"content-service-prod-control-a-0": {
+			"id":                    "content-service-prod-control-a-0",
+			"instanceId":            "content-service-prod-control-a-0",
+			"service":               "content-service",
+			"configVersion":         "config-current",
+			"releaseManifestDigest": service.releaseManifestDigest,
+			"inSync":                true,
+			"updatedAt":             "2026-07-26T12:00:00Z",
+		},
+		"chat-service-prod-control-a-0": {
+			"id":                    "chat-service-prod-control-a-0",
+			"instanceId":            "chat-service-prod-control-a-0",
+			"service":               "chat-service",
+			"configVersion":         "config-current",
+			"releaseManifestDigest": service.releaseManifestDigest,
+			"inSync":                false,
+			"updatedAt":             "2026-07-26T12:01:00Z",
+		},
+		"old-service-prod-control-a-0": {
+			"id":                    "old-service-prod-control-a-0",
+			"instanceId":            "old-service-prod-control-a-0",
+			"service":               "old-service",
+			"releaseManifestDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			"inSync":                true,
+			"updatedAt":             "2026-07-26T12:02:00Z",
+		},
+	} {
+		if err := service.store.PutDocument("config_instance_reports", instanceID, report); err != nil {
+			t.Fatalf("seed %s: %v", instanceID, err)
+		}
+	}
+
+	response := httptest.NewRecorder()
+	newServerMux(service).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/control-plane/platform/releases", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("release candidates status=%d body=%s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode release candidates: %v", err)
+	}
+	if len(payload.Items) != 2 {
+		t.Fatalf("current candidate must include exactly current ACK services, got %#v", payload.Items)
+	}
+	byService := map[string]map[string]any{}
+	for _, item := range payload.Items {
+		byService[stringifyDocumentValue(item["service"])] = item
+		if stringifyDocumentValue(item["releaseId"]) != service.releaseManifestDigest {
+			t.Fatalf("candidate digest drifted: %#v", item)
+		}
+		if _, found := item["workflowRef"]; found {
+			t.Fatalf("release candidate must not fabricate workflow references: %#v", item)
+		}
+		if _, found := item["rollbackToken"]; found {
+			t.Fatalf("release candidate must not fabricate rollback tokens: %#v", item)
+		}
+	}
+	if stringifyDocumentValue(byService["content-service"]["releaseState"]) != "in_sync" {
+		t.Fatalf("in-sync candidate must remain observable: %#v", byService["content-service"])
+	}
+	if stringifyDocumentValue(byService["chat-service"]["releaseState"]) != "drift" {
+		t.Fatalf("drift candidate must remain observable: %#v", byService["chat-service"])
 	}
 }
 

@@ -204,7 +204,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     if (_errorSemantic != null) {
       return _buildErrorCard();
@@ -243,7 +243,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
             CupertinoButton(
               padding: EdgeInsets.zero,
               onPressed: _isMutating ? null : () => unawaited(_backToParent()),
-              child: Text(UITextConstants.circleStorageBackToParent),
+              child: Text(CommunityText.circleStorageBackToParent),
             ),
             SizedBox(height: AppSpacing.sm),
           ],
@@ -251,7 +251,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
             Padding(
               padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
               child: Text(
-                UITextConstants.noData,
+                CommunityText.noData,
                 style: TextStyle(
                   fontSize: AppTypography.sm,
                   color: fgSecondary,
@@ -316,7 +316,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      UITextConstants.circleAssetsTab,
+                      CommunityText.circleAssetsTab,
                       style: TextStyle(
                         fontSize: AppTypography.base,
                         fontWeight: AppTypography.semiBold,
@@ -361,7 +361,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
             children: [
               Expanded(
                 child: _StorageStatChip(
-                  label: UITextConstants.circleStorageUsed,
+                  label: CommunityText.circleStorageUsed,
                   value: _formatBytes(widget.storageUsedBytes),
                   fgPrimary: fgPrimary,
                   fgSecondary: fgSecondary,
@@ -370,7 +370,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
               SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: _StorageStatChip(
-                  label: UITextConstants.circleStorageRemaining,
+                  label: CommunityText.circleStorageRemaining,
                   value: _formatBytes(remainingBytes),
                   fgPrimary: fgPrimary,
                   fgSecondary: fgSecondary,
@@ -477,7 +477,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (_isMutating)
-              const CupertinoActivityIndicator(color: AppColors.white)
+              AppRequestFeedback.inline(indicatorColor: AppColors.white)
             else
               Icon(
                 CupertinoIcons.cloud_upload,
@@ -486,7 +486,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
               ),
             SizedBox(width: AppSpacing.sm),
             Text(
-              UITextConstants.circleUploadFile,
+              CommunityText.circleUploadFile,
               style: TextStyle(
                 color: AppColors.white,
                 fontSize: AppTypography.base,

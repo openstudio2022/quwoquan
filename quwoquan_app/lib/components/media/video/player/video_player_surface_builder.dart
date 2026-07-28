@@ -17,6 +17,8 @@ final class VideoPlayerSurfaceBuilder {
   static Widget buildPlaceholder({
     required MediaDeliveryReference? thumbnailReference,
     required bool autoPlay,
+    required bool showProgress,
+    required bool showSlowHint,
   }) {
     final thumbnailUrl = thumbnailReference?.url ?? '';
     return Container(
@@ -43,25 +45,27 @@ final class VideoPlayerSurfaceBuilder {
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (autoPlay)
+              if (autoPlay && showProgress)
                 CupertinoActivityIndicator(
                   color: AppColors.white,
                   radius: AppSpacing.iconMedium / 2,
                 )
-              else
+              else if (!autoPlay)
                 Icon(
                   Icons.play_circle_outline,
                   size: (AppSpacing.avatarSize * 2).sp,
                   color: AppColors.white,
                 ),
-              SizedBox(height: AppSpacing.sm.h),
-              Text(
-                UITextConstants.loading,
-                style: TextStyle(
-                  color: AppColors.white,
-                  fontSize: AppTypography.sm.sp,
+              if (showSlowHint) ...<Widget>[
+                SizedBox(height: AppSpacing.sm.h),
+                Text(
+                  FoundationText.requestWaitSlow,
+                  style: TextStyle(
+                    color: AppColors.white,
+                    fontSize: AppTypography.sm.sp,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ],
@@ -98,12 +102,14 @@ final class VideoPlayerSurfaceBuilder {
     required MediaDeliveryReference? thumbnailReference,
     required bool retrying,
     required VoidCallback? onRetry,
+    required VoidCallback? onExit,
   }) {
     return VideoPlaybackFailureOverlay(
       failure: failure,
       thumbnailReference: thumbnailReference,
       retrying: retrying,
       onRetry: onRetry,
+      onExit: onExit,
     );
   }
 

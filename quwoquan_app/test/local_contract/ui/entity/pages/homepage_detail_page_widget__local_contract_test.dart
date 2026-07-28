@@ -26,6 +26,7 @@ import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show CloudOperationCancellationSignal;
 
+import '../../../../support/cloud_services/behavior_repository_double.dart';
 import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
 
 Override _homepageFacetOverride(MockHomepageRepository repository) {
@@ -83,15 +84,18 @@ void main() {
 
     expect(find.text('西湖景区'), findsWidgets);
     expect(
-      find.text(UITextConstants.objectMyIntersectionsTitle),
+      find.text(ObjectHomepageText.objectMyIntersectionsTitle),
       findsOneWidget,
     );
     expect(find.text('推荐你了解西湖摄影'), findsOneWidget);
-    expect(find.text(UITextConstants.objectImpactTitleEntity), findsWidgets);
+    expect(find.text(ObjectHomepageText.objectImpactTitleEntity), findsWidgets);
     expect(find.text('认领主页'), findsNothing);
-    expect(find.text(UITextConstants.follow), findsWidgets);
-    expect(find.text(UITextConstants.entityActionPublishRecord), findsWidgets);
-    expect(find.text(UITextConstants.profileDirectMessage), findsNothing);
+    expect(find.text(FoundationText.follow), findsWidgets);
+    expect(
+      find.text(ObjectHomepageText.entityActionPublishRecord),
+      findsWidgets,
+    );
+    expect(find.text(ProfileText.profileDirectMessage), findsNothing);
     expect(find.byType(BottomNavigationWidget), findsNothing);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -520));
     await tester.pumpAndSettle();
@@ -103,10 +107,13 @@ void main() {
       find.byKey(const ValueKey<String>('homepage-detail-back-button')),
       findsNothing,
     );
-    expect(find.text(UITextConstants.objectTabRecord), findsWidgets);
-    expect(find.text(UITextConstants.objectTabDiscussion), findsWidgets);
-    expect(find.text(UITextConstants.objectTabRelatedCircles), findsOneWidget);
-    expect(find.text(UITextConstants.entityAboutTitle), findsNothing);
+    expect(find.text(ObjectHomepageText.objectTabRecord), findsWidgets);
+    expect(find.text(ObjectHomepageText.objectTabDiscussion), findsWidgets);
+    expect(
+      find.text(ObjectHomepageText.objectTabRelatedCircles),
+      findsOneWidget,
+    );
+    expect(find.text(ContentText.entityAboutTitle), findsNothing);
     expect(find.text('实体介绍'), findsNothing);
     expect(find.text('治理入口'), findsNothing);
     expect(find.text('统一对象键'), findsNothing);
@@ -121,7 +128,9 @@ void main() {
     expect(find.text('湖畔慢行者', skipOffstage: false), findsWidgets);
     expect(find.byType(PostCardMetric, skipOffstage: false), findsWidgets);
 
-    await tester.tap(find.text(UITextConstants.objectTabRelatedCircles).last);
+    await tester.tap(
+      find.text(ObjectHomepageText.objectTabRelatedCircles).last,
+    );
     await tester.pumpAndSettle();
     expect(find.text(HomepageDetailText.relatedGroupOpenAction), findsWidgets);
 
@@ -437,9 +446,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
-    expect(find.text(UITextConstants.homepageLoadFailedTitle), findsOneWidget);
-    expect(find.text('主页不存在或已下线'), findsOneWidget);
-    expect(find.text(UITextConstants.back), findsNothing);
+    expect(
+      find.text(SearchText.recoveryContentUnavailableTitle),
+      findsOneWidget,
+    );
+    expect(
+      find.text(SearchText.recoveryContentUnavailableMessage),
+      findsOneWidget,
+    );
+    expect(find.text(SearchText.recoveryReturnAction), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('homepage-detail-error-back')),
       findsOneWidget,
@@ -537,9 +552,9 @@ void main() {
     expect(repository.lastExperimentBucket, 'A');
     expect(repository.lastRolloutCohort, 'city-hz');
     expect(find.text('认领主页'), findsNothing);
-    expect(find.text(UITextConstants.follow), findsOneWidget);
+    expect(find.text(FoundationText.follow), findsOneWidget);
     expect(
-      find.text(UITextConstants.entityActionPublishRecord),
+      find.text(ObjectHomepageText.entityActionPublishRecord),
       findsOneWidget,
     );
   });

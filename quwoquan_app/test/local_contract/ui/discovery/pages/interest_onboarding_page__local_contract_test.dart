@@ -11,7 +11,6 @@ import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/providers/interest_onboarding_provider.dart';
-import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/discovery/pages/interest_onboarding_page.dart';
 
 void main() {
@@ -39,7 +38,7 @@ void main() {
     expect(find.text('旅行'), findsOneWidget);
     await tester.tap(find.text('旅行'));
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.interestOnboardingSubmit));
+    await tester.tap(find.text(ProfileText.interestOnboardingSubmit));
     await tester.pumpAndSettle();
 
     expect(writer.submittedTagRefs, <String>['Topic/兴趣/旅行']);
@@ -70,14 +69,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.pageLoadFailedMessage), findsOneWidget);
+    expect(find.text(SearchText.recoveryReloadLaterMessage), findsOneWidget);
     query.shouldFail = false;
-    await tester.tap(
-      find.descendant(
-        of: find.byType(AppPageErrorState),
-        matching: find.byType(CupertinoButton),
-      ),
-    );
+    await tester.tap(find.text(SearchText.reload));
     await tester.pumpAndSettle();
 
     expect(find.text('旅行'), findsOneWidget);
@@ -109,7 +103,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('旅行'));
-    await tester.tap(find.text(UITextConstants.interestOnboardingSubmit));
+    await tester.tap(find.text(ProfileText.interestOnboardingSubmit));
     await tester.pumpAndSettle();
 
     expect(find.text('dismiss login'), findsOneWidget);
@@ -151,7 +145,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('旅行'));
-    await tester.tap(find.text(UITextConstants.interestOnboardingSubmit));
+    await tester.tap(find.text(ProfileText.interestOnboardingSubmit));
     await tester.pumpAndSettle();
 
     final continuation =

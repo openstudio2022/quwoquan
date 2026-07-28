@@ -728,8 +728,8 @@ void main() {
 
       expect(_segmentedControl(), findsOneWidget);
       expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
-      expect(_segmentedLabel(UITextConstants.circleFans), findsOneWidget);
-      expect(_segmentedLabel(UITextConstants.follow), findsOneWidget);
+      expect(_segmentedLabel(CommunityText.circleFans), findsOneWidget);
+      expect(_segmentedLabel(FoundationText.follow), findsOneWidget);
       expect(_segmentedLabel(ChatText.contactsTabCircles), findsOneWidget);
       expect(find.text('获赞'), findsNothing);
     });
@@ -779,7 +779,7 @@ void main() {
 
       expect(find.text('你的皮炎有点辣'), findsOneWidget);
       expect(find.text('阿青在路上'), findsNothing);
-      await _tapSegment(tester, UITextConstants.follow);
+      await _tapSegment(tester, FoundationText.follow);
       expect(find.text('阿青在路上'), findsOneWidget);
     });
 
@@ -834,7 +834,7 @@ void main() {
       expect(find.text('你的皮炎有点辣'), findsOneWidget);
       expect(find.text('摄影阿青'), findsNothing);
 
-      await _tapSegment(tester, UITextConstants.follow);
+      await _tapSegment(tester, FoundationText.follow);
       expect(_searchController(tester).text, isEmpty);
 
       await tester.enterText(find.byType(CupertinoSearchTextField), '阿青');
@@ -843,7 +843,7 @@ void main() {
       expect(find.text('阿青在路上'), findsOneWidget);
       expect(find.text('旅行收藏家'), findsNothing);
 
-      await _tapSegment(tester, UITextConstants.circleFans);
+      await _tapSegment(tester, CommunityText.circleFans);
       expect(_searchController(tester).text, '皮炎');
       expect(find.text('你的皮炎有点辣'), findsOneWidget);
       expect(find.text('摄影阿青'), findsNothing);
@@ -881,11 +881,11 @@ void main() {
       );
       await _pumpInitialLoad(tester);
 
-      await tester.tap(find.text(UITextConstants.following));
+      await tester.tap(find.text(FoundationText.following));
       await _pumpFrames(tester, count: 6);
 
-      expect(find.text(UITextConstants.profileStatsUnfollow), findsOneWidget);
-      expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
+      expect(find.text(ProfileText.profileStatsUnfollow), findsOneWidget);
+      expect(find.text(ProfileText.profileDirectMessage), findsOneWidget);
     });
 
     testWidgets('圈子页展示公开圈子并支持跳转详情', (tester) async {
@@ -977,11 +977,11 @@ void main() {
       await _pumpInitialLoad(tester);
 
       expect(
-        find.text(UITextConstants.profileStatsEmptyCirclesMineTitle),
+        find.text(ProfileText.profileStatsEmptyCirclesMineTitle),
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.profileStatsDiscoverCircles),
+        find.text(ProfileText.profileStatsDiscoverCircles),
         findsOneWidget,
       );
     });
@@ -1006,14 +1006,8 @@ void main() {
       );
       await _pumpInitialLoad(tester);
 
-      expect(
-        find.text(UITextConstants.profileStatsPrivateTitle),
-        findsOneWidget,
-      );
-      expect(
-        find.text(UITextConstants.profileStatsPrivateBody),
-        findsOneWidget,
-      );
+      expect(find.text(ProfileText.profileStatsPrivateTitle), findsOneWidget);
+      expect(find.text(ProfileText.profileStatsPrivateBody), findsOneWidget);
       expect(find.text('你的皮炎有点辣'), findsNothing);
     });
 
@@ -1043,14 +1037,8 @@ void main() {
       );
       await _pumpInitialLoad(tester);
 
-      expect(
-        find.text(UITextConstants.profileStatsBlockedTitle),
-        findsOneWidget,
-      );
-      expect(
-        find.text(UITextConstants.profileStatsBlockedBody),
-        findsOneWidget,
-      );
+      expect(find.text(ProfileText.profileStatsBlockedTitle), findsOneWidget);
+      expect(find.text(ProfileText.profileStatsBlockedBody), findsOneWidget);
     });
 
     testWidgets('self 行不显示关系按钮', (tester) async {
@@ -1078,9 +1066,9 @@ void main() {
       await _pumpInitialLoad(tester);
 
       expect(find.text('我自己'), findsOneWidget);
-      expect(find.text(UITextConstants.followBack), findsNothing);
-      expect(find.text(UITextConstants.following), findsNothing);
-      expect(find.text(UITextConstants.profileStatsMutual), findsNothing);
+      expect(find.text(FoundationText.followBack), findsNothing);
+      expect(find.text(FoundationText.following), findsNothing);
+      expect(find.text(ProfileText.profileStatsMutual), findsNothing);
     });
 
     testWidgets('分页滚动到底部后继续加载下一页', (tester) async {
@@ -1142,11 +1130,8 @@ void main() {
       );
       await _pumpInitialLoad(tester);
 
-      expect(
-        find.text(UITextConstants.sectionLoadFailedTitleDefault),
-        findsOneWidget,
-      );
-      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+      expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+      expect(find.text(SearchText.reload), findsOneWidget);
     });
 
     testWidgets('游客点击关注会进入登录页', (tester) async {
@@ -1181,7 +1166,7 @@ void main() {
       await tester.tap(
         find.descendant(
           of: find.byType(CustomScrollView),
-          matching: find.text(UITextConstants.follow),
+          matching: find.text(FoundationText.follow),
         ),
       );
       await _pumpFrames(tester, count: 10);

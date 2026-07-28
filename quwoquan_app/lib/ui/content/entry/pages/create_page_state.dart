@@ -465,25 +465,25 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   String _pageTitleForState(CreateEditorState state) {
     if (_useImmersiveArticleExperience(state)) {
-      return UITextConstants.createArticleSurfaceLongEdit;
+      return CreationText.createArticleSurfaceLongEdit;
     }
     if (_isPhotoCreateFlow(state)) {
       return CreatePageText.photoPageTitle;
     }
-    return UITextConstants.createPageTitle;
+    return CreationText.createPageTitle;
   }
 
   String _mediaHeaderHintForState(CreateEditorState state) {
     if (state.hasVideo) {
-      return UITextConstants.createMediaHintVideoCover;
+      return CreationText.createMediaHintVideoCover;
     }
     if (state.isOneTapMovie) {
-      return UITextConstants.createMediaOneTapMovieLockedHint;
+      return CreationText.createMediaOneTapMovieLockedHint;
     }
     if (state.imagePaths.isEmpty) {
-      return UITextConstants.createMediaHintAddFirst;
+      return CreationText.createMediaHintAddFirst;
     }
-    return UITextConstants.createMediaHintDragReorder;
+    return CreationText.createMediaHintDragReorder;
   }
 
   bool _isPhotoCreateFlow(CreateEditorState state) {

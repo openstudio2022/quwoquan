@@ -224,7 +224,7 @@ class _LoggedOutProfileSummaryCard extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.interGroupMd),
             Text(
-              UITextConstants.profileLoggedOutDisplayName,
+              FoundationText.profileLoggedOutDisplayName,
               style: TextStyle(
                 fontSize: AppTypography.iosTitle2,
                 fontWeight: AppTypography.bold,
@@ -233,7 +233,7 @@ class _LoggedOutProfileSummaryCard extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.intraGroupSm),
             Text(
-              UITextConstants.profileLoginCardSubtitle,
+              FoundationText.profileLoginCardSubtitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: AppTypography.iosCallout,
@@ -271,7 +271,7 @@ class _LoggedOutProfileSummaryCard extends StatelessWidget {
                 dismissFallback: AppRoutePaths.profile,
               ),
               child: Text(
-                UITextConstants.profileLoginNow,
+                FoundationText.profileLoginNow,
                 style: TextStyle(
                   fontSize: AppTypography.iosBody,
                   fontWeight: AppTypography.semiBold,
@@ -311,9 +311,9 @@ class _LoggedOutProfileContentPreview extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: const <Widget>[
-                _LoggedOutTabLabel(UITextConstants.creationFilterWork),
-                _LoggedOutTabLabel(UITextConstants.myFootprint),
-                _LoggedOutTabLabel(UITextConstants.profileLikedTab),
+                _LoggedOutTabLabel(DiscoveryText.creationFilterWork),
+                _LoggedOutTabLabel(FoundationText.myFootprint),
+                _LoggedOutTabLabel(FoundationText.profileLikedTab),
               ],
             ),
             SizedBox(height: AppSpacing.interGroupLg),
@@ -333,9 +333,9 @@ class _LoggedOutStatsRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: const <Widget>[
-        _LoggedOutStatItem(label: UITextConstants.creationFilterWork),
-        _LoggedOutStatItem(label: UITextConstants.myFootprint),
-        _LoggedOutStatItem(label: UITextConstants.follow),
+        _LoggedOutStatItem(label: DiscoveryText.creationFilterWork),
+        _LoggedOutStatItem(label: FoundationText.myFootprint),
+        _LoggedOutStatItem(label: FoundationText.follow),
       ],
     );
   }
@@ -402,7 +402,7 @@ class _LoggedOutEmptyHint extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.radiusEighteen),
       ),
       child: Text(
-        UITextConstants.profileLoggedOutTimelineHint,
+        FoundationText.profileLoggedOutTimelineHint,
         textAlign: TextAlign.center,
         style: TextStyle(
           fontSize: AppTypography.iosCallout,

@@ -140,8 +140,8 @@ def _candidate_gate(
     category = str(source.get("category") or _source_category(platform) or "").strip()
     role = str(source.get("sourceRole") or "supporting").strip()
     confidence = float(source.get("matchConfidence") or 0.0)
-    if not url.startswith(("http://", "https://")):
-        issues.append("url must be http(s)")
+    if not url.startswith("https://"):
+        issues.append("url must use https")
     if not platform:
         issues.append("platform missing")
     if not category:

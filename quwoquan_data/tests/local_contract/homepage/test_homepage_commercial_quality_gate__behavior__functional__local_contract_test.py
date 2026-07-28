@@ -32,6 +32,21 @@ from content.homepage.commercial_gate import (
     map_like_asset_issues,
     source_fidelity,
 )
+from content.homepage.quality_policy import (
+    homepage_body_char_minimum,
+    homepage_section_char_minimum,
+)
+
+# 字数口径由 vertical content supply policy 唯一持有；测试与生产读同一真相源。
+_POLICY_EXECUTION_ID = (
+    "20260727--travel-homepage-commercial-gate--test-region-a--pilot-001"
+)
+_MIN_BODY_CHARS = homepage_body_char_minimum(_POLICY_EXECUTION_ID)
+_MIN_SECTION_CHARS = homepage_section_char_minimum(_POLICY_EXECUTION_ID)
+_CHAR_LIMITS = {
+    "minimum_body_chars": _MIN_BODY_CHARS,
+    "minimum_section_chars": _MIN_SECTION_CHARS,
+}
 
 # ---------------------------------------------------------------------------
 # 夹具：SCALE 污染样本特征片段（罗泉古镇 360 百科壳 + infobox 键值堆）
@@ -78,13 +93,13 @@ coverImage: asset://示例景区_cover_main
 建议清晨从东门入园，沿主步道上行约两小时抵达山顶，午后经西侧索道下山；带儿童的家庭可选择环湖木栈道，全程平缓无台阶，约一小时可走完，沿途设有休息亭与补给点。
 
 ## 交通与门票
-市区乘坐地铁三号线至终点站后换乘景区接驳车约二十分钟直达东门；旺季门票八十元、淡季六十元，索道单程四十元，官方小程序提前一天购票可享九折优惠。
+市区乘坐地铁三号线至终点站后换乘景区接驳车约二十分钟直达东门；旺季门票八十元、淡季六十元，索道单程四十元，官方小程序提前一天购票可享九折优惠。自驾可走绕城高速西线，东门与南门各设停车场，节假日建议九点前抵达。
 """
 
 
 def test_luoquan_polluted_sample_is_rejected():
     """罗泉古镇态回归：百科编辑壳 + infobox 键值堆必须 BLOCK（历史逃逸态）。"""
-    issues = final_page_hard_issues(_LUOQUAN_POLLUTED, entity_name="罗泉古镇", label="罗泉古镇")
+    issues = final_page_hard_issues(_LUOQUAN_POLLUTED, entity_name="罗泉古镇", label="罗泉古镇", **_CHAR_LIMITS)
     text = "\n".join(issues)
     assert "折叠编辑本段" in text, "百科编辑壳必须命中"
     assert "infobox 键值堆" in text, "infobox 键值堆必须命中"
@@ -93,11 +108,11 @@ def test_luoquan_polluted_sample_is_rejected():
 def test_missing_h1_and_shell_pages_are_rejected():
     """浙江缺 H1 态 + 导航/登录残留态回归。"""
     no_h1 = "---\ncoverImage: asset://x\n---\n\n## 概况\n" + "内容充足" * 60
-    issues = final_page_hard_issues(no_h1, label="缺H1样本")
+    issues = final_page_hard_issues(no_h1, label="缺H1样本", **_CHAR_LIMITS)
     assert any("H1 必须恰好一个" in i for i in issues)
 
     shell = _GOOD_PAGE + "\n有用+1\n登录后查看更多\n"
-    issues2 = final_page_hard_issues(shell, entity_name="示例景区")
+    issues2 = final_page_hard_issues(shell, entity_name="示例景区", **_CHAR_LIMITS)
     assert any("有用+1" in i for i in issues2)
 
 
@@ -115,7 +130,7 @@ def test_html_entity_footnote_and_mojibake_rejected():
         "## 交通与门票",
         "## 交通与门票\n古镇&nbsp;历史[1]悠久[2]，字符\ufffd异常。\n",
     )
-    issues = final_page_hard_issues(page, entity_name="示例景区")
+    issues = final_page_hard_issues(page, entity_name="示例景区", **_CHAR_LIMITS)
     text = "\n".join(issues)
     assert "HTML 实体" in text
     assert "脚注标记" in text
@@ -124,14 +139,14 @@ def test_html_entity_footnote_and_mojibake_rejected():
 
 def test_empty_reference_section_and_thin_section_rejected():
     page = _GOOD_PAGE + "\n## 参考资料\n\n## 短章节\n略。\n"
-    issues = final_page_hard_issues(page, entity_name="示例景区")
+    issues = final_page_hard_issues(page, entity_name="示例景区", **_CHAR_LIMITS)
     text = "\n".join(issues)
     assert "空壳章节" in text
     assert "信息量不足" in text
 
 
 def test_good_page_passes_final_hard_gate():
-    assert final_page_hard_issues(_GOOD_PAGE, entity_name="示例景区") == []
+    assert final_page_hard_issues(_GOOD_PAGE, entity_name="示例景区", **_CHAR_LIMITS) == []
 
 
 # ---------------------------------------------------------------------------
@@ -283,18 +298,16 @@ def test_evaluate_commercial_page_end_to_end(tmp_path):
     }
     (entity / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
 
-    verdict = evaluate_commercial_page(
-        entity,
+    verdict = evaluate_commercial_page(entity,
         entity_name="示例景区",
         source_text="示例景区官方资料原文。" * 100,
-        source_use_mode="factual_reference_only",
-    )
+        source_use_mode="factual_reference_only", **_CHAR_LIMITS)
     assert verdict["passed"], verdict["issues"]
 
     # 同一入口对污染页必须 BLOCK。
     bad_entity = tmp_path / "罗泉古镇"
     bad_entity.mkdir()
     (bad_entity / "page.md").write_text(_LUOQUAN_POLLUTED, encoding="utf-8")
-    bad = evaluate_commercial_page(bad_entity, entity_name="罗泉古镇")
+    bad = evaluate_commercial_page(bad_entity, entity_name="罗泉古镇", **_CHAR_LIMITS)
     assert not bad["passed"]
     assert any("折叠编辑本段" in i for i in bad["issues"])

@@ -144,9 +144,8 @@ intersection:
     maxPathNodesPerSurface: 3
     secondarySpreadEnabled: false
 objectCards:
-  # 首页混合对象卡（S0 插卡模式，B4）：实体主页卡由独立召回器产出，按 everyN
-  # 间隔混排进内容流。S0 默认关闭（alpha/gamma 灰度开启验证后再放量）；
-  # user_card/circle_card 为 S1 触发开启（需社交图密度达标）。
+  # 首页混合对象卡（S0 插卡模式，B4）：实体主页卡由独立召回器产出，
+  # 按正式策略间隔混排进内容流；验收数据不得改写业务策略。
   enabled: true
   everyN: 8
   maxCards: 3

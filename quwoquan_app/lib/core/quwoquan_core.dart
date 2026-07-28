@@ -24,6 +24,7 @@ export 'constants/z_index_constants.dart';
 export 'design_system/theme/app_theme.dart';
 export 'design_system/colors/app_colors.dart';
 export 'design_system/spacing/app_spacing.dart';
+export 'design_system/spacing/recovery_surface_spacing.dart';
 export 'design_system/spacing/spacing_extensions.dart';
 export 'design_system/typography/app_typography.dart';
 export 'design_system/icons/app_custom_icons.dart';
@@ -36,6 +37,7 @@ export 'widgets/app_modal_surface.dart';
 export 'widgets/app_list_page_semantics.dart';
 export 'widgets/app_search_field.dart';
 export 'widgets/error_states/app_error_states.dart';
+export 'widgets/app_request_feedback.dart';
 export 'widgets/ios_selection_page_components.dart';
 export 'widgets/web_page_max_width_frame.dart';
 
@@ -62,9 +64,13 @@ export 'auth/auth_legal_config.dart';
 export 'platform/one_tap_login_native_bridge.dart';
 export 'errors/ui_error_semantics.dart';
 export 'package:quwoquan_app/core/errors/runtime_error_display.dart'
-    show runtimeErrorDisplayMessage, runtimeErrorSemantic;
+    show
+        ensureRetryUiErrorSemantic,
+        runtimeErrorDisplayMessage,
+        runtimeErrorSemantic;
 export 'services/assistant_chat_store.dart';
 export 'services/search_recent_history_store.dart';
+export 'services/app_page_load_arbiter.dart';
 
 // Utils
 export 'utils/chat_time_formatter.dart';

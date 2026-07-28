@@ -69,7 +69,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
         post: post,
         enableIdentityTemplate: enableIdentityTemplate,
       ),
-      ContentShareAction(id: 'copy_link', label: UITextConstants.copyLink),
+      ContentShareAction(id: 'copy_link', label: FoundationText.copyLink),
     );
     if (result.success) {
       await _recordShare(post.id, result.actionId);
@@ -184,11 +184,11 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
           ? post.displayName.trim()
           : post.title.trim().isNotEmpty
           ? post.title.trim()
-          : UITextConstants.contentUnavailable;
+          : ContentText.contentUnavailable;
       final confirmed = await showAppActionSheet<bool>(
         context,
         title: ChatText.messageActionDelete,
-        message: UITextConstants.profileSubAccountDeleteConfirmTemplate
+        message: ProfileText.profileSubAccountDeleteConfirmTemplate
             .replaceFirst('%s', displayName),
         sections: const [
           AppActionSheetSection<bool>(
@@ -215,7 +215,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
             );
         ref.read(discoveryFeedMapProvider.notifier).removePostLocally(post.id);
         if (context.mounted) {
-          AppToast.show(context, UITextConstants.contentDeleteSuccess);
+          AppToast.show(context, ProfileText.contentDeleteSuccess);
         }
         if (!mounted) {
           return;
@@ -303,7 +303,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
         },
       );
       if (!mounted) return;
-      AppToast.show(context, UITextConstants.reportSubmittedViewProgress);
+      AppToast.show(context, ContentText.reportSubmittedViewProgress);
     } catch (error) {
       await journeyTracker.trackAction(
         journey: 'content_report',
@@ -404,7 +404,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
         (_originalImageUrlsByPostId[post.id] ??= <int, String>{})[imageIndex] =
             grant.originalUrl.toString();
       });
-      AppToast.show(context, UITextConstants.imageOriginalLoaded);
+      AppToast.show(context, MediaText.imageOriginalLoaded);
     } catch (error) {
       _requestingOriginalMediaIds.remove(mediaId);
       if (!mounted) {
@@ -456,14 +456,14 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
   Future<void> _requestBlockAuthor(PostBaseDto post) async {
     final confirmed = await showAppActionSheet<bool>(
       context,
-      title: UITextConstants.profileBlockConfirmTitle,
-      message: UITextConstants.profileBlockConfirmMessage,
+      title: ContentText.profileBlockConfirmTitle,
+      message: ContentText.profileBlockConfirmMessage,
       sections: const <AppActionSheetSection<bool>>[
         AppActionSheetSection<bool>(
           items: <AppActionSheetItem<bool>>[
             AppActionSheetItem<bool>(
               value: true,
-              label: UITextConstants.blockAuthor,
+              label: ContentText.blockAuthor,
               icon: CupertinoIcons.person_crop_circle_badge_xmark,
               isDestructive: true,
             ),
@@ -738,7 +738,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
           AppToast.show(
             context,
             DiscoveryFeedText.feedNegativeFeedbackNotInterested,
-            actionLabel: UITextConstants.undo,
+            actionLabel: ContentText.undo,
             onAction: () {
               ref
                   .read(contentBehaviorTrackerProvider)
@@ -758,7 +758,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
               if (_pageController.hasClients) {
                 _pageController.jumpToPage(previousPage);
               }
-              AppToast.show(context, UITextConstants.notInterestedUndone);
+              AppToast.show(context, ContentText.notInterestedUndone);
             },
           );
         },

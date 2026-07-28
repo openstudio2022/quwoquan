@@ -119,18 +119,18 @@ class HomePrimaryTabStrip extends StatelessWidget {
   }
 
   static String _labelForChannel(String channelId) => switch (channelId) {
-    followingChannelId => UITextConstants.homeTabFollowing,
-    recommendedChannelId => UITextConstants.homeTabRecommended,
-    featuredChannelId => UITextConstants.homeTabFeatured,
-    circlesChannelId => UITextConstants.homeTabCircles,
+    followingChannelId => DiscoveryText.homeTabFollowing,
+    recommendedChannelId => DiscoveryText.homeTabRecommended,
+    featuredChannelId => DiscoveryText.homeTabFeatured,
+    circlesChannelId => DiscoveryText.homeTabCircles,
     travelPhotographyChannelId =>
-      UITextConstants.circleScenarioTravelPhotography,
-    campusChannelId => UITextConstants.circleScenarioCampus,
-    travelChannelId => UITextConstants.homeTabTravel,
-    photographyChannelId => UITextConstants.homeTabPhotography,
-    techChannelId => UITextConstants.homeTabTech,
-    carFriendsChannelId => UITextConstants.homeTabCarFriends,
-    _ => UITextConstants.homeTabRecommended,
+      DiscoveryText.circleScenarioTravelPhotography,
+    campusChannelId => DiscoveryText.circleScenarioCampus,
+    travelChannelId => DiscoveryText.homeTabTravel,
+    photographyChannelId => DiscoveryText.homeTabPhotography,
+    techChannelId => DiscoveryText.homeTabTech,
+    carFriendsChannelId => DiscoveryText.homeTabCarFriends,
+    _ => DiscoveryText.homeTabRecommended,
   };
 
   void _handleChannelTap(String channelId) {

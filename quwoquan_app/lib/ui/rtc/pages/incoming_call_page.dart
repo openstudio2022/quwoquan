@@ -105,7 +105,7 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
             children: [
               SizedBox(height: AppSpacing.xl * 2),
               Text(
-                '$callerName ${isVideo ? UITextConstants.callIncomingVideo : UITextConstants.callIncomingVoice}',
+                '$callerName ${isVideo ? CallText.callIncomingVideo : CallText.callIncomingVoice}',
                 style: TextStyle(
                   color: onGradientFg.withValues(alpha: 0.8),
                   fontSize: AppTypography.md,
@@ -153,7 +153,7 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
         children: [
           _CallActionButton(
             icon: CupertinoIcons.phone_down_fill,
-            label: UITextConstants.callReject,
+            label: CallText.callReject,
             color: AppColors.error,
             onTap: () {
               ref.read(callSessionProvider.notifier).rejectCall(widget.callId);
@@ -163,7 +163,7 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
             icon: session.callType.isVideo
                 ? CupertinoIcons.video_camera
                 : CupertinoIcons.phone,
-            label: UITextConstants.callAccept,
+            label: CallText.callAccept,
             color: AppColors.primaryColor,
             onTap: () => _onAccept(session.callType),
           ),

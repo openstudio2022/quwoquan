@@ -32,11 +32,12 @@ import (
 )
 
 type platformService struct {
-	repoRoot     string
-	store        controlplane.StateStore
-	configLayer  *configapp.Facade
-	configLayers http.Handler
-	health       func(context.Context) error
+	repoRoot              string
+	store                 controlplane.StateStore
+	configLayer           *configapp.Facade
+	configLayers          http.Handler
+	releaseManifestDigest string
+	health                func(context.Context) error
 }
 
 func platformOperatorOIDCRequired(appEnv string) bool {
@@ -127,14 +128,23 @@ func main() {
 	if err != nil {
 		log.Fatalf("platform-ops-service config snapshot HTTP adapter invalid: %v", err)
 	}
+	releaseManifestDigest := strings.TrimSpace(os.Getenv("RELEASE_MANIFEST_DIGEST"))
+	if appEnv == "prod" && !isCanonicalSHA256(releaseManifestDigest) {
+		log.Fatal("platform-ops-service RELEASE_MANIFEST_DIGEST is required in prod")
+	}
+	controlplane.StartReleaseConfigAttestation(
+		serviceName, appEnv, configRoot, configVersion, imageVersion,
+	)
 	service := &platformService{
 		repoRoot: repoRoot, store: store, configLayer: configLayerFacade, configLayers: configLayerHandler,
-		health: postgresPool.Ping,
+		releaseManifestDigest: releaseManifestDigest,
+		health:                postgresPool.Ping,
 	}
 	mux := newServerMux(service)
 	outerMux := http.NewServeMux()
 	outerMux.Handle("/healthz", mux)
 	outerMux.Handle("/metrics", mux)
+	outerMux.Handle("/readyz/config-convergence", mux)
 	// Alertmanager webhook 使用专用机器 token，并由 handler 前的独立认证边界
 	// fail-closed；其余控制面 operation 全部由 metadata codegen 描述符执行
 	// OIDC principal + scope 授权，不保留迁移期 fallback。
@@ -449,29 +459,6 @@ func sortedSet(values map[string]struct{}) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// readReleaseState 读取 stackctl 受锁 CAS ledger；生产环境必须挂载
-// QWQ_PROD_RELEASE_STATE_DIR，避免把可删除的构建输出当作发布真相源。
-func readReleaseState(repoRoot, service string) string {
-	stateRoot := strings.TrimSpace(os.Getenv("QWQ_PROD_RELEASE_STATE_DIR"))
-	if stateRoot != "" {
-		data, err := os.ReadFile(filepath.Join(stateRoot, service+".state"))
-		if err != nil {
-			return ""
-		}
-		return string(data)
-	}
-	outputRoot := strings.TrimSpace(os.Getenv("QWQ_OUTPUT_ROOT"))
-	if outputRoot == "" {
-		outputRoot = filepath.Join(repoRoot, ".qwq_output")
-	}
-	stateFile := filepath.Join(outputRoot, "env", "prod", "local", "prod-hosted", "process", "release-state", service+".state")
-	data, err := os.ReadFile(stateFile)
-	if err != nil {
-		return ""
-	}
-	return string(data)
 }
 
 func resolveRepoRoot() string {

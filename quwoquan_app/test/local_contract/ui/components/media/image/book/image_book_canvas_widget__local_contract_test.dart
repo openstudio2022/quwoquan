@@ -593,7 +593,7 @@ void main() {
     expect(find.byType(ImmersiveMediaFailureContent), findsOneWidget);
     expect(find.byIcon(Icons.image_not_supported_outlined), findsNothing);
     expect(find.byIcon(CupertinoIcons.refresh), findsNothing);
-    expect(find.text(UITextConstants.retry), findsOneWidget);
+    expect(find.text(SearchText.reload), findsOneWidget);
     expect(
       tester
           .widget<CupertinoButton>(

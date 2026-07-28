@@ -1,5 +1,4 @@
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 
 String? buildProfileCommentDetailRoute({
   required String workId,
@@ -17,25 +16,18 @@ String? buildProfileCommentDetailRoute({
   }
   final cleanParentCommentId = parentCommentId?.trim() ?? '';
   final isReply = cleanParentCommentId.isNotEmpty;
-  final route = Uri.parse(
-    AppRoutePaths.workBrowser(
-      workId: cleanWorkId,
-      filter: filter?.trim().isNotEmpty == true ? filter!.trim() : null,
-      source: source,
-    ),
+  final cleanReplyToCommentId = replyToCommentId?.trim() ?? '';
+  return AppRoutePaths.workBrowser(
+    workId: cleanWorkId,
+    filter: filter?.trim().isNotEmpty == true ? filter!.trim() : null,
+    source: source,
+    openComments: 'true',
+    commentEntrySource: entrySource.trim(),
+    targetParentCommentId: isReply ? cleanParentCommentId : null,
+    targetReplyId: isReply ? cleanCommentId : null,
+    targetCommentId: isReply ? null : cleanCommentId,
+    replyToCommentId: cleanReplyToCommentId.isEmpty
+        ? null
+        : cleanReplyToCommentId,
   );
-  return route
-      .replace(
-        queryParameters: <String, String>{
-          ...route.queryParameters,
-          ...MediaViewerCommentContext.buildDeepLinkQuery(
-            entrySource: entrySource,
-            targetParentCommentId: isReply ? cleanParentCommentId : null,
-            targetReplyId: isReply ? cleanCommentId : null,
-            targetCommentId: isReply ? null : cleanCommentId,
-            replyToCommentId: replyToCommentId,
-          ),
-        },
-      )
-      .toString();
 }

@@ -4,6 +4,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/platform/rtc_room_service.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 
 /// 通话中的真实屏幕共享画面。业务共享状态已到达但 LiveKit 轨道尚未订阅时，
 /// 显示明确的接收态，避免退回摄像头宫格造成“共享成功但看不到”的误解。
@@ -23,10 +24,10 @@ class VideoCallScreenShareSurface extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const CupertinoActivityIndicator(color: AppColors.white),
+                  AppRequestFeedback.inline(indicatorColor: AppColors.white),
                   SizedBox(height: AppSpacing.sm),
                   Text(
-                    UITextConstants.callScreenShareConnecting,
+                    CallText.callScreenShareConnecting,
                     style: TextStyle(
                       color: AppColors.white,
                       fontSize: AppTypography.body,

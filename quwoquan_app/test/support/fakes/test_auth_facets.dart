@@ -1,9 +1,10 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock_identity.dart';
 
-/// 测试专用对象级身份 Facet 组合，仅用于 Provider override。
+import '../cloud_services/repository_mock_reexports.dart';
+
+/// local_contract 专用对象级身份 Facet 组合，仅用于 Provider override。
 ///
-/// production/alpha composition 不得导入本文件；测试通过当前 AccountSession、
+/// production/Patrol composition 不得导入本文件；测试通过当前 AccountSession、
 /// AuthenticationChallenge 与 CredentialBinding typed Facet 注入行为。
 class TestAuthFacets
     implements

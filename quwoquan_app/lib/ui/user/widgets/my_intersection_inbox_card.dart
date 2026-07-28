@@ -110,7 +110,7 @@ class _MyIntersectionInboxCardState
           ? const ProfileIntersectionSkeletonList()
           : visible.isEmpty
           ? const ProfileIntersectionEmptyState(
-              text: UITextConstants.profileIntersectionEmptyGuidance,
+              text: ProfileText.profileIntersectionEmptyGuidance,
             )
           : Column(
               mainAxisSize: MainAxisSize.min,

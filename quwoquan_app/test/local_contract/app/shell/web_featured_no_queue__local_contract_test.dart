@@ -31,11 +31,11 @@ void main() {
       expect(find.textContaining('队列'), findsNothing);
 
       // 右侧说明栏已移除，不再展示占位 rail 文案。
-      expect(find.text(UITextConstants.webPcFeaturedRailTitle), findsNothing);
+      expect(find.text(DiscoveryText.webPcFeaturedRailTitle), findsNothing);
 
       // format 筛选 tab 仍可用（图片/视频/图文）。
-      expect(find.text(UITextConstants.workFormatFilterImage), findsOneWidget);
-      expect(find.text(UITextConstants.workFormatFilterVideo), findsWidgets);
+      expect(find.text(DiscoveryText.workFormatFilterImage), findsOneWidget);
+      expect(find.text(DiscoveryText.workFormatFilterVideo), findsWidgets);
     });
   });
 }

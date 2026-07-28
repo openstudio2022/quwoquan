@@ -292,24 +292,17 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                             key: const ValueKey<String>(
                               'works-external-empty-exit',
                             ),
-                            semantic: const UiErrorSemantic(
+                            semantic: AppUserRecoveryContract.semanticFor(
+                              group: AppUserRecoveryGroup.contentUnavailable,
                               category: UiErrorCategory.notFound,
                               scope: UiErrorScope.page,
-                              title: UITextConstants.contentUnavailable,
-                              message: UITextConstants.contentUnavailableReason,
-                              primaryAction: UiErrorAction(
-                                type: UiErrorActionType.dismiss,
-                                label: UITextConstants.back,
-                              ),
-                              dismissible: true,
                               presentation: UiErrorPresentation.emptyPage,
-                              tone: UiErrorTone.neutral,
                               appearanceMode: UiErrorAppearanceMode.dark,
                             ),
                             onAction: (_) async => _dismissViewer(),
                           );
                         }
-                        return Center(child: CupertinoActivityIndicator());
+                        return AppRequestFeedback.section();
                       }
                       if (showLoadMoreSentinel && index >= posts.length) {
                         return _buildLoadMoreSentinel(
@@ -624,10 +617,10 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                         },
                 )
               else ...[
-                const CupertinoActivityIndicator(radius: 16),
+                AppRequestFeedback.inline(),
                 SizedBox(height: AppSpacing.containerSm),
                 Text(
-                  UITextConstants.worksVideoBookLoadingTitle,
+                  DiscoveryText.worksVideoBookLoadingTitle,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.white,
@@ -637,7 +630,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                 ),
                 SizedBox(height: AppSpacing.intraGroupSm),
                 Text(
-                  UITextConstants.worksVideoBookLoadingSubtitle,
+                  DiscoveryText.worksVideoBookLoadingSubtitle,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.white.withValues(alpha: 0.72),

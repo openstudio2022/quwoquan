@@ -17,8 +17,8 @@ class _LoginTopBar extends StatelessWidget {
         Semantics(
           button: true,
           label: dismissPolicy == LoginDismissPolicy.popPrevious
-              ? UITextConstants.loginBackSemanticLabel
-              : UITextConstants.loginDismissSemanticLabel,
+              ? FoundationText.loginBackSemanticLabel
+              : FoundationText.loginDismissSemanticLabel,
           child: AppNavigationBarIconButton(
             icon: dismissPolicy == LoginDismissPolicy.popPrevious
                 ? CupertinoIcons.back

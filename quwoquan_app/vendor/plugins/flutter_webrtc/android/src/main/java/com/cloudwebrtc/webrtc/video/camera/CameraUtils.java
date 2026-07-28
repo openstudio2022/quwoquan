@@ -2,7 +2,7 @@ package com.cloudwebrtc.webrtc.video.camera;
 
 import android.app.Activity;
 import android.graphics.Rect;
-import android.hardware.Camera;
+import android.hardware.*;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CaptureRequest;
@@ -35,6 +35,7 @@ import io.flutter.embedding.engine.systemchannels.PlatformChannel;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 
+@SuppressWarnings("deprecation") // Isolated Camera1 fallback; Camera2 remains the default path.
 public class CameraUtils {
   private static final String TAG = "CameraUtils";
   Activity activity;
@@ -727,4 +728,3 @@ public class CameraUtils {
     }
   }
 }
-

@@ -242,7 +242,7 @@ def _wiki_resolved_title_matches_entity(
     allowed_suffixes.update({"遗址", "遺址", "故里", "古镇", "古鎮", "湿地", "濕地"})
     for alias in entity_aliases:
         alias_key = _normalized_title(alias)
-        if not alias_key or alias_key == entity_key or alias_key not in entity_key:
+        if not alias_key or alias_key == entity_key:
             continue
         if len(alias_key) < 3 and alias_key not in _WIKI_TITLE_ALLOWED_ALIAS_EXACT_2CHAR:
             continue
@@ -250,6 +250,8 @@ def _wiki_resolved_title_matches_entity(
             return True
         if _wiki_admin_disambiguation_matches(title, alias):
             return True
+        if alias_key not in entity_key:
+            continue
         if title_key.startswith(alias_key):
             suffix = title_key[len(alias_key):]
             if suffix in allowed_suffixes:

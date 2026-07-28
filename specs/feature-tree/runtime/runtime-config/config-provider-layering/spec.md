@@ -40,8 +40,8 @@
 - 统一目录结构：`default/` + `alpha/` + `beta/` + `gamma/` + `prod/`
 - 统一覆盖顺序：默认配置 -> 环境配置 -> 环境变量覆盖。
 - 统一部署映射：`environments -> deploy process -> domains`
-- 统一 environment topology：受支持环境分别由 `<env>/runtime.yaml` 声明运行策略，workload 从各服务环境部署目录推导，alpha 仅通过 mock boundary 差异化。
-- 统一环境包策略：App/Service 包的 host allowlist、secret scope、dataSource 与 purity gate 由环境 runtime 驱动。
+- 统一 environment topology：受支持环境分别由 `<env>/runtime.yaml` 声明运行策略，workload 从各服务环境部署目录推导；四环境 App composition 均为 Remote，alpha 只通过容量、endpoint、访问控制、release 与第三方 sandbox 策略差异化。
+- 统一环境包策略：App/Service 包的 host allowlist、secret scope 与 purity gate 由环境 runtime 驱动；production App composition 固定 Remote，不作为环境可切换字段。
 - 统一自动化入口：环境打包、校验、健康检查与巡检统一经 `stackctl` 暴露机器可读报告。
 - `alpha` 的 topology 字段必须完整，不能通过缺字段表达“简化环境”。
 - `prod` 只允许 `artifactPolicy.app.runtimeEnv=prod`，禁止任何 `prod-gray` 目录或枚举。

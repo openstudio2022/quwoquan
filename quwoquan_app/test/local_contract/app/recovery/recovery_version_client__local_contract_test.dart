@@ -14,8 +14,8 @@ void main() {
           requested = request.url;
           return http.Response(
             '{"latestVersion":"1.8.2","latestBuild":"18201",'
-            '"updateUrl":"https://quwoquan.com/download/android",'
-            '"recoveryUrl":"https://quwoquan.com/recovery"}',
+            '"updateUrl":"https://cdn.quwoquan.com/downloads/android/latest.json",'
+            '"recoveryUrl":"https://quwoquan.com/"}',
             200,
           );
         }),
@@ -45,8 +45,8 @@ void main() {
         client: MockClient(
           (_) async => http.Response(
             '{"latestVersion":"1.8.2","latestBuild":"18201",'
-            '"updateUrl":"https://quwoquan.com/download/android",'
-            '"recoveryUrl":"https://quwoquan.com/recovery",'
+            '"updateUrl":"https://cdn.quwoquan.com/downloads/android/latest.json",'
+            '"recoveryUrl":"https://quwoquan.com/",'
             '"diagnosticId":"forbidden"}',
             200,
           ),

@@ -128,17 +128,16 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
           ),
           SizedBox(height: AppSpacing.intraGroupSm),
           tasksAsync.when(
-            loading: () => Padding(
-              padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              child: const CupertinoActivityIndicator(),
-            ),
+            loading: AppRequestFeedback.section,
             error: (error, _) => AppSectionErrorCard(
               margin: EdgeInsets.zero,
-              semantic: runtimeErrorSemantic(
-                context,
-                error: error,
-                category: UiErrorCategory.sectionLoad,
-                scope: UiErrorScope.section,
+              semantic: ensureRetryUiErrorSemantic(
+                runtimeErrorSemantic(
+                  context,
+                  error: error,
+                  category: UiErrorCategory.sectionLoad,
+                  scope: UiErrorScope.section,
+                ),
               ),
               onAction: (action) async {
                 if (action.type == UiErrorActionType.retry ||
@@ -239,17 +238,16 @@ extension _AssistantSkillCenterSections on _AssistantSkillCenterPageState {
           ),
           SizedBox(height: AppSpacing.intraGroupSm),
           sessionsAsync.when(
-            loading: () => Padding(
-              padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              child: const CupertinoActivityIndicator(),
-            ),
+            loading: AppRequestFeedback.section,
             error: (error, _) => AppSectionErrorCard(
               margin: EdgeInsets.zero,
-              semantic: runtimeErrorSemantic(
-                context,
-                error: error,
-                category: UiErrorCategory.sectionLoad,
-                scope: UiErrorScope.section,
+              semantic: ensureRetryUiErrorSemantic(
+                runtimeErrorSemantic(
+                  context,
+                  error: error,
+                  category: UiErrorCategory.sectionLoad,
+                  scope: UiErrorScope.section,
+                ),
               ),
               onAction: (action) async {
                 if (action.type == UiErrorActionType.retry ||

@@ -3,6 +3,7 @@ package reliabletask
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -131,38 +132,93 @@ func TestDataContentFilesystemEvidenceVerifierRejectsEscapingEvidenceRef(t *test
 	}
 }
 
-func TestCountFinalizedDataContentObjectsCountsOnlyReviewedTriples(t *testing.T) {
-	evidenceRoot := t.TempDir()
-	executionID := "20260727--travel-homepage-coverage--cn-zhejiang--scale-034"
-	workPackage := filepath.Join(evidenceRoot, "data", "tasks", executionID)
-	writeDataContentObjectFixture(
-		t,
-		filepath.Join(workPackage, "entities", "地点", "景区", "西湖"),
-		"page.md", "manifest.json", "_entity.json",
-	)
-	writeDataContentObjectFixture(
-		t,
-		filepath.Join(workPackage, "posts", "article", "西湖春行"),
-		"page.md", "manifest.json", "_entity.json",
-	)
-	writeDataContentObjectFixture(
-		t,
-		filepath.Join(workPackage, "posts", "article", "未完成"),
-		"page.md",
-	)
-	writeDataContentObjectFixture(
-		t,
-		filepath.Join(workPackage, "posts", "article", "草稿", "4.draft", "普陀山"),
-		"page.md", "manifest.json", "_entity.json",
-	)
+func TestCountFinalizedDataContentObjectsUsesCarrierSpecificFinalArtifacts(t *testing.T) {
+	tests := []struct {
+		carrier    string
+		execution  string
+		objectPath string
+	}{
+		{
+			carrier:    "homepage",
+			execution:  "20260727--travel-homepage-coverage--cn-zhejiang--scale-034",
+			objectPath: "entities/地点/景区/西湖",
+		},
+		{
+			carrier:    "article",
+			execution:  "20260727--travel-article-coverage--cn-zhejiang--scale-034",
+			objectPath: "posts/article/攻略/西湖春行/1",
+		},
+		{
+			carrier:    "image",
+			execution:  "20260727--travel-image-coverage--cn-zhejiang--scale-034",
+			objectPath: "posts/image/画报/西湖光影/1",
+		},
+		{
+			carrier:    "video",
+			execution:  "20260727--travel-video-coverage--cn-zhejiang--scale-034",
+			objectPath: "posts/video/体验/西湖晨光/1",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.carrier, func(t *testing.T) {
+			evidenceRoot := t.TempDir()
+			objectRoot := filepath.Join(
+				evidenceRoot,
+				"data",
+				"tasks",
+				test.execution,
+				filepath.FromSlash(test.objectPath),
+			)
+			writeFinalizedDataContentObject(
+				t,
+				objectRoot,
+				test.execution,
+				test.carrier,
+			)
 
-	finalized, err := CountFinalizedDataContentObjects(evidenceRoot, executionID)
+			finalized, err := CountFinalizedDataContentObjects(
+				evidenceRoot,
+				test.execution,
+				dataContentCarrierJobs(test.execution, test.carrier),
+			)
+
+			if err != nil {
+				t.Fatal(err)
+			}
+			if finalized != 1 {
+				t.Fatalf("%s finalized object count=%d want=1", test.carrier, finalized)
+			}
+		})
+	}
+}
+
+func TestCountFinalizedDataContentObjectsRejectsHomepageTripleAsArticle(t *testing.T) {
+	evidenceRoot := t.TempDir()
+	executionID := "20260727--travel-article-coverage--cn-zhejiang--scale-035"
+	objectRoot := filepath.Join(
+		evidenceRoot,
+		"data",
+		"tasks",
+		executionID,
+		"posts",
+		"article",
+		"攻略",
+		"伪文章",
+		"1",
+	)
+	writeFinalizedDataContentObject(t, objectRoot, executionID, "homepage")
+
+	finalized, err := CountFinalizedDataContentObjects(
+		evidenceRoot,
+		executionID,
+		dataContentCarrierJobs(executionID, "article"),
+	)
 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if finalized != 2 {
-		t.Fatalf("finalized object count=%d want=2", finalized)
+	if finalized != 0 {
+		t.Fatalf("homepage triple was miscounted as article: %d", finalized)
 	}
 }
 
@@ -170,6 +226,10 @@ func TestCountFinalizedDataContentObjectsTreatsAbsentWorkPackageAsZero(t *testin
 	finalized, err := CountFinalizedDataContentObjects(
 		t.TempDir(),
 		"20260727--travel-homepage-coverage--cn-zhejiang--scale-999",
+		dataContentCarrierJobs(
+			"20260727--travel-homepage-coverage--cn-zhejiang--scale-999",
+			"homepage",
+		),
 	)
 	if err != nil {
 		t.Fatalf("absent work package must not be an error: %v", err)
@@ -180,21 +240,185 @@ func TestCountFinalizedDataContentObjectsTreatsAbsentWorkPackageAsZero(t *testin
 }
 
 func TestCountFinalizedDataContentObjectsRequiresEvidenceRoot(t *testing.T) {
-	_, err := CountFinalizedDataContentObjects("", "20260727--x--cn-zhejiang--scale-001")
+	executionID := "20260727--travel-image-coverage--cn-zhejiang--scale-001"
+	_, err := CountFinalizedDataContentObjects(
+		"",
+		executionID,
+		dataContentCarrierJobs(executionID, "image"),
+	)
 	if err == nil || !strings.Contains(err.Error(), "evidenceRoot") {
 		t.Fatalf("empty evidence root was not rejected: %v", err)
 	}
 }
 
-func writeDataContentObjectFixture(t *testing.T, directory string, files ...string) {
+func TestResolveDataContentExecutionCreatedAtUsesFrozenExecutionSpec(t *testing.T) {
+	evidenceRoot := t.TempDir()
+	executionID := "20260727--travel-video-coverage--cn-zhejiang--scale-036"
+	specPath := filepath.Join(
+		evidenceRoot,
+		"data",
+		"tasks",
+		executionID,
+		filepath.FromSlash(dataContentExecutionSpecRef),
+	)
+	if err := os.MkdirAll(filepath.Dir(specPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		specPath,
+		[]byte("provenance:\n  createdAt: 2026-07-27T01:02:03Z\n"),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	createdAt, err := ResolveDataContentExecutionCreatedAt(evidenceRoot, executionID)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := createdAt.Format("2006-01-02T15:04:05Z07:00"); got != "2026-07-27T01:02:03Z" {
+		t.Fatalf("execution createdAt=%s", got)
+	}
+}
+
+func dataContentCarrierJobs(executionID string, carrier string) []DataContentJob {
+	return []DataContentJob{{
+		ExecutionID: executionID,
+		Carrier:     carrier,
+	}}
+}
+
+func writeFinalizedDataContentObject(
+	t *testing.T,
+	directory string,
+	executionID string,
+	carrier string,
+) {
 	t.Helper()
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range files {
-		if err := os.WriteFile(filepath.Join(directory, name), []byte(name), 0o644); err != nil {
+	objectRef := "/entity/地点/景区/西湖"
+	if carrier != "homepage" {
+		objectRef = "/post/" + carrier + "/fixture"
+	}
+	writeDataContentJSONFixture(
+		t,
+		filepath.Join(directory, dataContentReviewAttestationRef),
+		map[string]any{
+			"executionId":     executionID,
+			"objectRef":       objectRef,
+			"decision":        "approved",
+			"finalizationRef": dataContentFinalizationReportPath,
+		},
+	)
+	switch carrier {
+	case "homepage", "article":
+		finalRef := "page.md"
+		manifest := map[string]any{}
+		if carrier == "article" {
+			finalRef = "article.md"
+			manifest["contentType"] = "article"
+		} else if err := os.WriteFile(
+			filepath.Join(directory, "_entity.json"),
+			[]byte("{}"),
+			0o644,
+		); err != nil {
 			t.Fatal(err)
 		}
+		writeDataContentJSONFixture(t, filepath.Join(directory, "manifest.json"), manifest)
+		body := []byte("# 真实最终产物\n")
+		if err := os.WriteFile(filepath.Join(directory, finalRef), body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		digest, err := dataContentFileSHA256(filepath.Join(directory, finalRef))
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeDataContentJSONFixture(
+			t,
+			filepath.Join(directory, dataContentFinalizationReportRef),
+			map[string]any{
+				"schema":      "quwoquan_data.finalization",
+				"executionId": executionID,
+				"finalRef":    finalRef,
+				"finalSha256": "sha256:" + fmt.Sprintf("%x", digest),
+			},
+		)
+	case "image":
+		assetRef := "assets/cover.jpg"
+		if err := os.MkdirAll(filepath.Join(directory, "assets"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(directory, assetRef), []byte("image"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		writeDataContentJSONFixture(
+			t,
+			filepath.Join(directory, "manifest.json"),
+			map[string]any{
+				"contentType": "image",
+				"assets": []map[string]any{{
+					"fileName": assetRef,
+					"kind":     "image",
+				}},
+			},
+		)
+		writeDataContentJSONFixture(
+			t,
+			filepath.Join(directory, dataContentFinalizationReportRef),
+			map[string]any{"schema": "quwoquan_data.finalization"},
+		)
+	case "video":
+		for ref, content := range map[string]string{
+			"assets/video.mp4":   "video",
+			"assets/poster.webp": "poster",
+			"subtitles.vtt":      "WEBVTT",
+		} {
+			path := filepath.Join(directory, filepath.FromSlash(ref))
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		writeDataContentJSONFixture(
+			t,
+			filepath.Join(directory, "manifest.json"),
+			map[string]any{
+				"contentType": "video",
+				"assets": []map[string]any{{
+					"fileName": "assets/video.mp4",
+					"kind":     "video",
+				}},
+			},
+		)
+		writeDataContentJSONFixture(
+			t,
+			filepath.Join(directory, dataContentFinalizationReportRef),
+			map[string]any{
+				"schema":       "quwoquan_data.video_finalization_report",
+				"videoRef":     "assets/video.mp4",
+				"posterRef":    "assets/poster.webp",
+				"subtitlesRef": "subtitles.vtt",
+			},
+		)
+	}
+}
+
+func writeDataContentJSONFixture(t *testing.T, path string, payload any) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 

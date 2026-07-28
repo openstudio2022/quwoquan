@@ -89,10 +89,10 @@ extension _SearchNetworkResultsPageStateDataNavigation
       return _EntityTopResultModel(
         homepageId: hit.objectId,
         title: hit.title,
-        badge: UITextConstants.searchEntityHomepage,
-        subtitle: hit.subtitle ?? UITextConstants.searchCategoryLocation,
+        badge: SearchText.searchEntityHomepage,
+        subtitle: hit.subtitle ?? SearchText.searchCategoryLocation,
         description:
-            hit.snippet ?? UITextConstants.searchOpenHomepageDescription,
+            hit.snippet ?? SearchText.searchOpenHomepageDescription,
         meta: _SearchNetworkResultsPageState._entityMetaFromHit(hit),
       );
     }
@@ -187,15 +187,15 @@ extension _SearchNetworkResultsPageStateDataNavigation
         category: resolved.category,
         scope: resolved.scope,
         title: unavailableSearchResult
-            ? UITextConstants.searchResultUnavailableTitle
-            : UITextConstants.workOpenFailedTitle,
+            ? SearchText.searchResultUnavailableTitle
+            : ContentText.workOpenFailedTitle,
         message: resolved.message,
         secondaryMessage: resolved.secondaryMessage,
         primaryAction:
             resolved.primaryAction ??
             const UiErrorAction(
               type: UiErrorActionType.dismiss,
-              label: UITextConstants.confirm,
+              label: FoundationText.confirm,
             ),
         secondaryAction: resolved.secondaryAction,
         dismissible: true,

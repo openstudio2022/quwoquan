@@ -704,7 +704,7 @@ class _ImageBookFailureOverlay extends StatelessWidget {
       key: const ValueKey<String>('image-book-failure-overlay'),
       child: ImmersiveMediaFailureContent(
         presentation: const MediaFailurePresentation(
-          title: UITextConstants.imageLoadFailed,
+          title: ContentText.imageLoadFailed,
         ),
         onRetry: onRetry,
         retryKey: const ValueKey<String>('image-book-retry'),

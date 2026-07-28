@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/content_execution_submission.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "rootExecutionId",
+    "executionId",
+    "operation",
+    "carrier",
+    "familyRef",
+    "regionRef",
+    "selector",
+    "quota",
+    "count",
+    "targetNames",
+    "sourceProviders",
+    "retryOf",
+    "gitCommitSha",
+    "sourceDigest",
+    "entityCatalogDigest",
+    "requestDigest",
+    "submittedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "quwoquan_data.content_execution_submission" },
+    "rootExecutionId": { "type": "string", "minLength": 1 },
+    "executionId": { "type": "string", "minLength": 1 },
+    "operation": {
+      "enum": ["homepage.generate", "article.generate", "image.generate", "video.generate"]
+    },
+    "carrier": { "enum": ["homepage", "article", "image", "video"] },
+    "familyRef": { "type": "string", "minLength": 1 },
+    "regionRef": { "type": "string", "minLength": 1 },
+    "selector": { "type": "string", "minLength": 1 },
+    "quota": { "type": "integer", "minimum": 1 },
+    "count": { "type": "integer", "minimum": 1 },
+    "topic": { "type": ["string", "null"] },
+    "targetNames": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "sourceProviders": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "retryOf": { "type": ["string", "null"] },
+    "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "sourceDigest": {
+      "type": "object",
+      "required": ["algorithm", "digest", "inputs"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "entityCatalogDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "requestDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "submittedAt": { "type": "string", "format": "date-time" }
+  }
+}

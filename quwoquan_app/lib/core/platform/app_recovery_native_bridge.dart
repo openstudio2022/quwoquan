@@ -163,8 +163,6 @@ final class AppRecoveryNativeBridge {
     }
     final host = uri.host.toLowerCase();
     return host == 'quwoquan.com' ||
-        host.endsWith('.quwoquan.com') ||
-        host == 'quwoquan-env.test' ||
-        host.endsWith('.quwoquan-env.test');
+        host.endsWith('.quwoquan.com');
   }
 }

@@ -115,6 +115,7 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
       autoPlay: _isPlaying,
       showControls: true,
       onTap: _togglePlayPause,
+      onExit: widget.onClose,
       aspectRatio: 9 / 16, // 竖屏视频比例
     );
   }
@@ -265,7 +266,7 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                           Text(
                             currentPost['displayName'] ??
                                 currentPost['username'] ??
-                                UITextConstants.user,
+                                FoundationText.user,
                             style: TextStyle(
                               color: AppColors.white,
                               fontSize: AppTypography.base.sp,
@@ -308,8 +309,8 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                           ),
                           child: Text(
                             isFollowing
-                                ? UITextConstants.following
-                                : UITextConstants.follow,
+                                ? FoundationText.following
+                                : FoundationText.follow,
                             style: TextStyle(
                               color: isFollowing
                                   ? (isDark

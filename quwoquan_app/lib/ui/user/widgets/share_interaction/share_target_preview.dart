@@ -38,8 +38,8 @@ class ShareTargetPreview extends StatelessWidget {
       if (item.previewImageUrl.trim().isEmpty) {
         return _TextPreview(
           text: item.previewKind == SharePreviewKind.video
-              ? UITextConstants.profileShareVideo
-              : UITextConstants.profileShareImageUnavailable,
+              ? ProfileText.profileShareVideo
+              : ProfileText.profileShareImageUnavailable,
         );
       }
       return Stack(
@@ -50,8 +50,8 @@ class ShareTargetPreview extends StatelessWidget {
             fit: BoxFit.cover,
             errorWidget: _TextPreview(
               text: item.previewKind == SharePreviewKind.video
-                  ? UITextConstants.profileShareVideo
-                  : UITextConstants.profileShareImageUnavailable,
+                  ? ProfileText.profileShareVideo
+                  : ProfileText.profileShareImageUnavailable,
             ),
           ),
           if (item.previewKind == SharePreviewKind.video)
@@ -111,23 +111,23 @@ class _TextPreview extends StatelessWidget {
 String _discussionText(ShareInteractionItem item) {
   final summary = _firstText(item.targetSummary, item.previewText);
   if (item.targetReplyCount <= 0) return summary;
-  return '$summary · ${item.targetReplyCount}${UITextConstants.profileShareDiscussionRepliesSuffix}';
+  return '$summary · ${item.targetReplyCount}${ProfileText.profileShareDiscussionRepliesSuffix}';
 }
 
 String _unavailableText(ShareTargetAvailability availability) {
   return switch (availability) {
-    ShareTargetAvailability.deleted => UITextConstants.profileShareDeleted,
-    ShareTargetAvailability.private => UITextConstants.profileSharePrivate,
-    ShareTargetAvailability.reviewing => UITextConstants.profileShareReviewing,
+    ShareTargetAvailability.deleted => ProfileText.profileShareDeleted,
+    ShareTargetAvailability.private => ProfileText.profileSharePrivate,
+    ShareTargetAvailability.reviewing => ProfileText.profileShareReviewing,
     ShareTargetAvailability.authorDeactivated =>
-      UITextConstants.profileShareAuthorDeactivated,
+      ProfileText.profileShareAuthorDeactivated,
     ShareTargetAvailability.active =>
-      UITextConstants.profileInteractionPreviewUnavailable,
+      ProfileText.profileInteractionPreviewUnavailable,
   };
 }
 
 String _firstText(String first, String second) {
   if (first.trim().isNotEmpty) return first.trim();
   if (second.trim().isNotEmpty) return second.trim();
-  return UITextConstants.profileInteractionPreviewUnavailable;
+  return ProfileText.profileInteractionPreviewUnavailable;
 }

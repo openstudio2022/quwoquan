@@ -50,7 +50,7 @@ extension _ImageEditorOperationPanelFilter on ImageEditorOperationPanel {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                UITextConstants.imageEditorFilterLoadFailed,
+                MediaText.imageEditorFilterLoadFailed,
                 style: TextStyle(
                   color: foregroundSecondary,
                   fontSize: AppTypography.sm,
@@ -62,7 +62,7 @@ extension _ImageEditorOperationPanelFilter on ImageEditorOperationPanel {
                   vertical: AppSpacing.xs,
                 ),
                 onPressed: onFilterCatalogRetry,
-                child: const Text(UITextConstants.tryAgain),
+                child: const Text(ContentText.tryAgain),
               ),
             ],
           ),

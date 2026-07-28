@@ -13,7 +13,7 @@
 
 - [`career-interest-profile-editor`](./career-interest-profile-editor/spec.md)：职业与兴趣入口不依赖端侧完整枚举。
 - [`owner-subaccount-homepage-unification`](./owner-subaccount-homepage-unification/spec.md)：统一 owner/Persona 主页，同时保持点赞、评论与浏览列表的既有行为。
-- [`profile-commercial-readiness`](./profile-commercial-readiness/spec.md)：我的主页首屏展示真实档案与一致统计，Mock/Remote 经 appDataSourceModeProvider 透明切换。
+- [`profile-commercial-readiness`](./profile-commercial-readiness/spec.md)：我的主页首屏展示真实档案与一致统计；alpha/beta/gamma/prod composition 只装配 Remote，对象级 typed double 仅存在 local_contract 测试树。
 
 ## 3. 端云与数据流
 

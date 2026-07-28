@@ -43,7 +43,7 @@ class _SettingsCallsPageState extends ConsumerState<SettingsCallsPage> {
     final settings = state.call;
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
-      title: UITextConstants.settingsCallSection,
+      title: SettingsText.settingsCallSection,
       onBack: () => _goBack(context),
       body: WebPageMaxWidthFrame(
         child: SafeArea(
@@ -62,26 +62,26 @@ class _SettingsCallsPageState extends ConsumerState<SettingsCallsPage> {
                   children: <Widget>[
                     SettingsInsetGroupedSection(
                       isDark: isDark,
-                      header: UITextConstants.settingsCallRingtone,
+                      header: SettingsText.settingsCallRingtone,
                       child: Column(
                         children: <Widget>[
                           _ringtoneRow(
                             isDark: isDark,
-                            label: UITextConstants.settingsCallRingtoneDefault,
+                            label: SettingsText.settingsCallRingtoneDefault,
                             ringtoneId: _defaultRingtone,
                             selected: settings.defaultIncomingCallRingtoneId,
                           ),
                           SettingsInsetFormSectionDivider(isDark: isDark),
                           _ringtoneRow(
                             isDark: isDark,
-                            label: UITextConstants.settingsCallRingtoneClassic,
+                            label: SettingsText.settingsCallRingtoneClassic,
                             ringtoneId: _classicRingtone,
                             selected: settings.defaultIncomingCallRingtoneId,
                           ),
                           SettingsInsetFormSectionDivider(isDark: isDark),
                           _ringtoneRow(
                             isDark: isDark,
-                            label: UITextConstants.settingsCallRingtoneSoft,
+                            label: SettingsText.settingsCallRingtoneSoft,
                             ringtoneId: _softRingtone,
                             selected: settings.defaultIncomingCallRingtoneId,
                           ),
@@ -98,9 +98,9 @@ class _SettingsCallsPageState extends ConsumerState<SettingsCallsPage> {
                         children: <Widget>[
                           SettingsInsetSwitchRow(
                             isDark: isDark,
-                            label: UITextConstants
+                            label: SettingsText
                                 .settingsAllowCallerRingtoneOverride,
-                            subtitle: UITextConstants
+                            subtitle: SettingsText
                                 .settingsAllowCallerRingtoneOverrideSubtitle,
                             value: settings.allowCallerRingtoneOverride,
                             onChanged: (value) => unawaited(
@@ -114,7 +114,7 @@ class _SettingsCallsPageState extends ConsumerState<SettingsCallsPage> {
                           SettingsInsetFormSectionDivider(isDark: isDark),
                           SettingsInsetSwitchRow(
                             isDark: isDark,
-                            label: UITextConstants.settingsEnableCallVibration,
+                            label: SettingsText.settingsEnableCallVibration,
                             value: settings.enableCallVibration,
                             onChanged: (value) => unawaited(
                               _update(
@@ -127,8 +127,8 @@ class _SettingsCallsPageState extends ConsumerState<SettingsCallsPage> {
                           SettingsInsetFormSectionDivider(isDark: isDark),
                           SettingsInsetSwitchRow(
                             isDark: isDark,
-                            label: UITextConstants.settingsEnableGroupCallRing,
-                            subtitle: UITextConstants
+                            label: SettingsText.settingsEnableGroupCallRing,
+                            subtitle: SettingsText
                                 .settingsEnableGroupCallRingSubtitle,
                             value: settings.enableGroupCallRing,
                             onChanged: (value) => unawaited(
@@ -169,7 +169,7 @@ class _SettingsCallsPageState extends ConsumerState<SettingsCallsPage> {
 
   Widget _buildUnavailable(UserSettingsSectionsState state) {
     if (state.isLoading) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     return AppPageErrorState(
       semantic: UiErrorSemanticResolver.resolve(

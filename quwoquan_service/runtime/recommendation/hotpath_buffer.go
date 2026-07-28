@@ -168,6 +168,15 @@ func (b *BufferedHotPath) FilterCandidates(ctx context.Context, userID string, c
 	return b.inner.FilterCandidates(ctx, userID, candidates, at)
 }
 
+func (b *BufferedHotPath) FilterCandidatesRelaxedExposure(
+	ctx context.Context,
+	userID string,
+	candidates []ContentCandidate,
+	at time.Time,
+) ([]ContentCandidate, error) {
+	return b.inner.FilterCandidatesRelaxedExposure(ctx, userID, candidates, at)
+}
+
 // Stop drains the buffer and waits for the flush loop to finish.
 func (b *BufferedHotPath) Stop() {
 	close(b.stopCh)

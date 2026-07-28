@@ -60,6 +60,13 @@ from content.homepage.homepage_text import (
     _split_fact_sentences,
     _strip_frontmatter,
     homepage_base_draft_readiness,
+    load_homepage_base_draft_text,
+)
+from content.homepage.quality_policy import (
+    homepage_body_char_minimum,
+    homepage_fact_count_minimum,
+    homepage_fact_char_minimum,
+    homepage_source_outline_section_minimum,
 )
 from content.homepage.homepage_validation import _asset_closure_issues, _condition_profile_issues
 from content.homepage.homepage_materialization import (
@@ -101,13 +108,10 @@ from content.homepage.homepage_prompt import (
     _render_entity_page_prompt,
     _write_entity_page_prompt_and_placeholder,
 )
-MIN_PAGE_CHARS = 350
 # 实体主页底稿下发上限：取消旧的 4000 截断（旧值会把维基百科页在中段截断，
 # Agent 看不到「技术变革 / 相关古迹」等后段章节，导致多级目录与章节缺失）。
 # 放宽到覆盖绝大多数百科页全文，仅兜底极端超长源避免 token 失控。
 HOMEPAGE_BASE_DRAFT_MAX_CHARS = MEDIA_PROCESSING_POLICY.homepage_base_draft_max_chars
-# 计入 sectionOutline 的关键章节最小去空白正文字数（短于此视为占位/导语碎片）。
-HOMEPAGE_SECTION_MIN_CHARS = 120
 # 发布态 _entity.json 必填集（结构契约唯一定义 = schema/publish/entity.schema.json）。
 # geoTagRef 为区县级主归属行政区标签（裁决 7：单值主归属 + 可选 geoTagRefs 全量数组），
 # 自 discovery_seed/2 起为物化必填；geoTagRefs 仅跨省/跨市地点提供。
@@ -180,7 +184,7 @@ def _entity_base_draft(
     aliases: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Select the strongest homepage-lane evidence as the primary reference."""
-    from content.post.article.base_draft import base_draft_candidates, load_base_draft_text
+    from content.post.article.base_draft import base_draft_candidates
     from core.homepage_source_judge import (
         ADMISSION_PENDING_JUDGE,
         build_judge_request,
@@ -195,9 +199,18 @@ def _entity_base_draft(
         unit_dir = Path(candidate["unitDir"])
         meta_path = unit_dir / "meta.json"
         meta = read_json(meta_path) if meta_path.is_file() else {}
-        readiness = homepage_base_draft_readiness(meta, candidate_text := load_base_draft_text(
-            execution_id, candidate["sourceRef"]
-        ).strip(), entity_name=name, aliases=aliases, unit_dir=unit_dir)
+        readiness = homepage_base_draft_readiness(
+            meta,
+            candidate_text := load_homepage_base_draft_text(
+                execution_id, candidate["sourceRef"]
+            ).strip(),
+            entity_name=name,
+            aliases=aliases,
+            unit_dir=unit_dir,
+            minimum_body_chars=homepage_body_char_minimum(execution_id),
+            minimum_fact_count=homepage_fact_count_minimum(execution_id),
+            minimum_fact_chars=homepage_fact_char_minimum(execution_id),
+        )
         judge = readiness.get("judge") if isinstance(readiness.get("judge"), dict) else {}
         if str(judge.get("decision") or "") == ADMISSION_PENDING_JUDGE:
             # 灰区来源：落判别请求（幂等），等待 Agent 写回 source.judge.json。
@@ -248,7 +261,11 @@ def _entity_base_draft(
     unit_dir = Path(best["unitDir"])
     meta_path = unit_dir / "meta.json"
     meta = read_json(meta_path) if meta_path.is_file() else {}
-    outline = _homepage_section_outline(unit_dir, meta)
+    outline = _homepage_section_outline(
+        unit_dir,
+        meta,
+        min_section_chars=homepage_source_outline_section_minimum(execution_id),
+    )
     structured_text = _homepage_structured_source_text(unit_dir, text, outline)
     from core.content_source_registry import homepage_primary_authority_rank
     return {

@@ -33,8 +33,8 @@ class ActiveCallBar extends ConsumerWidget {
         color: AppColors.primaryColor,
         child: Center(
           child: Text(
-            '${UITextConstants.callOngoing} $minutes:$seconds '
-            '${UITextConstants.callBarTapToReturn}',
+            '${CallText.callOngoing} $minutes:$seconds '
+            '${CallText.callBarTapToReturn}',
             style: TextStyle(
               color: AppColors.white,
               fontSize: AppTypography.sm,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { platformControlPlane } from '../../generated/control-plane/platformControlPlane.generated.js';
 import {
   fetchGrayRoutingPolicy,
@@ -20,12 +20,26 @@ const grayRoutingStages: Array<{ stage: GrayRoutingStage; label: string }> = [
 const grayRoutingDimensions = [
   { key: 'appVersions', label: '端侧版本', header: 'X-Client-App-Version' },
   { key: 'userIds', label: '用户白名单', header: 'X-Client-User-Id' },
-  { key: 'provinces', label: '省份', header: 'X-Client-Region-Code' },
-  { key: 'carriers', label: '运营商', header: 'X-Client-Carrier' },
+  { key: 'provinces', label: '省份（可信边缘接入前禁用）', header: 'X-Client-Region-Code' },
+  { key: 'carriers', label: '运营商（可信边缘接入前禁用）', header: 'X-Client-Carrier' },
 ] as const;
 
+function reportedValue(value: string | undefined): string {
+  return value?.trim() || '未报告';
+}
+
+function releaseStateBadgeTone(state: string): string {
+  if (state === 'rolled_back' || state === 'drift' || state === 'failed') {
+    return 'badge--danger';
+  }
+  if (state === 'paused' || state === '未报告') {
+    return 'badge--warning';
+  }
+  return 'badge--success';
+}
+
 export function PlatformRolloutPage() {
-  const releaseObject = platformControlPlane.object_types.find((item) => item.object_type === 'config_release');
+  const releaseObject = platformControlPlane.object_types.find((item) => item.object_type === 'release_candidate');
   const [releases, setReleases] = useState<ReleaseItem[]>([]);
   const [routingPolicy, setRoutingPolicy] = useState<GrayRoutingPolicyResponse | null>(null);
   const [remoteReady, setRemoteReady] = useState(false);
@@ -51,30 +65,18 @@ export function PlatformRolloutPage() {
       .catch((error) => setRuntimeError(coerceRuntimeError(error)));
   }, []);
 
-  const primaryRelease = releases[0] ?? null;
-  const rolloutSummary = useMemo(() => {
-    if (!primaryRelease) {
-      return null;
-    }
-    return {
-      stageLabel: primaryRelease.currentStage ? `${primaryRelease.currentStage}%` : 'pending',
-      workflowRef: primaryRelease.workflowRef ?? 'n/a',
-      rollbackToken: primaryRelease.rollbackToken ?? 'n/a',
-      releaseState: primaryRelease.releaseState || 'ready',
-      stageState: primaryRelease.stageState || 'pending',
-    };
-  }, [primaryRelease]);
+  const candidateDigest = releases[0]?.releaseId;
 
   return (
     <PageScaffold
-      title="Platform Ops / 灰度与回滚"
-      subtitle="只读展示 CI/CD 与 stackctl 产生的发布、灰度、SLO gate 和回滚事实；Portal 不提供第二执行入口。"
+      title="Platform Ops / 灰度与配置候选"
+      subtitle="只读展示控制面已声明、实例实际 ACK 的候选摘要与 IaC 灰度策略；Portal 不提供第二执行入口。"
       meta={
         <>
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实发布工作流 API 已接入' : '等待平台控制面连接'}
           </span>
-          {rolloutSummary ? <span className="badge badge--neutral">stage={rolloutSummary.stageLabel}</span> : null}
+          {candidateDigest ? <span className="badge badge--neutral">candidate={candidateDigest.slice(0, 16)}</span> : null}
           <RuntimeErrorBadge error={runtimeError} />
         </>
       }
@@ -113,7 +115,7 @@ export function PlatformRolloutPage() {
 
       <SectionCard
         title="灰度路由策略（IaC 只读）"
-        subtitle="按发布阶段读取端侧版本 / userId 白名单 / 省份（GB/T 2260）/ 运营商。命中任一启用维度的请求由可信边缘转发到灰度栈；未知或未命中均走稳定栈。"
+        subtitle="当前仅按端侧版本和 userId 白名单分流。province/carrier 在可信边缘 attestation 与 hosted UAT 到位前保持空值且不参与路由；未知或未命中均走稳定栈。"
       >
         {routingPolicy ? (
           <>
@@ -156,61 +158,29 @@ export function PlatformRolloutPage() {
         )}
       </SectionCard>
 
-      <SectionCard title="工作流闭环" subtitle="审批、阶段状态和 rollback token 只读取 CI/CD 发布账本">
-        <div className="stack-list">
-          {rolloutSummary ? (
-            <>
-              <div className="policy-item">
-                <div>
-                  <p className="item-title">workflowRef</p>
-                  <p className="item-subtitle">{rolloutSummary.workflowRef}</p>
-                </div>
-                <span className="badge badge--neutral">{rolloutSummary.releaseState}</span>
-              </div>
-              <div className="policy-item">
-                <div>
-                  <p className="item-title">rollbackToken</p>
-                  <p className="item-subtitle">{rolloutSummary.rollbackToken}</p>
-                </div>
-                <span className="badge badge--warning">{rolloutSummary.stageState}</span>
-              </div>
-            </>
-          ) : (
-            <div className="config-item">
-              <div>
-                <p className="item-title">等待发布工作流</p>
-                <p className="item-subtitle">CI/CD 发布账本产生 workflowRef / rollbackToken 后，这里显示真实状态。</p>
-              </div>
-              <span className="badge badge--warning">offline</span>
-            </div>
-          )}
-        </div>
-      </SectionCard>
-
-      <SectionCard title="当前发布单" subtitle="Portal 只负责观察；发布、放量与回滚统一经受保护的 CI/CD + stackctl 执行面">
+      <SectionCard title="实例 ACK 候选摘要" subtitle="每行来自当前控制面候选摘要下的实例 ACK 聚合；未声明候选或无 ACK 时不显示合成发布状态。">
         <div className="stack-list">
           {releases.map((release) => (
-            <div className="config-item" key={release.releaseId}>
+            <div className="config-item" key={`${release.releaseId}-${release.service}`}>
               <div>
                 <p className="item-title">{release.service} / {release.releaseId}</p>
                 <p className="item-subtitle">
-                  {release.releaseState || release.configPath}
-                  {release.stageState ? ` · stage=${release.stageState}` : ''}
-                  {release.workflowRef ? ` · workflow=${release.workflowRef}` : ''}
+                  configVersion={reportedValue(release.configVersion)}
+                  {release.updatedAt ? ` · updatedAt=${release.updatedAt}` : ''}
                 </p>
               </div>
-              <span className={`badge ${release.releaseState === 'paused' ? 'badge--warning' : release.releaseState === 'rolled_back' ? 'badge--danger' : 'badge--success'}`}>
-                {release.releaseState || 'ready'}
+              <span className={`badge ${releaseStateBadgeTone(reportedValue(release.releaseState))}`}>
+                {reportedValue(release.releaseState)}
               </span>
             </div>
           ))}
           {releases.length === 0 ? (
             <div className="config-item">
               <div>
-                <p className="item-title">等待发布单接入</p>
-                <p className="item-subtitle">平台控制面可达后将展示配置发布与回滚状态。</p>
+                <p className="item-title">尚无可验证候选 ACK</p>
+                <p className="item-subtitle">控制面候选摘要和实例 ACK 同时存在后才显示；不会从本地文件、默认阶段或伪造 token 推断状态。</p>
               </div>
-              <span className="badge badge--warning">offline</span>
+              <span className="badge badge--warning">not_reported</span>
             </div>
           ) : null}
         </div>

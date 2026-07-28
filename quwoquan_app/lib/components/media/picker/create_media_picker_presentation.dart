@@ -53,7 +53,7 @@ String mediaPickerCompletionLabel({
   required MediaPickerEntryMode mode,
   required int selectionCount,
 }) {
-  const prefix = UITextConstants.mediaPickerNextStep;
+  const prefix = MediaText.mediaPickerNextStep;
   return '$prefix($selectionCount)';
 }
 
@@ -69,7 +69,7 @@ List<CreateMediaPickerBottomActionSpec> mediaPickerBottomActionsForEntryMode({
     return <CreateMediaPickerBottomActionSpec>[
       CreateMediaPickerBottomActionSpec(
         action: CreateMediaPickerBottomAction.editImage,
-        label: UITextConstants.mediaPickerOneTapMovie,
+        label: MediaText.mediaPickerOneTapMovie,
         enabled: canCreateOneTapMovie,
         isPrimary: false,
       ),

@@ -481,16 +481,28 @@ func (s *RemoteModelScorer) ScoreBatch(ctx context.Context, features *ScoringFea
 		Context:        reqCtx,
 	})
 	if err != nil {
-		return nil, err
+		return nil, NewFeedFailure(FailureStageScorerUnavailable, err)
 	}
 	if resp == nil {
-		return nil, fmt.Errorf("model scorer returned an empty response")
+		return nil, NewFeedFailure(
+			FailureStageScorerEmptyOutput,
+			fmt.Errorf("model scorer returned an empty response"),
+		)
 	}
 	if len(candidates) > 0 && strings.TrimSpace(resp.ModelReleaseID) == "" {
 		// 模型服务允许用 NULL 表达“未命中激活发布”；这对 transport 合法，
 		// 但不能被线上引擎误报成 model 成功。返回错误交给 CascadeScorer 的
 		// RuleScorer 兜底，保证 fallback 指标与曝光 modelReleaseId 都诚实。
-		return nil, fmt.Errorf("model scorer returned no active model release")
+		return nil, NewFeedFailure(
+			FailureStageScorerUnavailable,
+			fmt.Errorf("model scorer returned no active model release"),
+		)
+	}
+	if len(candidates) > 0 && len(resp.Scores) == 0 {
+		return nil, NewFeedFailure(
+			FailureStageScorerEmptyOutput,
+			fmt.Errorf("model scorer returned no scores for %d candidates", len(candidates)),
+		)
 	}
 
 	scoreMap := make(map[string]CandidateScore, len(resp.Scores))
@@ -614,6 +626,17 @@ func (c *CascadeScorer) ScoreBatchWithPath(
 	features *ScoringFeatures,
 	candidates []ContentCandidate,
 ) ([]ScoredCandidate, bool, error) {
+	result, usedFallback, _, err := c.ScoreBatchWithFailureStage(ctx, features, candidates)
+	return result, usedFallback, err
+}
+
+// ScoreBatchWithFailureStage exposes the bounded primary failure stage when
+// fallback succeeds, allowing callers to report a truthful degraded terminal.
+func (c *CascadeScorer) ScoreBatchWithFailureStage(
+	ctx context.Context,
+	features *ScoringFeatures,
+	candidates []ContentCandidate,
+) ([]ScoredCandidate, bool, FailureStage, error) {
 	scoreCtx := ctx
 	if c.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -622,8 +645,18 @@ func (c *CascadeScorer) ScoreBatchWithPath(
 	}
 
 	result, err := c.Primary.ScoreBatch(scoreCtx, features, candidates)
+	if err == nil && (len(candidates) == 0 || len(result) > 0) {
+		return result, false, FailureStageNone, nil
+	}
 	if err == nil {
-		return result, false, nil
+		err = NewFeedFailure(
+			FailureStageScorerEmptyOutput,
+			fmt.Errorf("primary scorer returned no output for %d candidates", len(candidates)),
+		)
+	}
+	primaryStage := FailureStageOf(err)
+	if primaryStage == FailureStageNone {
+		primaryStage = FailureStageScorerUnavailable
 	}
 
 	if c.Logger != nil {
@@ -637,5 +670,18 @@ func (c *CascadeScorer) ScoreBatchWithPath(
 	}
 
 	fallbackResult, fallbackErr := c.Fallback.ScoreBatch(ctx, features, candidates)
-	return fallbackResult, true, fallbackErr
+	if fallbackErr != nil {
+		stage := FailureStageOf(fallbackErr)
+		if stage == FailureStageNone {
+			stage = FailureStageScorerUnavailable
+		}
+		return nil, true, stage, fallbackErr
+	}
+	if len(candidates) > 0 && len(fallbackResult) == 0 {
+		return nil, true, FailureStageScorerEmptyOutput, NewFeedFailure(
+			FailureStageScorerEmptyOutput,
+			fmt.Errorf("fallback scorer returned no output for %d candidates", len(candidates)),
+		)
+	}
+	return fallbackResult, true, primaryStage, nil
 }

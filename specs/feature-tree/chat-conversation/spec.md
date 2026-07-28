@@ -124,7 +124,7 @@
 ### REQ-003 `encrypted`：保留给加密或密信能力
 
 - `encrypted`：保留给加密或密信能力；未接入 chat-service 主链前不得作为首发主推能力。
-- 端侧数据源必须支持 mock/remote 无感切换（Provider 模式）
+- alpha/beta/gamma/prod App 只装配 Remote chat typed ports；对象级 typed double 仅存在 local_contract 测试树，禁止 runner/UAT override 与运行时 Mock/Remote 切换。
 - 会话与消息接口统一 `{ items, nextCursor }` 分页协议
 - 聊天全链路必须透传 `X-Request-Id` / `X-Trace-Id` / `X-Client-Page-Id` / `X-Client-Session-Id`
 - Message.seq 为服务端唯一真相，客户端禁止自行生成 seq

@@ -36,9 +36,10 @@
             "reviewer": { "type": "integer", "minimum": 1 },
             "research": { "type": "integer", "minimum": 1 },
             "download": { "type": "integer", "minimum": 1 },
+            "campaignLaneWorkers": { "type": "integer", "minimum": 1 },
             "cursorBridgeInstances": { "type": "integer", "minimum": 1 }
           },
-          "required": ["author", "reviewer", "research", "download", "cursorBridgeInstances"],
+          "required": ["author", "reviewer", "research", "download", "campaignLaneWorkers", "cursorBridgeInstances"],
           "additionalProperties": false
         },
         "selection": {
@@ -53,6 +54,8 @@
           "type": "object",
           "properties": {
             "startupTimeoutSeconds": { "type": "integer", "minimum": 1 },
+            "campaignSubmissionTimeoutSeconds": { "type": "integer", "minimum": 1 },
+            "campaignLaneTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "preflightNetworkTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "agentTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "authRetryLimit": { "type": "integer", "minimum": 1 },
@@ -92,6 +95,7 @@
             "apiRequestTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "directFetchTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "sourceFetchTimeoutSeconds": { "type": "integer", "minimum": 1 },
+            "sourceVideoReadTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "sourceFetchMaxRetries": { "type": "integer", "minimum": 1 },
             "ocrTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "videoProbeTimeoutSeconds": { "type": "integer", "minimum": 1 },
@@ -119,7 +123,8 @@
             "coverageOverpassQueryTimeoutSeconds": { "type": "integer", "minimum": 1 }
           },
           "required": [
-            "startupTimeoutSeconds", "preflightNetworkTimeoutSeconds",
+            "startupTimeoutSeconds", "campaignSubmissionTimeoutSeconds",
+            "campaignLaneTimeoutSeconds", "preflightNetworkTimeoutSeconds",
             "agentTimeoutSeconds", "authRetryLimit",
             "authRetryDelaySeconds", "noProgressRoundLimit",
             "researchWaveSize", "researchMaxWavesPerRun", "sourcePlanRecoveryPasses", "sourcePlanRecoveryWorkers",
@@ -138,7 +143,8 @@
             "localProcessProbeTimeoutSeconds", "processTerminationTimeoutSeconds",
             "agentFuturePollTimeoutSeconds", "apiRequestTimeoutSeconds",
             "directFetchTimeoutSeconds",
-            "sourceFetchTimeoutSeconds", "sourceFetchMaxRetries", "ocrTimeoutSeconds",
+            "sourceFetchTimeoutSeconds", "sourceVideoReadTimeoutSeconds",
+            "sourceFetchMaxRetries", "ocrTimeoutSeconds",
             "videoProbeTimeoutSeconds", "videoTranscodeTimeoutSeconds",
             "mediawikiFallbackRetries", "mediawikiWikitextMaxRetries", "queueLeaseTtlSeconds",
             "queueHeartbeatSeconds", "queueMaxAttempts", "queueMaxStartupFailures",

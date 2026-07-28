@@ -23,6 +23,9 @@ URL_FIELDS = (
     "realtime",
     "rtc",
     "productOps",
+    "publicWeb",
+    "appDownload",
+    "legal",
     "mediaAvatar",
     "mediaImage",
     "mediaVideo",
@@ -31,6 +34,9 @@ URL_FIELDS = (
 SECURE_HTTP_FIELDS = (
     "api",
     "productOps",
+    "publicWeb",
+    "appDownload",
+    "legal",
     "mediaAvatar",
     "mediaImage",
     "mediaVideo",
@@ -39,7 +45,6 @@ SECURE_HTTP_FIELDS = (
 REQUIRED_SUBNETS = ("edge", "media", "service", "data")
 REQUIRED_APP_POLICY = (
     "runtimeEnv",
-    "dataSource",
     "allowSeeds",
     "allowLocalHosts",
     "allowProdHosts",
@@ -62,6 +67,9 @@ LOCAL_PUBLIC_PORT_ROLES = {
     "realtime": "api-edge",
     "rtc": "api-edge",
     "productOps": "product-ops-edge",
+    "publicWeb": "api-edge",
+    "legal": "api-edge",
+    "appDownload": "media-edge",
     "mediaAvatar": "media-edge",
     "mediaImage": "media-edge",
     "mediaVideo": "media-edge",
@@ -74,6 +82,59 @@ LOCAL_ORIGIN_PORT_ROLES = {
 DATA_RELEASE_MODES = {"projection-only", "local-import", "hosted-import"}
 DATA_RELEASE_ENV_KEY_RE = re.compile(r"^QWQ_[A-Z0-9_]+$")
 WORKLOAD_PLANES = {"edge", "media", "service", "data"}
+ROLE_SCHEMES = {
+    "api": "https",
+    "realtime": "wss",
+    "rtc": "wss",
+    "productOps": "https",
+    "publicWeb": "https",
+    "appDownload": "https",
+    "legal": "https",
+    "mediaAvatar": "https",
+    "mediaImage": "https",
+    "mediaVideo": "https",
+    "mediaUpload": "https",
+}
+ROLE_PATH_BASES = {
+    "api": "/",
+    "realtime": "/",
+    "rtc": "/",
+    "productOps": "/",
+    "publicWeb": "/",
+    "appDownload": "/app/download",
+    "legal": "/legal",
+    "mediaAvatar": "/media/avatar",
+    "mediaImage": "/media/image",
+    "mediaVideo": "/media/video",
+    "mediaUpload": "/",
+}
+ROLE_HOST_LABELS = {
+    "api": "api",
+    "realtime": "api",
+    "rtc": "rtc",
+    "productOps": "ops",
+    "publicWeb": "",
+    "appDownload": "cdn",
+    "legal": "",
+    "mediaAvatar": "cdn",
+    "mediaImage": "cdn",
+    "mediaVideo": "cdn",
+    "mediaUpload": "upload",
+}
+TARGET_HOST_ENV_LABELS = {
+    "alpha-local": "alpha",
+    "beta-local": "beta",
+    "gamma-local": "gamma",
+    "prod-sim": "sim",
+    "prod-hosted": "",
+}
+LOCAL_TLS_PROFILE_BY_TARGET = {
+    "alpha-local": "acme-dns01-alpha",
+    "beta-local": "acme-dns01-beta",
+    "gamma-local": "acme-dns01-gamma",
+    "prod-sim": "acme-dns01-sim",
+}
+PROD_TLS_PROFILE = "public-ca-prod"
 
 
 def load_environment_topology(path: Path | None = None) -> dict[str, Any]:
@@ -81,7 +142,7 @@ def load_environment_topology(path: Path | None = None) -> dict[str, Any]:
         loaded = load_json_yaml(path)
         if not isinstance(loaded, dict):
             raise RuntimeError("environment topology input must be a mapping")
-        return loaded
+        return _materialize_public_bases(loaded)
 
     environment_root = path or DEFAULT_PATH
     environments: dict[str, dict[str, Any]] = {}
@@ -107,11 +168,114 @@ def load_environment_topology(path: Path | None = None) -> dict[str, Any]:
             if target_name in targets:
                 raise RuntimeError(f"duplicate target definition: {target_name}")
             targets[str(target_name)] = target
-    return {
+    return _materialize_public_bases({
         "schema": "environment-topology",
         "environments": environments,
         "targets": targets,
-    }
+    })
+
+
+def _materialize_public_bases(manifest: dict[str, Any]) -> dict[str, Any]:
+    """从结构化 urlRoles 生成消费者兼容的只读 publicBases 投影。"""
+
+    environments = manifest.get("environments")
+    targets = manifest.get("targets")
+    if not isinstance(environments, dict) or not isinstance(targets, dict):
+        return manifest
+
+    resolution_errors: list[str] = []
+    for target_name, raw_target in list(targets.items()):
+        if not isinstance(raw_target, dict):
+            continue
+        target = dict(raw_target)
+        targets[target_name] = target
+        env_name = str(target.get("env") or "")
+        env = environments.get(env_name)
+        if not isinstance(env, dict):
+            continue
+        try:
+            resolved_roles, public_bases = _resolve_target_url_roles(
+                target_name,
+                env,
+                target,
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            resolution_errors.append(f"{target_name}: {exc}")
+            continue
+        target["resolvedUrlRoles"] = resolved_roles
+        target["publicBases"] = public_bases
+
+    for env_name, target_name in ENVIRONMENT_CANONICAL_TARGET.items():
+        env = environments.get(env_name)
+        target = targets.get(target_name)
+        if not isinstance(env, dict) or not isinstance(target, dict):
+            continue
+        public_bases = target.get("publicBases")
+        if isinstance(public_bases, dict):
+            env["publicBases"] = dict(public_bases)
+
+    if resolution_errors:
+        manifest["_urlResolutionErrors"] = resolution_errors
+    return manifest
+
+
+def _resolve_target_url_roles(
+    target_name: str,
+    environment: dict[str, Any],
+    target: dict[str, Any],
+) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+    base_roles = environment.get("urlRoles")
+    if not isinstance(base_roles, dict):
+        raise TypeError("environment urlRoles must be a mapping")
+    overrides = target.get("urlOverrides") or {}
+    if not isinstance(overrides, dict):
+        raise TypeError("urlOverrides must be a mapping")
+    unknown_overrides = sorted(set(overrides) - set(URL_FIELDS))
+    if unknown_overrides:
+        raise ValueError(f"urlOverrides contains unknown roles: {unknown_overrides}")
+
+    backend = str(target.get("backend") or "")
+    profile = target.get("portProfile")
+    role_ports: dict[str, int] = {}
+    if backend == "local":
+        if not profile:
+            raise ValueError("local target requires portProfile")
+        role_ports = profile_ports(load_port_manifest(), str(profile))
+
+    resolved_roles: dict[str, dict[str, Any]] = {}
+    public_bases: dict[str, str] = {}
+    for field in URL_FIELDS:
+        base = base_roles.get(field)
+        if not isinstance(base, dict):
+            raise TypeError(f"urlRoles.{field} must be a mapping")
+        override = overrides.get(field) or {}
+        if not isinstance(override, dict):
+            raise TypeError(f"urlOverrides.{field} must be a mapping")
+        role = {**base, **override}
+        port_role = role.get("portRole")
+        port: int | None = None
+        if backend == "local":
+            if not isinstance(port_role, str) or port_role not in role_ports:
+                raise ValueError(
+                    f"urlRoles.{field}.portRole must reference {profile}"
+                )
+            port = role_ports[port_role]
+        elif port_role is not None:
+            raise ValueError(
+                f"urlRoles.{field}.portRole must be null for non-local targets"
+            )
+        resolved_roles[field] = role
+        public_bases[field] = _build_role_base_url(role, port=port)
+    return resolved_roles, public_bases
+
+
+def _build_role_base_url(role: dict[str, Any], *, port: int | None) -> str:
+    scheme = str(role.get("scheme") or "").strip()
+    host = str(role.get("host") or "").strip()
+    path_base = str(role.get("pathBase") or "").strip()
+    authority = f"{host}:{port}" if port is not None else host
+    suffix = "" if path_base == "/" else path_base
+    return f"{scheme}://{authority}{suffix}"
 
 
 def _scan_environment_workloads(env_name: str) -> list[dict[str, str]]:
@@ -187,7 +351,9 @@ def validate_environment_topology(
     *,
     port_manifest: dict[str, Any] | None = None,
 ) -> list[str]:
-    issues: list[str] = []
+    issues: list[str] = [
+        str(issue) for issue in manifest.get("_urlResolutionErrors", [])
+    ]
     if manifest.get("schema") != "environment-topology":
         issues.append("schema must be environment-topology")
 
@@ -254,16 +420,31 @@ def validate_environment_topology(
                 issues.append(
                     f"{env_name}: topology deploymentRef has no environment overlay: {stale}"
                 )
-        public_bases = env.get("publicBases")
-        if not isinstance(public_bases, dict):
-            issues.append(f"{env_name}: publicBases must be a mapping")
+        url_roles = env.get("urlRoles")
+        if not isinstance(url_roles, dict):
+            issues.append(f"{env_name}: urlRoles must be a mapping")
         else:
             for field in URL_FIELDS:
-                value = str(public_bases.get(field, "")).strip()
-                if not value:
-                    issues.append(f"{env_name}: publicBases.{field} is required")
+                role = url_roles.get(field)
+                if not isinstance(role, dict):
+                    issues.append(f"{env_name}: urlRoles.{field} is required")
                 else:
-                    issues.extend(_validate_public_base_url(f"{env_name}: publicBases.{field}", field, value))
+                    issues.extend(
+                        _validate_url_role_definition(
+                            f"{env_name}: urlRoles.{field}",
+                            field,
+                            role,
+                        )
+                    )
+        public_bases = env.get("publicBases")
+        if not isinstance(public_bases, dict):
+            issues.append(f"{env_name}: derived publicBases must be a mapping")
+        if "hostAllowlist" in env:
+            issues.append(f"{env_name}: hostAllowlist must be derived, not declared")
+        if "forbiddenHostTokens" in env:
+            issues.append(
+                f"{env_name}: forbiddenHostTokens is retired; use host grammar validation"
+            )
 
         subnets = env.get("subnets")
         if not isinstance(subnets, dict):
@@ -301,40 +482,6 @@ def validate_environment_topology(
                             f"{env_name}: artifactPolicy.service.{field} is required"
                         )
 
-        allowlist = env.get("hostAllowlist")
-        if not isinstance(allowlist, list) or not allowlist:
-            issues.append(f"{env_name}: hostAllowlist must be a non-empty list")
-            allowlist_values: set[str] = set()
-        else:
-            allowlist_values = {str(item).strip() for item in allowlist if str(item).strip()}
-
-        if isinstance(public_bases, dict):
-            public_values = [
-                str(public_bases.get(field, "")).strip()
-                for field in URL_FIELDS
-            ]
-            public_hosts = {_url_host(value) for value in public_values}
-            public_hosts.discard("")
-            for host in sorted(public_hosts):
-                if host not in allowlist_values:
-                    issues.append(
-                        f"{env_name}: publicBases host {host} must be listed in hostAllowlist"
-                    )
-            forbidden_tokens = [
-                str(item).strip()
-                for item in env.get("forbiddenHostTokens", [])
-                if str(item).strip()
-            ]
-            joined_public_values = "\n".join(public_values)
-            for token in forbidden_tokens:
-                if token in joined_public_values:
-                    issues.append(
-                        f"{env_name}: publicBases must not contain forbidden host token {token}"
-                    )
-
-        if env.get("artifactPolicy", {}).get("app", {}).get("dataSource") != "remote":
-            issues.append(f"{env_name}: artifactPolicy.app.dataSource must be remote")
-
     targets = manifest.get("targets")
     if not isinstance(targets, dict):
         issues.append("targets must be a mapping")
@@ -357,21 +504,60 @@ def validate_environment_topology(
         env_name = str(target.get("env", "")).strip()
         if env_name not in ENVIRONMENTS:
             issues.append(f"{target_name}: env must be one of {', '.join(ENVIRONMENTS)}")
+        if target.get("baseRoleSet") != "environment":
+            issues.append(f"{target_name}: baseRoleSet must be environment")
+        url_overrides = target.get("urlOverrides") or {}
+        if not isinstance(url_overrides, dict):
+            issues.append(f"{target_name}: urlOverrides must be a mapping")
         public_bases = target.get("publicBases")
         if not isinstance(public_bases, dict):
-            issues.append(f"{target_name}: publicBases must be a mapping")
+            issues.append(f"{target_name}: derived publicBases must be a mapping")
         else:
             for field in URL_FIELDS:
                 value = str(public_bases.get(field, "")).strip()
                 if not value:
-                    issues.append(f"{target_name}: publicBases.{field} is required")
+                    issues.append(
+                        f"{target_name}: derived publicBases.{field} is required"
+                    )
                 else:
                     issues.extend(
-                        _validate_public_base_url(
+                        _validate_target_public_base(
                             f"{target_name}: publicBases.{field}",
+                            target_name,
                             field,
                             value,
                         )
+                    )
+        resolved_roles = target.get("resolvedUrlRoles")
+        if not isinstance(resolved_roles, dict):
+            issues.append(f"{target_name}: resolvedUrlRoles must be a mapping")
+        else:
+            expected_tls_profile = (
+                PROD_TLS_PROFILE
+                if target_name == "prod-hosted"
+                else LOCAL_TLS_PROFILE_BY_TARGET.get(target_name)
+            )
+            for field in URL_FIELDS:
+                role = resolved_roles.get(field)
+                if not isinstance(role, dict):
+                    issues.append(
+                        f"{target_name}: resolvedUrlRoles.{field} is required"
+                    )
+                    continue
+                expected_port_role = None
+                if target_name != "prod-hosted":
+                    expected_port_role = LOCAL_PUBLIC_PORT_ROLES[field]
+                    if target_name == "gamma-local" and field == "mediaUpload":
+                        expected_port_role = "object-storage-edge"
+                if role.get("portRole") != expected_port_role:
+                    issues.append(
+                        f"{target_name}: resolvedUrlRoles.{field}.portRole must be "
+                        f"{expected_port_role}"
+                    )
+                if role.get("tlsProfile") != expected_tls_profile:
+                    issues.append(
+                        f"{target_name}: resolvedUrlRoles.{field}.tlsProfile must be "
+                        f"{expected_tls_profile}"
                     )
         backend = str(target.get("backend", "")).strip()
         if backend not in {"local", "ssh-hosted"}:
@@ -414,11 +600,6 @@ def validate_environment_topology(
                         issues.append(
                             f"{target_name}: publicBases.{field} port must match {profile}/{role_name}={expected_port}, got {actual_port}"
                         )
-                    host = _url_host(value)
-                    if not host.endswith(".quwoquan-env.test"):
-                        issues.append(
-                            f"{target_name}: publicBases.{field} must use a quwoquan-env.test host"
-                        )
             origins = target.get("origins")
             if origins is None:
                 origins = {}
@@ -447,11 +628,6 @@ def validate_environment_topology(
                 if mode not in DATA_RELEASE_MODES:
                     issues.append(
                         f"{target_name}: dataRelease.mode must be one of {sorted(DATA_RELEASE_MODES)}"
-                    )
-                public_key = str(data_release.get("mediaPublicBaseKey") or "")
-                if public_key not in URL_FIELDS:
-                    issues.append(
-                        f"{target_name}: dataRelease.mediaPublicBaseKey must name a publicBases field"
                     )
                 if mode == "projection-only" and env_name != "alpha":
                     issues.append(
@@ -496,19 +672,6 @@ def validate_environment_topology(
             issues.append("prod-hosted target must map to prod environment")
         if target_name == "prod-hosted" and backend != "ssh-hosted":
             issues.append("prod-hosted target must use ssh-hosted backend")
-        if backend == "ssh-hosted" and isinstance(public_bases, dict):
-            env_allowlist = {
-                str(item).strip()
-                for item in get_environment(manifest, env_name).get("hostAllowlist", [])
-                if str(item).strip()
-            }
-            for field in URL_FIELDS:
-                host = _url_host(str(public_bases.get(field, "")).strip())
-                if host and host not in env_allowlist:
-                    issues.append(
-                        f"{target_name}: publicBases.{field} host {host} must be allowed by {env_name}"
-                    )
-
     for env_name, target_name in ENVIRONMENT_CANONICAL_TARGET.items():
         env = environments.get(env_name)
         target = targets.get(target_name)
@@ -534,13 +697,31 @@ def environment_url_values(manifest: dict[str, Any], env_name: str) -> list[str]
 
 
 def host_allowlist(manifest: dict[str, Any], env_name: str) -> list[str]:
-    return [str(item) for item in get_environment(manifest, env_name).get("hostAllowlist", [])]
+    return sorted(
+        {
+            _url_host(value)
+            for value in environment_url_values(manifest, env_name)
+            if _url_host(value)
+        }
+    )
 
 
 def forbidden_host_tokens(manifest: dict[str, Any], env_name: str) -> list[str]:
+    if env_name == "prod":
+        return [
+            ".test",
+            ".alpha.quwoquan.com",
+            ".beta.quwoquan.com",
+            ".gamma.quwoquan.com",
+            ".sim.quwoquan.com",
+            "127.0.0.1",
+            "10.0.2.2",
+            ".localhost",
+        ]
+    other_labels = sorted({"alpha", "beta", "gamma", "sim"} - {env_name})
     return [
-        str(item)
-        for item in get_environment(manifest, env_name).get("forbiddenHostTokens", [])
+        ".test",
+        *(f".{label}.quwoquan.com" for label in other_labels),
     ]
 
 
@@ -558,18 +739,89 @@ def _looks_like_cidr(value: str) -> bool:
     return bool(re.match(r"^\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}$", value))
 
 
-def _validate_public_base_url(label: str, field: str, value: str) -> list[str]:
-    if field in {"realtime", "rtc"}:
-        if value.startswith("wss://"):
-            return []
-        return [f"{label} must use secure wss://"]
-    if field in SECURE_HTTP_FIELDS:
-        if value.startswith("https://"):
-            return []
-        return [f"{label} must use secure https://"]
-    if value.startswith(("http://", "https://", "ws://", "wss://")):
-        return []
-    return [f"{label} must include http(s)/ws(s) scheme"]
+def _validate_url_role_definition(
+    label: str,
+    field: str,
+    role: dict[str, Any],
+) -> list[str]:
+    issues: list[str] = []
+    allowed_fields = {
+        "exposure",
+        "scheme",
+        "host",
+        "portRole",
+        "pathBase",
+        "tlsProfile",
+        "consumers",
+    }
+    unknown = sorted(set(role) - allowed_fields)
+    if unknown:
+        issues.append(f"{label} contains unsupported fields: {unknown}")
+    if role.get("exposure") != "public":
+        issues.append(f"{label}.exposure must be public")
+    if role.get("scheme") != ROLE_SCHEMES[field]:
+        issues.append(f"{label}.scheme must be {ROLE_SCHEMES[field]}")
+    host = str(role.get("host") or "").strip()
+    if not re.fullmatch(
+        r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+quwoquan\.com",
+        host,
+    ) and host != "quwoquan.com":
+        issues.append(f"{label}.host must be a canonical quwoquan.com hostname")
+    if role.get("pathBase") != ROLE_PATH_BASES[field]:
+        issues.append(f"{label}.pathBase must be {ROLE_PATH_BASES[field]}")
+    tls_profile = str(role.get("tlsProfile") or "").strip()
+    if not tls_profile:
+        issues.append(f"{label}.tlsProfile is required")
+    consumers = role.get("consumers")
+    if (
+        not isinstance(consumers, list)
+        or not consumers
+        or any(not isinstance(item, str) or not item.strip() for item in consumers)
+    ):
+        issues.append(f"{label}.consumers must be a non-empty string list")
+    port_role = role.get("portRole")
+    if port_role is not None and (
+        not isinstance(port_role, str)
+        or not re.fullmatch(r"[a-z][a-z0-9-]{2,63}", port_role)
+    ):
+        issues.append(f"{label}.portRole must be null or a canonical port role")
+    return issues
+
+
+def _validate_target_public_base(
+    label: str,
+    target_name: str,
+    field: str,
+    value: str,
+) -> list[str]:
+    issues: list[str] = []
+    parsed = urlparse(value)
+    if parsed.scheme != ROLE_SCHEMES[field]:
+        issues.append(f"{label} must use {ROLE_SCHEMES[field]}://")
+    expected_host = _expected_role_host(target_name, field)
+    if parsed.hostname != expected_host:
+        issues.append(f"{label} host must be {expected_host}, got {parsed.hostname}")
+    expected_path = ROLE_PATH_BASES[field]
+    actual_path = parsed.path or "/"
+    if actual_path != expected_path:
+        issues.append(f"{label} path must be {expected_path}, got {actual_path}")
+    if parsed.username or parsed.password:
+        issues.append(f"{label} must not contain userinfo")
+    if parsed.query or parsed.fragment:
+        issues.append(f"{label} must not contain query or fragment")
+    if target_name == "prod-hosted" and _url_port(value) is not None:
+        issues.append(f"{label} must use implicit port 443")
+    return issues
+
+
+def _expected_role_host(target_name: str, field: str) -> str:
+    env_label = TARGET_HOST_ENV_LABELS[target_name]
+    role_label = ROLE_HOST_LABELS[field]
+    if not env_label:
+        return f"{role_label}.quwoquan.com" if role_label else "quwoquan.com"
+    if role_label:
+        return f"{role_label}.{env_label}.quwoquan.com"
+    return f"{env_label}.quwoquan.com"
 
 
 def _url_host(value: str) -> str:

@@ -46,7 +46,7 @@ class _XiaoquSummaryCard extends StatelessWidget {
                 ),
                 SizedBox(width: AppSpacing.intraGroupSm),
                 Text(
-                  UITextConstants.searchXiaoquTab,
+                  SearchText.searchXiaoquTab,
                   style: TextStyle(
                     fontSize: _SearchResultTokens.sectionTitleSize,
                     fontWeight: _SearchResultTokens.sectionTitleWeight,
@@ -58,7 +58,7 @@ class _XiaoquSummaryCard extends StatelessWidget {
             SizedBox(height: AppSpacing.containerSm),
             Text(
               query.trim().isEmpty
-                  ? UITextConstants.searchXiaoquTrendingSummary
+                  ? SearchText.searchXiaoquTrendingSummary
                   : UITextConstants.searchXiaoquQuerySummary(query),
               style: TextStyle(
                 fontSize: _SearchResultTokens.bodySize,
@@ -70,7 +70,7 @@ class _XiaoquSummaryCard extends StatelessWidget {
             Text(
               result?.summary?.trim().isNotEmpty == true
                   ? result!.summary!.trim()
-                  : UITextConstants.searchCircleAggregationSummary,
+                  : SearchText.searchCircleAggregationSummary,
               style: TextStyle(
                 fontSize: AppTypography.iosFootnote,
                 color: fgSecondary,
@@ -140,7 +140,7 @@ class _SearchEmptyState extends StatelessWidget {
     );
     return Semantics(
       container: true,
-      label: '$title。${UITextConstants.searchEmptySuggestion}',
+      label: '$title。${SearchText.searchEmptySuggestion}',
       child: Padding(
         padding: EdgeInsets.symmetric(
           vertical: AppSpacing.containerXl,
@@ -166,7 +166,7 @@ class _SearchEmptyState extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.intraGroupSm),
             Text(
-              UITextConstants.searchEmptySuggestion,
+              SearchText.searchEmptySuggestion,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: AppTypography.iosSubheadline,
@@ -180,7 +180,7 @@ class _SearchEmptyState extends StatelessWidget {
                 AppSpacing.minInteractiveSize,
                 AppSpacing.minInteractiveSize,
               ),
-              child: const Text(UITextConstants.searchEditQuery),
+              child: const Text(SearchText.searchEditQuery),
             ),
           ],
         ),

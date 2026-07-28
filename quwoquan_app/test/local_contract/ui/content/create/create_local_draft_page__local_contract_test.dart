@@ -4,7 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -176,20 +176,20 @@ void main() {
 
       expect(find.byKey(TestKeys.localDraftPage), findsOneWidget);
       expect(
-        find.text(UITextConstants.localDraftsDeviceOnlyNotice),
+        find.text(CreationText.localDraftsDeviceOnlyNotice),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.localDraftMissingImage), findsOneWidget);
+      expect(find.text(CreationText.localDraftMissingImage), findsOneWidget);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('local_draft_delete_draft_image')),
       );
       await tester.pumpAndSettle();
       expect(
-        find.text(UITextConstants.localDraftDeleteConfirmTitle),
+        find.text(CreationText.localDraftDeleteConfirmTitle),
         findsOneWidget,
       );
-      await tester.tap(find.text(UITextConstants.localDraftDeleteAction));
+      await tester.tap(find.text(CreationText.localDraftDeleteAction));
       await tester.pumpAndSettle();
 
       expect(
@@ -255,15 +255,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text(UITextConstants.localDraftUnavailableTitle),
+        find.text(CreationText.localDraftUnavailableTitle),
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.localDraftMissingVideoDesc),
+        find.text(CreationText.localDraftMissingVideoDesc),
         findsOneWidget,
       );
 
-      await tester.tap(find.text(UITextConstants.localDraftDeleteAction));
+      await tester.tap(find.text(CreationText.localDraftDeleteAction));
       await tester.pumpAndSettle();
 
       expect(find.byKey(TestKeys.localDraftEmptyState), findsOneWidget);

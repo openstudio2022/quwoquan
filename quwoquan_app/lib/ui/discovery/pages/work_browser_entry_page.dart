@@ -111,21 +111,7 @@ class _WorkBrowserEntryPageState extends ConsumerState<WorkBrowserEntryPage> {
       scope: UiErrorScope.page,
     );
     setState(() {
-      _error = UiErrorSemantic(
-        category: semantic.category,
-        scope: semantic.scope,
-        title: semantic.title,
-        message: semantic.message,
-        secondaryMessage: semantic.secondaryMessage,
-        primaryAction: semantic.primaryAction,
-        secondaryAction: semantic.secondaryAction,
-        dismissible: semantic.dismissible,
-        sourceCode: semantic.sourceCode,
-        failureKind: semantic.failureKind,
-        copyKey: semantic.copyKey,
-        recoveryAction: semantic.recoveryAction,
-        presentation: semantic.presentation,
-        tone: semantic.tone,
+      _error = semantic.withSurfaceContext(
         appearanceMode: widget.sourceAppearanceMode,
         sourceRouteId: 'workBrowser',
         sourceSurfaceId: widget.source,
@@ -161,19 +147,22 @@ class _WorkBrowserEntryPageState extends ConsumerState<WorkBrowserEntryPage> {
               child: _loading
                   ? Center(
                       key: const ValueKey('work-browser-entry-loading'),
-                      child: CupertinoActivityIndicator(
-                        color: AppColors.iosLabel(themedContext),
+                      child: AppRequestFeedback.inline(
+                        indicatorColor: AppColors.iosLabel(themedContext),
                       ),
                     )
                   : Stack(
                       children: <Widget>[
                         AppPageErrorState(
                           key: const ValueKey('work-browser-entry-error'),
-                          semantic: _error!,
+                          semantic: ensureRetryUiErrorSemantic(_error!),
                           onAction: (action) async {
                             if (action.type == UiErrorActionType.retry ||
                                 action.type == UiErrorActionType.resubmit) {
                               await _resolve();
+                            } else if (action.type ==
+                                UiErrorActionType.dismiss) {
+                              _back();
                             }
                           },
                         ),

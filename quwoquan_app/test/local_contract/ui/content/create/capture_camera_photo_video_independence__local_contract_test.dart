@@ -39,8 +39,8 @@ void main() {
     await tester.tap(find.text('open photo'));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.cameraPhotoModeTitle), findsOneWidget);
-    expect(find.text(UITextConstants.cameraVideoModeTitle), findsNothing);
+    expect(find.text(MediaText.cameraPhotoModeTitle), findsOneWidget);
+    expect(find.text(MediaText.cameraVideoModeTitle), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('camera-capture-action')),
       findsOneWidget,
@@ -54,7 +54,7 @@ void main() {
       find.byKey(const ValueKey<String>('camera-capture-action')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.cameraUsePhoto));
+    await tester.tap(find.text(MediaText.cameraUsePhoto));
     await tester.pumpAndSettle();
 
     expect(result?.type, CreateMediaType.image);
@@ -94,8 +94,8 @@ void main() {
     await tester.tap(find.text('open video'));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.cameraVideoModeTitle), findsOneWidget);
-    expect(find.text(UITextConstants.cameraPhotoModeTitle), findsNothing);
+    expect(find.text(MediaText.cameraVideoModeTitle), findsOneWidget);
+    expect(find.text(MediaText.cameraPhotoModeTitle), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('camera-record-action')),
       findsOneWidget,
@@ -117,8 +117,8 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
     // 视频先进预览确认（重拍/下一步），不会落到图片确认文案。
-    expect(find.text(UITextConstants.cameraVideoNext), findsOneWidget);
-    expect(find.text(UITextConstants.cameraUsePhoto), findsNothing);
+    expect(find.text(MediaText.cameraVideoNext), findsOneWidget);
+    expect(find.text(MediaText.cameraUsePhoto), findsNothing);
 
     await tester.tap(
       find.byKey(const ValueKey<String>('camera-use-video-action')),
@@ -174,7 +174,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
       ImageEditorFilterPreset(
         id: 'original',
         categoryId: ImageEditorFilterRepository.cameraPhotoCategoryId,
-        name: UITextConstants.imageEditOriginal,
+        name: MediaText.imageEditOriginal,
         sort: 1,
         enabled: true,
         defaultStrength: 0,

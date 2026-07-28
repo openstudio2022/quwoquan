@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import '../../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../../support/cloud_services/content/mock_content_repository.dart';
 
@@ -25,17 +24,6 @@ ContentRuntimeConfigState _effectiveState(ProviderContainer container) {
       container.read(contentRuntimeConfigProvider);
 }
 
-/// 绕过 setMode 的环境守卫（alpha 强制 mock），用于验证 remote 配置拉取行为。
-class _SwitchableModeNotifier extends AppDataSourceModeNotifier {
-  @override
-  AppDataSourceMode build() => AppDataSourceMode.mock;
-
-  @override
-  void setMode(AppDataSourceMode mode) {
-    state = mode;
-  }
-}
-
 void main() {
   test('alpha runner 显式配置会启用内容 story runtime flags', () {
     final state = buildAlphaContentRuntimeConfigDefaults();
@@ -52,7 +40,6 @@ void main() {
   test('remote app config 覆盖 feature flags 与 canary matrix', () async {
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(_SwitchableModeNotifier.new),
         ...mockContentFacetOverrides(
           _RuntimeConfigRepository({
             'content': {
@@ -82,9 +69,6 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    container
-        .read(appDataSourceModeProvider.notifier)
-        .setMode(AppDataSourceMode.remote);
     container.read(contentRuntimeConfigProvider);
     await Future<void>.delayed(const Duration(milliseconds: 1));
     await Future<void>.delayed(const Duration(milliseconds: 1));
@@ -130,16 +114,10 @@ void main() {
       },
     });
     final container = ProviderContainer(
-      overrides: [
-        appDataSourceModeProvider.overrideWith(_SwitchableModeNotifier.new),
-        ...mockContentFacetOverrides(repo),
-      ],
+      overrides: [...mockContentFacetOverrides(repo)],
     );
     addTearDown(container.dispose);
 
-    container
-        .read(appDataSourceModeProvider.notifier)
-        .setMode(AppDataSourceMode.remote);
     container.read(contentRuntimeConfigProvider);
     await Future<void>.delayed(const Duration(milliseconds: 1));
     await Future<void>.delayed(const Duration(milliseconds: 1));
@@ -179,7 +157,6 @@ void main() {
   test('remote app config 覆盖 client state sync 参数', () async {
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(_SwitchableModeNotifier.new),
         ...mockContentFacetOverrides(
           _RuntimeConfigRepository({
             'content': {
@@ -198,9 +175,6 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    container
-        .read(appDataSourceModeProvider.notifier)
-        .setMode(AppDataSourceMode.remote);
     container.read(contentRuntimeConfigProvider);
     await Future<void>.delayed(const Duration(milliseconds: 1));
     await Future<void>.delayed(const Duration(milliseconds: 1));
@@ -230,7 +204,6 @@ void main() {
   test('remote app config 可关闭 persona management 与 sync flags', () async {
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(_SwitchableModeNotifier.new),
         ...mockContentFacetOverrides(
           _RuntimeConfigRepository({
             'content': {
@@ -245,9 +218,6 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    container
-        .read(appDataSourceModeProvider.notifier)
-        .setMode(AppDataSourceMode.remote);
     container.read(contentRuntimeConfigProvider);
     await Future<void>.delayed(const Duration(milliseconds: 1));
     await Future<void>.delayed(const Duration(milliseconds: 1));

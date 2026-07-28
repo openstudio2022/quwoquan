@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -22,15 +23,15 @@ class CallStageBanner extends ConsumerWidget {
   /// [CallStage] -> 用户可见文案（统一来自 [UITextConstants]）。
   static String messageFor(CallStage stage) {
     return switch (stage) {
-      CallStage.connecting => UITextConstants.callStageConnecting,
-      CallStage.ringing => UITextConstants.callStageRinging,
-      CallStage.waitingPeer => UITextConstants.callStageWaitingPeer,
-      CallStage.reconnecting => UITextConstants.callStageReconnecting,
-      CallStage.weakNetwork => UITextConstants.callStageWeakNetwork,
-      CallStage.peerNoAnswer => UITextConstants.callStagePeerNoAnswer,
-      CallStage.peerLeft => UITextConstants.callStagePeerLeft,
-      CallStage.ended => UITextConstants.callStageEnded,
-      CallStage.inCall => UITextConstants.callOngoing,
+      CallStage.connecting => CallText.callStageConnecting,
+      CallStage.ringing => CallText.callStageRinging,
+      CallStage.waitingPeer => CallText.callStageWaitingPeer,
+      CallStage.reconnecting => CallText.callStageReconnecting,
+      CallStage.weakNetwork => CallText.callStageWeakNetwork,
+      CallStage.peerNoAnswer => CallText.callStagePeerNoAnswer,
+      CallStage.peerLeft => CallText.callStagePeerLeft,
+      CallStage.ended => CallText.callStageEnded,
+      CallStage.inCall => CallText.callOngoing,
     };
   }
 
@@ -81,7 +82,7 @@ class CallStageBanner extends ConsumerWidget {
                 ),
                 onPressed: onRetry,
                 child: Text(
-                  UITextConstants.retry,
+                  FoundationText.retry,
                   style: TextStyle(
                     color: AppColors.white,
                     fontSize: AppTypography.sm,
@@ -134,7 +135,7 @@ class CallStageBanner extends ConsumerWidget {
             SizedBox(
               width: AppSpacing.iconSmall,
               height: AppSpacing.iconSmall,
-              child: const CupertinoActivityIndicator(color: AppColors.white),
+              child: AppRequestFeedback.inline(indicatorColor: AppColors.white),
             ),
             SizedBox(width: AppSpacing.sm),
           ],

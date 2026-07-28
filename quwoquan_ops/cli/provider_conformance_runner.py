@@ -199,18 +199,38 @@ def _execute_cell(
         raise ValueError(
             "--data-digest is forbidden; the test-owned CaseResult must report dataDigest"
         )
-    if not provider_conformance.SHA256_PATTERN.fullmatch(args.image_digest):
-        raise ValueError("--image-digest must be an immutable sha256 digest")
-    expected_image_digest = os.environ.get(
-        "QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST",
-        "",
-    )
-    if not provider_conformance.SHA256_PATTERN.fullmatch(expected_image_digest):
-        raise ValueError(
-            "QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST is required to reject stale image evidence"
+    requested_image_digest = str(args.image_digest or "").strip()
+    if args.environment in provider_conformance.ENVIRONMENTS:
+        image_digest = provider_conformance.candidate_image_digest(
+            args.environment,
+            registry=registry,
         )
-    if args.image_digest != expected_image_digest:
-        raise ValueError("--image-digest does not match the active immutable image")
+        configured_expected = os.environ.get(
+            "QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST",
+            "",
+        ).strip()
+        if configured_expected and configured_expected != image_digest:
+            raise ValueError(
+                "configured expected image digest does not match packaged candidate"
+            )
+        if requested_image_digest and requested_image_digest != image_digest:
+            raise ValueError(
+                "--image-digest does not match the packaged immutable candidate"
+            )
+    else:
+        if not provider_conformance.SHA256_PATTERN.fullmatch(requested_image_digest):
+            raise ValueError("--image-digest must be an immutable sha256 digest")
+        expected_image_digest = os.environ.get(
+            "QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST",
+            "",
+        )
+        if not provider_conformance.SHA256_PATTERN.fullmatch(expected_image_digest):
+            raise ValueError(
+                "QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST is required for Prod hosted evidence"
+            )
+        if requested_image_digest != expected_image_digest:
+            raise ValueError("--image-digest does not match the active immutable image")
+        image_digest = requested_image_digest
     adapters = {
         item.get("adapter_id"): item
         for item in registry.get("adapters", [])
@@ -336,7 +356,6 @@ def _execute_cell(
     )
     if case_result_issues or case_result is None:
         raise ValueError("; ".join(case_result_issues))
-    image_digest = args.image_digest
     executed_at = datetime.now(timezone.utc).isoformat()
     case_result_bytes = case_result_path.read_bytes()
     report: dict[str, Any] = {

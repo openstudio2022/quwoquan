@@ -41,8 +41,12 @@ api_routes:
     max_attempts: 2
     idempotency: none
   error_codes:
+  - CONTENT.USER.unauthorized
   - CONTENT.USER.invalid_argument
+  - CONTENT.USER.rate_limited
   - CONTENT.SYSTEM.storage_read_failed
+  - CONTENT.SYSTEM.required_dependency_unavailable
+  - CONTENT.MIDDLEWARE.upstream_timeout
   - CONTENT.SYSTEM.internal_error
   privacy:
     request_classification: PII
@@ -59,6 +63,12 @@ api_routes:
   slo:
     latency_p95_ms: 500
     availability_percent: 99.9
+  client_contract:
+    dart_import: ../content/post_reader_queries.dart
+    request_type: ContentDiscoveryFeedQuery
+    response_type: ContentDiscoveryFeedPageSlice
+    request_encoder: encodeContentDiscoveryFeedQuery
+    response_decoder: decodeContentDiscoveryFeedPageSlice
   description: '发现流首页推荐唯一主链路（sort=recommend）。cursor 为 opaque token，仅用于 future window。
 
     feedRequestId 为服务端权威生成的归因 id：随响应 envelope 下发；客户端首刷不传，

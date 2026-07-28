@@ -80,10 +80,6 @@ class AppSpacing {
 
   static const double md = 16.0;
 
-  /// 字段、表单与局部操作错误行的图标和图文间距。
-  static const double inlineErrorIconSize = 16.0;
-  static const double inlineErrorIconTextGap = 6.0;
-
   static const double lg = 24.0;
 
   static const double xl = 32.0;
@@ -95,6 +91,8 @@ class AppSpacing {
   static const double largeButtonSize = 48.0;
 
   static const double smallButtonSize = 32.0;
+
+  /// 页面级错误终态的柔和插画与服务连接徽标尺寸。
 
   /// 两状态登录品牌图标容器尺寸（完整应用图标：蓝底圆角 + 花瓣）。
   static const double loginBrandMarkSize = 64.0;
@@ -191,23 +189,6 @@ class AppSpacing {
 
   /// 统一可点击区域最低标准（WCAG 触控建议）
   static const double minInteractiveSize = 44.0;
-
-  /// 不可恢复异常页：固定内容槽避免版本检查和容器重建状态切换时纵向跳动。
-  static const double recoveryContentMaxWidth = 280.0;
-  static const double recoveryHorizontalInset = 24.0;
-  static const double recoveryTitleSlotHeight = 44.0;
-  static const double recoverySubtitleSlotHeight = 52.0;
-  static const double recoveryActionSlotHeight = 108.0;
-  static const double recoveryTitleSubtitleGap = 16.0;
-  static const double recoverySubtitleActionGap = 28.0;
-  static const double recoveryButtonGap = 12.0;
-  static const double recoveryVisualCenterAlignment = 0.1;
-  static const Duration recoveryOldContentFadeDuration = Duration(
-    milliseconds: 80,
-  );
-  static const Duration recoveryNewContentFadeDuration = Duration(
-    milliseconds: 120,
-  );
 
   /// 我的主页转发互动行最小高度。
   static const double profileShareInteractionRowMinHeight = 104.0;

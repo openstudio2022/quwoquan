@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -61,7 +62,7 @@ class _MyQrCodePageState extends ConsumerState<MyQrCodePage> {
           },
         ),
         middle: Text(
-          UITextConstants.editProfileQrCardTitle,
+          ProfileText.editProfileQrCardTitle,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
       ),
@@ -84,7 +85,7 @@ class _MyQrCodePageState extends ConsumerState<MyQrCodePage> {
             );
           }
           if (!snapshot.hasData) {
-            return const Center(child: CupertinoActivityIndicator());
+            return AppRequestFeedback.section();
           }
           return MyQrCardView(
             card: snapshot.data!,

@@ -24,6 +24,10 @@ ROOT = _find_repo_root()
 sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.output_paths import env_run_dir  # noqa: E402
+from quwoquan_ops.cli.lib.environment_topology import (  # noqa: E402
+    get_target,
+    load_environment_topology,
+)
 
 
 def utc_now() -> str:
@@ -31,14 +35,18 @@ def utc_now() -> str:
 
 
 def parse_args() -> argparse.Namespace:
+    public_bases = get_target(
+        load_environment_topology(),
+        "gamma-local",
+    )["publicBases"]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("LOCAL_GAMMA_GATEWAY_BASE_URL", "http://127.0.0.1:18080"),
+        default=public_bases["api"],
     )
     parser.add_argument(
-        "--media-base-url",
-        default=os.environ.get("LOCAL_GAMMA_MEDIA_BASE_URL", "http://127.0.0.1:18080"),
+        "--media-avatar-base-url",
+        default=public_bases["mediaAvatar"],
     )
     parser.add_argument("--test-auth-token", default=os.environ.get("LOCAL_GAMMA_TEST_AUTH_TOKEN", "local-gamma-token"))
     parser.add_argument("--platform", choices=("android", "ios", "all"), default="all")
@@ -95,7 +103,7 @@ def main() -> int:
         "startedAt": utc_now(),
         "endedAt": "",
         "baseUrl": args.base_url,
-        "mediaBaseUrl": args.media_base_url,
+        "mediaAvatarBaseUrl": args.media_avatar_base_url,
         "probe": {},
         "deviceMatrix": {},
     }
@@ -106,8 +114,8 @@ def main() -> int:
         "gamma",
         "--base-url",
         args.base_url,
-        "--media-base-url",
-        args.media_base_url,
+        "--media-avatar-base-url",
+        args.media_avatar_base_url,
         "--test-auth-token",
         args.test_auth_token,
         "--report",
@@ -129,8 +137,8 @@ def main() -> int:
             args.platform,
             "--gateway-base-url",
             args.base_url,
-            "--media-base-url",
-            args.media_base_url,
+            "--media-avatar-base-url",
+            args.media_avatar_base_url,
             "--test-auth-token",
             args.test_auth_token,
             "--report",

@@ -148,18 +148,18 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       context: context,
       builder: (dialogContext) {
         return CupertinoAlertDialog(
-          title: const Text(UITextConstants.editProfileDiscardTitle),
-          content: const Text(UITextConstants.editProfileDiscardMessage),
+          title: const Text(ProfileText.editProfileDiscardTitle),
+          content: const Text(ProfileText.editProfileDiscardMessage),
           actions: <Widget>[
             CupertinoDialogAction(
               isDestructiveAction: true,
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text(UITextConstants.editProfileDiscardConfirm),
+              child: const Text(ProfileText.editProfileDiscardConfirm),
             ),
             CupertinoDialogAction(
               isDefaultAction: true,
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text(UITextConstants.editProfileKeepEditing),
+              child: const Text(ProfileText.editProfileKeepEditing),
             ),
           ],
         );
@@ -239,7 +239,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       }
       setState(() => _isSaving = false);
       _trackProfileAction('save', outcome: 'succeeded');
-      AppToast.show(context, UITextConstants.editProfileSavedToast);
+      AppToast.show(context, ProfileText.editProfileSavedToast);
       _doClose();
     } catch (error) {
       if (!mounted) {
@@ -263,12 +263,12 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       semantic: UiErrorSemantic(
         category: resolved.category,
         scope: resolved.scope,
-        title: UITextConstants.editProfileSaveFailedTitle,
+        title: ProfileText.editProfileSaveFailedTitle,
         message: resolved.message,
         secondaryMessage: resolved.secondaryMessage,
         primaryAction: const UiErrorAction(
           type: UiErrorActionType.retry,
-          label: UITextConstants.tryAgain,
+          label: ContentText.tryAgain,
         ),
         secondaryAction: resolved.secondaryAction,
         dismissible: resolved.dismissible,
@@ -304,19 +304,19 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     final source = await showAppActionSheet<ImagePickSource>(
       context,
       title: target == _EditProfileMediaTarget.avatar
-          ? UITextConstants.profileChangeAvatar
-          : UITextConstants.profileChangeCover,
+          ? ProfileText.profileChangeAvatar
+          : ProfileText.profileChangeCover,
       sections: const <AppActionSheetSection<ImagePickSource>>[
         AppActionSheetSection<ImagePickSource>(
           items: <AppActionSheetItem<ImagePickSource>>[
             AppActionSheetItem<ImagePickSource>(
               value: ImagePickSource.camera,
-              label: UITextConstants.editProfileMediaCamera,
+              label: ProfileText.editProfileMediaCamera,
               icon: CupertinoIcons.camera,
             ),
             AppActionSheetItem<ImagePickSource>(
               value: ImagePickSource.photoLibrary,
-              label: UITextConstants.editProfileMediaPhotoLibrary,
+              label: ProfileText.editProfileMediaPhotoLibrary,
               icon: CupertinoIcons.photo_on_rectangle,
             ),
           ],
@@ -355,9 +355,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     final value = await Navigator.of(context).push<String>(
       CupertinoPageRoute<String>(
         builder: (_) => _TextEditPage(
-          title: UITextConstants.editProfileNicknameLabel,
+          title: ProfileText.editProfileNicknameLabel,
           initialValue: _nicknameController.text,
-          placeholder: UITextConstants.editProfileNicknamePlaceholder,
+          placeholder: ProfileText.editProfileNicknamePlaceholder,
           maxLength: 24,
           maxLines: 1,
         ),
@@ -371,23 +371,23 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   Future<void> _editGender() async {
     final next = await showAppActionSheet<String>(
       context,
-      title: UITextConstants.editProfileGenderLabel,
+      title: ProfileText.editProfileGenderLabel,
       sections: const <AppActionSheetSection<String>>[
         AppActionSheetSection<String>(
           items: <AppActionSheetItem<String>>[
             AppActionSheetItem<String>(
               value: 'male',
-              label: UITextConstants.editProfileGenderMale,
+              label: ProfileText.editProfileGenderMale,
               icon: CupertinoIcons.person,
             ),
             AppActionSheetItem<String>(
               value: 'female',
-              label: UITextConstants.editProfileGenderFemale,
+              label: ProfileText.editProfileGenderFemale,
               icon: CupertinoIcons.person,
             ),
             AppActionSheetItem<String>(
               value: 'unspecified',
-              label: UITextConstants.editProfileGenderUnspecified,
+              label: ProfileText.editProfileGenderUnspecified,
               icon: CupertinoIcons.eye_slash,
             ),
           ],
@@ -446,9 +446,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     final value = await Navigator.of(context).push<String>(
       CupertinoPageRoute<String>(
         builder: (_) => _TextEditPage(
-          title: UITextConstants.editProfileSignatureTitle,
+          title: ProfileText.editProfileSignatureTitle,
           initialValue: _signature,
-          placeholder: UITextConstants.editProfileSignaturePlaceholder,
+          placeholder: ProfileText.editProfileSignaturePlaceholder,
           maxLength: _signatureMaxLength,
           maxLines: 4,
         ),
@@ -536,7 +536,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
             onPressed: () => unawaited(_handleBackRequest()),
           ),
           middle: Text(
-            UITextConstants.editProfile,
+            SettingsText.editProfile,
             style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
           ),
           trailing: CupertinoButton(
@@ -545,7 +545,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
             minimumSize: const Size.square(AppSpacing.minInteractiveSize),
             onPressed: canSave ? _save : null,
             child: Text(
-              UITextConstants.editProfileSaveAction,
+              ProfileText.editProfileSaveAction,
               style: TextStyle(
                 fontSize: AppTypography.iosBody,
                 fontWeight: AppTypography.medium,
@@ -557,14 +557,16 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
           ),
         ),
         body: _loading
-            ? const Center(child: CupertinoActivityIndicator())
+            ? AppRequestFeedback.section()
             : _snapshotLoadError != null
             ? AppPageErrorState(
-                semantic: UiErrorSemanticResolver.resolve(
-                  context,
-                  error: _snapshotLoadError!,
-                  category: UiErrorCategory.pageLoad,
-                  scope: UiErrorScope.page,
+                semantic: ensureRetryUiErrorSemantic(
+                  UiErrorSemanticResolver.resolve(
+                    context,
+                    error: _snapshotLoadError!,
+                    category: UiErrorCategory.pageLoad,
+                    scope: UiErrorScope.page,
+                  ),
                 ),
                 onAction: (action) async {
                   if (action.type == UiErrorActionType.retry) {
@@ -591,9 +593,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             key: const ValueKey<String>(
                               'edit-profile-proposal-retry',
                             ),
-                            title: UITextConstants.editProfileProposalTitle,
+                            title: ProfileText.editProfileProposalTitle,
                             trailing: Text(
-                              UITextConstants.editProfileProposalLoadFailed,
+                              ProfileText.editProfileProposalLoadFailed,
                               style: TextStyle(
                                 fontSize: AppTypography.iosSubheadline,
                                 color: AppColors.iosDestructive(context),
@@ -606,7 +608,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                             key: ValueKey<String>(
                               'edit-profile-proposal-${proposal.id}',
                             ),
-                            title: UITextConstants.editProfileProposalTitle,
+                            title: ProfileText.editProfileProposalTitle,
                             trailing: Text(
                               _profileProposalStatusLabel(proposal.status),
                               style: TextStyle(
@@ -633,17 +635,17 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         key: const ValueKey<String>(
                           'edit-profile-nickname-row',
                         ),
-                        title: UITextConstants.editProfileNicknameLabel,
+                        title: ProfileText.editProfileNicknameLabel,
                         trailing: _EditProfileTrailingValue(
                           value: _valueOrPrompt(
                             _nicknameController.text.trim(),
-                            prompt: UITextConstants.editProfileFillCtaValue,
+                            prompt: ProfileText.editProfileFillCtaValue,
                           ),
                         ),
                         onTap: _editNickname,
                       ),
                       ProfileIosGroupedCell(
-                        title: UITextConstants.editProfileGenderLabel,
+                        title: ProfileText.editProfileGenderLabel,
                         trailing: _EditProfileTrailingValue(
                           value: _EditProfileDisplayValue(
                             _genderLabel(_gender),
@@ -652,17 +654,17 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         onTap: _editGender,
                       ),
                       ProfileIosGroupedCell(
-                        title: UITextConstants.editProfileBirthdayLabel,
+                        title: ProfileText.editProfileBirthdayLabel,
                         trailing: _EditProfileTrailingValue(
                           value: _valueOrPrompt(
                             _birthDate,
-                            prompt: UITextConstants.editProfileFillCtaValue,
+                            prompt: ProfileText.editProfileFillCtaValue,
                           ),
                         ),
                         onTap: _editBirthday,
                       ),
                       ProfileIosGroupedCell(
-                        title: UITextConstants.editProfileRegionLabel,
+                        title: ProfileText.editProfileRegionLabel,
                         trailing: _EditProfileTrailingValue(
                           value: _regionDisplay(_region),
                         ),
@@ -674,25 +676,25 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                     showDividers: true,
                     children: <Widget>[
                       ProfileIosGroupedCell(
-                        title: UITextConstants.editProfilePhoneLabel,
+                        title: ProfileText.editProfilePhoneLabel,
                         trailing: _EditProfileTrailingValue(
                           value: _phoneDisplay(_phoneCredential),
                         ),
                         onTap: _editPhone,
                       ),
                       ProfileIosGroupedCell(
-                        title: UITextConstants.editProfileQuwoquanIdLabel,
+                        title: ProfileText.editProfileQuwoquanIdLabel,
                         showChevron: false,
                         trailing: _EditProfileTrailingValue(
                           value: _valueOrSystemFallback(
                             _initialHandle,
-                            fallback: UITextConstants
-                                .editProfileSystemGeneratingValue,
+                            fallback:
+                                ProfileText.editProfileSystemGeneratingValue,
                           ),
                         ),
                       ),
                       ProfileIosGroupedCell(
-                        title: UITextConstants.editProfileQrCodeLabel,
+                        title: ProfileText.editProfileQrCodeLabel,
                         trailing: Icon(
                           CupertinoIcons.qrcode,
                           size: AppSpacing.iconMedium,
@@ -709,17 +711,17 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                         key: const ValueKey<String>(
                           'edit-profile-signature-row',
                         ),
-                        title: UITextConstants.editProfileBioLabel,
+                        title: ProfileText.editProfileBioLabel,
                         trailing: _EditProfileTrailingValue(
                           value: _valueOrPrompt(
                             _signature,
-                            prompt: UITextConstants.editProfileFillCtaValue,
+                            prompt: ProfileText.editProfileFillCtaValue,
                           ),
                         ),
                         onTap: _editSignature,
                       ),
                       ProfileIosGroupedCell(
-                        title: UITextConstants.editProfileTagsLabel,
+                        title: ProfileText.editProfileTagsLabel,
                         trailing: _EditProfileTrailingValue(
                           value: _tagsSummary(
                             _occupationTagRef,
@@ -738,7 +740,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
   Widget _buildCoverRow() {
     return ProfileIosGroupedCell(
-      title: UITextConstants.editProfileCoverLabel,
+      title: ProfileText.editProfileCoverLabel,
       minHeight: _EditProfileFormSemantics.mediaRowMinHeight,
       verticalPadding: AppSpacing.intraGroupSm,
       trailing: _MediaPreview(
@@ -752,7 +754,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
   Widget _buildAvatarRow() {
     return ProfileIosGroupedCell(
-      title: UITextConstants.editProfileAvatarLabel,
+      title: ProfileText.editProfileAvatarLabel,
       minHeight: _EditProfileFormSemantics.mediaRowMinHeight,
       verticalPadding: AppSpacing.intraGroupSm,
       trailing: _MediaPreview(
@@ -765,21 +767,20 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   }
 }
 
-String _profileProposalStatusLabel(ProfileUpdateProposalStatus status) =>
-    switch (status) {
-      ProfileUpdateProposalStatus.pending =>
-        UITextConstants.editProfileProposalPending,
-      ProfileUpdateProposalStatus.confirmed =>
-        UITextConstants.editProfileProposalConfirmed,
-      ProfileUpdateProposalStatus.applying =>
-        UITextConstants.editProfileProposalApplying,
-      ProfileUpdateProposalStatus.applied =>
-        UITextConstants.editProfileProposalAppliedStatus,
-      ProfileUpdateProposalStatus.rollingBack =>
-        UITextConstants.editProfileProposalRollingBackStatus,
-      ProfileUpdateProposalStatus.rolledBack =>
-        UITextConstants.editProfileProposalRolledBack,
-      ProfileUpdateProposalStatus.rejected ||
-      ProfileUpdateProposalStatus.expired =>
-        UITextConstants.editProfileProposalConfirmed,
-    };
+String _profileProposalStatusLabel(
+  ProfileUpdateProposalStatus status,
+) => switch (status) {
+  ProfileUpdateProposalStatus.pending => ProfileText.editProfileProposalPending,
+  ProfileUpdateProposalStatus.confirmed =>
+    ProfileText.editProfileProposalConfirmed,
+  ProfileUpdateProposalStatus.applying =>
+    ProfileText.editProfileProposalApplying,
+  ProfileUpdateProposalStatus.applied =>
+    ProfileText.editProfileProposalAppliedStatus,
+  ProfileUpdateProposalStatus.rollingBack =>
+    ProfileText.editProfileProposalRollingBackStatus,
+  ProfileUpdateProposalStatus.rolledBack =>
+    ProfileText.editProfileProposalRolledBack,
+  ProfileUpdateProposalStatus.rejected || ProfileUpdateProposalStatus.expired =>
+    ProfileText.editProfileProposalConfirmed,
+};

@@ -12,6 +12,7 @@
 - 环境、打包、URL/topology、健康检查、巡检、诊断、修复和部署统一使用 `python3 quwoquan_ops/cli/stackctl.py`；不要新增第二套环境脚本入口。
 - Ops 脚本按职责归入 `cli/`、`ci/`、`gate/`、`observability/`、`runbooks/` 等横切目录；禁止在 `quwoquan_ops/` 中按业务特性新增 `assistant/`、`avatar/`、`chat_avatar/` 等脚本岛或第二套 feature runner。跨环境 smoke/gate/CI 脚本统一归 `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/<service>/`；领域内可解耦测试仍归各服务 `tests/local_contract` 或 `tests/api_integration`。
 - 四环境语义固定为 `alpha`、`beta`、`gamma`、`prod`；生产灰度是 `prod` rollout stage，不存在 `prod-gray`。
+- 四环境 App 均使用 production Remote composition；第一方 App 可见业务数据只能由 canonical immutable release activation 产生。stackctl/T3/UAT/环境 bootstrap 禁止通过 API、Mongo/PostgreSQL 或 fixture manifest 自建待验证对象。
 - 不手写端口、host、public URL、gateway/media base；统一读取 quwoquan_ops/environments manifests 与 stackctl 输出。
 - `.qwq_output` 一级只允许 `env/` 与 `data/`。环境输出统一放 `.qwq_output/env/<env>/{runs,observability,local}/`，repo 级证据与临时状态放 `.qwq_output/env/repo/{runs,observability,local}/`，数据执行输出放 `.qwq_output/data/{tasks,releases,local}/`。
 - `local/` 下每个 target 只允许 `process/` 与 `cache/`；`process/` 只保存 pid、进程状态、stdout/stderr 等可删除运行记录，`cache/` 只保存可重建缓存。渲染配置、`.env`、Caddyfile、Caddy data/config、TLS/证书和临时部署卷一律放仓外受限的 `QWQ_DEPLOY_WORK_ROOT`；配置、网络拓扑、证书生成规则与部署约束的真相源必须留在领域 `deploy/` 或 `quwoquan_ops/environments/`，不得写入 `.qwq_output`。

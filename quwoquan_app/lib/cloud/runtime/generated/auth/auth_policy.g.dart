@@ -136,6 +136,7 @@ class AuthApiPolicy {
     'content.outbound_share_fact.CreateOutboundShare': 'optional',
     'content.post.GetAuthorImpact': 'required',
     'content.post.GetEntityWishlistState': 'required',
+    'content.post.GetFeed': 'optional',
     'content.post.GetMyFootprint': 'required',
     'content.post.GetPost': 'optional',
     'content.post.ListAuthorImpactEvidence': 'required',

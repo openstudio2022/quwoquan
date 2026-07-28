@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/profile-commercial-readiness/spec.md#gwt-002
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -466,9 +467,9 @@ void main() {
       );
       await _pumpFrames(tester);
 
-      expect(find.text(UITextConstants.profilePersonasLabel), findsNothing);
-      expect(find.text(UITextConstants.personaSwitchProfile), findsNothing);
-      expect(find.text(UITextConstants.profileEditLabel), findsOneWidget);
+      expect(find.text(ProfileText.profilePersonasLabel), findsNothing);
+      expect(find.text(ProfileText.personaSwitchProfile), findsNothing);
+      expect(find.text(ProfileText.profileEditLabel), findsOneWidget);
     });
 
     testWidgets('默认昵称态展示头像/封面/简介/标签引导与 QR，且不出现探索者/趣我圈号', (tester) async {
@@ -499,10 +500,10 @@ void main() {
         findsNothing,
       );
       // 空态引导：头像 / 封面 / 简介 / 标签。
-      expect(find.text(UITextConstants.profileUploadAvatar), findsWidgets);
-      expect(find.text(UITextConstants.profileUploadCover), findsOneWidget);
-      expect(find.text(UITextConstants.profileEmptyBioPrompt), findsWidgets);
-      expect(find.text(UITextConstants.profileEmptyTagsPrompt), findsOneWidget);
+      expect(find.text(ProfileText.profileUploadAvatar), findsWidgets);
+      expect(find.text(ProfileText.profileUploadCover), findsOneWidget);
+      expect(find.text(ProfileText.profileEmptyBioPrompt), findsWidgets);
+      expect(find.text(ProfileText.profileEmptyTagsPrompt), findsOneWidget);
       // 昵称行不再承载小画笔；新增二维码固定在 header trailing 区。
       expect(
         find.byKey(const ValueKey<String>('profile-header-edit')),
@@ -626,7 +627,7 @@ void main() {
       );
       await _pumpFrames(tester, count: 20);
 
-      expect(find.text(UITextConstants.profileUploadCover), findsNothing);
+      expect(find.text(ProfileText.profileUploadCover), findsNothing);
     });
 
     testWidgets('无任何背景图时展示添加封面', (tester) async {
@@ -644,7 +645,7 @@ void main() {
       );
       await _pumpFrames(tester, count: 20);
 
-      expect(find.text(UITextConstants.profileUploadCover), findsOneWidget);
+      expect(find.text(ProfileText.profileUploadCover), findsOneWidget);
     });
 
     testWidgets('二维码位于 header trailing 区并贴近资料卡右边界', (tester) async {
@@ -723,13 +724,13 @@ void main() {
       await revealProfilePrimaryTabs(tester);
       // 统计行也有「记录」标签，主 Tab 断言一律限定在 inline tabs 容器内。
       expect(
-        _inlinePrimaryTab(UITextConstants.profileTabCreations),
+        _inlinePrimaryTab(ProfileText.profileTabCreations),
         findsOneWidget,
       );
       expect(_inlinePrimaryTab('互动'), findsOneWidget);
       // V5：足迹=浏览历史，仅本人主页可见（ui_config modes: [mine]）。
       expect(
-        _inlinePrimaryTab(UITextConstants.profileTabFootprint),
+        _inlinePrimaryTab(ProfileText.profileTabFootprint),
         findsOneWidget,
       );
       expect(_inlinePrimaryTab('圈子'), findsNothing);
@@ -752,15 +753,12 @@ void main() {
       await _pumpFrames(tester);
       await revealProfilePrimaryTabs(tester);
       expect(
-        _inlinePrimaryTab(UITextConstants.profileTabCreations),
+        _inlinePrimaryTab(ProfileText.profileTabCreations),
         findsOneWidget,
       );
       expect(_inlinePrimaryTab('互动'), findsOneWidget);
       // 他人主页禁止展示浏览历史足迹。
-      expect(
-        _inlinePrimaryTab(UITextConstants.profileTabFootprint),
-        findsNothing,
-      );
+      expect(_inlinePrimaryTab(ProfileText.profileTabFootprint), findsNothing);
     });
 
     testWidgets('mine 模式四段式文案不串入 other 口径', (tester) async {
@@ -772,9 +770,9 @@ void main() {
       await _pumpFrames(tester);
 
       expect(find.text(DiscoveryFeedText.myIntersectionsTitle), findsWidgets);
-      expect(find.text(UITextConstants.profileImpactTitleMine), findsOneWidget);
-      expect(find.text(UITextConstants.profileWhyRecommendTitle), findsNothing);
-      expect(find.text(UITextConstants.profileImpactTitleOther), findsNothing);
+      expect(find.text(ContentText.profileImpactTitleMine), findsOneWidget);
+      expect(find.text(ContentText.profileWhyRecommendTitle), findsNothing);
+      expect(find.text(ContentText.profileImpactTitleOther), findsNothing);
     });
 
     testWidgets('other 模式默认空数据也保留交集与打动模块空态', (tester) async {
@@ -799,7 +797,7 @@ void main() {
       expect(find.byKey(OtherProfileIntersectionCard.cardKey), findsOneWidget);
       expect(find.byKey(OtherProfileIntersectionCard.emptyKey), findsOneWidget);
       expect(
-        find.text(UITextConstants.profileIntersectionEmptyOther),
+        find.text(ProfileText.profileIntersectionEmptyOther),
         findsOneWidget,
       );
       expect(
@@ -811,10 +809,7 @@ void main() {
       );
       expect(find.byKey(AuthorImpactCard.cardKey), findsOneWidget);
       expect(find.byKey(AuthorImpactCard.emptyKey), findsOneWidget);
-      expect(
-        find.text(UITextConstants.profileImpactEmptyOther),
-        findsOneWidget,
-      );
+      expect(find.text(ContentText.profileImpactEmptyOther), findsOneWidget);
     });
 
     testWidgets('打动摘要读取失败展示可重试终态，重试后恢复数据', (tester) async {
@@ -844,13 +839,10 @@ void main() {
       );
       await _pumpFrames(tester);
 
-      expect(
-        find.text(UITextConstants.profileImpactUnavailableTitleOther),
-        findsOneWidget,
-      );
-      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+      expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+      expect(find.text(SearchText.reload), findsOneWidget);
 
-      final retryAction = find.text(UITextConstants.tryAgain);
+      final retryAction = find.text(SearchText.reload);
       await tester.ensureVisible(retryAction);
       await tester.tap(retryAction);
       await _pumpFrames(tester);
@@ -862,10 +854,7 @@ void main() {
       );
       await tester.pump();
       expect(find.byKey(AuthorImpactCard.cardKey), findsOneWidget);
-      expect(
-        find.text(UITextConstants.profileImpactUnavailableTitleOther),
-        findsNothing,
-      );
+      expect(find.text(SearchText.recoveryReloadLaterTitle), findsNothing);
     });
 
     testWidgets('other 模式四段式文案不串入 mine 口径', (tester) async {
@@ -939,10 +928,7 @@ void main() {
       );
       await _pumpFrames(tester);
 
-      expect(
-        find.text(UITextConstants.profileImpactTitleOther),
-        findsOneWidget,
-      );
+      expect(find.text(ContentText.profileImpactTitleOther), findsOneWidget);
       expect(find.byKey(OtherProfileIntersectionCard.cardKey), findsOneWidget);
       expect(
         find.descendant(
@@ -952,7 +938,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text(DiscoveryFeedText.myIntersectionsTitle), findsNothing);
-      expect(find.text(UITextConstants.profileImpactTitleMine), findsNothing);
+      expect(find.text(ContentText.profileImpactTitleMine), findsNothing);
     });
 
     testWidgets('用户主页主区块表面使用更多功能同源语义 token', (tester) async {
@@ -1262,16 +1248,14 @@ void main() {
       expect(
         find.descendant(
           of: secondaryTabs,
-          matching: find.text(
-            UITextConstants.profileInteractionDirectionReceived,
-          ),
+          matching: find.text(ProfileText.profileInteractionDirectionReceived),
         ),
         findsNothing,
       );
       expect(
         find.descendant(
           of: secondaryTabs,
-          matching: find.text(UITextConstants.profileInteractionDirectionSent),
+          matching: find.text(ProfileText.profileInteractionDirectionSent),
         ),
         findsNothing,
       );
@@ -1328,14 +1312,14 @@ void main() {
 
       await tester.tap(find.byIcon(CupertinoIcons.ellipsis));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(UITextConstants.profileBlockUser));
+      await tester.tap(find.text(ContentText.profileBlockUser));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(UITextConstants.profileBlockUser));
+      await tester.tap(find.text(ContentText.profileBlockUser));
       await _pumpFrames(tester);
 
       expect(writer.blockedTarget, 'u_block_target');
       expect(leaveCount, 1);
-      expect(find.text(UITextConstants.profileBlockSuccess), findsOneWidget);
+      expect(find.text(ContentText.profileBlockSuccess), findsOneWidget);
       await tester.pump(const Duration(seconds: 4));
     });
 
@@ -1409,7 +1393,7 @@ void main() {
         of: find.byKey(
           const ValueKey<String>('profile-interaction-secondary-tabs'),
         ),
-        matching: find.text(UITextConstants.interactionSubLikes),
+        matching: find.text(ProfileText.interactionSubLikes),
       );
       final before = tester.getTopLeft(subTabFinder);
 
@@ -1478,10 +1462,10 @@ void main() {
           : _inlinePrimaryTab('互动');
       final creationsTab =
           _pinnedPrimaryTab(
-            UITextConstants.profileTabCreations,
+            ProfileText.profileTabCreations,
           ).evaluate().isNotEmpty
-          ? _pinnedPrimaryTab(UITextConstants.profileTabCreations)
-          : _inlinePrimaryTab(UITextConstants.profileTabCreations);
+          ? _pinnedPrimaryTab(ProfileText.profileTabCreations)
+          : _inlinePrimaryTab(ProfileText.profileTabCreations);
 
       await tester.tap(interactionTab);
       await _pumpFrames(tester, count: 12);
@@ -1535,7 +1519,7 @@ void main() {
       await _pumpFrames(tester);
       await revealProfilePrimaryTabs(tester);
       expect(
-        _inlinePrimaryTab(UITextConstants.profileTabCreations),
+        _inlinePrimaryTab(ProfileText.profileTabCreations),
         findsOneWidget,
       );
       expect(
@@ -1587,7 +1571,7 @@ void main() {
       await _pumpFrames(tester);
       await revealProfilePrimaryTabs(tester);
       expect(
-        _inlinePrimaryTab(UITextConstants.profileTabCreations),
+        _inlinePrimaryTab(ProfileText.profileTabCreations),
         findsOneWidget,
       );
     });
@@ -1607,7 +1591,7 @@ void main() {
       await _pumpFrames(tester);
 
       // 首屏失败不被乐观壳层静默吞掉：结构化错误态可见 + 重试入口（R17/R20）。
-      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+      expect(find.text(SearchText.reload), findsOneWidget);
     });
   });
 }

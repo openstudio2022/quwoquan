@@ -264,7 +264,7 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
             ),
             child: AppSearchField(
               controller: _searchController,
-              placeholder: UITextConstants.search,
+              placeholder: DiscoveryText.search,
               onChanged: _onSearchChanged,
             ),
           ),
@@ -378,7 +378,7 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
     required StartGroupMemberWizardState wizardState,
   }) {
     if (_loading) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     if (_errorSemantic != null) {
       return AppPageErrorState(
@@ -438,9 +438,9 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
           ),
         ],
         if (_loadingMore)
-          const Padding(
+          Padding(
             padding: EdgeInsets.all(AppSpacing.md),
-            child: Center(child: CupertinoActivityIndicator()),
+            child: AppRequestFeedback.section(),
           )
         else if (_appendErrorSemantic != null)
           AppListAppendErrorFooter(
@@ -454,7 +454,7 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
                 'start-group-member-picker-load-more',
               ),
               onPressed: () => unawaited(_loadMoreMembers()),
-              child: const Text(UITextConstants.loadMore),
+              child: const Text(ContentText.loadMore),
             ),
           ),
       ],

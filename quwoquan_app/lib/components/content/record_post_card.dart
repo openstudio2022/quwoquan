@@ -53,7 +53,7 @@ class RecordPostCard extends ConsumerWidget {
     final body = post.normalizedBody;
     if (title.isNotEmpty) return title;
     if (body.isNotEmpty) return body;
-    return UITextConstants.profileTabCreations;
+    return ProfileText.profileTabCreations;
   }
 
   String get _supportingText {
@@ -158,7 +158,7 @@ class RecordPostCard extends ConsumerWidget {
         SizedBox(width: AppSpacing.intraGroupXs),
         Flexible(
           child: Text(
-            name.isEmpty ? UITextConstants.profileTabCreations : name,
+            name.isEmpty ? ProfileText.profileTabCreations : name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: metaTextStyle,

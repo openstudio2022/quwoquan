@@ -55,7 +55,7 @@
 - feed、viewer、profile 共用统一 provider 同步关系态与互动状态。
 - 图片、视频、微趣、文章进入浏览器/阅读器后，标题（可选）和正文（可选）必须与对应 post 展示一致。
 - Web 精品不恢复独立「精品队列」hero/rail；当前商用口径为复用发现内容流的宽屏多列墙 + 统一 `workBrowser` 落点。
-- 所有 Repository 必须支持 `appDataSourceModeProvider` 的 Mock/Remote 切换。
+- alpha/beta/gamma/prod composition 的所有对象级 Query/Command port 只装配 Remote adapter；typed double 仅存在测试树，代码图、runner 与 UAT support 不得保留 fixture override 或运行时 Mock/Remote 切换。
 - 运行时同步参数属于 `sys.*`，不得落到 `ops.*`、业务 feature flag 或 `ui_config.yaml`。
 - Web 内容区复用 `HomeMultiFormFeed` 宽屏多列墙；post 点击统一调用 `openHomeFeedPost(...)`，进入 `AppRoutePaths.workBrowser(...)` 与 `WorksImmersiveViewer`。
 - 禁止回退到旧「精品队列」hero/rail、右侧说明 rail 或独立精品壳；建立独立 Web 精品容器前必须先更新本 L2 规格、页面契约和测试。

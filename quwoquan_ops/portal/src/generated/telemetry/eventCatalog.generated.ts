@@ -192,6 +192,8 @@ export const eventCatalog = {
       "log_type": "event",
       "normal_sample_rate": 1,
       "optional_extensions": [
+        "surfaceId",
+        "hasCache",
         "durationMs",
         "failReasonCode",
         "recoveryAction",
@@ -239,6 +241,82 @@ export const eventCatalog = {
         "contentType",
         "objectState",
         "surfaceId",
+        "result"
+      ]
+    },
+    {
+      "event_type": "article_reader_enter",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [],
+      "required_extensions": [
+        "surfaceId",
+        "objectType",
+        "objectId",
+        "durationMs",
+        "result"
+      ]
+    },
+    {
+      "event_type": "article_reader_dwell",
+      "internal_priority": "normal",
+      "log_type": "event",
+      "normal_sample_rate": 0.1,
+      "optional_extensions": [],
+      "required_extensions": [
+        "surfaceId",
+        "objectType",
+        "objectId",
+        "durationMs",
+        "result"
+      ]
+    },
+    {
+      "event_type": "article_reader_exit",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [],
+      "required_extensions": [
+        "surfaceId",
+        "objectType",
+        "objectId",
+        "durationMs",
+        "result"
+      ]
+    },
+    {
+      "event_type": "article_reader_error",
+      "internal_priority": "error",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "durationMs"
+      ],
+      "required_extensions": [
+        "surfaceId",
+        "objectType",
+        "objectId",
+        "errorCode",
+        "recoveryAction",
+        "result"
+      ]
+    },
+    {
+      "event_type": "article_reader_recovery",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "durationMs",
+        "errorCode"
+      ],
+      "required_extensions": [
+        "surfaceId",
+        "objectType",
+        "objectId",
+        "recoveryAction",
         "result"
       ]
     },
@@ -616,6 +694,9 @@ export const eventCatalog = {
         "member_leave"
       ],
       "type": "string"
+    },
+    "hasCache": {
+      "type": "bool"
     },
     "hasError": {
       "type": "bool"

@@ -227,8 +227,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     final capabilities = ref.watch(platformCapabilitiesProvider);
     final useWebWideShell =
         capabilities.wideScreenLayout && AppSpacing.isWideLayout(context);
-    final showInstallBanner =
-        capabilities.promotesAppInstall && !useWebWideShell;
+    final showInstallBanner = capabilities.promotesAppInstall;
     final activeSpeaker = ref.watch(callParticipantsProvider).activeSpeaker;
 
     final statusBarStyle = SystemUiOverlayStyle(

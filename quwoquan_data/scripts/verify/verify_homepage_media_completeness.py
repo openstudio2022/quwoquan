@@ -7,6 +7,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from collections.abc import Collection
 from typing import Any, Iterable, Mapping
 
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
@@ -342,11 +343,28 @@ def _manifest_issues(
     return issues
 
 
-def homepage_media_completeness_report(execution_id: str) -> dict[str, Any]:
+def homepage_media_completeness_report(
+    execution_id: str,
+    *,
+    publishable_names: Collection[str] | None = None,
+) -> dict[str, Any]:
+    """校验主页图片枚举与发布处置的完整性。
+
+    ``publishable_names`` 为 None 时审计整个工作包（独立 verifier 口径）。批次准出
+    调用方必须传入本次准出集合：候选池经过采后必然留下未产出的丢弃对象，它们的来源
+    图片既不会进入任何 manifest，也不该阻断已达标对象发布。
+    """
     root = paths.execution_root(execution_id)
     issues: list[DataIssue] = []
     checked_sources = 0
+    scope = (
+        None
+        if publishable_names is None
+        else {str(name).strip() for name in publishable_names if str(name).strip()}
+    )
     manifests = _entity_manifest_by_name(root) if root.is_dir() else {}
+    if scope is not None:
+        manifests = {name: row for name, row in manifests.items() if name in scope}
     dispositions = _homepage_media_dispositions(root) if root.is_dir() else {}
     published_source_assets = {
         str(asset.get("sourceAssetRef") or "").strip()
@@ -365,6 +383,8 @@ def homepage_media_completeness_report(execution_id: str) -> dict[str, Any]:
         )
     for meta_path in sorted((root / "sources").glob("*/meta.json")) if root.is_dir() else []:
         meta = read_json(meta_path)
+        if scope is not None and str(meta.get("entityName") or "").strip() not in scope:
+            continue
         placements = _mapping_rows(meta.get("imagePlacements"))
         if not placements:
             continue

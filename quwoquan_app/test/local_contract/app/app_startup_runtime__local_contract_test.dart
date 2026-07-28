@@ -48,8 +48,8 @@ void main() {
     );
     expect(
       runtime.deadlineOrigin,
-      'fallbackDart',
-      reason: 'late native hydration cannot rebase an already armed deadline',
+      'android_process',
+      reason: 'native process time may consume more of the existing budget',
     );
   });
 
@@ -81,9 +81,8 @@ void main() {
     );
   });
 
-  test('native timing hydration 不得重置已 arm 的 deadline origin', () async {
+  test('native timing hydration 只向前收紧已 arm 的 deadline', () async {
     runtime.markBootstrapStarted();
-    final deadlineOriginBeforeHydration = runtime.deadlineOrigin;
 
     AppStartupRuntime.overrideNativeTimingsBridgeForTesting(
       _FakeNativeTimingBridge(
@@ -100,8 +99,38 @@ void main() {
       budget: const Duration(milliseconds: 20),
     );
 
-    expect(runtime.deadlineOrigin, deadlineOriginBeforeHydration);
-    expect(runtime.deadlineElapsedSinceProcessStart, isA<Duration>());
+    expect(runtime.deadlineOrigin, 'android_process');
+    expect(
+      runtime.deadlineElapsedSinceProcessStart,
+      greaterThanOrEqualTo(const Duration(milliseconds: 5000)),
+    );
+  });
+
+  test('stale native timing hydration 不得延长已 arm 的 deadline', () async {
+    runtime.markBootstrapStarted();
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    final deadlineBeforeHydration = runtime.deadlineElapsedSinceProcessStart;
+
+    AppStartupRuntime.overrideNativeTimingsBridgeForTesting(
+      _FakeNativeTimingBridge(
+        Future<NativeStartupProcessSegments?>.value(
+          const NativeStartupProcessSegments(
+            elapsedSinceProcessStartMs: 0,
+            deadlineOrigin: 'android_process',
+          ),
+        ),
+      ),
+    );
+
+    await runtime.hydrateNativeProcessSegments(
+      budget: const Duration(milliseconds: 20),
+    );
+
+    expect(runtime.deadlineOrigin, 'fallbackDart');
+    expect(
+      runtime.deadlineElapsedSinceProcessStart,
+      greaterThanOrEqualTo(deadlineBeforeHydration),
+    );
   });
 
   test('Dart 启动只记录环境摘要与脱敏缺失键', () async {
@@ -125,12 +154,55 @@ void main() {
       (event) => event['eventName'] == 'startup_attempt_started',
     );
     final summary = CloudRuntimeConfig.runtimeDefineSummary;
-    expect(started.containsKey('attemptId'), isFalse);
+    expect(
+      started['attemptId'],
+      isA<String>().having(
+        (value) => value,
+        'attemptId',
+        matches(RegExp(r'^[A-Za-z0-9_-]{32}$')),
+      ),
+    );
     expect(started['runtimeEnv'], summary['runtimeEnv']);
     expect(started['launchMode'], summary['launchMode']);
     expect(started['configurationState'], summary['configurationState']);
     expect(started['missingDefineKeys'] ?? '', summary['missingKeys']);
     expect(started.containsKey('CLOUD_GATEWAY_BASE_URL'), isFalse);
+  });
+
+  test('native hydration 后所有 Dart 事件复用原生 attemptId', () async {
+    final events = <Map<String, dynamic>>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_startupTimingsChannel, (call) async {
+          if (call.method == 'recordStartupEvent') {
+            events.add(
+              Map<String, dynamic>.from(
+                jsonDecode(call.arguments! as String) as Map<String, dynamic>,
+              ),
+            );
+          }
+          return null;
+        });
+    AppStartupRuntime.overrideNativeTimingsBridgeForTesting(
+      _FakeNativeTimingBridge(
+        Future<NativeStartupProcessSegments?>.value(
+          const NativeStartupProcessSegments(
+            startupAttemptId: 'native_attempt_1234567890',
+          ),
+        ),
+      ),
+    );
+
+    runtime.markBootstrapStarted();
+    await runtime.hydrateNativeProcessSegments(
+      budget: const Duration(milliseconds: 20),
+    );
+    runtime.markShellFirstPainted();
+    await Future<void>.delayed(Duration.zero);
+
+    final validated = events.singleWhere(
+      (event) => event['eventName'] == 'startup_safe_terminal',
+    );
+    expect(validated['attemptId'], 'native_attempt_1234567890');
   });
 
   test('安全终态首帧会通知平台 watchdog，而欢迎首帧不会提前取消', () async {

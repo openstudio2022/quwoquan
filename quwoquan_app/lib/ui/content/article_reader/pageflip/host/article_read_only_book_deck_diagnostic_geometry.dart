@@ -389,7 +389,7 @@ extension _ArticleReadOnlyBookDeckDiagnosticGeometry
     final positionViewport = convertBookPointToViewport(
       surfaceOrigin,
       bounds,
-      direction: softLayerViewportDirection(direction),
+      direction: softLayerViewportDirection(geometryDirection),
     );
     final localClipPolygon = _localPolygonFromArea(
       area: area,
@@ -498,19 +498,30 @@ extension _ArticleReadOnlyBookDeckDiagnosticGeometry
         (leafFrame.totalRectoVisibleWidthNormalized * pageSize.width)
             .clamp(0.0, coveredWidth)
             .toDouble();
-    final rectoLocalPolygon = _clipBackwardSheetLocalSlice(
-      sheetContentLocalPolygon,
-      pageSize: pageSize,
-      left: 0,
-      right: rectoWidth,
+    final slices = resolveArticlePageBackwardSheetLocalSlices(
+      sheetLocalPolygon: sheetContentLocalPolygon,
+      coveredWidth: coveredWidth,
+      rectoWidth: rectoWidth,
     );
-    final versoLocalPolygon = _clipBackwardSheetLocalSlice(
-      sheetContentLocalPolygon,
-      pageSize: pageSize,
-      left: rectoWidth,
-      right: coveredWidth,
-    );
-    final paintedUnionLocalPolygon = sheetContentLocalPolygon;
+    final rectoLocalPolygon = slices == null
+        ? const <Offset>[]
+        : _clipBackwardSheetLocalSlice(
+            sheetLocalPolygon: sheetContentLocalPolygon,
+            pageSize: pageSize,
+            left: slices.rectoLeft,
+            width: slices.rectoWidth,
+          );
+    final versoLocalPolygon = slices == null
+        ? const <Offset>[]
+        : _clipBackwardSheetLocalSlice(
+            sheetLocalPolygon: sheetContentLocalPolygon,
+            pageSize: pageSize,
+            left: slices.versoLeft,
+            width: slices.versoWidth,
+          );
+    final paintedUnionLocalPolygon = slices == null
+        ? const <Offset>[]
+        : sheetContentLocalPolygon;
     final pageViewportOrigin = _backwardPageRect(scene).topLeft;
     final rectoViewportPolygon = transformSoftLayerContentLocalPolygon(
       polygon: rectoLocalPolygon,
@@ -577,23 +588,38 @@ extension _ArticleReadOnlyBookDeckDiagnosticGeometry
     );
   }
 
-  List<Offset> _clipBackwardSheetLocalSlice(
-    List<Offset> sheetLocalPolygon, {
+  List<Offset> _clipBackwardSheetLocalSlice({
+    required List<Offset> sheetLocalPolygon,
     required Size pageSize,
     required double left,
-    required double right,
+    required double width,
   }) {
-    if (right - left <= 0.001) {
+    if (sheetLocalPolygon.length < 3 || width <= 0.001) {
       return const <Offset>[];
     }
-    final clippedAtRight = clipPolygonByLine(
-      polygon: sheetLocalPolygon,
+    var clipped = List<Offset>.of(sheetLocalPolygon);
+    final right = left + width;
+    clipped = clipPolygonByLine(
+      polygon: clipped,
+      line: (Offset(left, 0), Offset(left, pageSize.height)),
+      keepPositiveSide: false,
+    );
+    clipped = clipPolygonByLine(
+      polygon: clipped,
       line: (Offset(right, 0), Offset(right, pageSize.height)),
       keepPositiveSide: true,
     );
+    clipped = clipPolygonByLine(
+      polygon: clipped,
+      line: (Offset(0, 0), Offset(pageSize.width, 0)),
+      keepPositiveSide: true,
+    );
     return clipPolygonByLine(
-      polygon: clippedAtRight,
-      line: (Offset(left, 0), Offset(left, pageSize.height)),
+      polygon: clipped,
+      line: (
+        Offset(0, pageSize.height),
+        Offset(pageSize.width, pageSize.height),
+      ),
       keepPositiveSide: false,
     );
   }

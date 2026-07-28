@@ -21,6 +21,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	runtimemedia "quwoquan_service/runtime/media"
 	model "quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
 )
 
@@ -29,6 +30,7 @@ const (
 	reportSchema        = "quwoquan.user_creator_import_report"
 	dataSourceOwner     = "qwq_data"
 	contentIdentityKind = "content_release"
+	projectionDatabase  = "quwoquan_user"
 	modeUpsert          = "upsert"
 	modeSync            = "sync"
 )
@@ -42,18 +44,29 @@ type desiredState struct {
 }
 
 type creatorProfile struct {
-	Schema               string   `json:"schema"`
-	CreatorID            string   `json:"creatorId"`
-	UserID               string   `json:"userId"`
-	AuthorID             string   `json:"authorId"`
-	SubAccountID         string   `json:"subAccountId"`
-	DisplayName          string   `json:"displayName"`
-	UserHandle           string   `json:"userHandle"`
-	AvatarObjectKey      string   `json:"avatarObjectKey"`
-	Headline             string   `json:"headline"`
-	Bio                  string   `json:"bio"`
-	CreatorArchetype     string   `json:"creatorArchetype"`
-	PublicProfileTagRefs []string `json:"publicProfileTagRefs"`
+	Schema               string                `json:"schema"`
+	CreatorID            string                `json:"creatorId"`
+	UserID               string                `json:"userId"`
+	AuthorID             string                `json:"authorId"`
+	SubAccountID         string                `json:"subAccountId"`
+	DisplayName          string                `json:"displayName"`
+	UserHandle           string                `json:"userHandle"`
+	AvatarAsset          *creatorMediaAssetRef `json:"avatarAsset"`
+	AvatarObjectKey      string                `json:"avatarObjectKey"`
+	AvatarURL            string                `json:"-"`
+	AvatarVersion        int64                 `json:"-"`
+	AvatarPublicSliceKey string                `json:"-"`
+	Headline             string                `json:"headline"`
+	Bio                  string                `json:"bio"`
+	CreatorArchetype     string                `json:"creatorArchetype"`
+	PublicProfileTagRefs []string              `json:"publicProfileTagRefs"`
+}
+
+type creatorMediaAssetRef struct {
+	AssetID   string `json:"assetId"`
+	Kind      string `json:"kind"`
+	SHA256    string `json:"sha256"`
+	ObjectKey string `json:"objectKey"`
 }
 
 type creatorRecord struct {
@@ -62,15 +75,17 @@ type creatorRecord struct {
 }
 
 type importReport struct {
-	Schema      string   `json:"schema"`
-	Status      string   `json:"status"`
-	Environment string   `json:"environment"`
-	ReleaseID   string   `json:"releaseId"`
-	SourceOwner string   `json:"sourceOwner"`
-	Mode        string   `json:"mode"`
-	Counts      counts   `json:"counts"`
-	AuthorIDs   []string `json:"authorIds"`
-	GeneratedAt string   `json:"generatedAt"`
+	Schema             string   `json:"schema"`
+	Status             string   `json:"status"`
+	Environment        string   `json:"environment"`
+	ReleaseID          string   `json:"releaseId"`
+	SourceOwner        string   `json:"sourceOwner"`
+	Mode               string   `json:"mode"`
+	ProjectionDatabase string   `json:"projectionDatabase"`
+	Counts             counts   `json:"counts"`
+	AuthorIDs          []string `json:"authorIds"`
+	VerifiedCreatorIDs []string `json:"verifiedCreatorIds"`
+	GeneratedAt        string   `json:"generatedAt"`
 }
 
 type counts struct {
@@ -85,6 +100,7 @@ func Run() {
 	releaseRoot := flag.String("release-root", "", "immutable release root (required)")
 	postgresDSN := flag.String("postgres-dsn", "", "user-service PostgreSQL DSN (required)")
 	mongoURI := flag.String("mongo-uri", "", "user-service MongoDB URI (required)")
+	mediaAvatarBaseURL := flag.String("media-avatar-base-url", "", "avatar media public base URL")
 	environment := flag.String("env", "", "environment label (required)")
 	mode := flag.String("mode", modeUpsert, "apply mode: upsert|sync")
 	reportPath := flag.String("report", "", "machine-readable report path (required)")
@@ -94,15 +110,18 @@ func Run() {
 	if err := requireArguments(*releaseRoot, *postgresDSN, *mongoURI, *environment, *reportPath, *mode); err != nil {
 		fatal(err)
 	}
-	state, creators, err := loadCreators(*releaseRoot)
+	state, creators, err := loadCreators(*releaseRoot, *mediaAvatarBaseURL)
 	if err != nil {
 		fatal(err)
 	}
 	report := importReport{
 		Schema: reportSchema, Status: "dry-run", Environment: *environment,
 		ReleaseID: state.ReleaseID, SourceOwner: dataSourceOwner, Mode: *mode,
-		Counts:    counts{CreatorsLoaded: len(creators)},
-		AuthorIDs: authorIDs(creators), GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		ProjectionDatabase: projectionDatabase,
+		Counts:             counts{CreatorsLoaded: len(creators)},
+		AuthorIDs:          authorIDs(creators),
+		VerifiedCreatorIDs: []string{},
+		GeneratedAt:        time.Now().UTC().Format(time.RFC3339),
 	}
 	if *dryRun {
 		fatal(writeReport(*reportPath, report))
@@ -128,18 +147,29 @@ func Run() {
 	if err != nil {
 		fatal(err)
 	}
-	creatorsUpserted, err := upsertCreatorProfiles(ctx, client.Database("quwoquan_user"), creators, state.ReleaseID)
+	projectionDB := client.Database(projectionDatabase)
+	creatorsUpserted, err := upsertCreatorProfiles(ctx, projectionDB, creators, state.ReleaseID)
+	if err != nil {
+		fatal(err)
+	}
+	verifiedCreatorIDs, err := verifyCreatorProfileReadback(
+		ctx,
+		projectionDB,
+		creators,
+		state.ReleaseID,
+	)
 	if err != nil {
 		fatal(err)
 	}
 	report.Counts.UsersUpserted = usersUpserted
 	report.Counts.CreatorsUpserted = creatorsUpserted
+	report.VerifiedCreatorIDs = verifiedCreatorIDs
 	if *mode == modeSync {
 		report.Counts.UsersRemoved, err = removeAbsentUsers(ctx, pool, report.AuthorIDs)
 		if err != nil {
 			fatal(err)
 		}
-		report.Counts.CreatorsRemoved, err = removeAbsentCreatorProfiles(ctx, client.Database("quwoquan_user"), creatorIDs(creators))
+		report.Counts.CreatorsRemoved, err = removeAbsentCreatorProfiles(ctx, projectionDB, creatorIDs(creators))
 		if err != nil {
 			fatal(err)
 		}
@@ -161,7 +191,10 @@ func requireArguments(values ...string) error {
 	return nil
 }
 
-func loadCreators(releaseRoot string) (desiredState, []creatorRecord, error) {
+func loadCreators(
+	releaseRoot string,
+	mediaAvatarBaseURL string,
+) (desiredState, []creatorRecord, error) {
 	statePath := filepath.Join(releaseRoot, "payload", "desired_state.json")
 	bytes, err := os.ReadFile(statePath)
 	if err != nil {
@@ -173,6 +206,10 @@ func loadCreators(releaseRoot string) (desiredState, []creatorRecord, error) {
 	}
 	if state.Schema != releaseSchema || strings.TrimSpace(state.ReleaseID) == "" {
 		return desiredState{}, nil, fmt.Errorf("invalid immutable release desired state")
+	}
+	releaseAssets, err := runtimemedia.LoadReleaseMediaAssets(releaseRoot, state.ReleaseID)
+	if err != nil {
+		return desiredState{}, nil, fmt.Errorf("load release media authority: %w", err)
 	}
 	records := make([]creatorRecord, 0, len(state.DesiredRefs.Creators))
 	seen := make(map[string]struct{}, len(state.DesiredRefs.Creators))
@@ -188,6 +225,26 @@ func loadCreators(releaseRoot string) (desiredState, []creatorRecord, error) {
 		profile, err := loadCreatorProfile(root, ref)
 		if err != nil {
 			return desiredState{}, nil, err
+		}
+		if profile.AvatarAsset != nil {
+			resolved, resolveErr := runtimemedia.ResolveReleaseMediaAsset(
+				releaseAssets,
+				runtimemedia.MediaDeliveryBases{Avatar: mediaAvatarBaseURL},
+				profile.AvatarAsset.AssetID,
+				profile.AvatarAsset.Kind,
+				profile.AvatarAsset.SHA256,
+				"creators/"+ref,
+			)
+			if resolveErr != nil {
+				return desiredState{}, nil, fmt.Errorf(
+					"creator %s avatar differs from release media authority: %w",
+					ref,
+					resolveErr,
+				)
+			}
+			profile.AvatarURL = resolved.PublicURL
+			profile.AvatarVersion = resolved.Version
+			profile.AvatarPublicSliceKey = resolved.PublicSliceKey
 		}
 		works, err := loadCreatorWorks(filepath.Join(root, "works.refs.ndjson"))
 		if err != nil {
@@ -218,6 +275,13 @@ func loadCreatorProfile(root, ref string) (creatorProfile, error) {
 	var profile creatorProfile
 	if err := json.Unmarshal(bytes, &profile); err != nil {
 		return creatorProfile{}, fmt.Errorf("decode creator profile %s: %w", ref, err)
+	}
+	if strings.TrimSpace(profile.AvatarObjectKey) != "" ||
+		(profile.AvatarAsset != nil && strings.TrimSpace(profile.AvatarAsset.ObjectKey) != "") {
+		return creatorProfile{}, fmt.Errorf(
+			"creator profile %s contains forbidden avatar objectKey",
+			ref,
+		)
 	}
 	if profile.Schema != "quwoquan_data.creator_profile" || profile.CreatorID != ref ||
 		profile.UserID == "" || profile.AuthorID == "" || profile.UserID != profile.AuthorID ||
@@ -271,13 +335,29 @@ func upsertUsers(ctx context.Context, pool *pgxpool.Pool, creators []creatorReco
 		user_id, account_state, identity_origin, logical_shard, anonymous_retention_policy,
 		phone, nickname, avatar_url, avatar_asset_id, avatar_version, bio, identity_tags,
 		status, profile_version, owner_display_name, sub_account_count, created_at, updated_at
-	) VALUES ($1, 'active', 'content_release', 0, 'preserve', NULL, $2, NULL, NULL, 0, $3, '', 'active', 1, $2, 0, NOW(), NOW())
-	ON CONFLICT (user_id) DO UPDATE SET nickname=EXCLUDED.nickname, bio=EXCLUDED.bio,
+	) VALUES ($1, 'active', 'content_release', 0, 'preserve', NULL, $2, $3, $4, $5, $6, '', 'active', 1, $2, 0, NOW(), NOW())
+	ON CONFLICT (user_id) DO UPDATE SET nickname=EXCLUDED.nickname,
+		avatar_url=EXCLUDED.avatar_url, avatar_asset_id=EXCLUDED.avatar_asset_id,
+		avatar_version=EXCLUDED.avatar_version, bio=EXCLUDED.bio,
 		owner_display_name=EXCLUDED.owner_display_name, updated_at=NOW()
 	WHERE user_profiles.identity_origin='content_release'`
 	count := 0
 	for _, creator := range creators {
-		tag, err := pool.Exec(ctx, query, creator.Profile.UserID, creator.Profile.DisplayName, creator.Profile.Bio)
+		profile := creator.Profile
+		avatarAssetID := ""
+		if profile.AvatarAsset != nil {
+			avatarAssetID = profile.AvatarAsset.AssetID
+		}
+		tag, err := pool.Exec(
+			ctx,
+			query,
+			profile.UserID,
+			profile.DisplayName,
+			nullableString(profile.AvatarURL),
+			nullableString(avatarAssetID),
+			profile.AvatarVersion,
+			profile.Bio,
+		)
 		if err != nil {
 			return 0, fmt.Errorf("upsert creator user %s: %w", creator.Profile.UserID, err)
 		}
@@ -289,6 +369,13 @@ func upsertUsers(ctx context.Context, pool *pgxpool.Pool, creators []creatorReco
 	return count, nil
 }
 
+func nullableString(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return value
+}
+
 func upsertCreatorProfiles(ctx context.Context, database *mongo.Database, creators []creatorRecord, releaseID string) (int, error) {
 	collection := database.Collection("creator_runtime_profiles")
 	count := 0
@@ -297,10 +384,16 @@ func upsertCreatorProfiles(ctx context.Context, database *mongo.Database, creato
 		runtime := model.CreatorRuntimeProfile{
 			CreatorID: profile.CreatorID, SubAccountID: profile.SubAccountID, Handle: profile.UserHandle,
 			DisplayName: profile.DisplayName, Headline: profile.Headline, Bio: profile.Bio,
-			AvatarObjectKey: profile.AvatarObjectKey, PublicProfileTagRefs: profile.PublicProfileTagRefs,
-			CreatorArchetype: profile.CreatorArchetype, Works: creator.Works, PackageDigest: releaseID,
+			AvatarURL: profile.AvatarURL, AvatarVersion: profile.AvatarVersion,
+			AvatarPublicSliceKey: profile.AvatarPublicSliceKey,
+			PublicProfileTagRefs: profile.PublicProfileTagRefs,
+			CreatorArchetype:     profile.CreatorArchetype, Works: creator.Works, PackageDigest: releaseID,
 			ReleaseID: releaseID, Status: "active", ManagedBy: dataSourceOwner,
 			ImportedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+		}
+		if profile.AvatarAsset != nil {
+			runtime.AvatarAssetID = profile.AvatarAsset.AssetID
+			runtime.AvatarSHA256 = profile.AvatarAsset.SHA256
 		}
 		_, err := collection.UpdateOne(ctx, bson.M{"creatorId": profile.CreatorID}, bson.M{"$set": runtime}, options.UpdateOne().SetUpsert(true))
 		if err != nil {
@@ -309,6 +402,45 @@ func upsertCreatorProfiles(ctx context.Context, database *mongo.Database, creato
 		count++
 	}
 	return count, nil
+}
+
+func verifyCreatorProfileReadback(
+	ctx context.Context,
+	database *mongo.Database,
+	creators []creatorRecord,
+	releaseID string,
+) ([]string, error) {
+	collection := database.Collection("creator_runtime_profiles")
+	verified := make([]string, 0, len(creators))
+	for _, creator := range creators {
+		profile := creator.Profile
+		var persisted model.CreatorRuntimeProfile
+		err := collection.FindOne(ctx, bson.M{
+			"creatorId":    profile.CreatorID,
+			"subAccountId": profile.SubAccountID,
+			"releaseId":    releaseID,
+			"managedBy":    dataSourceOwner,
+			"status":       "active",
+		}).Decode(&persisted)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"read back creator projection %s from %s: %w",
+				profile.CreatorID,
+				projectionDatabase,
+				err,
+			)
+		}
+		if persisted.CreatorID != profile.CreatorID ||
+			persisted.SubAccountID != profile.SubAccountID {
+			return nil, fmt.Errorf(
+				"creator projection identity drift after readback: %s",
+				profile.CreatorID,
+			)
+		}
+		verified = append(verified, persisted.CreatorID)
+	}
+	sort.Strings(verified)
+	return verified, nil
 }
 
 func removeAbsentUsers(ctx context.Context, pool *pgxpool.Pool, authorIDs []string) (int, error) {

@@ -1,6 +1,6 @@
 part of 'ui_text_constants.dart';
 
-abstract final class _UITextCommunity {
+abstract final class CommunityText {
   static const String createCircle = '创建圈子';
   static const String circleCreateSuccess = '圈子已创建';
   static const String editCircle = '编辑圈子';

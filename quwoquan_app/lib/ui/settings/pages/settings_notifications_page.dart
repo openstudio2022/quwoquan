@@ -33,7 +33,7 @@ class _SettingsNotificationsPageState
     final settings = state.notification;
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
-      title: UITextConstants.settingsNotificationSection,
+      title: SettingsText.settingsNotificationSection,
       onBack: () => _goBack(context),
       body: WebPageMaxWidthFrame(
         child: SafeArea(
@@ -56,9 +56,8 @@ class _SettingsNotificationsPageState
                         children: <Widget>[
                           SettingsInsetSwitchRow(
                             isDark: isDark,
-                            label: UITextConstants.settingsEnablePush,
-                            subtitle:
-                                UITextConstants.settingsEnablePushSubtitle,
+                            label: SettingsText.settingsEnablePush,
+                            subtitle: SettingsText.settingsEnablePushSubtitle,
                             value: settings.enablePush,
                             onChanged: (value) => unawaited(
                               _update(
@@ -71,9 +70,9 @@ class _SettingsNotificationsPageState
                           SettingsInsetFormSectionDivider(isDark: isDark),
                           SettingsInsetSwitchRow(
                             isDark: isDark,
-                            label: UITextConstants.settingsEnableMarketing,
+                            label: SettingsText.settingsEnableMarketing,
                             subtitle:
-                                UITextConstants.settingsEnableMarketingSubtitle,
+                                SettingsText.settingsEnableMarketingSubtitle,
                             value: settings.enableMarketing,
                             onChanged: (value) => unawaited(
                               _update(
@@ -95,7 +94,7 @@ class _SettingsNotificationsPageState
 
   Widget _buildUnavailable(UserSettingsSectionsState state) {
     if (state.isLoading) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     return AppPageErrorState(
       semantic: UiErrorSemanticResolver.resolve(

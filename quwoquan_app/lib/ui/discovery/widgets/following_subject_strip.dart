@@ -75,7 +75,7 @@ class FollowingSubjectStrip extends ConsumerWidget {
                   horizontal: AppSpacing.containerMd,
                 ),
                 child: Text(
-                  UITextConstants.followingSubjectStripTitle,
+                  DiscoveryText.followingSubjectStripTitle,
                   style: TextStyle(
                     fontSize: AppTypography.iosSubheadline,
                     fontWeight: AppTypography.semiBold,
@@ -319,10 +319,10 @@ class _FollowingSubjectTypeBadge extends StatelessWidget {
 
   String get _label {
     return switch (type) {
-      'user' => UITextConstants.followingSubjectTypeUser,
-      'circle' => UITextConstants.followingSubjectTypeCircle,
-      'homepage' => UITextConstants.followingSubjectTypeObject,
-      _ => UITextConstants.followingSubjectTypeUser,
+      'user' => ContentText.followingSubjectTypeUser,
+      'circle' => ContentText.followingSubjectTypeCircle,
+      'homepage' => ContentText.followingSubjectTypeObject,
+      _ => ContentText.followingSubjectTypeUser,
     };
   }
 }
@@ -468,7 +468,7 @@ class _FollowingSubjectEmptyState extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            UITextConstants.followingSubjectEmptyTitle,
+            DiscoveryText.followingSubjectEmptyTitle,
             style: TextStyle(
               fontSize: AppTypography.iosSubheadline,
               fontWeight: AppTypography.semiBold,
@@ -480,7 +480,7 @@ class _FollowingSubjectEmptyState extends StatelessWidget {
           ),
           SizedBox(height: AppSpacing.intraGroupXs),
           Text(
-            UITextConstants.followingSubjectEmptySubtitle,
+            DiscoveryText.followingSubjectEmptySubtitle,
             style: TextStyle(
               fontSize: AppTypography.iosFootnote,
               color: AppColorsFunctional.getColor(

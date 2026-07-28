@@ -44,7 +44,6 @@ class CommentDraft {
 class CommentDraftStore {
   CommentDraftStore._();
 
-  static const String _legacyKeyPrefix = 'comment_draft:v1:';
   static const String _keyPrefix = 'comment_draft:v2:';
 
   static String _actorPrefix(String actorScope) {
@@ -65,7 +64,6 @@ class CommentDraftStore {
     String? replyToCommentId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    await _removeLegacyKeys(prefs);
     final raw = prefs.getString(_key(actorScope, postId, replyToCommentId));
     if (raw == null || raw.isEmpty) {
       return null;
@@ -89,7 +87,6 @@ class CommentDraftStore {
     required CommentDraft draft,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    await _removeLegacyKeys(prefs);
     final key = _key(actorScope, postId, replyToCommentId);
     if (draft.isEmpty) {
       await prefs.remove(key);
@@ -113,27 +110,14 @@ class CommentDraftStore {
     final keys = preferences
         .getKeys()
         .where((key) {
-          return key.startsWith(actorPrefix) ||
-              key.startsWith(_legacyKeyPrefix);
+          return key.startsWith(actorPrefix);
         })
         .toList(growable: false);
     for (final key in keys) {
       await preferences.remove(key);
     }
-    if (preferences.getKeys().any(
-      (key) => key.startsWith(actorPrefix) || key.startsWith(_legacyKeyPrefix),
-    )) {
+    if (preferences.getKeys().any((key) => key.startsWith(actorPrefix))) {
       throw StateError('comment draft cleanup verification failed');
-    }
-  }
-
-  static Future<void> _removeLegacyKeys(SharedPreferences preferences) async {
-    final legacyKeys = preferences
-        .getKeys()
-        .where((key) => key.startsWith(_legacyKeyPrefix))
-        .toList(growable: false);
-    for (final key in legacyKeys) {
-      await preferences.remove(key);
     }
   }
 }

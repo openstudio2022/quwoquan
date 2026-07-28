@@ -115,29 +115,25 @@ void main() {
   });
 
   group('AppPermissionCoordinator.permissionSemantic', () {
-    test('永久拒绝 gate 含去设置与重试授权', () {
+    test('永久拒绝 gate 只显示恢复组约定的去设置动作', () {
       final semantic = coordinator.permissionSemantic(
         AppPermissionKind.photos,
         openSettings: true,
-        includeRetry: true,
       );
       expect(semantic.category, UiErrorCategory.permissionRequired);
       expect(semantic.presentation, UiErrorPresentation.gateCard);
       expect(semantic.primaryAction?.type, UiErrorActionType.openSettings);
-      expect(semantic.secondaryAction?.type, UiErrorActionType.retry);
+      expect(semantic.secondaryAction, isNull);
+      expect(semantic.userRecoveryGroup, AppUserRecoveryGroup.enablePermission);
     });
 
-    test('L3 gate 标题使用 permissionSettingsGateTitle', () {
+    test('L3 gate 使用 enablePermission 唯一文案', () {
       final semantic = coordinator.permissionSemantic(
         AppPermissionKind.microphone,
         openSettings: true,
       );
-      expect(
-        semantic.title,
-        ChatText.permissionSettingsGateTitle(
-          ChatText.permissionMicrophoneLabel,
-        ),
-      );
+      expect(semantic.title, SearchText.recoveryEnablePermissionTitle);
+      expect(semantic.message, SearchText.recoveryEnablePermissionMessage);
     });
   });
 
@@ -152,14 +148,14 @@ void main() {
   });
 
   group('MicrophonePermissionGuard 兼容层', () {
-    test('permissionSemantic 保留自定义 title/message', () {
+    test('permissionSemantic 保留语音输入前置说明', () {
       final semantic = MicrophonePermissionGuard.permissionSemantic(
-        title: UITextConstants.callPermissionMicTitle,
-        message: UITextConstants.callPermissionMicDenied,
+        title: CallText.callPermissionMicTitle,
+        message: CallText.callPermissionMicDenied,
         openSettings: true,
       );
-      expect(semantic.title, UITextConstants.callPermissionMicTitle);
-      expect(semantic.message, UITextConstants.callPermissionMicDenied);
+      expect(semantic.title, CallText.callPermissionMicTitle);
+      expect(semantic.message, CallText.callPermissionMicDenied);
     });
   });
 

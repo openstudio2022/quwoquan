@@ -74,14 +74,15 @@ from content.homepage.homepage_assets import (
     select_homepage_assets,
     write_homepage_media_dispositions,
 )
-from content.homepage.quality_policy import homepage_source_fidelity_limit
-MIN_PAGE_CHARS = 350
+from content.homepage.quality_policy import (
+    homepage_body_char_minimum,
+    homepage_section_char_minimum,
+    homepage_source_fidelity_limit,
+)
 # 实体主页底稿下发上限：取消旧的 4000 截断（旧值会把维基百科页在中段截断，
 # Agent 看不到「技术变革 / 相关古迹」等后段章节，导致多级目录与章节缺失）。
 # 放宽到覆盖绝大多数百科页全文，仅兜底极端超长源避免 token 失控。
 HOMEPAGE_BASE_DRAFT_MAX_CHARS = MEDIA_PROCESSING_POLICY.homepage_base_draft_max_chars
-# 计入 sectionOutline 的关键章节最小去空白正文字数（短于此视为占位/导语碎片）。
-HOMEPAGE_SECTION_MIN_CHARS = 120
 # 发布态 _entity.json 必填集（结构契约唯一定义 = schema/publish/entity.schema.json）。
 # geoTagRef 为区县级主归属行政区标签（裁决 7：单值主归属 + 可选 geoTagRefs 全量数组），
 # 自 discovery_seed/2 起为物化必填；geoTagRefs 仅跨省/跨市地点提供。
@@ -117,6 +118,31 @@ def final_provenance_source_paths(source_refs: list[str]) -> list[str]:
     leaking into release validation.
     """
     return _dedupe_nonempty(source_refs)
+
+
+def _manifest_caption_bindings(
+    bindings: list[dict[str, Any]],
+    assets: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Project final manifest captions back into page placeholder bindings."""
+    caption_by_source_asset_id = {
+        str(asset.get("sourceAssetId") or "").strip(): str(
+            asset.get("caption") or ""
+        ).strip()
+        for asset in assets
+        if str(asset.get("sourceAssetId") or "").strip()
+        and str(asset.get("caption") or "").strip()
+    }
+    return [
+        {
+            **binding,
+            "caption": caption_by_source_asset_id.get(
+                str(binding.get("sourceAssetId") or "").strip(),
+                str(binding.get("caption") or ""),
+            ),
+        }
+        for binding in bindings
+    ]
 
 
 def materialize_entity_page(execution_id: str, domain: str, etype: str, name: str) -> list[str]:
@@ -181,7 +207,8 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
         return [f"{label}: 4.draft/draft_meta.agentRunId 缺失"]
     # 主页不复用文章的 figuregroup 回带协议。图集成员不会进入 Agent 底稿，
     # 而是由 imagePlacements 在 finalize 时统一写入「相关图片」。
-    draft_text = fold_to_simplified(draft_text)
+    draft_template = fold_to_simplified(draft_text)
+    draft_text = draft_template
     structure_issues = _homepage_outline_issues(
         [row for row in (base.get("sectionOutline") or []) if isinstance(row, dict)],
         draft_text,
@@ -253,7 +280,6 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
             assets.append(asset)
     if images and not assets:
         return [f"{label}: homepage asset copy failed"]
-    draft_text = _replace_homepage_source_asset_refs(draft_text, assets)
     # 配图确定性注入（主页三段契约）：封面只进 frontmatter；有原图注的图按章节锚点
     # 注入正文块级 fullWidth figure（每章节最多 1 张）；其余进文末『## 相关图片』gallery。
     # 幂等：Agent 已内联的 asset:// 不重复注入。
@@ -273,19 +299,6 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
         except (OSError, ValueError, TypeError):
             image_placements = []
     _homepage_layout_assets(assets)
-    # 把 meta.imagePlacements 的 caption 回填到 manifest assets（wikitext 语义 caption）。
-    # 用规范化原始 wiki 文件名精确等值匹配；禁止子串匹配（实体名会污染批次路径）。
-    placement_caption_by_file = {
-        _normalize_wiki_filename(str(p.get("fileName") or "")): str(p.get("caption") or "")
-        for p in image_placements
-        if str(p.get("fileName") or "").strip() and str(p.get("caption") or "").strip()
-    }
-    if placement_caption_by_file:
-        for asset in assets:
-            key = _asset_wiki_filename(asset)
-            cap = placement_caption_by_file.get(key) if key else None
-            if cap:
-                asset["caption"] = fold_to_simplified(cap)
     from core.asset_placement import _caption_is_degraded
     for asset in assets:
         caption = str(asset.get("caption") or "")
@@ -301,6 +314,15 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
             asset["caption"] = ""
         else:
             asset["caption"] = fold_to_simplified(caption)
+    final_placeholder_bindings = _manifest_caption_bindings(
+        placeholder_bindings,
+        assets,
+    )
+    draft_text = expand_image_placeholders(
+        draft_template,
+        final_placeholder_bindings,
+    )
+    draft_text = _replace_homepage_source_asset_refs(draft_text, assets)
     # wikitext imagePlacements 用 fileName 锚点；finalize 已分配 assetId，在此对齐。
     # 同样用原始 wiki 文件名精确等值匹配，杜绝实体名子串误命中。
     asset_id_by_wiki_name: dict[str, str] = {}
@@ -427,6 +449,8 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
 
     commercial_result = evaluate_commercial_page(
         obj,
+        minimum_body_chars=homepage_body_char_minimum(execution_id),
+        minimum_section_chars=homepage_section_char_minimum(execution_id),
         entity_name=name,
         source_text=base_text_for_gate,
         source_use_mode=str(base.get("sourceUseMode") or "factual_reference_only"),

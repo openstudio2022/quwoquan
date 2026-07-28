@@ -35,9 +35,9 @@ class OtherProfileIntersectionCard extends ConsumerWidget {
     return ObjectIntersectionSection(
       key: cardKey,
       query: query,
-      title: UITextConstants.profileWhyRecommendTitle,
+      title: ContentText.profileWhyRecommendTitle,
       isDark: CupertinoTheme.of(context).brightness == Brightness.dark,
-      emptyText: UITextConstants.profileIntersectionEmptyOther,
+      emptyText: ProfileText.profileIntersectionEmptyOther,
       emptyKey: emptyKey,
     );
   }

@@ -25,8 +25,16 @@ from core.article_package import (  # noqa: E402
     compute_document_sha256,
     post_asset_id,
 )
+from content.post.article.base_draft_source import _clean_source_title  # noqa: E402
 
 TITLE = "峨眉山周末·自驾两日的真实体验"
+
+
+def test_source_title_removes_platform_seo_keyword_tail_before_routing() -> None:
+    assert _clean_source_title(
+        "杭州西湖风景名胜区游玩攻略简介,"
+        "杭州西湖风景名胜区门票/地址/图片/开放时间/照片/门票价格【携程攻略】"
+    ) == "杭州西湖风景名胜区游玩攻略"
 
 
 def _build_fixture() -> tuple[str, dict]:

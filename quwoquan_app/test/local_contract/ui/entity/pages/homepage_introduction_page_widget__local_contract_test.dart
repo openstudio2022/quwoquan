@@ -223,13 +223,13 @@ void main() {
       ],
     );
     final cases = <(String, HomepageDetailTabTarget)>[
-      (UITextConstants.objectIntroReturnRecord, HomepageDetailTabTarget.record),
+      (ObjectHomepageText.objectIntroReturnRecord, HomepageDetailTabTarget.record),
       (
-        UITextConstants.objectIntroReturnDiscussion,
+        ObjectHomepageText.objectIntroReturnDiscussion,
         HomepageDetailTabTarget.discussion,
       ),
       (
-        UITextConstants.objectIntroReturnCircles,
+        ObjectHomepageText.objectIntroReturnCircles,
         HomepageDetailTabTarget.relatedCircles,
       ),
     ];

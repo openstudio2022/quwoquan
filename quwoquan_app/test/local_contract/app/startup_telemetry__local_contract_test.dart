@@ -13,6 +13,33 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
+  test('Dart bootstrap 与持久化遥测复用同一初始 attemptId', () async {
+    final transport = _RecordingTransport(
+      const StartupTelemetryBatchAck(acceptedCount: 1, duplicateCount: 0),
+    );
+    final reporter = StartupTelemetryReporter(
+      journal: StartupJournal(_MemoryStartupJournalStore()),
+      transport: transport,
+      platform: 'android',
+      runtimeEnv: 'alpha',
+      appVersion: '1.0.0',
+      initialAttemptId: 'bootstrap_attempt_1234567890',
+      isDetailedAttemptSampled: (_) => true,
+    );
+
+    await reporter.record(
+      phase: StartupTelemetryPhase.terminal,
+      elapsedMs: 1000,
+      outcome: 'success',
+    );
+    await reporter.flush();
+
+    expect(
+      transport.batches.expand((batch) => batch).single.attemptId,
+      'bootstrap_attempt_1234567890',
+    );
+  });
+
   test('启动事件只有完整 ACK 后才从离线 journal 删除', () async {
     final store = _MemoryStartupJournalStore();
     final transport = _RecordingTransport(

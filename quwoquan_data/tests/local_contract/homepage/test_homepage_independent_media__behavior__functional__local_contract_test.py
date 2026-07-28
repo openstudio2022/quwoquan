@@ -15,9 +15,11 @@ from content.source.source_unit import resolve_entity_object_dir, write_source_u
 from core.asset_identity import compute_post_asset_id  # noqa: E402
 from content.post.article.draft_io import is_placeholder  # noqa: E402
 from content.homepage.homepage_assets import (  # noqa: E402
+    _prefer_homepage_placement,
     select_homepage_assets,
     write_homepage_media_dispositions,
 )
+from content.homepage.homepage_release import _manifest_caption_bindings  # noqa: E402
 from core.io import read_json  # noqa: E402
 from content.homepage.homepage_materialization import _homepage_source_figure_issues  # noqa: E402
 from content.homepage.homepage_prompt import (  # noqa: E402
@@ -25,9 +27,51 @@ from content.homepage.homepage_prompt import (  # noqa: E402
     _write_entity_page_prompt_and_placeholder,
 )
 from content.homepage.homepage_validation import _asset_closure_issues  # noqa: E402
+from content.homepage.quality_policy import (  # noqa: E402
+    homepage_body_char_minimum,
+    homepage_section_char_minimum,
+)
 from verify.verify_homepage_media_completeness import _manifest_issues  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 from support.image_fixture import jpeg_bytes  # noqa: E402
+
+
+def test_repeated_visual_uses_section_aligned_caption_as_single_authority():
+    history_placement = {
+        "fileName": "Three_Ponds.jpg",
+        "caption": "三潭映月与雷峰塔",
+        "subjectKey": "三潭映月与雷峰塔",
+        "sectionSlug": "元代清代",
+        "sourceOrder": 3,
+    }
+    landmark_placement = {
+        "fileName": "Three_Ponds.jpg",
+        "caption": "三潭印月标志性的葫芦状石塔",
+        "subjectKey": "三潭印月标志性的葫芦状石塔",
+        "sectionSlug": "小瀛洲三潭印月",
+        "sourceOrder": 22,
+    }
+
+    assert (
+        _prefer_homepage_placement(history_placement, landmark_placement)
+        is landmark_placement
+    )
+
+    bindings = [
+        {
+            "figId": "fig_04",
+            "sourceAssetId": "001_004",
+            "caption": history_placement["caption"],
+        }
+    ]
+    assets = [
+        {
+            "sourceAssetId": "001_004",
+            "caption": landmark_placement["caption"],
+        }
+    ]
+    projected = _manifest_caption_bindings(bindings, assets)
+    assert projected[0]["caption"] == landmark_placement["caption"]
 
 
 def test_homepage_assets_fall_back_to_independent_rights_cleared_media_unit():
@@ -319,6 +363,8 @@ def test_changed_homepage_base_source_invalidates_stale_draft_and_failure():
             "name": entity,
             "domain": "地点",
             "etype": "景区",
+            "minChars": homepage_body_char_minimum(execution_id),
+            "minSectionChars": homepage_section_char_minimum(execution_id),
             "baseDraft": {
                 "sourceRef": source_ref,
                 "primaryEvidenceRef": source_ref,

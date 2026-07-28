@@ -15,7 +15,9 @@ PY
 fi
 
 REPORT="${LOCAL_GAMMA_ONBOARDING_AUTHOR_IMPACT_API_UAT_REPORT:-$QWQ_RUN_ROOT/onboarding_author_impact_api_uat_report.json}"
-SEED_REPORT="$QWQ_RUN_ROOT/onboarding_author_impact_seed_report.json"
+RELEASE_REPORT="$QWQ_RUN_ROOT/onboarding_author_impact_release_report.json"
+RELEASE_ID="${QWQ_DATA_RELEASE_ID:-}"
+IMPORT_RUN_ID="${QWQ_GAMMA_IMPORT_RUN_ID:-}"
 SESSION_DEFINES="$(mktemp "${TMPDIR:-/tmp}/qwq-gamma-api-uat-defines.XXXXXX.json")"
 chmod 600 "$SESSION_DEFINES"
 trap 'rm -f "$SESSION_DEFINES"' EXIT
@@ -24,39 +26,28 @@ if [[ ! -f "$RUNTIME_TOPOLOGY" ]]; then
   echo "[local-gamma:onboarding-author-impact-api] GATE_BLOCK: gamma runtime topology is missing" >&2
   exit 2
 fi
+if [[ -z "$RELEASE_ID" || -z "$IMPORT_RUN_ID" ]]; then
+  echo "[local-gamma:onboarding-author-impact-api] GATE_BLOCK: QWQ_DATA_RELEASE_ID and QWQ_GAMMA_IMPORT_RUN_ID are required" >&2
+  exit 2
+fi
 
-GATEWAY_BASE_URL="$(python3 - "$RUNTIME_TOPOLOGY" <<'PY'
-import json
-import sys
-from pathlib import Path
+GATEWAY_BASE_URL="$(python3 - <<'PY'
+from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
 
-try:
-    runtime = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-    value = str(runtime["publicBases"]["api"]).strip()
-except (KeyError, OSError, TypeError, json.JSONDecodeError) as exc:
-    raise SystemExit(f"invalid gamma runtime topology: {exc}")
+value = str(
+    get_target(load_environment_topology(), "gamma-local")["publicBases"]["api"]
+).strip()
 if not value:
     raise SystemExit("invalid gamma runtime topology: publicBases.api is empty")
 print(value)
 PY
 )"
 
-FLUTTER_GATEWAY_URL="$(python3 - "$GATEWAY_BASE_URL" <<'PY'
-import sys
-from urllib.parse import urlsplit, urlunsplit
-
-parts = urlsplit(sys.argv[1].strip())
-host = parts.hostname or ""
-if host.endswith(".quwoquan-env.test"):
-    host = host.removesuffix(".quwoquan-env.test") + ".localhost"
-port = f":{parts.port}" if parts.port else ""
-print(urlunsplit((parts.scheme, host + port, parts.path, parts.query, parts.fragment)))
-PY
-)"
+FLUTTER_GATEWAY_URL="$GATEWAY_BASE_URL"
 
 mkdir -p "$(dirname "$REPORT")"
 health_status=0
-seed_status=0
+release_status=0
 api_status=0
 
 if ! python3 "$ROOT/quwoquan_ops/cli/stackctl.py" \
@@ -66,13 +57,14 @@ fi
 
 if [[ "$health_status" -eq 0 ]]; then
   if ! python3 "$ROOT/quwoquan_app/scripts/gamma/run_local_gamma_t3.py" \
-    --seed-only \
-    --report "$SEED_REPORT"; then
-    seed_status=1
+    --release-id "$RELEASE_ID" \
+    --import-run-id "$IMPORT_RUN_ID" \
+    --report "$RELEASE_REPORT"; then
+    release_status=1
   fi
 fi
 
-if [[ "$health_status" -eq 0 && "$seed_status" -eq 0 ]]; then
+if [[ "$health_status" -eq 0 && "$release_status" -eq 0 ]]; then
   if ! PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 - \
     "$GATEWAY_BASE_URL" "$SESSION_DEFINES" <<'PY'
 import json
@@ -126,17 +118,17 @@ PY
 fi
 
 status="passed"
-if [[ "$health_status" -ne 0 || "$seed_status" -ne 0 || "$api_status" -ne 0 ]]; then
+if [[ "$health_status" -ne 0 || "$release_status" -ne 0 || "$api_status" -ne 0 ]]; then
   status="failed"
 fi
 
-python3 - "$REPORT" "$status" "$SEED_REPORT" \
-  "$health_status" "$seed_status" "$api_status" <<'PY'
+python3 - "$REPORT" "$status" "$RELEASE_REPORT" \
+  "$health_status" "$release_status" "$api_status" <<'PY'
 import json
 import sys
 from pathlib import Path
 
-report_path, status, seed_report, health, seed, api = sys.argv[1:]
+report_path, status, release_report, health, release, api = sys.argv[1:]
 Path(report_path).write_text(
     json.dumps(
         {
@@ -145,9 +137,9 @@ Path(report_path).write_text(
             "evidenceClass": "api_integration_remote",
             "cases": {
                 "stackHealth": {"exitCode": int(health)},
-                "seedCanonicalEvidence": {
-                    "exitCode": int(seed),
-                    "report": seed_report,
+                "immutableReleaseConsumer": {
+                    "exitCode": int(release),
+                    "report": release_report,
                 },
                 "remoteAdapterBlackBox": {"exitCode": int(api)},
             },

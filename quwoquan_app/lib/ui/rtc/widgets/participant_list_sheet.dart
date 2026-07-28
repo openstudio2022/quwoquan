@@ -63,7 +63,7 @@ class ParticipantListSheet extends ConsumerWidget {
       child: Row(
         children: [
           Text(
-            UITextConstants.callParticipants,
+            CallText.callParticipants,
             style: TextStyle(
               fontSize: AppTypography.lg,
               fontWeight: AppTypography.semiBold,
@@ -96,7 +96,7 @@ class ParticipantListSheet extends ConsumerWidget {
           borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
           onPressed: onInviteMore,
           child: Text(
-            UITextConstants.callInviteMore,
+            CallText.callInviteMore,
             style: TextStyle(
               fontSize: AppTypography.md,
               fontWeight: AppTypography.medium,
@@ -164,7 +164,7 @@ class _ParticipantRow extends StatelessWidget {
                           borderRadius: BorderRadius.circular(AppSpacing.xs),
                         ),
                         child: Text(
-                          UITextConstants.callInitiator,
+                          CallText.callInitiator,
                           style: TextStyle(
                             fontSize: AppTypography.xs,
                             color: AppColors.primaryColor,

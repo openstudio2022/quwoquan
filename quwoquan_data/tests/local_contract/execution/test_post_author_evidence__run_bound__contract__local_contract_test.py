@@ -5,6 +5,8 @@ import shutil
 import sys
 from pathlib import Path
 
+import pytest
+
 DATA_ROOT = next(
     parent
     for parent in Path(__file__).resolve().parents
@@ -47,6 +49,32 @@ from core.control_types import (  # noqa: E402
 )
 from core.paths import OUTPUT_ROOT, execution_root  # noqa: E402
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
+
+
+def test_fleet_request_rejects_carrier_different_from_execution_identity() -> None:
+    execution_id = "20260728--travel-article-golden--test-region-a--pilot-099"
+    shutil.rmtree(execution_root(execution_id), ignore_errors=True)
+    try:
+        ExecutionFixtureBuilder(execution_id).build()
+        enqueue_ref_job(
+            execution_id,
+            "/entity/地点/景区/测试实体甲",
+            QueueJobStage.AUTHOR,
+            mutex_key="/entity/地点/景区/测试实体甲",
+            queue_backend=QueueBackend.RELIABLE_TASK,
+            meta={
+                "contentType": "homepage",
+                "carrier": "homepage",
+                "entityRef": "/entity/地点/景区/测试实体甲",
+                "sourceRevision": "sha256:" + ("a" * 64),
+                "contentObjectDir": "entities/地点/景区/测试实体甲",
+            },
+        )
+
+        with pytest.raises(ValueError, match="carrier 必须与 executionId 一致"):
+            build_fleet_request(execution_id, QueueJobStage.AUTHOR)
+    finally:
+        shutil.rmtree(execution_root(execution_id), ignore_errors=True)
 
 EXECUTION_ID = (
     "20260720--travel-article-reliabletask-evidence--"

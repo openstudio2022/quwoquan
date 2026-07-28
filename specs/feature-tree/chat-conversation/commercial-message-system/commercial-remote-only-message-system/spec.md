@@ -17,7 +17,7 @@
 ### In Scope
 
 - “商用远端单轨消息系统”的输入、可观察主路径、失败语义以及与父能力的交接。
-- alpha/test fixture 的开发态组织方式。
+- 四环境 Remote composition 与 local_contract 测试树 typed double 的物理隔离。
 
 ### Out of Scope
 

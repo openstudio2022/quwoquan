@@ -7,7 +7,6 @@ from typing import Any
 from content.execution.prompt_snapshot import prompt_bundle_revision
 from content.execution.runtime_contract import stage_execution_context
 from content.homepage.homepage import (
-    MIN_PAGE_CHARS,
     _condition_menu,
     _coverage_targets,
     _entity_base_draft,
@@ -18,6 +17,10 @@ from content.homepage.homepage import (
     _write_entity_quality_stage,
 )
 from content.homepage.homepage_assets import select_homepage_assets
+from content.homepage.quality_policy import (
+    homepage_body_char_minimum,
+    homepage_section_char_minimum,
+)
 from content.homepage.homepage_prompt import (
     _homepage_base_text_with_image_placeholders,
     _homepage_image_placeholder_bindings,
@@ -95,7 +98,8 @@ def prepare_entity_pages(execution_id: str, spec: dict[str, Any]) -> tuple[Path,
                 if target.get(key)
             },
             **creator_assignment,
-            "minChars": MIN_PAGE_CHARS,
+            "minChars": homepage_body_char_minimum(execution_id),
+            "minSectionChars": homepage_section_char_minimum(execution_id),
             "baseDraft": base_draft,
             "availableImages": available_images,
             "imagePlaceholderBindings": image_placeholder_bindings,

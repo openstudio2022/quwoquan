@@ -10,10 +10,13 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_LIB = ROOT / "quwoquan_app" / "lib"
-URL_RE = re.compile(r"https?://[^\s'\"`)>]+")
-ALLOWED_PUBLIC_HOSTS = {"schema.org"}
+URL_RE = re.compile(
+    r"https?://(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9][A-Za-z0-9.-]*)"
+    r"(?::[0-9]+)?[^\s'\"`)>]*"
+)
+ALLOWED_PUBLIC_HOSTS = {"schema.org", "quwoquan.com"}
 ALLOWED_PRIVATE_HOSTS = {"localhost", "127.0.0.1", "::1", "10.0.2.2"}
-ALLOWED_PUBLIC_HOST_SUFFIXES = (".quwoquan-env.test",)
+ALLOWED_PUBLIC_HOST_SUFFIXES = (".quwoquan.com",)
 
 
 def _is_comment_only_line(line: str) -> bool:
@@ -38,7 +41,22 @@ def _is_allowed_host(host: str) -> bool:
         return False
 
 
+def _self_test() -> None:
+    controls = {
+        "https://example.com/path": "example.com",
+        "http://[::1]:8080/healthz": "::1",
+        "https://127.0.0.1:17000/healthz": "127.0.0.1",
+    }
+    for source, expected_host in controls.items():
+        match = URL_RE.search(source)
+        if match is None or urlparse(match.group(0)).hostname != expected_host:
+            raise AssertionError(f"runtime host detector missed {source}")
+    if URL_RE.search(r"RegExp(r'(https://[^\s?#]+)\?[^\s#]*')") is not None:
+        raise AssertionError("runtime host detector treated a regex pattern as a URL")
+
+
 def main() -> int:
+    _self_test()
     issues: list[str] = []
     for path in sorted(APP_LIB.rglob("*.dart")):
         rel = path.relative_to(ROOT).as_posix()

@@ -121,7 +121,7 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
     if (session.isLoading && session.session == null) {
       return AppScaffold(
         backgroundColor: backdrop,
-        child: const Center(child: CupertinoActivityIndicator()),
+        child: AppRequestFeedback.section(),
       );
     }
     if (session.failure case final failure? when session.session == null) {

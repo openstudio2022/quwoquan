@@ -179,27 +179,10 @@ class _PublishLocationSelectorPageState
       ),
       child: SafeArea(
         child: _loading
-            ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CupertinoActivityIndicator(),
-                    SizedBox(height: AppSpacing.interGroupMd),
-                    Text(
-                      l10n.locationFetchingResult,
-                      style: TextStyle(
-                        fontSize: AppTypography.body,
-                        color: isDark
-                            ? CupertinoColors.white
-                            : CupertinoColors.black,
-                      ),
-                    ),
-                  ],
-                ),
-              )
+            ? AppRequestFeedback.page()
             : _errorSemantic != null
             ? AppPageErrorState(
-                semantic: _errorSemantic!,
+                semantic: ensureRetryUiErrorSemantic(_errorSemantic!),
                 onAction: _handleErrorAction,
               )
             : ListView(
@@ -233,6 +216,7 @@ class _PublishLocationSelectorPageState
         await _loadNearby();
         return;
       case UiErrorActionType.login:
+      case UiErrorActionType.openUpdate:
       case UiErrorActionType.dismiss:
         return;
     }
@@ -372,10 +356,10 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
             ),
             Expanded(
               child: _loading
-                  ? const Center(child: CupertinoActivityIndicator())
+                  ? AppRequestFeedback.section()
                   : _errorSemantic != null
                   ? AppPageErrorState(
-                      semantic: _errorSemantic!,
+                      semantic: ensureRetryUiErrorSemantic(_errorSemantic!),
                       onAction: _handleSearchErrorAction,
                     )
                   : _items.isEmpty
@@ -417,6 +401,7 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
       case UiErrorActionType.dismiss:
       case UiErrorActionType.login:
       case UiErrorActionType.openSettings:
+      case UiErrorActionType.openUpdate:
         return;
     }
   }

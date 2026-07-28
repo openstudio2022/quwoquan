@@ -1,6 +1,6 @@
 part of 'ui_text_constants.dart';
 
-abstract final class _UITextContent {
+abstract final class ContentText {
   static const String commentLoadFailedTitle = '评论暂时没加载出来';
   static const String commentDeeplinkTargetMissing = '没找到这条评论，可能已被删除';
   static const String sectionLoadFailedTitleDefault = '这里没加载出来';
@@ -130,7 +130,7 @@ abstract final class _UITextContent {
   static const String profileImpactSubtitleMine = '我的内容真实帮到了谁';
   static const String profileImpactSubtitleOther = 'TA的内容真实帮到了谁';
   static const String profileImpactEmptyMine =
-      UITextConstants.profileInteractionEmptyGuidance;
+      ProfileText.profileInteractionEmptyGuidance;
   static const String profileImpactEmptyOther = 'TA 打动的人还在形成中，更多连接与带动会展示在这里';
   static const String profileShareHomepage = '分享主页';
   static const String notInterested = '不感兴趣';

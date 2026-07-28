@@ -71,7 +71,7 @@ class _SectionMembersState extends ConsumerState<SectionMembers> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     if (_errorSemantic != null) {
       return AppSectionErrorCard(
@@ -88,7 +88,7 @@ class _SectionMembersState extends ConsumerState<SectionMembers> {
     if (_members.isEmpty) {
       return Center(
         child: Text(
-          UITextConstants.noData,
+          CommunityText.noData,
           style: TextStyle(
             fontSize: AppTypography.base,
             color: AppColorsFunctional.getColor(

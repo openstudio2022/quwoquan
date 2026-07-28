@@ -111,4 +111,22 @@ func TestBuildContentMediaPublicSliceKeyUsesAssetIdentityNotCASKey(t *testing.T)
 	); got != "" {
 		t.Fatalf("invalid asset identity must not produce a public slice: %q", got)
 	}
+	unicodeAsset := BuildContentMediaPublicSliceKey(
+		"image",
+		"杭州西湖_cover_三潭印月",
+		1,
+		"image/jpeg",
+	)
+	if !strings.HasPrefix(unicodeAsset, "media/image/s/asset/unicode-") ||
+		!strings.HasSuffix(unicodeAsset, "/v1/source.jpg") {
+		t.Fatalf("historical unicode asset must receive a stable public path: %q", unicodeAsset)
+	}
+	if got := BuildContentMediaPublicSliceKey(
+		"avatar",
+		"creator_avatar_001",
+		1,
+		"image/png",
+	); got != "media/avatar/s/asset/creator_avatar_001/v1/source.png" {
+		t.Fatalf("avatar public slice kind drift: %q", got)
+	}
 }

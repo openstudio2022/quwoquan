@@ -94,12 +94,14 @@ class _HomepageMaintenancePageState
     final blockingSemantic = _permissionSemantic ?? _pageErrorSemantic;
     if (blockingSemantic != null && !_isLoading) {
       return IosSelectionPageScaffold(
-        title: UITextConstants.homepageMaintainAction,
+        title: ObjectHomepageText.homepageMaintainAction,
         onBack: _safeReturn,
         leadingStyle: IosSelectionHeaderLeadingStyle.close,
         backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
         body: AppPageErrorState(
-          semantic: blockingSemantic,
+          semantic: _permissionSemantic == null
+              ? ensureRetryUiErrorSemantic(blockingSemantic)
+              : blockingSemantic,
           onAction: _permissionSemantic == null
               ? _handlePageErrorAction
               : _handlePermissionAction,
@@ -109,7 +111,7 @@ class _HomepageMaintenancePageState
 
     final canSubmit = !_isLoading && !_isSubmitting && _detail != null;
     return IosSelectionPageScaffold(
-      title: UITextConstants.homepageMaintainAction,
+      title: ObjectHomepageText.homepageMaintainAction,
       onBack: _handleCloseRequest,
       leadingStyle: IosSelectionHeaderLeadingStyle.close,
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
@@ -122,10 +124,10 @@ class _HomepageMaintenancePageState
         ),
         children: <Widget>[
           if (_isLoading)
-            const Center(child: CupertinoActivityIndicator())
+            AppRequestFeedback.section()
           else ...<Widget>[
             const IosSelectionSectionHeader(
-              title: UITextConstants.homepageFormOverviewSection,
+              title: ObjectHomepageText.homepageFormOverviewSection,
               padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
             ),
             IosSelectionSection(
@@ -136,7 +138,7 @@ class _HomepageMaintenancePageState
                   children: <Widget>[
                     Text(
                       _detail?.title ??
-                          UITextConstants.homepageClaimHomepageFallback,
+                          ObjectHomepageText.homepageClaimHomepageFallback,
                       style: const TextStyle(
                         fontSize: AppTypography.iosTitle3,
                         fontWeight: AppTypography.semiBold,
@@ -144,7 +146,7 @@ class _HomepageMaintenancePageState
                     ),
                     SizedBox(height: AppSpacing.intraGroupXs),
                     Text(
-                      UITextConstants.homepageMaintenanceOwnedDescription,
+                      ObjectHomepageText.homepageMaintenanceOwnedDescription,
                       style: TextStyle(
                         fontSize: AppTypography.iosFootnote,
                         color: AppColors.iosSecondaryLabel(context),
@@ -163,20 +165,20 @@ class _HomepageMaintenancePageState
             ),
             SizedBox(height: AppSpacing.containerSm),
             const IosSelectionSectionHeader(
-              title: UITextConstants.homepageFormDetailsSection,
+              title: ObjectHomepageText.homepageFormDetailsSection,
               padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
             ),
             IosSelectionSection(
               child: Column(
                 children: <Widget>[
                   IosSelectionFormFieldRow(
-                    label: UITextConstants.homepageMaintenanceNameLabel,
+                    label: ObjectHomepageText.homepageMaintenanceNameLabel,
                     validationMessage: _titleValidationMessage,
                     child: IosSelectionTextField(
                       controller: _titleController,
                       enabled: canSubmit,
                       placeholder:
-                          UITextConstants.homepageMaintenanceNamePlaceholder,
+                          ObjectHomepageText.homepageMaintenanceNamePlaceholder,
                       onChanged: (_) {
                         if (_titleValidationMessage != null) {
                           setState(() => _titleValidationMessage = null);
@@ -188,11 +190,11 @@ class _HomepageMaintenancePageState
                     indent: AppSpacing.containerMd,
                   ),
                   IosSelectionFormFieldRow(
-                    label: UITextConstants.homepageMaintenanceSubtitleLabel,
+                    label: ObjectHomepageText.homepageMaintenanceSubtitleLabel,
                     child: IosSelectionTextField(
                       controller: _subtitleController,
                       enabled: canSubmit,
-                      placeholder: UITextConstants
+                      placeholder: ObjectHomepageText
                           .homepageMaintenanceSubtitlePlaceholder,
                     ),
                   ),
@@ -200,24 +202,24 @@ class _HomepageMaintenancePageState
                     indent: AppSpacing.containerMd,
                   ),
                   IosSelectionFormFieldRow(
-                    label: UITextConstants.homepageMaintenanceCityLabel,
+                    label: ObjectHomepageText.homepageMaintenanceCityLabel,
                     child: IosSelectionTextField(
                       controller: _cityController,
                       enabled: canSubmit,
                       placeholder:
-                          UITextConstants.homepageMaintenanceCityPlaceholder,
+                          ObjectHomepageText.homepageMaintenanceCityPlaceholder,
                     ),
                   ),
                   const IosSelectionInlineDivider(
                     indent: AppSpacing.containerMd,
                   ),
                   IosSelectionFormFieldRow(
-                    label: UITextConstants.homepageMaintenanceAddressLabel,
+                    label: ObjectHomepageText.homepageMaintenanceAddressLabel,
                     child: IosSelectionTextField(
                       controller: _addressController,
                       enabled: canSubmit,
-                      placeholder:
-                          UITextConstants.homepageMaintenanceAddressPlaceholder,
+                      placeholder: ObjectHomepageText
+                          .homepageMaintenanceAddressPlaceholder,
                       maxLines: 3,
                     ),
                   ),
@@ -225,12 +227,12 @@ class _HomepageMaintenancePageState
                     indent: AppSpacing.containerMd,
                   ),
                   IosSelectionFormFieldRow(
-                    label: UITextConstants.homepageMaintenanceTagsLabel,
+                    label: ObjectHomepageText.homepageMaintenanceTagsLabel,
                     child: IosSelectionTextField(
                       controller: _tagsController,
                       enabled: canSubmit,
                       placeholder:
-                          UITextConstants.homepageMaintenanceTagsPlaceholder,
+                          ObjectHomepageText.homepageMaintenanceTagsPlaceholder,
                     ),
                   ),
                 ],
@@ -240,7 +242,7 @@ class _HomepageMaintenancePageState
         ],
       ),
       bottomBar: IosSelectionBottomBar(
-        confirmLabel: UITextConstants.homepageMaintenanceSave,
+        confirmLabel: ObjectHomepageText.homepageMaintenanceSave,
         confirmEnabled: canSubmit,
         confirmLoading: _isSubmitting,
         onConfirm: _submit,
@@ -324,17 +326,17 @@ class _HomepageMaintenancePageState
     final discardChanges = await showAppCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
-        title: const Text(UITextConstants.unsavedChangesTitle),
-        content: const Text(UITextConstants.unsavedChangesMessage),
+        title: const Text(CreationText.unsavedChangesTitle),
+        content: const Text(CreationText.unsavedChangesMessage),
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text(UITextConstants.continueEditing),
+            child: const Text(CreationText.continueEditing),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text(UITextConstants.discard),
+            child: const Text(CreationText.discard),
           ),
         ],
       ),
@@ -378,17 +380,11 @@ class _HomepageMaintenancePageState
         setState(() {
           _detail = detail;
           _isLoading = false;
-          _permissionSemantic = const UiErrorSemantic(
-            category: UiErrorCategory.permissionRequired,
+          _permissionSemantic = AppUserRecoveryContract.semanticFor(
+            group: AppUserRecoveryGroup.noAccess,
+            category: UiErrorCategory.pageLoad,
             scope: UiErrorScope.page,
-            title: UITextConstants.homepageMaintenanceUnavailableTitle,
-            message: UITextConstants.homepageMaintenanceUnavailableMessage,
-            primaryAction: UiErrorAction(
-              type: UiErrorActionType.dismiss,
-              label: UITextConstants.homepageMaintenanceSafeReturn,
-            ),
             presentation: UiErrorPresentation.gateCard,
-            tone: UiErrorTone.info,
           );
         });
         return;
@@ -428,7 +424,7 @@ class _HomepageMaintenancePageState
     if (_titleController.text.trim().isEmpty) {
       setState(() {
         _titleValidationMessage =
-            UITextConstants.homepageMaintenanceNameRequired;
+            ObjectHomepageText.homepageMaintenanceNameRequired;
       });
       return;
     }
@@ -468,7 +464,7 @@ class _HomepageMaintenancePageState
       if (!mounted) {
         return;
       }
-      AppToast.show(context, UITextConstants.homepageMaintenanceUpdated);
+      AppToast.show(context, ObjectHomepageText.homepageMaintenanceUpdated);
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) {
@@ -520,6 +516,7 @@ class _HomepageMaintenancePageState
         }
         return;
       case UiErrorActionType.openSettings:
+      case UiErrorActionType.openUpdate:
       case UiErrorActionType.login:
         return;
     }
@@ -535,6 +532,7 @@ class _HomepageMaintenancePageState
         _safeReturn();
         return;
       case UiErrorActionType.openSettings:
+      case UiErrorActionType.openUpdate:
       case UiErrorActionType.login:
         return;
     }

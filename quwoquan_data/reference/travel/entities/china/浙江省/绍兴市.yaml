@@ -273,6 +273,7 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/柯桥区
     aliases:
     - 柯岩
+    - 绍兴柯岩风景区
     selectionPriority: 2
   - name: 安昌古镇
     canonicalName: 安昌古镇

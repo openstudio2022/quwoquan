@@ -29,13 +29,13 @@ extension _SearchNetworkResultsPageStateHelpers
         SizedBox(height: AppSpacing.containerMd),
         if (_isLoading)
           AppRequestFeedback.section(
-            loadingLabel: UITextConstants.searchXiaoquLoading,
+            loadingLabel: SearchText.searchXiaoquLoading,
             showSlowHint: true,
-            slowLabel: UITextConstants.searchXiaoquLoading,
+            slowLabel: SearchText.searchXiaoquLoading,
           )
         else if ((_xiaoquResult?.citations?.length ?? 0) == 0)
           _StatusMessage(
-            text: UITextConstants.searchNoNetworkReferences,
+            text: SearchText.searchNoNetworkReferences,
             isDark: isDark,
           )
         else
@@ -74,7 +74,7 @@ extension _SearchNetworkResultsPageStateHelpers
           loadingLabel: UITextConstants.pageLoadingA11y(
             UITextConstants.searchTabResults(activeTab.label),
           ),
-          slowLabel: UITextConstants.searchWaitSlow,
+          slowLabel: SearchText.searchWaitSlow,
         ),
       ]);
     }
@@ -111,9 +111,9 @@ extension _SearchNetworkResultsPageStateHelpers
         AppRequestFeedback.page(
           showSlowHint: _isSlow,
           loadingLabel: UITextConstants.pageLoadingA11y(
-            UITextConstants.searchAppResults,
+            SearchText.searchAppResults,
           ),
-          slowLabel: UITextConstants.searchWaitSlow,
+          slowLabel: SearchText.searchWaitSlow,
         ),
       ];
     }
@@ -170,7 +170,7 @@ extension _SearchNetworkResultsPageStateHelpers
       }
       sections.add(
         const _SearchResultSectionHeader(
-          title: UITextConstants.searchUserResultsTitle,
+          title: SearchText.searchUserResultsTitle,
         ),
       );
       sections.add(SizedBox(height: AppSpacing.intraGroupSm));
@@ -209,8 +209,8 @@ extension _SearchNetworkResultsPageStateHelpers
       return <Widget>[
         AppRequestFeedback.page(
           showSlowHint: _isSlow,
-          loadingLabel: UITextConstants.searchIntersectionLoading,
-          slowLabel: UITextConstants.searchWaitSlow,
+          loadingLabel: SearchText.searchIntersectionLoading,
+          slowLabel: SearchText.searchWaitSlow,
         ),
       ];
     }
@@ -229,12 +229,12 @@ extension _SearchNetworkResultsPageStateHelpers
                 .toList(growable: false);
       sections.add(
         _SearchResultSectionHeader(
-          title: UITextConstants.searchEstablishedConnections,
-          subtitle: UITextConstants.searchEstablishedConnectionsSubtitle,
+          title: SearchText.searchEstablishedConnections,
+          subtitle: SearchText.searchEstablishedConnectionsSubtitle,
           actionLabel: hasMore
               ? (_showAllConnections
-                    ? UITextConstants.searchHistoryCollapse
-                    : UITextConstants.searchViewAll)
+                    ? SearchText.searchHistoryCollapse
+                    : SearchText.searchViewAll)
               : null,
           onAction: hasMore
               ? () => _setMountedState(
@@ -267,9 +267,9 @@ extension _SearchNetworkResultsPageStateHelpers
       }
       sections.add(
         _SearchResultSectionHeader(
-          title: UITextConstants.searchDiscoverMoreIntersections,
+          title: SearchText.searchDiscoverMoreIntersections,
           subtitle: _query.trim().isEmpty
-              ? UITextConstants.searchRecommendMoreContent
+              ? SearchText.searchRecommendMoreContent
               : UITextConstants.searchRecommendForQuery(_query.trim()),
         ),
       );
@@ -313,7 +313,7 @@ extension _SearchNetworkResultsPageStateHelpers
           targetType: _IntersectionTargetType.circle,
           targetId: card.circleId,
           coverUrl: card.coverUrl,
-          categoryLabel: UITextConstants.searchCategoryCircle,
+          categoryLabel: SearchText.searchCategoryCircle,
           categoryIcon: CupertinoIcons.person_3_fill,
           title: hit.title,
           reasonIcon: CupertinoIcons.person_2_fill,
@@ -330,7 +330,7 @@ extension _SearchNetworkResultsPageStateHelpers
           targetType: _IntersectionTargetType.user,
           targetId: user?.userId ?? hit.objectId,
           coverUrl: '',
-          categoryLabel: UITextConstants.searchCategoryUser,
+          categoryLabel: SearchText.searchCategoryUser,
           categoryIcon: CupertinoIcons.person_fill,
           title: user?.displayName ?? hit.title,
           reasonIcon: CupertinoIcons.person_2_fill,
@@ -348,7 +348,7 @@ extension _SearchNetworkResultsPageStateHelpers
           targetType: _IntersectionTargetType.locationPlace,
           targetId: hit.objectId,
           coverUrl: '',
-          categoryLabel: UITextConstants.searchCategoryLocation,
+          categoryLabel: SearchText.searchCategoryLocation,
           categoryIcon: CupertinoIcons.location_solid,
           title: hit.title,
           reasonIcon: CupertinoIcons.location_solid,
@@ -367,8 +367,8 @@ extension _SearchNetworkResultsPageStateHelpers
           targetId: item.postId,
           coverUrl: item.coverUrl ?? '',
           categoryLabel: isVideo
-              ? UITextConstants.searchCategoryVideo
-              : UITextConstants.searchCategoryImage,
+              ? SearchText.searchCategoryVideo
+              : SearchText.searchCategoryImage,
           categoryIcon: isVideo
               ? CupertinoIcons.play_rectangle_fill
               : CupertinoIcons.photo_fill,

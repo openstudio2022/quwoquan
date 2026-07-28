@@ -12,13 +12,15 @@ import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/bootstrap_recovery.dart';
 import 'package:quwoquan_app/app/recovery/recovery_failure_reporter.dart';
 import 'package:quwoquan_app/app/recovery/runtime_recovery_host.dart';
+import 'package:quwoquan_app/app/startup/startup_telemetry.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
+import 'package:quwoquan_app/cloud/remote/ops/startup_telemetry_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/core/di/app_cloud_client_context_provider.dart';
 import 'package:quwoquan_app/core/platform/firebase_incoming_call_runtime.dart';
 import 'package:quwoquan_app/core/platform/app_recovery_native_bridge.dart';
-import 'package:quwoquan_app/core/platform/local_dev_https_trust.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_session_store.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_context_provider.dart';
@@ -105,6 +107,7 @@ Future<void> _runQuwoquanAppInBootstrapZone({
   AppStartupRuntime.instance.markBootstrapStarted();
   try {
     CloudRuntimeConfig.validateRequiredEndpoints();
+    _configureStartupTelemetry();
     AppStartupRuntime.instance.markConfigurationValidated();
     // SecureStorage / package_info / 连通性探测不得阻塞 runApp。
     // 日志中 native_first_frame_timeout 后才出现 FlutterSecureStorage migration
@@ -152,9 +155,7 @@ Future<void> _runQuwoquanAppInBootstrapZone({
                 autoCompleteStartupWelcomeForTest,
             skipStartupWelcome: isRuntimeReentry,
             postFirstFrameTasks: _hydratePostFirstFrameStartupState,
-            authNetworkPrerequisites: kReleaseMode
-                ? null
-                : _installLocalDevHttpsTrustBeforeMediaClients,
+            authNetworkPrerequisites: null,
           ),
         ),
       ),
@@ -173,8 +174,22 @@ Future<void> _runQuwoquanAppInBootstrapZone({
   }
 }
 
-Future<void> _installLocalDevHttpsTrustBeforeMediaClients() {
-  return LocalDevHttpsTrust.installForCurrentRuntime();
+void _configureStartupTelemetry() {
+  StartupTelemetryRuntime.instance.configure(
+    StartupTelemetryReporter(
+      journal: StartupJournal(SharedPreferencesStartupJournalStore()),
+      transport: RemoteStartupTelemetryTransport.fromRuntimeConfig(
+        httpClient: CloudHttpClient(),
+      ),
+      platform: platformWireName(currentAppPlatform),
+      runtimeEnv: CloudRuntimeConfig.appRuntimeEnv,
+      appVersion: const String.fromEnvironment(
+        'APP_VERSION',
+        defaultValue: '0.0.0',
+      ),
+      initialAttemptId: AppStartupRuntime.instance.startupAttemptId,
+    ),
+  );
 }
 
 void _installBootstrapErrorBoundary() {

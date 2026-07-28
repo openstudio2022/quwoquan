@@ -48,6 +48,7 @@ python3 quwoquan_ops/gate/verify_single_track_contracts.py
 python3 quwoquan_ops/gate/verify_behavior_event_type_contract.py
 python3 quwoquan_ops/cli/cloud_contract_handoff.py verify
 python3 quwoquan_app/scripts/runtime/verify_app_generated_manifest.py
+python3 quwoquan_app/scripts/runtime/verify_app_recoverable_error_surface.py
 python3 quwoquan_app/scripts/runtime/verify_cloud_package_boundaries.py
 python3 quwoquan_ops/cli/feature_tree.py verify
 python3 quwoquan_ops/gate/verify_execution_profiles.py
@@ -82,8 +83,10 @@ run_service() {
 python3 quwoquan_ops/gate/verify_dev_up_cli_surface.py
 python3 quwoquan_ops/gate/verify_api_path_unversioned.py
 python3 quwoquan_ops/gate/verify_environment_assembly.py
+python3 quwoquan_ops/gate/verify_domain_governance.py
   python3 quwoquan_ops/gate/verify_local_env_port_manifest.py
   python3 quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py
+  python3 quwoquan_ops/tests/local_contract/test_config_ack_governed_workload__local_contract_test.py
   python3 quwoquan_ops/gate/verify_prod_plane_access_isolation.py
   python3 quwoquan_ops/gate/verify_prod_access_guard.py
   bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
@@ -145,8 +148,18 @@ python3 quwoquan_ops/gate/verify_environment_assembly.py
 
 run_app() {
   echo "[gate] quwoquan_app"
+  local app_phase="${GATE_APP_PHASE:-all}"
+  case "$app_phase" in
+    all|static|tests|serial) ;;
+    *)
+      echo "[gate] FAIL: invalid GATE_APP_PHASE=$app_phase (expected all|static|tests|serial)" >&2
+      exit 2
+      ;;
+  esac
   command -v flutter >/dev/null 2>&1 || { echo "[gate] FAIL: flutter not found in PATH" 1>&2; exit 1; }
   command -v dart >/dev/null 2>&1 || { echo "[gate] FAIL: dart not found in PATH" 1>&2; exit 1; }
+
+  if [[ "$app_phase" == "all" || "$app_phase" == "static" ]]; then
   dart quwoquan_ops/tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check
   dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
   (cd quwoquan_app && flutter pub get --offline)
@@ -162,7 +175,6 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/verify_unified_error_semantics_ratchet.py || exit 1
     python3 quwoquan_app/scripts/settings/verify_settings_canonical.py || exit 1
     python3 quwoquan_app/scripts/chat/verify_conversation_sheet_canonical.py || exit 1
-    python3 quwoquan_app/scripts/chat/verify_chat_mock_remote_parity.py || exit 1
     python3 quwoquan_app/scripts/chat/verify_chat_group_roster_consistency.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_error_code_semantic.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_error_code_endcloud_parity.py || exit 1
@@ -230,6 +242,8 @@ run_app() {
     python3 quwoquan_app/scripts/auth/verify_login_entry_loop_contract.py || exit 1
     python3 quwoquan_app/scripts/device/verify_startup_ttid_baseline.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_startup_environment_matrix.py >/dev/null || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_dual_platform_usability_baseline.py || exit 1
+    python3 quwoquan_app/test/local_contract/app/ios_runtime_dart_defines__local_contract_test.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_plugin_registration_policy.py || exit 1
     python3 quwoquan_service/scripts/contract/verify_metadata_service_entities_vs_fields.py || exit 1
     python3 quwoquan_service/scripts/contract/verify_assistant_context_contract.py || exit 1
@@ -241,7 +255,7 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/verify_app_no_integration_test_dir.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_no_import_test_tree.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_remote_realtime_no_mock_import.py || exit 1
-    python3 quwoquan_app/scripts/env/verify_ui_app_data_source_mode_ratchet.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_production_data_source_single_path.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_dart_io_budget.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_platform_check_isolation.py || exit 1
@@ -268,51 +282,72 @@ run_app() {
     echo "[gate] FAIL: python3 is required for App static verification" >&2
     exit 1
   fi
-  # local_contract tests — fast, no external deps. Canonical App entry is test/local_contract/.
+  # PA Core 与静态同相位，避免每个 shard 重复。
+  bash quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/run_pa_core_tests.sh
+  fi
+
+  if [[ "$app_phase" == "static" ]]; then
+    echo "[gate] app phase=static OK"
+    return 0
+  fi
+
+  if [[ "$app_phase" == "tests" || "$app_phase" == "serial" ]]; then
+    (cd quwoquan_app && flutter pub get --offline)
+  fi
+
+  # local_contract tests — Canonical App entry is test/local_contract/.
   # 使用 tee 边跑边输出：原先整段输出进变量，长时间无日志易被误判为「卡住」。
-  local flutter_log
-  flutter_log="$(mktemp -t quwoquan_gate_flutter_l1.XXXXXX)"
-  local flutter_status=0
-  set +e
-  set -o pipefail
-  python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/ 2>&1 | tee "$flutter_log"
-  flutter_status=${PIPESTATUS[0]:-1}
-  set +o pipefail
-  set -e
-  if [[ "$flutter_status" -ne 0 ]]; then
-    if grep -Fq "Connection closed before full header was received" "$flutter_log" 2>/dev/null; then
-      echo ""
-      echo "[gate] FAIL: flutter_tester loopback bootstrap failed — Proxifier Network Extension is intercepting 127.0.0.1 TCP connections."
-      echo ""
-      echo "[gate] ROOT CAUSE DIAGNOSIS:"
-      echo "  Proxifier (com.initex.proxifier.v3.macos.ProxifierExtension) is active and redirecting"
-      echo "  ALL TCP connections (including loopback 127.0.0.1) to the Clash Verge proxy at 127.0.0.1:7899."
-      echo "  flutter_tester connects to flutter tools HTTP listener on a random 127.0.0.1 port, but"
-      echo "  Proxifier intercepts it before the server can accept, causing the WebSocket upgrade to fail."
-      echo ""
-      echo "[gate] FIX — Proxifier rules UI (one-time setup, permanent fix):"
-      echo "  1. Open Proxifier.app → menu: Profile → Rules…"
-      echo "  2. Click '+' to add a new rule at the TOP of the list"
-      echo "  3. Set rule name: 'Localhost Direct'"
-      echo "  4. Applications: <Any>"
-      echo "  5. Target hosts: 127.0.0.1; ::1; localhost"
-      echo "  6. Target ports: <Any>"
-      echo "  7. Action: Direct"
-      echo "  8. Click OK and save profile"
-      echo ""
-      echo "  After adding the rule, re-run: make gate"
-      echo ""
-      echo "[gate] ALTERNATIVE (temporary — for single test session):"
-      echo "  Quit Proxifier.app before running 'make gate', then reopen after."
-      echo ""
+  run_app_flutter_tests() {
+    local serial_mode="$1"
+    local concurrency_env="${2:-}"
+    local flutter_log
+    flutter_log="$(mktemp -t quwoquan_gate_flutter_l1.XXXXXX)"
+    local flutter_status=0
+    set +e
+    set -o pipefail
+    FLUTTER_TEST_SERIAL_MODE="$serial_mode" \
+    FLUTTER_TEST_CONCURRENCY="${concurrency_env:-4}" \
+      python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/ 2>&1 | tee "$flutter_log"
+    flutter_status="${PIPESTATUS[0]}"
+    set +o pipefail
+    set -e
+    if [[ -z "$flutter_status" ]]; then
+      flutter_status=1
+    fi
+    if [[ "$flutter_status" -ne 0 ]]; then
+      if grep -Fq "Connection closed before full header was received" "$flutter_log" 2>/dev/null; then
+        echo ""
+        echo "[gate] FAIL: flutter_tester loopback bootstrap failed — Proxifier Network Extension is intercepting 127.0.0.1 TCP connections."
+        echo ""
+        echo "[gate] FIX: add Proxifier Direct rule for 127.0.0.1 / ::1 / localhost, then re-run make gate"
+        echo ""
+      fi
+      rm -f "$flutter_log"
+      return 1
     fi
     rm -f "$flutter_log"
-    return 1
+    return 0
+  }
+
+  if [[ "$app_phase" == "serial" ]]; then
+    FLUTTER_TEST_GUARD_TIMEOUT_SECONDS="${FLUTTER_TEST_GUARD_TIMEOUT_SECONDS:-1800}" \
+      run_app_flutter_tests "only" "1" || return 1
+    echo "[gate] app phase=serial OK"
+    return 0
   fi
-  rm -f "$flutter_log"
-  # PA Core（桶 A 协议契约 + 桶 B 引擎集成 + 桶 C UI 契约）默认全部阻断。
-  # 桶 A 覆盖降级响应根因/消息记录协议/可观测字段，失败即退。
-  bash quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/run_pa_core_tests.sh
+
+  if [[ "$app_phase" == "tests" ]]; then
+    FLUTTER_TEST_GUARD_TIMEOUT_SECONDS="${FLUTTER_TEST_GUARD_TIMEOUT_SECONDS:-1800}" \
+      run_app_flutter_tests "${FLUTTER_TEST_SERIAL_MODE:-exclude}" "${FLUTTER_TEST_CONCURRENCY:-8}" || return 1
+    echo "[gate] app phase=tests OK"
+    return 0
+  fi
+
+  # app_phase=all：并行套件 + 串行隔离套件各跑一次（仍非双跑全量）。
+  FLUTTER_TEST_GUARD_TIMEOUT_SECONDS="${FLUTTER_TEST_GUARD_TIMEOUT_SECONDS:-1200}" \
+    run_app_flutter_tests "exclude" "${FLUTTER_TEST_CONCURRENCY:-4}" || return 1
+  FLUTTER_TEST_GUARD_TIMEOUT_SECONDS="${FLUTTER_TEST_GUARD_TIMEOUT_SECONDS:-1800}" \
+    run_app_flutter_tests "only" "1" || return 1
   # Skip in CI: test/user_acceptance/patrol/ (needs real device/Patrol, run via FTL).
 
 }

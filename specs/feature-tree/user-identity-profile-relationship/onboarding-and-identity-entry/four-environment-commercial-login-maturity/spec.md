@@ -49,7 +49,7 @@
 <a id="req-004"></a>
 ### REQ-004 社交首登创建账号并同步昵称头像
 
-- 社交首登必须创建身份事实，二次登录必须复用既有账号并恢复原 Persona。
+- 社交首登必须先返回一次性手机号 binding ticket；手机号绑定完成后原子创建身份事实并签发会话，二次登录复用既有账号并恢复原 Persona。
 - owner、primary persona、credential 与昵称头像初始化结果可在真实存储验证。
 
 <a id="req-005"></a>
@@ -58,6 +58,7 @@
 - App 端社交登录 Repository、NativeAuthBridge 和 LoginPage 状态均有 local_contract 覆盖。
 - 授权取消、provider 不可用和服务错误不会触发登录回环。
 - 同一次失败不会同时显示 Toast/Snackbar 与内联反馈。
+- 社交授权、授权失败、手机号绑定与绑定 OTP 使用同一 `/login` 内部状态；绑定未完成时返回或杀进程均不能进入应用。
 
 <a id="req-006"></a>
 ### REQ-006 社交 metadata/codegen/错误码契约一致
@@ -86,7 +87,7 @@
 <a id="req-009"></a>
 ### REQ-009 四环境端到端与商用纯净证据
 
-- alpha public plane 与 alpha runner 使用固定码 123456；production App/Service package graph 不可达该 adapter。
+- alpha App 使用 Remote user-service，固定码 123456 只由服务端登记的认证 sandbox adapter 实现；四环境 App package graph 均不可达该 adapter 实现或端侧登录 mock。
 - beta/gamma 固定使用 Port 对等本地认证 Provider，不允许在同一环境切换官方沙箱或真实 Provider。
 - prod 微信、支付宝、QQ 与三网本机号认证均有真实成功证据，且无放通、无验证码回传、无 mock 数据源。
 - 社交首登资料同步真机可见。
@@ -116,8 +117,11 @@
 - canonical：`quwoquan_service/services/user-service/tests/local_contract/account/authentication_challenge/command_facade__local_contract_test.go`
 - canonical：`quwoquan_service/services/user-service/tests/api_integration/account/user_account/helpers__support__api_integration_test.go`
 - canonical：`quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/external_interaction_mongo_provider__reliability__api_integration_test.go`
-- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/operations.yaml`
-- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/errors.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/account_session/operations.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/account_session/errors.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/authentication_challenge/operations.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/credential_binding/operations.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/credential_binding/errors.yaml`
 - canonical：`quwoquan_service/services/user-service/contracts/account/user_account/fields.yaml`
 - canonical：`quwoquan_service/services/user-service/tests/api_integration/account/user_account/auth_contract__api_integration_test.go`
 - canonical：`quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart`
@@ -183,5 +187,5 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：alpha public plane 与 alpha runner 使用固定码 123456；production App/Service package graph 不可达该 adapter。
+- 目标：alpha App 通过 Remote user-service 使用服务端认证 sandbox 固定码 123456；四环境 App package graph 不可达该 adapter 实现或端侧登录 mock。
 - 完成判定：`GWT-009` 对应行为满足且真实测试 `spec_ref` 有效。

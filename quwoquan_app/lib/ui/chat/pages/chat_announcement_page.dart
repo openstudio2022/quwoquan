@@ -88,7 +88,7 @@ class _ChatAnnouncementPageState extends ConsumerState<ChatAnnouncementPage> {
         content: Text(ChatText.groupAnnouncementPublishConfirm),
         actions: [
           CupertinoDialogAction(
-            child: Text(UITextConstants.cancel),
+            child: Text(FoundationText.cancel),
             onPressed: () => Navigator.pop(dialogContext, false),
           ),
           CupertinoDialogAction(
@@ -228,7 +228,7 @@ class _ChatAnnouncementPageState extends ConsumerState<ChatAnnouncementPage> {
               padding: EdgeInsets.zero,
               onPressed: _submitting ? null : _publish,
               child: _submitting
-                  ? const CupertinoActivityIndicator()
+                  ? AppRequestFeedback.inline()
                   : Text(
                       ChatText.groupAnnouncementPublish,
                       style: TextStyle(
@@ -252,7 +252,7 @@ class _ChatAnnouncementPageState extends ConsumerState<ChatAnnouncementPage> {
             ),
             children: [
               if (groupHomeAsync.isLoading && groupHome == null)
-                const Center(child: CupertinoActivityIndicator())
+                AppRequestFeedback.section()
               else if (canEdit)
                 SettingsInsetGroupedSection(
                   isDark: isDark,

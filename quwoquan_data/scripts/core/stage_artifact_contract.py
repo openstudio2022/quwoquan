@@ -1,4 +1,5 @@
 """五阶段产物唯一契约：common contract → lane adapter。"""
+
 from __future__ import annotations
 
 from typing import Final
@@ -85,7 +86,6 @@ PROCESS_ARTIFACT_NAMES: Final[frozenset[str]] = frozenset(
         "slo.json",
         "import-content.json",
         "import-homepage.json",
-        "activation-smoke.json",
     }
 )
 

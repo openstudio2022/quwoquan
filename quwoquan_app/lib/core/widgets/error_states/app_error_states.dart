@@ -1,20 +1,17 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/telemetry/app_page_experience_tracker.dart';
-import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 
-part 'app_error_state_visuals.dart';
-
-typedef UiErrorActionCallback = Future<void> Function(UiErrorAction action);
-
-const double _softErrorIllustrationSize = 80.0;
+import 'app_error_action_feedback.dart';
+export 'app_error_action_feedback.dart';
+part 'app_error_action_row.dart';
+part 'app_error_state_appearance.dart';
 
 class AppPageErrorState extends StatefulWidget {
   const AppPageErrorState({
@@ -171,25 +168,33 @@ class _AppPageErrorStateState extends State<AppPageErrorState> {
                 final height = constraints.hasBoundedHeight
                     ? constraints.maxHeight
                     : MediaQuery.sizeOf(themedContext).height;
+                final resolvedPadding =
+                    (widget.padding ?? EdgeInsets.all(AppSpacing.containerMd))
+                        .resolve(Directionality.of(themedContext));
+                final availableHeight = height - resolvedPadding.vertical;
                 return SizedBox(
                   width: double.infinity,
                   height: height,
                   child: DefaultTextStyle(
                     style: fallbackStyle,
-                    child: Center(
-                      child: Padding(
-                        padding:
-                            widget.padding ??
-                            EdgeInsets.all(AppSpacing.containerMd),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(
-                            maxWidth: AppSpacing.feedMaxContentWidth,
-                          ),
-                          child: _ErrorEmptyPageBody(
-                            semantic: widget.semantic,
-                            onAction: widget.onAction == null
-                                ? null
-                                : _handleAction,
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: resolvedPadding,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: availableHeight > 0 ? availableHeight : 0,
+                        ),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              maxWidth: AppSpacing.feedMaxContentWidth,
+                            ),
+                            child: _ErrorEmptyPageBody(
+                              semantic: widget.semantic,
+                              onAction: widget.onAction == null
+                                  ? null
+                                  : _handleAction,
+                            ),
                           ),
                         ),
                       ),
@@ -226,16 +231,39 @@ class AppSectionErrorState extends StatelessWidget {
     return _wrapWithErrorAppearance(
       context,
       semantic,
-      Center(
-        child: Padding(
-          padding: padding ?? EdgeInsets.all(AppSpacing.containerXl),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: AppSpacing.feedMaxContentWidth,
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final resolvedPadding =
+              (padding ?? EdgeInsets.all(AppSpacing.containerXl)).resolve(
+                Directionality.of(context),
+              );
+          final content = Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: AppSpacing.feedMaxContentWidth,
+              ),
+              child: _ErrorEmptyPageBody(
+                semantic: semantic,
+                onAction: onAction,
+              ),
             ),
-            child: _ErrorEmptyPageBody(semantic: semantic, onAction: onAction),
-          ),
-        ),
+          );
+          if (!constraints.hasBoundedHeight) {
+            return Padding(padding: resolvedPadding, child: content);
+          }
+          final availableHeight =
+              constraints.maxHeight - resolvedPadding.vertical;
+          return SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: resolvedPadding,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: availableHeight > 0 ? availableHeight : 0,
+              ),
+              child: content,
+            ),
+          );
+        },
       ),
     );
   }
@@ -350,32 +378,16 @@ class _InlineErrorMessage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.hairline),
-              child: Icon(
-                CupertinoIcons.exclamationmark_circle,
-                size: AppSpacing.inlineErrorIconSize,
-                color: AppColors.errorForeground(context),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.inlineErrorIconTextGap),
-            Expanded(
-              child: Text(
-                semantic.message,
-                maxLines: isCompactWidth ? 2 : 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: AppColors.errorForeground(context),
-                  fontSize: AppTypography.inlineError,
-                  fontWeight: AppTypography.inlineErrorWeight,
-                  height: AppSpacing.textLineHeightBody,
-                ),
-              ),
-            ),
-          ],
+        Text(
+          semantic.message,
+          maxLines: isCompactWidth ? 2 : 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: AppColors.errorForeground(context),
+            fontSize: AppTypography.inlineError,
+            fontWeight: AppTypography.inlineErrorWeight,
+            height: AppSpacing.textLineHeightBody,
+          ),
         ),
         if (action != null && onAction != null) ...<Widget>[
           SizedBox(
@@ -450,15 +462,6 @@ class AppTransientErrorNotice extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Container(
-                  width: AppSpacing.xs,
-                  height: AppSpacing.xs,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.75),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                SizedBox(width: AppSpacing.sm),
                 Flexible(
                   child: Text(
                     semantic.message,
@@ -571,59 +574,7 @@ class AppInlineGateState extends StatelessWidget {
       child: _ErrorSoftCardBody(
         semantic: semantic,
         onAction: onAction,
-        gate: true,
         density: AppFormErrorCardDensity.regular,
-      ),
-    );
-  }
-}
-
-class AppActionErrorFeedback {
-  const AppActionErrorFeedback._();
-
-  static Future<void> show(
-    BuildContext context, {
-    required UiErrorSemantic semantic,
-    UiErrorActionCallback? onAction,
-  }) async {
-    final primary = semantic.primaryAction;
-    if (!context.mounted) {
-      return;
-    }
-    await showAppCupertinoDialog<void>(
-      context: context,
-      builder: (dialogContext) => CupertinoAlertDialog(
-        title: Text(semantic.title),
-        content: Text(semantic.message),
-        actions: <Widget>[
-          if (semantic.secondaryAction != null)
-            CupertinoDialogAction(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                if (onAction != null) {
-                  unawaited(onAction(semantic.secondaryAction!));
-                }
-              },
-              child: Text(semantic.secondaryAction!.label),
-            ),
-          if (primary != null)
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                if (onAction != null) {
-                  unawaited(onAction(primary));
-                }
-              },
-              child: Text(primary.label),
-            )
-          else if (semantic.secondaryAction == null)
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text(UITextConstants.gotIt),
-            ),
-        ],
       ),
     );
   }
@@ -639,48 +590,51 @@ class _ErrorEmptyPageBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final titleColor = AppColors.iosLabel(context);
     final messageColor = AppColors.iosSecondaryLabel(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        const _SoftPlanetIllustration(),
-        SizedBox(height: AppSpacing.interGroupMd),
-        Text(
-          semantic.title,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: AppTypography.iosTitle3,
-            fontWeight: AppTypography.semiBold,
-            color: titleColor,
-          ),
-        ),
-        SizedBox(height: AppSpacing.intraGroupSm),
-        Text(
-          semantic.message,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: AppTypography.iosBody,
-            color: messageColor,
-            height: AppSpacing.textLineHeightBody,
-          ),
-        ),
-        if ((semantic.secondaryMessage ?? '').trim().isNotEmpty) ...<Widget>[
-          SizedBox(height: AppSpacing.intraGroupSm),
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
           Text(
-            semantic.secondaryMessage!.trim(),
+            semantic.title,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: AppTypography.iosFootnote,
-              color: AppColors.iosSecondaryLabel(context),
-              height: AppSpacing.textLineHeightFootnote,
+              fontSize: AppTypography.iosTitle3,
+              fontWeight: AppTypography.semiBold,
+              color: titleColor,
             ),
           ),
+          SizedBox(height: AppSpacing.intraGroupSm),
+          Text(
+            semantic.message,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: AppTypography.iosBody,
+              color: messageColor,
+              height: AppSpacing.textLineHeightBody,
+            ),
+          ),
+          if ((semantic.secondaryMessage ?? '').trim().isNotEmpty) ...<Widget>[
+            SizedBox(height: AppSpacing.intraGroupSm),
+            Text(
+              semantic.secondaryMessage!.trim(),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                color: AppColors.iosSecondaryLabel(context),
+                height: AppSpacing.textLineHeightFootnote,
+              ),
+            ),
+          ],
+          if (onAction != null &&
+              (semantic.primaryAction != null ||
+                  semantic.secondaryAction != null)) ...<Widget>[
+            SizedBox(height: AppSpacing.interGroupMd),
+            _ErrorActionRow(semantic: semantic, onAction: onAction),
+          ],
         ],
-        if (semantic.primaryAction != null ||
-            semantic.secondaryAction != null) ...<Widget>[
-          SizedBox(height: AppSpacing.interGroupMd),
-          _ErrorActionRow(semantic: semantic, onAction: onAction),
-        ],
-      ],
+      ),
     );
   }
 }
@@ -689,13 +643,11 @@ class _ErrorSoftCardBody extends StatelessWidget {
   const _ErrorSoftCardBody({
     required this.semantic,
     this.onAction,
-    this.gate = false,
     this.density = AppFormErrorCardDensity.regular,
   });
 
   final UiErrorSemantic semantic;
   final UiErrorActionCallback? onAction;
-  final bool gate;
   final AppFormErrorCardDensity density;
 
   @override
@@ -704,7 +656,6 @@ class _ErrorSoftCardBody extends StatelessWidget {
     final background = AppColors.iosSecondaryFill(
       context,
     ).withValues(alpha: isDark ? 0.22 : 0.35);
-    final accent = _toneAccentColor(context, semantic.tone);
     final titleColor = AppColors.iosLabel(context);
     final messageColor = AppColors.iosSecondaryLabel(context);
     if (density == AppFormErrorCardDensity.compact) {
@@ -721,15 +672,6 @@ class _ErrorSoftCardBody extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              Container(
-                width: AppSpacing.xs,
-                height: AppSpacing.xs,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.72),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
                   semantic.message,
@@ -752,202 +694,52 @@ class _ErrorSoftCardBody extends StatelessWidget {
       ),
       child: Padding(
         padding: EdgeInsets.all(AppSpacing.containerMd),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Container(
-              width: AppSpacing.sm,
-              height: AppSpacing.sm,
-              margin: EdgeInsets.only(top: AppSpacing.xs),
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: gate ? 0.8 : 0.55),
-                shape: BoxShape.circle,
+            Text(
+              semantic.title,
+              style: TextStyle(
+                fontSize: AppTypography.iosSubheadline,
+                fontWeight: AppTypography.semiBold,
+                color: titleColor,
               ),
             ),
-            SizedBox(width: AppSpacing.containerSm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
-                    semantic.title,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosSubheadline,
-                      fontWeight: AppTypography.semiBold,
-                      color: titleColor,
-                    ),
-                  ),
-                  SizedBox(height: AppSpacing.xs),
-                  Text(
-                    semantic.message,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosFootnote,
-                      color: messageColor,
-                      height: AppSpacing.textLineHeightFootnote,
-                    ),
-                  ),
-                  if ((semantic.secondaryMessage ?? '')
-                      .trim()
-                      .isNotEmpty) ...<Widget>[
-                    SizedBox(height: AppSpacing.xs),
-                    Text(
-                      semantic.secondaryMessage!.trim(),
-                      style: TextStyle(
-                        fontSize: AppTypography.iosCaption1,
-                        color: AppColors.iosSecondaryLabel(context),
-                        height: AppSpacing.textLineHeightCaption,
-                      ),
-                    ),
-                  ],
-                  if (semantic.primaryAction != null ||
-                      semantic.secondaryAction != null) ...<Widget>[
-                    SizedBox(height: AppSpacing.containerSm),
-                    _ErrorActionRow(
-                      semantic: semantic,
-                      onAction: onAction,
-                      compact: true,
-                    ),
-                  ],
-                ],
+            SizedBox(height: AppSpacing.xs),
+            Text(
+              semantic.message,
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                color: messageColor,
+                height: AppSpacing.textLineHeightFootnote,
               ),
             ),
+            if ((semantic.secondaryMessage ?? '')
+                .trim()
+                .isNotEmpty) ...<Widget>[
+              SizedBox(height: AppSpacing.xs),
+              Text(
+                semantic.secondaryMessage!.trim(),
+                style: TextStyle(
+                  fontSize: AppTypography.iosCaption1,
+                  color: AppColors.iosSecondaryLabel(context),
+                  height: AppSpacing.textLineHeightCaption,
+                ),
+              ),
+            ],
+            if (semantic.primaryAction != null ||
+                semantic.secondaryAction != null) ...<Widget>[
+              SizedBox(height: AppSpacing.containerSm),
+              _ErrorActionRow(
+                semantic: semantic,
+                onAction: onAction,
+                compact: true,
+              ),
+            ],
           ],
         ),
       ),
     );
-  }
-}
-
-class _ErrorActionRow extends StatelessWidget {
-  const _ErrorActionRow({
-    required this.semantic,
-    this.onAction,
-    this.compact = false,
-  });
-
-  final UiErrorSemantic semantic;
-  final UiErrorActionCallback? onAction;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final actions = <Widget>[
-      if (semantic.secondaryAction != null)
-        _buildSecondaryAction(context, semantic.secondaryAction!),
-      if (semantic.primaryAction != null)
-        _buildPrimaryAction(context, semantic.primaryAction!),
-    ];
-    if (!compact) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: actions
-            .map(
-              (action) => Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.intraGroupXs,
-                ),
-                child: SizedBox(
-                  width: AppSpacing.minInteractiveSize * 2.55,
-                  height: AppSpacing.minInteractiveSize,
-                  child: action,
-                ),
-              ),
-            )
-            .toList(growable: false),
-      );
-    }
-    return Wrap(
-      alignment: WrapAlignment.start,
-      spacing: AppSpacing.containerSm,
-      runSpacing: AppSpacing.containerSm,
-      children: actions,
-    );
-  }
-
-  Widget _buildSecondaryAction(BuildContext context, UiErrorAction action) {
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final background = isDark
-        ? AppColors.white.withValues(alpha: 0.08)
-        : CupertinoColors.systemBackground.resolveFrom(context);
-    final border = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.26 : 0.2);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-        border: Border.all(color: border, width: AppSpacing.hairline),
-      ),
-      child: CupertinoButton(
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? AppSpacing.sm : AppSpacing.containerMd,
-          vertical: compact ? AppSpacing.xs : AppSpacing.sm,
-        ),
-        minimumSize: const Size(
-          AppSpacing.minInteractiveSize,
-          AppSpacing.minInteractiveSize,
-        ),
-        borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-        onPressed: _canDispatch(action)
-            ? () => unawaited(_dispatchAction(context, action))
-            : null,
-        child: Center(
-          child: Text(
-            action.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: AppColors.iosLabel(context),
-              fontWeight: AppTypography.medium,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPrimaryAction(BuildContext context, UiErrorAction action) {
-    return CupertinoButton(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? AppSpacing.containerSm : AppSpacing.containerMd,
-        vertical: compact ? AppSpacing.xs : AppSpacing.sm,
-      ),
-      minimumSize: const Size(
-        AppSpacing.minInteractiveSize,
-        AppSpacing.minInteractiveSize,
-      ),
-      color: AppColors.iosTintedFill(context),
-      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-      onPressed: _canDispatch(action)
-          ? () => unawaited(_dispatchAction(context, action))
-          : null,
-      child: Center(
-        child: Text(
-          action.label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: AppColors.iosAccent(context),
-            fontWeight: AppTypography.semiBold,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _dispatchAction(
-    BuildContext context,
-    UiErrorAction action,
-  ) async {
-    if (onAction == null) {
-      return;
-    }
-    await onAction!(action);
-  }
-
-  bool _canDispatch(UiErrorAction action) {
-    return onAction != null;
   }
 }

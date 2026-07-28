@@ -47,11 +47,11 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
         ),
         actions: [
           CupertinoDialogAction(
-            child: Text(UITextConstants.cancel),
+            child: Text(FoundationText.cancel),
             onPressed: () => Navigator.pop(context),
           ),
           CupertinoDialogAction(
-            child: Text(UITextConstants.confirm),
+            child: Text(FoundationText.confirm),
             onPressed: () async {
               Navigator.pop(context);
               try {
@@ -106,7 +106,7 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
                   secondaryMessage: resolved.secondaryMessage,
                   primaryAction: const UiErrorAction(
                     type: UiErrorActionType.retry,
-                    label: UITextConstants.tryAgain,
+                    label: ContentText.tryAgain,
                   ),
                   secondaryAction: resolved.secondaryAction,
                   dismissible: resolved.dismissible,
@@ -164,7 +164,7 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
           ),
           Expanded(
             child: membersState.isLoading
-                ? const Center(child: CupertinoActivityIndicator())
+                ? AppRequestFeedback.section()
                 : ListView(
                     padding: EdgeInsets.fromLTRB(
                       AppSpacing.containerMd,

@@ -200,14 +200,14 @@ class ShareInteractionRow extends StatelessWidget {
 
   String get _actionText {
     final suffix = item.targetKind == ShareTargetKind.discussion
-        ? UITextConstants.profileShareInitiatedDiscussionSuffix
-        : UITextConstants.profileShareInitiatedRecordSuffix;
+        ? ProfileText.profileShareInitiatedDiscussionSuffix
+        : ProfileText.profileShareInitiatedRecordSuffix;
     if (item.direction == ShareInteractionDirection.initiated) {
-      return '${UITextConstants.profileShareInitiatedRecordPrefix} ${item.displayName}$suffix';
+      return '${ProfileText.profileShareInitiatedRecordPrefix} ${item.displayName}$suffix';
     }
     return item.targetKind == ShareTargetKind.discussion
-        ? UITextConstants.profileShareReceivedDiscussionAction
-        : UITextConstants.profileShareReceivedRecordAction;
+        ? ProfileText.profileShareReceivedDiscussionAction
+        : ProfileText.profileShareReceivedRecordAction;
   }
 }
 

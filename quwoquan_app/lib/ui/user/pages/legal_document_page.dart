@@ -216,20 +216,10 @@ class _LegalDocumentPageState extends ConsumerState<LegalDocumentPage> {
           children: <Widget>[
             if (_hasError)
               AppPageErrorState(
-                semantic: const UiErrorSemantic(
+                semantic: AppUserRecoveryContract.semanticFor(
+                  group: AppUserRecoveryGroup.reloadLater,
                   category: UiErrorCategory.pageLoad,
                   scope: UiErrorScope.page,
-                  title: UITextConstants.legalUnavailableTitle,
-                  message: UITextConstants.legalUnavailableMessage,
-                  primaryAction: UiErrorAction(
-                    type: UiErrorActionType.retry,
-                    label: UITextConstants.tryAgain,
-                  ),
-                  secondaryAction: UiErrorAction(
-                    type: UiErrorActionType.dismiss,
-                    label: UITextConstants.back,
-                  ),
-                  copyKey: 'legalUnavailable',
                 ),
                 onAction: (action) async {
                   if (action.type == UiErrorActionType.retry ||
@@ -237,16 +227,13 @@ class _LegalDocumentPageState extends ConsumerState<LegalDocumentPage> {
                     await _retry();
                     return;
                   }
-                  if (action.type == UiErrorActionType.dismiss) {
-                    _goBack();
-                  }
                 },
               )
             else if (controller == null)
               const SizedBox.shrink()
             else
               widget.webViewBuilder(context, controller),
-            if (_isLoading) const Center(child: CupertinoActivityIndicator()),
+            if (_isLoading) AppRequestFeedback.section(),
           ],
         ),
       ),

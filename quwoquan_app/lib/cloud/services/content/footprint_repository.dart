@@ -46,6 +46,5 @@ abstract class FootprintRepository {
   });
 }
 
-// Mock 实现已物理迁至 test/support/cloud_services/content/
-// mock_content_repository.dart（测试）与 runners/alpha 的 fixture 回放实现；
-// 生产 lib 只保留接口与 Remote adapter。
+// Test double 仅位于 test/support/cloud_services/content/；
+// 四环境 production lib 只保留接口与 Remote adapter。

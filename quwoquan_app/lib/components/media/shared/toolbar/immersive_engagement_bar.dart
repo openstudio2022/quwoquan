@@ -162,7 +162,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
   /// 作者展示文案：空 -> unknownUser；非空最多 12 个 Unicode 字符。
   static String _normalizeAuthorDisplay(String raw) {
     final t = raw.trim();
-    if (t.isEmpty) return UITextConstants.unknownUser;
+    if (t.isEmpty) return FoundationText.unknownUser;
     final runes = t.runes.toList();
     if (runes.length <= _kAuthorDisplayMaxChars) {
       return String.fromCharCodes(runes);
@@ -300,8 +300,8 @@ class ImmersiveEngagementBar extends StatelessWidget {
                               ),
                               child: Text(
                                 isFollowing
-                                    ? UITextConstants.following
-                                    : UITextConstants.follow,
+                                    ? FoundationText.following
+                                    : FoundationText.follow,
                                 maxLines: 1,
                                 overflow: TextOverflow.fade,
                                 softWrap: false,

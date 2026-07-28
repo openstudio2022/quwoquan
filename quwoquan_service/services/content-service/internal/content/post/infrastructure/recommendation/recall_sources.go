@@ -24,7 +24,7 @@ func NewTagRecallSource(db *mongo.Database) *TagRecallSource {
 
 func (s *TagRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest) ([]rtrec.ContentCandidate, error) {
 	if len(req.Tags) == 0 {
-		return nil, nil
+		return nil, rtrec.SkipRecall("tag recall requires interest tags")
 	}
 	limit := req.Limit
 	if limit <= 0 {
@@ -130,7 +130,7 @@ func NewAuthorRecallSource(db *mongo.Database) *AuthorRecallSource {
 
 func (s *AuthorRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest) ([]rtrec.ContentCandidate, error) {
 	if strings.TrimSpace(req.UserID) == "" || req.UserID == identity.AnonymousFallbackSubAccountID {
-		return nil, nil
+		return nil, rtrec.SkipRecall("author recall requires an authenticated persona")
 	}
 
 	limit := req.Limit

@@ -127,6 +127,93 @@ api_routes:
     request_encoder: encodeBindPhoneCredentialCommand
     response_decoder: decodeCredentialBindingCommandResult
 - method: POST
+  path: /auth/login/social/phone/complete
+  operation: CompleteFederatedPhoneBinding
+  actor: none
+  application:
+    kind: command
+    facet: CredentialCommandFacade
+    method: completeFederatedPhoneBinding
+    aggregate_owner: CredentialBinding
+    mutation_target: CredentialBinding
+    invariant_target: CredentialBinding
+  description: 消费一次性社交 binding ticket 与 bind_phone OTP，原子创建或恢复账号、绑定社交和手机号凭证并签发会话
+  request_fields:
+  - bindingTicket
+  - phone
+  - otpCode
+  - challengeId
+  - deviceId
+  - platform
+  - appVersion
+  - agreementVersion
+  - privacyVersion
+  response_fields:
+  - accessToken
+  - refreshToken
+  - ownerId
+  - activeSub
+  - subAccountCount
+  - accountState
+  - identityOrigin
+  - logicalShard
+  - anonymousRetentionPolicy
+  - accountHint
+  - sessionRememberTtlSeconds
+  authorization:
+    principal: public
+    ownership_policy: federated_phone_binding_ticket_holder
+  commercial:
+    status: blocked
+    block_reason: prod federated providers and real-device binding evidence are not injected
+    gap_id: R_AUTH_001
+    target_story: four-environment-commercial-login-maturity
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: none
+    max_attempts: 1
+    idempotency: none
+  error_codes:
+  - USER.USER.invalid_argument
+  - USER.AUTH.consent_required
+  - USER.AUTH.otp_expired
+  - USER.AUTH.otp_mismatch
+  - USER.AUTH.otp_attempts_exceeded
+  - USER.AUTH.challenge_consumed
+  - USER.AUTH.credential_conflict
+  - USER.AUTH.account_suspended
+  - USER.AUTH.account_deleted
+  - USER.SYSTEM.internal_error
+  privacy:
+    request_classification: SECRET
+    response_classification: SECRET
+    log_policy: none
+  telemetry:
+    metric: user_federated_phone_binding_complete
+    trace: true
+    attributes:
+    - environment
+    - platform
+    - provider
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  security:
+    auth_mode: public
+    principal: public
+    token_transport: none
+    anonymous_policy: allow
+    visibility: private
+  client_contract:
+    dart_import: ../user/credential_binding_contracts.dart
+    request_type: CompleteFederatedPhoneBindingCommand
+    response_type: AuthSessionGrant
+    request_encoder: encodeCompleteFederatedPhoneBindingCommand
+    response_decoder: decodeAuthSessionGrant
+- method: POST
   path: /owner/credentials/carrier-phone/bind
   operation: BindCarrierPhoneCredential
   actor: account

@@ -93,7 +93,7 @@ class _HomepageIntroductionPageState
     return AppScaffold(
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
       navigationBar: CupertinoNavigationBar(
-        middle: const Text(UITextConstants.objectIntroNavigationTitle),
+        middle: const Text(ObjectHomepageText.objectIntroNavigationTitle),
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: () {
@@ -109,7 +109,7 @@ class _HomepageIntroductionPageState
       child: SafeArea(
         bottom: false,
         child: asyncValue.when(
-          loading: () => const Center(child: CupertinoActivityIndicator()),
+          loading: () => AppRequestFeedback.section(),
           error: (error, _) => AppPageErrorState(
             semantic: runtimeErrorSemantic(
               context,

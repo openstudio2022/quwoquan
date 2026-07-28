@@ -47,6 +47,25 @@ def _write_homepage_repair_report(
     return report_path
 
 
+def _normalize_homepage_document_title(*, entity_name: str, draft_text: str) -> str:
+    """Add the deterministic document title when an authored body omitted it.
+
+    The entity identity is frozen by the execution target.  Supplying a missing
+    H1 is document framing, not generated content; duplicate or mismatched H1
+    values remain review failures and must be repaired by the author.
+    """
+    from core.section_outline import match_heading
+
+    h1_count = sum(
+        1
+        for line in draft_text.splitlines()
+        if (heading := match_heading(line)) is not None and int(heading[0]) == 1
+    )
+    if h1_count:
+        return draft_text
+    return f"# {entity_name}\n\n{draft_text.lstrip()}"
+
+
 def _finalize_managed_homepage_outputs(
     ctx: ExecutionContext,
     _prompts: list[str],
@@ -111,12 +130,115 @@ def _finalize_managed_homepage_outputs(
             continue
         draft_page = draft_dir / "page.md"
         if not draft_page.is_file():
-            finalized.append(job_outcome.with_gate_issues(("homepage author finished without 4.draft/page.md",)))
+            messages = ("homepage author finished without 4.draft/page.md",)
+            _write_homepage_repair_report(
+                ctx,
+                object_dir=draft_dir.parent,
+                ref=job_outcome.ref,
+                materialization_messages=messages,
+            )
+            finalized.append(job_outcome.with_gate_issues(messages))
             continue
         draft_text = draft_page.read_text(encoding="utf-8")
+        # Typed failure protocol must win over placeholder detection: Agent may
+        # correctly refuse to author and leave page.md untouched. Treat that as
+        # a finished author pass so build_homepage can rewind source discovery.
+        from core.homepage_source_failure import (
+            SOURCE_RECOVERY_FAILURE_KINDS,
+            entity_page_failure_issues,
+            entity_page_failure_kind,
+            read_entity_page_failure,
+        )
+
+        failure = read_entity_page_failure(draft_dir)
+        if failure is not None:
+            failure_problems = entity_page_failure_issues(failure, entity_name=entity)
+            kind = entity_page_failure_kind(failure)
+            if failure_problems:
+                messages = tuple(
+                    f"homepage author finished with invalid 4.draft/failure.json: {p}"
+                    for p in failure_problems
+                )
+                _write_homepage_repair_report(
+                    ctx,
+                    object_dir=draft_dir.parent,
+                    ref=job_outcome.ref,
+                    materialization_messages=messages,
+                )
+                finalized.append(job_outcome.with_gate_issues(messages))
+                continue
+            if kind in SOURCE_RECOVERY_FAILURE_KINDS:
+                reasons = [
+                    str(item).strip()
+                    for item in (failure.get("reasons") or [])
+                    if str(item).strip()
+                ]
+                (draft_dir.parent / "5.review" / "repair_report.json").unlink(
+                    missing_ok=True
+                )
+                meta.update(
+                    {
+                        "generator": "agent",
+                        "status": "failed",
+                        "provider": outcome.provider.value,
+                        "model": ctx.model,
+                        "agentRunId": run_id,
+                        "agentId": outcome.agent_id or None,
+                        "draftSha256": None,
+                        "selfCheck": {
+                            "status": "failed",
+                            "issues": [
+                                (
+                                    f"failureProtocol:{kind.value}: {reasons[0]}"
+                                    if reasons
+                                    else f"failureProtocol:{kind.value}"
+                                )
+                            ],
+                        },
+                        "sessionTrace": "build_homepage",
+                        "updatedAt": store.now_iso(),
+                        "finalizedFromAgentRunHistory": True,
+                    }
+                )
+                assert_valid(meta, "content", "draft_meta", label=f"draft_meta:{entity}")
+                write_json(meta_path, meta)
+                try:
+                    _write_homepage_author_evidence(
+                        ctx,
+                        draft_dir=draft_dir,
+                        domain=domain,
+                        etype=et,
+                        entity=entity,
+                        outcome=outcome,
+                        draft_meta=meta,
+                        source_failure=failure,
+                    )
+                except (OSError, ValueError, TypeError) as exc:
+                    finalized.append(
+                        job_outcome.with_gate_issues(
+                            (f"homepage author evidence failed: {exc}",)
+                        )
+                    )
+                    continue
+                finalized.append(job_outcome)
+                continue
         if is_placeholder(draft_text):
-            finalized.append(job_outcome.with_gate_issues(("homepage author finished with placeholder 4.draft/page.md",)))
+            messages = ("homepage author finished with placeholder 4.draft/page.md",)
+            _write_homepage_repair_report(
+                ctx,
+                object_dir=draft_dir.parent,
+                ref=job_outcome.ref,
+                materialization_messages=messages,
+            )
+            finalized.append(job_outcome.with_gate_issues(messages))
             continue
+        normalized_draft_text = _normalize_homepage_document_title(
+            entity_name=entity,
+            draft_text=draft_text,
+        )
+        if normalized_draft_text != draft_text:
+            draft_page.write_text(normalized_draft_text, encoding="utf-8")
+            draft_text = normalized_draft_text
         meta.update(
             {
                 "generator": "agent",

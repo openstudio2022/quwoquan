@@ -53,12 +53,23 @@ APP_USER_ACCEPTANCE_FAKE_PATTERNS = (
     ),
     re.compile(r"import\s+['\"][^'\"]*test/support/(?:fixtures|cloud_services)/"),
     re.compile(r"\bquwoquan_cloud_mock\b"),
+    re.compile(r"\bbuildAlphaCloudOverrides\b"),
+    re.compile(r"\bproviderScopeOverrides\b"),
+    re.compile(r"\brepository_mock_reexports\b"),
     re.compile(r"\bpumpWidget\s*\("),
     re.compile(r"\bcoverage evidence is declared\b"),
     re.compile(r"\b(?:sourceEvidence|requiredCaseIds)\b"),
 )
 DART_TEST_RE = re.compile(r"\b(?:test(?:Widgets)?|patrolTest)\s*\(")
 PYTHON_TEST_RE = re.compile(r"^\s*def\s+test_[A-Za-z0-9_]+\s*\(", re.MULTILINE)
+
+
+def is_app_user_acceptance_source(path: Path) -> bool:
+    return (
+        path.suffix == ".dart"
+        and "quwoquan_app" in path.parts
+        and "user_acceptance" in path.parts
+    )
 
 
 class Failures:
@@ -169,12 +180,7 @@ def verify_all_test_sources(failures: Failures) -> None:
                             f"{path.relative_to(ROOT)} contains skip pattern "
                             f"{pattern.pattern!r}"
                         )
-            is_app_user_acceptance_source = (
-                path.suffix == ".dart"
-                and "quwoquan_app" in path.parts
-                and "user_acceptance" in path.parts
-            )
-            if is_app_user_acceptance_source:
+            if is_app_user_acceptance_source(path):
                 text = path.read_text(encoding="utf-8", errors="ignore")
                 for pattern in APP_USER_ACCEPTANCE_FAKE_PATTERNS:
                     if pattern.search(text):

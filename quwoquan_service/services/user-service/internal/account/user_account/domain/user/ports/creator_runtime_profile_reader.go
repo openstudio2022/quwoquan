@@ -7,8 +7,9 @@ import (
 )
 
 // CreatorRuntimeProfileReader 提供系统 creator 的运行时只读投影。
-// 身份解析允许 creatorId、subAccountId 或 handle，供既有 profile API 透明消费。
+// 公共身份只认 immutable release authority 的 subAccountId，以及内容契约
+// creatorProfileId 对应的 CreatorRuntimeProfile.creatorId；不接受 handle 或旧别名。
 type CreatorRuntimeProfileReader interface {
-	FindActiveByIdentity(ctx context.Context, identity string) (*model.CreatorRuntimeProfile, bool, error)
+	FindActiveByPublicIdentity(ctx context.Context, identity string) (*model.CreatorRuntimeProfile, bool, error)
 	ListActiveWorks(ctx context.Context, identity string) ([]model.CreatorWorkRef, bool, error)
 }

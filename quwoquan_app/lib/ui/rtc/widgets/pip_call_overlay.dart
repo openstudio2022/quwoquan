@@ -161,7 +161,7 @@ class _PipCallOverlayState extends ConsumerState<PipCallOverlay> {
             ),
             SizedBox(height: AppSpacing.xs),
             Text(
-              speaker?.displayName ?? UITextConstants.callOngoing,
+              speaker?.displayName ?? CallText.callOngoing,
               style: TextStyle(
                 color: AppColors.white,
                 fontSize: AppTypography.xs,
@@ -186,16 +186,16 @@ class _PipCallOverlayState extends ConsumerState<PipCallOverlay> {
     showAppCupertinoDialog<void>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text(UITextConstants.callHangupConfirmTitle),
-        content: const Text(UITextConstants.callHangupConfirmBody),
+        title: const Text(CallText.callHangupConfirmTitle),
+        content: const Text(CallText.callHangupConfirmBody),
         actions: [
           CupertinoDialogAction(
-            child: const Text(UITextConstants.cancel),
+            child: const Text(FoundationText.cancel),
             onPressed: () => Navigator.pop(ctx),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
-            child: const Text(UITextConstants.callHangup),
+            child: const Text(CallText.callHangup),
             onPressed: () {
               Navigator.pop(ctx);
               widget.onHangup();

@@ -1,4 +1,4 @@
-// Code generated from runners/alpha/lib/alpha_chat_repository.dart. DO NOT EDIT.
+// Test-only ChatRepository double. Production and all App environments use Remote.
 import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
@@ -16,9 +16,10 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conve
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
-import 'package:quwoquan_cloud_mock/chat_fixture.dart';
 
-/// Alpha runner 与 test 共用的 App DTO 薄适配器。
+import 'repository_mock_reexports.dart';
+
+/// local_contract 专用 App DTO 薄适配器。
 ///
 /// 所有 fixture/state 行为都委托给 pure Dart [AlphaChatStateEngine]；
 /// 此类只承担 `quwoquan_app` DTO 映射，不持有第二份 chat 状态。

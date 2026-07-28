@@ -1,6 +1,12 @@
 // ignore_for_file: unnecessary_non_null_assertion
 part of 'home_multi_form_feed.dart';
 
+typedef _HomeFeedItemBuilder =
+    Widget Function(
+      int index,
+      ValueListenable<_HomeFeedVideoScrollSignal> videoScrollSignal,
+    );
+
 /// 多列瀑布每段卡数：段尾由 sliver 边界天然两列齐平，段间可插入交集模块。
 const int _kFeedSegmentSize = 10;
 
@@ -431,29 +437,13 @@ class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
     BuildContext context,
     Object error,
   ) {
-    final base = runtimeErrorSemantic(
+    return runtimeErrorSemantic(
       context,
       error: error,
       category: UiErrorCategory.backgroundAction,
       scope: UiErrorScope.section,
       allowRetry: false,
       presentation: UiErrorPresentation.transientNotice,
-    );
-    return UiErrorSemantic(
-      category: base.category,
-      scope: base.scope,
-      title: UITextConstants.pageLoadFailedTitle,
-      message: UITextConstants.homeCacheFallback,
-      secondaryMessage: base.secondaryMessage,
-      primaryAction: base.primaryAction,
-      secondaryAction: base.secondaryAction,
-      dismissible: base.dismissible,
-      sourceCode: base.sourceCode,
-      failureKind: base.failureKind,
-      copyKey: 'homeCacheFallback',
-      recoveryAction: base.recoveryAction,
-      presentation: base.presentation,
-      tone: UiErrorTone.caution,
     );
   }
 }
@@ -499,7 +489,7 @@ class _LoadMoreFooter extends StatelessWidget {
             },
           )
         else
-          const CupertinoActivityIndicator(),
+          AppRequestFeedback.inline(),
         if (!hasError && moodCopy.isNotEmpty) ...[
           SizedBox(height: AppSpacing.intraGroupSm),
           Text(

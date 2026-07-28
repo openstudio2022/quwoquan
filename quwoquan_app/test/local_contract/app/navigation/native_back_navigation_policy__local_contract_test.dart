@@ -1,8 +1,14 @@
+// spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/spec.md#sit-001
+// spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/global-route-edge-pop-contract/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/home-edge-swipe-exit-guard/spec.md#gwt-001
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/native_back_navigation.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 void main() {
   group('NativeBackNavigationPolicy', () {
@@ -76,5 +82,79 @@ void main() {
         isA<MaterialPage<void>>(),
       );
     });
+  });
+
+  testWidgets('Android 根页首次返回只提示，保护窗口内第二次才请求退出', (tester) async {
+    var exitRequestCount = 0;
+    late final GoRouter router;
+    router = GoRouter(
+      initialLocation: AppRoutePaths.home,
+      routes: <RouteBase>[
+        GoRoute(
+          path: AppRoutePaths.home,
+          builder: (context, _) => AppNativeBackScope(
+            router: GoRouter.of(context),
+            policy: const AndroidNativeBackNavigationPolicy(),
+            onExitRequested: () async => exitRequestCount += 1,
+            child: const SizedBox.shrink(),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+
+    expect(exitRequestCount, 0);
+    expect(find.text(FoundationText.edgeBackExitPrompt), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+
+    expect(exitRequestCount, 1);
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('非根路由返回交还 Router 并回到上一页', (tester) async {
+    const detailPath = '/native-back-detail';
+    late final GoRouter router;
+    router = GoRouter(
+      initialLocation: AppRoutePaths.home,
+      routes: <RouteBase>[
+        GoRoute(
+          path: AppRoutePaths.home,
+          builder: (context, _) => AppNativeBackScope(
+            router: GoRouter.of(context),
+            policy: const AndroidNativeBackNavigationPolicy(),
+            child: const Text('home-route'),
+          ),
+        ),
+        GoRoute(
+          path: detailPath,
+          builder: (context, _) => AppNativeBackScope(
+            router: GoRouter.of(context),
+            policy: const AndroidNativeBackNavigationPolicy(),
+            child: const Text('detail-route'),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+    router.push(detailPath);
+    await tester.pumpAndSettle();
+    expect(find.text('detail-route'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('home-route'), findsOneWidget);
+    expect(find.text('detail-route'), findsNothing);
   });
 }

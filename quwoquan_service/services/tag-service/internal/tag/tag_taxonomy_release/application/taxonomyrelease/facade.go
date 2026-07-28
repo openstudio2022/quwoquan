@@ -35,6 +35,7 @@ type StageCommand struct {
 	ReleaseID       string
 	SourceOwner     string
 	CanonicalDigest string
+	ReleaseKind     model.ReleaseKind
 	NodeCount       int
 }
 
@@ -43,7 +44,7 @@ type StageCommand struct {
 func (f *Facade) Stage(ctx context.Context, command StageCommand) (model.Release, error) {
 	release, err := model.NewStaged(
 		command.ReleaseID, command.SourceOwner,
-		command.CanonicalDigest, command.NodeCount, f.now())
+		command.CanonicalDigest, command.ReleaseKind, command.NodeCount, f.now())
 	if err != nil {
 		return model.Release{}, err
 	}
@@ -86,6 +87,7 @@ func resolveStageReplay(existing, requested model.Release) (model.Release, error
 	if existing.ReleaseID != requested.ReleaseID ||
 		existing.SourceOwner != requested.SourceOwner ||
 		existing.CanonicalDigest != requested.CanonicalDigest ||
+		existing.ReleaseKind != requested.ReleaseKind ||
 		existing.NodeCount != requested.NodeCount {
 		return model.Release{}, model.ErrDigestConflict
 	}

@@ -13,7 +13,7 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
 |----------|------|------|----------|
 | **delivery-gate.yml** | `pull_request(main)`、手动 | PR 主门禁：拓扑校验、L1+L2 | G0~G3 |
 | **service_pipeline.yml** | `push main`、手动 | main 后 Go 构建、rec-model 镜像、kustomize 校验 | G2 |
-| **app_pipeline.yml** | `v*` tag、手动 | macOS 构建（主干门禁已由 03/04/05 负责） | G2 / 发布 |
+| **app_pipeline.yml** | `v*` tag、手动 | Android AAB、iOS IPA、macOS 与 Web 正式构建及制品纯度证明 | G2 / 发布 |
 | **pre-release-gate.yml** | `pull_request(main)`、手动 | deploy → L3 → L4 → gamma smoke | G3→G5b |
 | **app-env-device-matrix-self-hosted.yml** | `pull_request(main)` / 被调用 / 手动 | self-hosted 动态设备矩阵唯一入口 | G5b |
 | **deploy-prod-gray.yml** | 手动 | prod `gray-initial` 发布与验证 | G5c |
@@ -51,16 +51,27 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
 
 ## 四、App Pipeline（app_pipeline.yml）
 
-### 必须配置
-
-无。常规单元测试、v* tag 下 macOS 构建均无需额外 Secrets。
-
-### 可选
+### 必须配置（Android / iOS 正式发布）
 
 | Secret | 用途 |
 |--------|------|
-| CODESIGN_IDENTITY | macOS 签名身份（codesign） |
-| MATCH_PASSWORD | fastlane match 证书密码 |
+| **QWQ_ANDROID_RELEASE_KEYSTORE_B64** | Base64 编码的 Android release keystore |
+| **QWQ_ANDROID_RELEASE_STORE_PASSWORD** | Android keystore 密码 |
+| **QWQ_ANDROID_RELEASE_KEY_ALIAS** | Android 签名 key alias |
+| **QWQ_ANDROID_RELEASE_KEY_PASSWORD** | Android 签名 key 密码 |
+| **QWQ_ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256** | 受保护环境登记的 Android 正式签名证书 SHA-256；必须与 APK 实际签名一致 |
+| **QWQ_ANDROID_GOOGLE_SERVICES_JSON** | Android release Firebase 配置原文 |
+| **QWQ_IOS_DISTRIBUTION_CERT_P12_B64** | Base64 编码的 iOS Distribution P12 |
+| **QWQ_IOS_DISTRIBUTION_CERT_PASSWORD** | iOS Distribution P12 密码 |
+| **QWQ_IOS_PROVISIONING_PROFILE_B64** | Base64 编码的正式 Provisioning Profile |
+| **QWQ_IOS_EXPORT_OPTIONS_PLIST_B64** | Base64 编码的 ExportOptions.plist |
+
+### 发布证明
+
+- 每次 tag / 手动正式构建都会产出 Android AAB、iOS IPA、macOS 和 Web 制品，并上传
+  对应的 SPDX SBOM、SHA-256、源码 revision 与 test/fixture/Mock 扫描报告。
+- 任何缺失移动端签名材料、非 `prod` runtime environment 或命中 test-only 标识都会硬失败；
+  不允许以 unsigned、alpha runner 或 fixture 包替代正式制品。
 
 ---
 
@@ -87,7 +98,7 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
 
 | Secret | 用途 |
 |--------|------|
-| ALPHA_TEST_AUTH_TOKEN | alpha-local 鉴权覆盖（可选；mock 默认无需配置） |
+| ALPHA_TEST_AUTH_TOKEN | alpha-local Remote 鉴权覆盖（按 validation profile 配置） |
 | BETA_TEST_AUTH_TOKEN | beta-local 鉴权覆盖（可选） |
 | GAMMA_TEST_AUTH_TOKEN | gamma-local 鉴权覆盖（可选） |
 | PROD_TEST_AUTH_TOKEN | prod-sim/prod 鉴权覆盖（可选） |
@@ -107,7 +118,7 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
 - `app-env-device-matrix-self-hosted.yml` 已成为唯一的 **05. App Env Device Matrix** 入口；同时支持 `pull_request(main)`、被其他 workflow 调用以及手动调试。
 - gamma 网关默认从 topology `gamma-local.publicBases.api` 解析，不再依赖 `GAMMA_BASE_URL` GitHub secret。
 - `05` 已统一固定到 **本机 macOS self-hosted runner**；不再依赖自定义 runner label，也不再依赖固定 `ANDROID_DEVICE_ID` / `IOS_DEVICE_ID`。
-- `alpha` 使用 `APP_DATA_SOURCE=mock`，不需要云侧 Secret。
+- `alpha` 设备测试与其他环境使用同一 production Remote composition；第一方业务对象来自已激活 canonical release，所需鉴权按环境 validation profile 配置，禁止 runner/UAT fixture override。
 - `beta` 在 runner 内启动本地 beta assistant-service + gateway；设备列表通过 `flutter devices --machine` 动态发现，当前可见的每台 Android/iOS 模拟器或真机都会执行。
 - 四环境 token 严格按环境变量解析；禁止 alpha/beta/prod 回退复用 `GAMMA_TEST_AUTH_TOKEN`。
 - beta CI 默认使用 deterministic provider；真实模型链路仍以人工/专门 beta 验证为准。

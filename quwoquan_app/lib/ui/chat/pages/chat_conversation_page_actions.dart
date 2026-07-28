@@ -53,7 +53,7 @@ abstract class _ChatConversationPageActionsState
         message: message,
         primaryAction: const UiErrorAction(
           type: UiErrorActionType.dismiss,
-          label: UITextConstants.confirm,
+          label: FoundationText.confirm,
         ),
         dismissible: true,
         presentation: UiErrorPresentation.actionDialog,
@@ -697,11 +697,11 @@ abstract class _ChatConversationPageActionsState
 
   List<ChatInputExtraPanelItem> _buildCallPanelItems() {
     final voiceLabel = _isGroupChat
-        ? UITextConstants.callGroupVoice
-        : UITextConstants.callVoice;
+        ? CallText.callGroupVoice
+        : CallText.callVoice;
     final videoLabel = _isGroupChat
-        ? UITextConstants.callGroupVideo
-        : UITextConstants.callVideo;
+        ? CallText.callGroupVideo
+        : CallText.callVideo;
     final items = <ChatInputExtraPanelItem>[];
     if (_isGroupChat || _isDirectCallAvailable(RtcCallEntryMediaType.audio)) {
       items.add(
@@ -864,7 +864,7 @@ abstract class _ChatConversationPageActionsState
                         .reset();
                   },
                   child: Text(
-                    UITextConstants.retry,
+                    FoundationText.retry,
                     style: TextStyle(fontSize: AppTypography.sm, color: fg),
                   ),
                 ),
@@ -912,7 +912,7 @@ abstract class _ChatConversationPageActionsState
                 onPressed: () =>
                     ref.read(chatSendOutboxProvider.notifier).drain(),
                 child: Text(
-                  UITextConstants.tryAgain,
+                  ContentText.tryAgain,
                   style: TextStyle(fontSize: AppTypography.sm, color: fg),
                 ),
               ),

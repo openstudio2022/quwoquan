@@ -55,18 +55,18 @@ Widget _buildCreatePublishResultSheet(
   final canViewTasks = state != CreatePublishResultState.published;
   final title = switch (state) {
     CreatePublishResultState.published =>
-      UITextConstants.publishResultSuccessTitle,
+      CreationText.publishResultSuccessTitle,
     CreatePublishResultState.pendingReview =>
-      UITextConstants.publishResultPendingReviewTitle,
-    CreatePublishResultState.queued => UITextConstants.publishResultQueuedTitle,
+      CreationText.publishResultPendingReviewTitle,
+    CreatePublishResultState.queued => CreationText.publishResultQueuedTitle,
   };
   final description = switch (state) {
     CreatePublishResultState.published =>
-      UITextConstants.publishResultSuccessDescription,
+      CreationText.publishResultSuccessDescription,
     CreatePublishResultState.pendingReview =>
-      UITextConstants.publishResultPendingReviewDescription,
+      CreationText.publishResultPendingReviewDescription,
     CreatePublishResultState.queued =>
-      UITextConstants.publishResultQueuedDescription,
+      CreationText.publishResultQueuedDescription,
   };
   return CupertinoActionSheet(
     key: TestKeys.createPublishResultSheet,
@@ -93,21 +93,21 @@ Widget _buildCreatePublishResultSheet(
           onPressed: () => Navigator.of(
             sheetContext,
           ).pop(CreatePublishResultAction.viewWork),
-          child: const Text(UITextConstants.publishResultViewWork),
+          child: const Text(CreationText.publishResultViewWork),
         ),
       if (canViewTasks)
         CupertinoActionSheetAction(
           onPressed: () => Navigator.of(
             sheetContext,
           ).pop(CreatePublishResultAction.viewPublicationTasks),
-          child: const Text(UITextConstants.publishResultViewTasks),
+          child: const Text(CreationText.publishResultViewTasks),
         ),
     ],
     cancelButton: CupertinoActionSheetAction(
       key: TestKeys.createPublishResultDoneButton,
       onPressed: () =>
           Navigator.of(sheetContext).pop(CreatePublishResultAction.done),
-      child: const Text(UITextConstants.publishResultDone),
+      child: const Text(CreationText.publishResultDone),
     ),
   );
 }

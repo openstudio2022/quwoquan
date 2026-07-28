@@ -277,6 +277,7 @@ def _source_plan_issue_records(
     from content.source.gate import download_requirements
     from content.source.source_inputs import (
         curated_images_for_entity,
+        curated_sourced_videos_for_entity,
         curated_sources_for_entity,
         source_plan_rights_issues,
     )
@@ -307,6 +308,11 @@ def _source_plan_issue_records(
                 ctx.execution_id, eid, entity_type, research_lane="article"
             )
             images = curated_images_for_entity(ctx.execution_id, eid, entity_type)
+            sourced_videos = curated_sourced_videos_for_entity(
+                ctx.execution_id,
+                eid,
+                entity_type,
+            )
             work_images = [
                 image for image in images
                 if str(image.get("researchLane") or "image") == "image"
@@ -428,15 +434,19 @@ def _source_plan_issue_records(
                     "image research needs enough rights-cleared source collections "
                     f"for {required_image_works} image work(s)"
                 )
-            # video 作品的帧来自 video lane 的 rights-cleared 图证；plan 阶段无帧候选
-            # 必须判未就绪并触发 auto research，否则 fetch 必然 0 帧失败。
+            # A directly sourced video is the preferred real-media carrier. Image
+            # frames remain the fallback and retain their minimum-count contract.
             if "video" in active_lanes and quotas.video_works_per_target > 0:
                 video_frame_candidates = [
                     image for image in images
                     if str(image.get("researchLane") or "") == "video"
                 ]
                 required_frames = requirements.min_video_frames
-                if required_frames and len(video_frame_candidates) < required_frames:
+                if (
+                    not sourced_videos
+                    and required_frames
+                    and len(video_frame_candidates) < required_frames
+                ):
                     lane_issues.append(
                         "video research needs "
                         f">={required_frames} rights-cleared frame candidate(s), "

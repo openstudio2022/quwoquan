@@ -92,7 +92,7 @@ public class DeviceOrientationManager {
       DeviceOrientation previousOrientation) {
   }
 
-  @SuppressWarnings("deprecation")
+  @SuppressWarnings("deprecation") // Display#getRotation is the pre-API-30 compatibility path.
   @VisibleForTesting
   PlatformChannel.DeviceOrientation getUIOrientation() {
     final int rotation = getDisplay().getRotation();
@@ -180,7 +180,7 @@ public class DeviceOrientationManager {
    *
    * @return An instance of the Android {@link android.view.Display}.
    */
-  @SuppressWarnings("deprecation")
+  @SuppressWarnings("deprecation") // WindowManager#getDefaultDisplay is required before API 30.
   @VisibleForTesting
   Display getDisplay() {
     return ((WindowManager) activity.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay();

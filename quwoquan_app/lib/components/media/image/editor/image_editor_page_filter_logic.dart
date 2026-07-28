@@ -95,7 +95,7 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
     appendCategory(
       const ImageEditorFilterCategory(
         id: 'common',
-        label: UITextConstants.imageEditorFilterFrequent,
+        label: MediaText.imageEditorFilterFrequent,
         sort: -10,
         enabled: true,
       ),
@@ -108,7 +108,7 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
     appendCategory(
       const ImageEditorFilterCategory(
         id: 'recommended',
-        label: UITextConstants.imageEditorFilterRecommended,
+        label: MediaText.imageEditorFilterRecommended,
         sort: 0,
         enabled: true,
       ),

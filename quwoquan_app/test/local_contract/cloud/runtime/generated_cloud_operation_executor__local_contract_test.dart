@@ -255,11 +255,17 @@ void main() {
           ),
         ),
         throwsA(
-          isA<CloudException>().having(
-            (error) => error.runtimeFailure.code,
-            'code',
-            'APP.CONTRACT.invalid_response',
-          ),
+          isA<CloudException>()
+              .having(
+                (error) => error.runtimeFailure.code,
+                'code',
+                'APP.CONTRACT.invalid_response',
+              )
+              .having(
+                (error) => error.sourceOperationId,
+                'sourceOperationId',
+                searchOperation.canonicalOperationId,
+              ),
         ),
       );
     });

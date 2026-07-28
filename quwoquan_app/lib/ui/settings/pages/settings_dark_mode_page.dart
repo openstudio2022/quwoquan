@@ -19,7 +19,7 @@ class SettingsDarkModePage extends ConsumerWidget {
 
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
-      title: UITextConstants.settingsDarkMode,
+      title: SettingsText.settingsDarkMode,
       onBack: () {
         if (context.canPop()) {
           context.pop();
@@ -43,8 +43,8 @@ class SettingsDarkModePage extends ConsumerWidget {
                   isDark: isDark,
                   child: SettingsInsetNavigationRow(
                     isDark: isDark,
-                    label: UITextConstants.settingsSyncFailed,
-                    trailingText: UITextConstants.settingsRetrySync,
+                    label: SettingsText.settingsSyncFailed,
+                    trailingText: SettingsText.settingsRetrySync,
                     isDestructive: true,
                     onTap: () => ref
                         .read(appearanceSettingsControllerProvider.notifier)
@@ -60,8 +60,8 @@ class SettingsDarkModePage extends ConsumerWidget {
                 density: SettingsInsetSectionDensity.compact,
                 child: SettingsInsetSwitchRow(
                   isDark: isDark,
-                  label: UITextConstants.settingsDarkModeSystem,
-                  subtitle: UITextConstants.settingsDarkModeSystemDescription,
+                  label: SettingsText.settingsDarkModeSystem,
+                  subtitle: SettingsText.settingsDarkModeSystemDescription,
                   value: snapshot.themeMode == AppearanceThemeMode.system,
                   onChanged: (value) => _updateThemeMode(
                     ref,
@@ -78,7 +78,7 @@ class SettingsDarkModePage extends ConsumerWidget {
               SettingsInsetGroupedSection(
                 isDark: isDark,
                 density: SettingsInsetSectionDensity.compact,
-                header: UITextConstants.settingsDarkModeManualSection,
+                header: SettingsText.settingsDarkModeManualSection,
                 child: Column(
                   children: <Widget>[
                     SettingsInsetChoiceRow(
@@ -86,7 +86,7 @@ class SettingsDarkModePage extends ConsumerWidget {
                         AppearanceThemeMode.light,
                       ),
                       isDark: isDark,
-                      label: UITextConstants.settingsDarkModeLightOption,
+                      label: SettingsText.settingsDarkModeLightOption,
                       isSelected:
                           snapshot.themeMode == AppearanceThemeMode.light,
                       onTap: () => _updateThemeMode(
@@ -101,7 +101,7 @@ class SettingsDarkModePage extends ConsumerWidget {
                         AppearanceThemeMode.dark,
                       ),
                       isDark: isDark,
-                      label: UITextConstants.settingsDarkModeDarkOption,
+                      label: SettingsText.settingsDarkModeDarkOption,
                       isSelected:
                           snapshot.themeMode == AppearanceThemeMode.dark,
                       onTap: () => _updateThemeMode(
@@ -119,7 +119,7 @@ class SettingsDarkModePage extends ConsumerWidget {
               SettingsInsetGroupedSection(
                 isDark: isDark,
                 density: SettingsInsetSectionDensity.compact,
-                header: UITextConstants.settingsFontSizeSection,
+                header: SettingsText.settingsFontSizeSection,
                 child: Column(
                   children: <Widget>[
                     for (
@@ -193,11 +193,11 @@ class SettingsDarkModePage extends ConsumerWidget {
 
   static String _fontSizeLabel(AppearanceFontSizePreset preset) =>
       switch (preset) {
-        AppearanceFontSizePreset.xs => UITextConstants.settingsFontSizeXs,
-        AppearanceFontSizePreset.sm => UITextConstants.settingsFontSizeSm,
-        AppearanceFontSizePreset.md => UITextConstants.settingsFontSizeMd,
-        AppearanceFontSizePreset.lg => UITextConstants.settingsFontSizeLg,
-        AppearanceFontSizePreset.xl => UITextConstants.settingsFontSizeXl,
+        AppearanceFontSizePreset.xs => SettingsText.settingsFontSizeXs,
+        AppearanceFontSizePreset.sm => SettingsText.settingsFontSizeSm,
+        AppearanceFontSizePreset.md => SettingsText.settingsFontSizeMd,
+        AppearanceFontSizePreset.lg => SettingsText.settingsFontSizeLg,
+        AppearanceFontSizePreset.xl => SettingsText.settingsFontSizeXl,
       };
 
   static void _trackAppearanceAction(WidgetRef ref, String action) {

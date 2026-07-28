@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""验证 pure contracts、alpha Mock package 与 production 依赖边界。"""
+"""验证 pure contracts、对象级 test double 与四环境 Remote 依赖边界。"""
 
 from __future__ import annotations
 
 import json
-import subprocess
-import tempfile
 from pathlib import Path
 
 import yaml
@@ -14,12 +12,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[3]
 APP = ROOT / "quwoquan_app"
 CONTRACTS = APP / "packages/quwoquan_cloud_contracts"
-MOCK = APP / "packages/quwoquan_cloud_mock"
-ALPHA_RUNNER = APP / "runners/alpha"
-FIXTURE_BUILDER = APP / "scripts/env/build_alpha_fixture_bundle.py"
-FIXTURE_BUNDLE = (
-    MOCK / "lib/src/generated/alpha_fixture_bundle.g.dart"
-)
+RETIRED_AGGREGATE_MOCK_PACKAGE = APP / "packages/quwoquan_cloud_mock"
+FORBIDDEN_AGGREGATE_PACKAGE_NAMES = frozenset({"quwoquan_cloud_mock"})
 FORBIDDEN_CONTRACT_TOKENS = (
     "package:quwoquan_app/",
     "package:flutter/",
@@ -28,12 +22,6 @@ FORBIDDEN_CONTRACT_TOKENS = (
     "package:hive",
     "package:shared_preferences",
     "package:http",
-    "package:riverpod",
-)
-FORBIDDEN_MOCK_TOKENS = (
-    "package:quwoquan_app/",
-    "package:flutter/",
-    "package:flutter_",
     "package:riverpod",
 )
 
@@ -67,7 +55,7 @@ def local_dependency_graph(
     include_dev: bool,
 ) -> dict[str, set[str]]:
     """path 依赖图。production 可达性只看 dependencies（release 构建不含
-    dev_dependencies）；alpha runner 完整性与环检测用全图。"""
+    dev_dependencies）；完整性与环检测使用全图。"""
     graph = {name: set() for name in catalog}
     for name, (package_root, data) in catalog.items():
         dependencies = dict(data.get("dependencies") or {})
@@ -135,77 +123,50 @@ def verify_contracts_purity(catalog: dict[str, tuple[Path, dict]]) -> None:
             )
 
 
-def verify_mock_package_boundary() -> None:
-    for source in sorted((MOCK / "lib").rglob("*.dart")):
-        text = source.read_text(encoding="utf-8")
-        found = [token for token in FORBIDDEN_MOCK_TOKENS if token in text]
-        if found:
-            raise AssertionError(
-                "alpha Mock package 不得反向依赖 App: "
-                f"{source.relative_to(ROOT)} -> {found}"
-            )
+def verify_aggregate_mock_package_retired(
+    catalog: dict[str, tuple[Path, dict]],
+) -> None:
+    if RETIRED_AGGREGATE_MOCK_PACKAGE.exists():
+        raise AssertionError(
+            "聚合 Mock package 必须物理删除: "
+            f"{RETIRED_AGGREGATE_MOCK_PACKAGE.relative_to(ROOT)}"
+        )
+    present = FORBIDDEN_AGGREGATE_PACKAGE_NAMES.intersection(catalog)
+    if present:
+        raise AssertionError(f"聚合 Mock package 仍在 package catalog: {sorted(present)}")
+
+    _, app_pubspec = catalog["quwoquan_app"]
+    declared = {
+        *dict(app_pubspec.get("dependencies") or {}),
+        *dict(app_pubspec.get("dev_dependencies") or {}),
+    }
+    forbidden = FORBIDDEN_AGGREGATE_PACKAGE_NAMES.intersection(declared)
+    if forbidden:
+        raise AssertionError(
+            f"App pubspec 不得声明聚合 Mock package: {sorted(forbidden)}"
+        )
 
 
 def verify_composition_graph(
     graph: dict[str, set[str]],
     production_graph: dict[str, set[str]],
 ) -> None:
+    full = reachable(graph, "quwoquan_app")
     production = reachable(production_graph, "quwoquan_app")
-    if "quwoquan_cloud_mock" in production:
-        raise AssertionError("production App package graph 不得包含 cloud mock")
-    alpha = reachable(graph, "quwoquan_app_alpha_runner")
-    required = {"quwoquan_app", "quwoquan_cloud_mock", "quwoquan_cloud_contracts"}
-    if not required.issubset(alpha):
-        raise AssertionError(f"alpha runner composition 不完整: {sorted(alpha)}")
+    forbidden_full = FORBIDDEN_AGGREGATE_PACKAGE_NAMES.intersection(full)
+    if forbidden_full:
+        raise AssertionError(
+            f"App 完整依赖图不得包含聚合 Mock package: {sorted(forbidden_full)}"
+        )
+    forbidden_production = FORBIDDEN_AGGREGATE_PACKAGE_NAMES.intersection(production)
+    if forbidden_production:
+        raise AssertionError(
+            "production App package graph 不得包含聚合 Mock package: "
+            f"{sorted(forbidden_production)}"
+        )
     main_prod = (APP / "lib/main_prod.dart").read_text(encoding="utf-8")
     if "quwoquan_cloud_mock" in main_prod:
         raise AssertionError("main_prod 不得 import alpha/test Mock package")
-
-
-def verify_fixture_rebuild() -> None:
-    committed = FIXTURE_BUNDLE.read_bytes()
-    with tempfile.TemporaryDirectory(prefix="qwq-alpha-fixture-") as temp:
-        output = Path(temp) / "alpha_fixture_bundle.g.dart"
-        result = subprocess.run(
-            ["python3", str(FIXTURE_BUILDER), "--output", str(output)],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0:
-            raise AssertionError(
-                f"alpha fixture bundle rebuild 失败:\n{result.stdout}\n{result.stderr}"
-            )
-        if output.read_bytes() != committed:
-            raise AssertionError("alpha fixture bundle 不是 seed manifest 可重建产物")
-    header = committed[:300].decode("utf-8", errors="replace")
-    if "Source manifest SHA256:" not in header:
-        raise AssertionError("alpha fixture bundle 缺内容寻址 manifest hash")
-
-def verify_override_sync() -> None:
-    source = load_yaml(APP / "pubspec.yaml").get("dependency_overrides") or {}
-    for target in (MOCK, ALPHA_RUNNER):
-        generated = load_yaml(target / "pubspec_overrides.yaml").get(
-            "dependency_overrides"
-        ) or {}
-        if set(source) != set(generated):
-            raise AssertionError(
-                f"{target.relative_to(ROOT)} dependency override 名单漂移"
-            )
-        for name, source_descriptor in source.items():
-            target_descriptor = generated[name]
-            if isinstance(source_descriptor, dict) and "path" in source_descriptor:
-                if not isinstance(target_descriptor, dict):
-                    raise AssertionError(f"{name} path override 结构漂移")
-                source_path = (APP / str(source_descriptor["path"])).resolve()
-                target_path = (
-                    target / str(target_descriptor.get("path", ""))
-                ).resolve()
-                if source_path != target_path:
-                    raise AssertionError(f"{name} path override 目标漂移")
-            elif source_descriptor != target_descriptor:
-                raise AssertionError(f"{name} dependency override 版本漂移")
 
 
 def main() -> int:
@@ -213,8 +174,6 @@ def main() -> int:
     required = {
         "quwoquan_app",
         "quwoquan_cloud_contracts",
-        "quwoquan_cloud_mock",
-        "quwoquan_app_alpha_runner",
     }
     if not required.issubset(catalog):
         raise AssertionError(
@@ -224,12 +183,10 @@ def main() -> int:
     production_graph = local_dependency_graph(catalog, include_dev=False)
     verify_acyclic(graph)
     verify_contracts_purity(catalog)
-    verify_mock_package_boundary()
+    verify_aggregate_mock_package_retired(catalog)
     verify_composition_graph(graph, production_graph)
-    verify_override_sync()
-    verify_fixture_rebuild()
     print(
-        "PASS: pure contracts + alpha Mock package + production package graph "
+        "PASS: pure contracts + no aggregate Mock package + four-environment Remote graph "
         f"({json.dumps({k: sorted(v) for k, v in graph.items()}, ensure_ascii=False)})"
     )
     return 0

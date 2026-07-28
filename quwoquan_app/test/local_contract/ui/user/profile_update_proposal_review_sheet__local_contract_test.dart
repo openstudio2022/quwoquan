@@ -16,15 +16,15 @@ void main() {
       await _pumpReview(tester, writer: writer, proposal: _proposal());
 
       expect(
-        find.text(UITextConstants.editProfileProposalReviewBasis),
+        find.text(ProfileText.editProfileProposalReviewBasis),
         findsOneWidget,
       );
       expect(find.text('assistant evidence'), findsOneWidget);
       expect(find.text('assistant-run:run-1'), findsOneWidget);
       expect(
         find.text(
-          '${UITextConstants.editProfileBioLabel}, '
-          '${UITextConstants.editProfileNicknameLabel}',
+          '${ProfileText.editProfileBioLabel}, '
+          '${ProfileText.editProfileNicknameLabel}',
         ),
         findsOneWidget,
       );

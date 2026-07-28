@@ -16,6 +16,11 @@ _GLOBAL_RULE_RELATIVE_PATHS = (
     "scripts/content/source/source_inputs.py",
     "scripts/content/source/research/auto_plan_writer.py",
     "scripts/content/source/research/auto_plan_article.py",
+    "scripts/content/source/research/article_crawl_frontier.py",
+    "scripts/content/source/research/article_frontier_contract.py",
+    "scripts/content/source/research/article_frontier_profile.py",
+    "scripts/content/source/research/article_frontier_robots.py",
+    "scripts/content/source/research/article_site_crawl.py",
     "scripts/content/source/research/public_search.py",
     "scripts/content/source/research/qunar_sources.py",
     "scripts/content/source/research/source_registry.py",
@@ -26,6 +31,7 @@ _GLOBAL_RULE_RELATIVE_PATHS = (
     "scripts/core/source_catalog.py",
     "control_plane/_shared/catalogs/source_catalog.yaml",
     "control_plane/_shared/catalogs/content_source_registry.yaml",
+    "schema/execution/article_source_discovery_evidence.schema.json",
 )
 
 

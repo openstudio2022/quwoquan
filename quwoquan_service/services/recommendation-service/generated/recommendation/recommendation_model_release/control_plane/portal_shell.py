@@ -3,27 +3,6 @@
 import json
 
 _PORTAL_SHELL_JSON = r'''{
-  "context_switchers": [
-    "environment",
-    "tenant",
-    "release-window"
-  ],
-  "dashboard_defaults": {
-    "overview": {
-      "charts": [
-        "moderation_case_trend",
-        "recommendation_guardrail",
-        "config_release_health"
-      ],
-      "kpis": [
-        "moderation_pending",
-        "recovery_sla_risk",
-        "experiment_running",
-        "rollout_failure_rate"
-      ]
-    }
-  },
-  "default_domain": "product-ops",
   "default_environment": "beta",
   "domains": [
     {
@@ -42,26 +21,6 @@ _PORTAL_SHELL_JSON = r'''{
       "label": "Product Ops"
     }
   ],
-  "global_search": {
-    "enabled": true,
-    "object_types": [
-      "moderation_case",
-      "recovery_case",
-      "experiment",
-      "recommendation_policy",
-      "config_release",
-      "user_profile",
-      "content_report"
-    ],
-    "placeholder": "搜索 case、实验、配置项、发布单、用户、内容"
-  },
-  "notification_channels": [
-    "audit",
-    "approval",
-    "sla",
-    "rollout",
-    "guardrail"
-  ],
   "portal_id": "ops-portal",
   "supported_environments": [
     "alpha",
@@ -69,28 +28,6 @@ _PORTAL_SHELL_JSON = r'''{
     "gamma",
     "prod"
   ],
-  "title": "趣我圈运营与平台门户",
-  "workbench_views": [
-    {
-      "id": "my-initiated",
-      "label": "我发起的"
-    },
-    {
-      "id": "pending-approval",
-      "label": "待我审批"
-    },
-    {
-      "id": "over-sla",
-      "label": "超 SLA"
-    },
-    {
-      "id": "rollout-watch",
-      "label": "灰度观察"
-    },
-    {
-      "id": "guardrail-alert",
-      "label": "指标告警"
-    }
-  ]
+  "title": "趣我圈运营与平台门户"
 }'''
 PORTAL_SHELL = json.loads(_PORTAL_SHELL_JSON)

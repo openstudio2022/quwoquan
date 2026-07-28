@@ -24,7 +24,7 @@ class PostPublicationTaskSection extends StatelessWidget {
     }
     return Semantics(
       container: true,
-      label: UITextConstants.publishTasksTitle,
+      label: CreationText.publishTasksTitle,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.containerMd,
@@ -36,7 +36,7 @@ class PostPublicationTaskSection extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              UITextConstants.publishTasksTitle,
+              CreationText.publishTasksTitle,
               style: TextStyle(
                 color: AppColors.iosLabel(context),
                 fontSize: AppTypography.iosTitle3,
@@ -203,7 +203,7 @@ class _PublicationTaskActions extends StatelessWidget {
             key: ValueKey<String>('publication_task_edit_$draftId'),
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
             onPressed: onEdit,
-            child: const Text(UITextConstants.publishTaskContinueEditing),
+            child: const Text(CreationText.publishTaskContinueEditing),
           )
         else if (canRetry)
           CupertinoButton(
@@ -212,8 +212,8 @@ class _PublicationTaskActions extends StatelessWidget {
             onPressed: onRetry,
             child: Text(
               publicationState == ContentPostPublicationState.pendingReview
-                  ? UITextConstants.publishTaskRefresh
-                  : UITextConstants.publishTaskRetry,
+                  ? CreationText.publishTaskRefresh
+                  : CreationText.publishTaskRetry,
             ),
           ),
         if (canRemove)
@@ -221,7 +221,7 @@ class _PublicationTaskActions extends StatelessWidget {
             key: ValueKey<String>('publication_task_remove_$draftId'),
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
             onPressed: onRemove,
-            child: const Text(UITextConstants.publishTaskRemove),
+            child: const Text(CreationText.publishTaskRemove),
           ),
       ],
     );
@@ -234,53 +234,53 @@ String _taskTitle(LocalPostPublicationIntent intent) {
     return title;
   }
   final body = intent.command.body?.trim() ?? '';
-  return body.isEmpty ? UITextConstants.publishTaskUntitled : body;
+  return body.isEmpty ? CreationText.publishTaskUntitled : body;
 }
 
 String _statusForIntent(LocalPostPublicationIntent intent) {
   switch (intent.publicationState) {
     case ContentPostPublicationState.pendingReview:
-      return UITextConstants.publishTaskPendingReviewStatus;
+      return CreationText.publishTaskPendingReviewStatus;
     case ContentPostPublicationState.published:
-      return UITextConstants.publishTaskFinalizingStatus;
+      return CreationText.publishTaskFinalizingStatus;
     case ContentPostPublicationState.rejected:
-      return UITextConstants.publishTaskRejectedStatus;
+      return CreationText.publishTaskRejectedStatus;
     case null:
       if (intent.requiresMediaCancellation) {
-        return UITextConstants.publishTaskCancellingMediaStatus;
+        return CreationText.publishTaskCancellingMediaStatus;
       }
       if (intent.requiresMediaPreparation) {
-        return UITextConstants.publishTaskPreparingMediaStatus;
+        return CreationText.publishTaskPreparingMediaStatus;
       }
       if (intent.blocked) {
-        return UITextConstants.publishTaskBlockedStatus;
+        return CreationText.publishTaskBlockedStatus;
       }
       if (intent.retryCount > 0) {
-        return UITextConstants.publishTaskRetryWaitingStatus;
+        return CreationText.publishTaskRetryWaitingStatus;
       }
-      return UITextConstants.publishTaskSubmittingStatus;
+      return CreationText.publishTaskSubmittingStatus;
   }
 }
 
 String _descriptionForIntent(LocalPostPublicationIntent intent) {
   return switch (intent.publicationState) {
     ContentPostPublicationState.pendingReview =>
-      UITextConstants.publishTaskPendingReviewDescription,
+      CreationText.publishTaskPendingReviewDescription,
     ContentPostPublicationState.rejected =>
-      UITextConstants.publishTaskRejectedDescription,
+      CreationText.publishTaskRejectedDescription,
     ContentPostPublicationState.published =>
-      UITextConstants.publishTaskFinalizingDescription,
+      CreationText.publishTaskFinalizingDescription,
     null when intent.requiresMediaCancellation =>
-      UITextConstants.publishTaskCancellingMediaDescription,
+      CreationText.publishTaskCancellingMediaDescription,
     null when intent.requiresMediaPreparation =>
-      UITextConstants.publishTaskPreparingMediaDescription,
+      CreationText.publishTaskPreparingMediaDescription,
     null when intent.blocked => switch (intent.blockReason) {
       LocalPostPublicationBlockReason.personaChanged =>
-        UITextConstants.publishTaskPersonaChangedDescription,
+        CreationText.publishTaskPersonaChangedDescription,
       LocalPostPublicationBlockReason.invalidReceipt =>
-        UITextConstants.publishTaskInvalidReceiptDescription,
-      _ => UITextConstants.publishTaskBlockedDescription,
+        CreationText.publishTaskInvalidReceiptDescription,
+      _ => CreationText.publishTaskBlockedDescription,
     },
-    null => UITextConstants.publishTaskRetryWaitingDescription,
+    null => CreationText.publishTaskRetryWaitingDescription,
   };
 }

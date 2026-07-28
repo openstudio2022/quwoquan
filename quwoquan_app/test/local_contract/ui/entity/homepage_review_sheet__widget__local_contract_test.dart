@@ -45,7 +45,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(UITextConstants.homepageReviewRatingRequired),
+      find.text(ObjectHomepageText.homepageReviewRatingRequired),
       findsOneWidget,
     );
     expect(result, isNull);
@@ -100,11 +100,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(UITextConstants.homepageReviewSheetEditTitle),
+      find.text(ObjectHomepageText.homepageReviewSheetEditTitle),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.homepageReviewUpdateAction),
+      find.text(ObjectHomepageText.homepageReviewUpdateAction),
       findsOneWidget,
     );
     expect(find.text('原有正文'), findsOneWidget);

@@ -25,6 +25,14 @@ class PublicApiResponse:
     payload: Mapping[str, Any]
 
 
+@dataclass(frozen=True)
+class PublicBinaryResponse:
+    status: int
+    content_type: str
+    content_range: str
+    body: bytes
+
+
 @contextmanager
 def _temporary_host_resolution(url: str, resolve_host: str):
     expected_host = urlparse(url).hostname or ""
@@ -103,5 +111,53 @@ class PublicApiClient:
             raise PublicApiClientError(f"GET {url} returned a non-object JSON payload")
         return PublicApiResponse(status=status, payload=payload)
 
+    def get_bytes(
+        self,
+        url: str,
+        *,
+        byte_range: str = "bytes=0-65535",
+    ) -> PublicBinaryResponse:
+        if not url.startswith(("http://", "https://")):
+            raise PublicApiClientError("public media URL must be http(s)")
+        context = ssl._create_unverified_context() if self.insecure_tls else None  # noqa: SLF001
+        request = Request(
+            url,
+            headers={
+                "Accept": "*/*",
+                "Range": byte_range,
+            },
+            method="GET",
+        )
+        handlers = [ProxyHandler({})]
+        if context is not None:
+            handlers.append(HTTPSHandler(context=context))
+        opener = build_opener(*handlers)
+        try:
+            with _temporary_host_resolution(url, self.resolve_host):
+                with opener.open(
+                    request,
+                    timeout=active_runtime_policy().api_request_timeout_seconds,
+                ) as response:  # noqa: S310
+                    return PublicBinaryResponse(
+                        status=int(response.status),
+                        content_type=str(response.headers.get("Content-Type") or ""),
+                        content_range=str(response.headers.get("Content-Range") or ""),
+                        body=response.read(65536),
+                    )
+        except HTTPError as exc:
+            return PublicBinaryResponse(
+                status=int(exc.code),
+                content_type=str(exc.headers.get("Content-Type") or ""),
+                content_range=str(exc.headers.get("Content-Range") or ""),
+                body=exc.read(65536),
+            )
+        except (URLError, OSError) as exc:
+            raise PublicApiClientError(f"GET {url} failed: {exc}") from exc
 
-__all__ = ["PublicApiClient", "PublicApiClientError", "PublicApiResponse"]
+
+__all__ = [
+    "PublicApiClient",
+    "PublicApiClientError",
+    "PublicApiResponse",
+    "PublicBinaryResponse",
+]

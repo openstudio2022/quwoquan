@@ -101,14 +101,14 @@ void main() {
       await tester.pump();
       await _circlesPumpSettled(tester);
 
-      expect(find.text(UITextConstants.circlesSearchHint), findsOneWidget);
+      expect(find.text(CommunityText.circlesSearchHint), findsOneWidget);
       expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
       expect(
-        find.text(UITextConstants.circlesEntitySectionTitle),
+        find.text(CommunityText.circlesEntitySectionTitle),
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.circlesRecommendedTitle),
+        find.text(CommunityText.circlesRecommendedTitle),
         findsOneWidget,
       );
       expect(find.byIcon(CupertinoIcons.search), findsAtLeastNWidgets(1));
@@ -117,8 +117,8 @@ void main() {
         find.text(cfg['campus']?.subCategories.first ?? '母校'),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.homeTabCircles), findsNothing);
-      expect(find.text(UITextConstants.circlesDirectoryTitle), findsNothing);
+      expect(find.text(DiscoveryText.homeTabCircles), findsNothing);
+      expect(find.text(CommunityText.circlesDirectoryTitle), findsNothing);
     });
 
     testWidgets('展示五个固定业务垂类并隐藏频道管理入口', (tester) async {

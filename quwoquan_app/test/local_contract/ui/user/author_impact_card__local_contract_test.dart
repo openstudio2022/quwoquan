@@ -9,7 +9,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summa
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
-import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -104,7 +103,7 @@ void main() {
         ),
       );
 
-      expect(find.text(UITextConstants.profileImpactTitleMine), findsOneWidget);
+      expect(find.text(ContentText.profileImpactTitleMine), findsOneWidget);
       expect(find.byKey(AuthorImpactCard.emptyKey), findsOneWidget);
       expect(find.text('23人加入相关圈子'), findsNothing);
     });
@@ -124,7 +123,7 @@ void main() {
       expect(find.byKey(AuthorImpactCard.cardKey), findsOneWidget);
       expect(find.byKey(AuthorImpactCard.emptyKey), findsOneWidget);
       expect(
-        find.text(UITextConstants.profileImpactEmptyOther),
+        find.text(ContentText.profileImpactEmptyOther),
         findsOneWidget,
       );
     });
@@ -161,7 +160,7 @@ void main() {
       await tester.pumpWidget(_host(summary, isMine: false));
 
       expect(
-        find.text(UITextConstants.profileImpactTitleOther),
+        find.text(ContentText.profileImpactTitleOther),
         findsOneWidget,
       );
       expect(find.byKey(AuthorImpactCard.emptyKey), findsNothing);
@@ -196,7 +195,7 @@ void main() {
       expect(find.text('23人加入相关圈子'), findsWidgets);
       expect(find.textContaining('source:circle_join'), findsOneWidget);
       expect(
-        find.textContaining(UITextConstants.impactEnumerableHintOther),
+        find.textContaining(ObjectHomepageText.impactEnumerableHintOther),
         findsWidgets,
       );
     });
@@ -277,7 +276,7 @@ void main() {
       );
       expect(find.textContaining('source:circle_join'), findsOneWidget);
       expect(
-        find.textContaining(UITextConstants.impactEnumerableHintOther),
+        find.textContaining(ObjectHomepageText.impactEnumerableHintOther),
         findsWidgets,
       );
     });

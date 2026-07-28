@@ -1,12 +1,17 @@
 """Formal video work packages are rendered and validated from typed evidence."""
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 import hashlib
 
 import cv2
 import numpy as np
+import pytest
 
+import content.post.video.package as video_package_module
+import content.execution.controller.content_plan_video as content_plan_video
+from content.execution.context import ExecutionContext
 from content.post.video import (
     VideoRenderRequest,
     VideoSourceBasis,
@@ -14,6 +19,7 @@ from content.post.video import (
     render_video_work_package,
     validate_video_work_package,
 )
+from governance.coverage.license import RightsAuditStatus
 from content.execution.runtime_state import write_execution_runtime_state
 from content.post.gate import gate_post
 from content.post.materialize_apply import materialize_posts
@@ -24,10 +30,14 @@ from content.post.video.authoring import (
     review_video_draft,
     video_script_path,
 )
+from content.post.video.codec import VideoSourceFrameEvidence
 from content.source.media.check import check_images
 from core.io import read_json, write_json
 from core.paths import execution_root
-from support.execution_manifest_fixture import build_execution_fixture
+from support.execution_manifest_fixture import (
+    ExecutionFixtureBuilder,
+    build_execution_fixture,
+)
 
 
 def _source_frame(root: Path, index: int) -> VideoSourceFrame:
@@ -44,6 +54,9 @@ def _source_frame(root: Path, index: int) -> VideoSourceFrame:
         creator="fixture photographer",
         license="CC BY 4.0",
         basis=VideoSourceBasis.RIGHTS_CLEARED,
+        source_use_mode="licensed_adaptation",
+        rights_audit_status=RightsAuditStatus.VERIFIED,
+        rights_audit_issues=(),
     )
 
 
@@ -109,6 +122,185 @@ def test_video_work_package_requires_explicit_rights_audit_status(tmp_path: Path
     )
 
 
+def test_video_frame_contract_has_no_rights_or_source_mode_fallback() -> None:
+    payload = {
+        "assetRef": "sources/fixture/assets/frame.jpg",
+        "sourceRef": "sources/fixture/source.md",
+        "rightsRef": "sources/fixture/assets/index.json#001",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Frame.jpg",
+        "creator": "Fixture Photographer",
+        "license": "CC BY 4.0",
+        "sha256": "sha256:" + "a" * 64,
+    }
+
+    with pytest.raises(ValueError, match="sourceUseMode is invalid or missing"):
+        VideoSourceFrameEvidence.from_mapping(payload, index=0)
+
+    payload["sourceUseMode"] = "factual_reference_only"
+    with pytest.raises(ValueError, match="rightsAuditStatus is invalid or missing"):
+        VideoSourceFrameEvidence.from_mapping(payload, index=0)
+
+
+def test_commercial_video_work_package_rejects_unverified_source_frame(
+    tmp_path: Path,
+) -> None:
+    request = _request(tmp_path)
+    unverified = replace(
+        request.source_frames[0],
+        rights_audit_status=RightsAuditStatus.UNVERIFIED,
+        rights_audit_issues=("imageRights: source terms not yet verified",),
+    )
+
+    with pytest.raises(ValueError, match="rights are not verified"):
+        render_video_work_package(
+            replace(request, source_frames=(unverified, *request.source_frames[1:]))
+        )
+
+
+def test_frame_montage_preserves_unverified_audit_instead_of_upgrading(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _request(tmp_path)
+    issue = "imageRights: source terms not yet verified"
+    frames = tuple(
+        replace(
+            frame,
+            rights_audit_status=RightsAuditStatus.UNVERIFIED,
+            rights_audit_issues=(issue,),
+        )
+        for frame in request.source_frames
+    )
+    monkeypatch.setattr(
+        video_package_module,
+        "rights_proof_required",
+        lambda _vertical: False,
+    )
+
+    package = render_video_work_package(replace(request, source_frames=frames))
+
+    manifest = read_json(package / "manifest.json")
+    assert all(
+        asset["rightsAuditStatus"] == "unverified"
+        and asset["rightsAuditIssues"] == [issue]
+        for asset in manifest["assets"]
+    )
+    provenance = read_json(package / "provenance.json")
+    assert all(
+        source["rightsAuditStatus"] == "unverified"
+        and source["rightsAuditIssues"] == [issue]
+        for source in provenance["sources"]
+    )
+
+
+def _content_plan_frame_source(
+    *,
+    execution_id: str,
+    source_use_mode: str,
+    rights_audit_status: str,
+    rights_audit_issues: list[str],
+) -> tuple[ExecutionContext, Path]:
+    root = execution_root(execution_id)
+    source_dir = (
+        root
+        / "entities/地点/景区/测试实体甲/1.download/sources/001__video_frames"
+    )
+    assets_dir = source_dir / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    source_path = source_dir / "source.md"
+    source_path.write_text("# 测试实体甲视频帧\n", encoding="utf-8")
+    write_json(
+        source_dir / "meta.json",
+        {
+            "researchLane": "video",
+            "sourceUseMode": source_use_mode,
+        },
+    )
+    image_path = assets_dir / "frame.jpg"
+    rng = np.random.default_rng(20260728)
+    image = rng.integers(0, 256, size=(240, 360, 3), dtype=np.uint8)
+    assert cv2.imwrite(str(image_path), image)
+    write_json(
+        assets_dir / "index.json",
+        {
+            "assets": [
+                {
+                    "sourceAssetId": "001_001",
+                    "fileName": image_path.name,
+                    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Frame.jpg",
+                    "sourceCollectionId": "fixture:video-frames",
+                    "sha256": _sha256(image_path),
+                    "creator": "Fixture Photographer",
+                    "credit": "Fixture Photographer",
+                    "license": "CC BY 4.0",
+                    "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+                    "usageScope": "app_publish",
+                    "authorizationProof": (
+                        "https://commons.wikimedia.org/wiki/File:Frame.jpg"
+                    ),
+                    "modelReleaseStatus": "not_required",
+                    "rightsAuditStatus": rights_audit_status,
+                    "rightsAuditIssues": rights_audit_issues,
+                }
+            ]
+        },
+    )
+    return (
+        ExecutionContext(
+            execution_id=execution_id,
+            entity_ids=("测试实体甲",),
+            spec=ExecutionFixtureBuilder(execution_id).spec(),
+        ),
+        source_dir,
+    )
+
+
+def test_video_content_plan_rejects_unverified_commercial_frame(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx, source_dir = _content_plan_frame_source(
+        execution_id="20260716--travel-video-plan--test-region-a--pilot-903",
+        source_use_mode="factual_reference_only",
+        rights_audit_status="unverified",
+        rights_audit_issues=["imageRights: source terms not yet verified"],
+    )
+    monkeypatch.setattr(
+        content_plan_video,
+        "iter_source_units",
+        lambda _object_dir: [source_dir],
+    )
+
+    candidates, rejects = content_plan_video._source_frames(ctx, source_dir.parent)
+
+    assert candidates == []
+    assert rejects == {"rights_not_verified": 1}
+
+
+def test_video_content_plan_preserves_source_unit_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx, source_dir = _content_plan_frame_source(
+        execution_id="20260716--travel-video-plan--test-region-a--pilot-904",
+        source_use_mode="factual_reference_only",
+        rights_audit_status="verified",
+        rights_audit_issues=[],
+    )
+    monkeypatch.setattr(
+        content_plan_video,
+        "iter_source_units",
+        lambda _object_dir: [source_dir],
+    )
+
+    candidates, rejects = content_plan_video._source_frames(ctx, source_dir.parent)
+
+    assert rejects == {}
+    assert len(candidates) == 1
+    assert candidates[0].source_use_mode == "factual_reference_only"
+    assert candidates[0].as_brief_value()["sourceUseMode"] == (
+        "factual_reference_only"
+    )
+
+
 def _sha256(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -129,6 +321,13 @@ def test_video_execution_reaches_review_materialization_and_post_gate() -> None:
     rights_dir.mkdir(parents=True, exist_ok=True)
     source_path = source_dir / "source.md"
     source_path.write_text("# 测试实体甲视频来源\n\n三张已清权的景观画面。\n", encoding="utf-8")
+    write_json(
+        source_dir / "meta.json",
+        {
+            "sourceUseMode": "licensed_adaptation",
+            "researchLane": "video",
+        },
+    )
     source_frames: list[dict[str, str]] = []
     for index in range(1, 4):
         image_path = assets_dir / f"frame-{index}.jpg"
@@ -157,6 +356,9 @@ def test_video_execution_reaches_review_materialization_and_post_gate() -> None:
                 "sha256": _sha256(image_path),
                 "caption": f"测试实体甲景观画面 {index}",
                 "sourceCollectionId": "fixture:测试实体甲-video",
+                "sourceUseMode": "licensed_adaptation",
+                "rightsAuditStatus": "verified",
+                "rightsAuditIssues": [],
             }
         )
     brief = {

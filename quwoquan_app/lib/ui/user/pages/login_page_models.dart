@@ -207,26 +207,26 @@ class LoginPhoneOtpState {
 
   String get primaryLabel {
     if (phase == LoginPhoneOtpPhase.sendingCode) {
-      return UITextConstants.loginSendOtpSubmitting;
+      return FoundationText.loginSendOtpSubmitting;
     }
     if (phase == LoginPhoneOtpPhase.loggingIn) {
-      return UITextConstants.loginSubmitting;
+      return FoundationText.loginSubmitting;
     }
     if (phase == LoginPhoneOtpPhase.success) {
-      return UITextConstants.loginSuccess;
+      return FoundationText.loginSuccess;
     }
     // 账号此路不通：主按钮收敛为"换个手机号登录"出口，不诱导无效重试。
     if (isBlocked) {
-      return UITextConstants.loginSwitchPhone;
+      return FoundationText.loginSwitchPhone;
     }
     // 验证码已过期且已清码：主按钮语义=重新获取验证码（文案与行为一致）。
     if (phase == LoginPhoneOtpPhase.codeExpired) {
-      return UITextConstants.loginOtpResend;
+      return FoundationText.loginOtpResend;
     }
     if (_showsCode) {
-      return UITextConstants.loginPhoneSubmit;
+      return FoundationText.loginPhoneSubmit;
     }
-    return UITextConstants.loginSendOtp;
+    return FoundationText.loginSendOtp;
   }
 
   bool get _showsCode =>
@@ -593,15 +593,15 @@ String resolveLoginErrorMessage(
   final failureKind = error?.runtimeFailure.kind;
   if (failureKind == RuntimeFailureKind.network ||
       failureKind == RuntimeFailureKind.timeout) {
-    return UITextConstants.loginNetworkUnavailable;
+    return FoundationText.loginNetworkUnavailable;
   }
   if (failureKind == RuntimeFailureKind.unavailable ||
       failureKind == RuntimeFailureKind.internal) {
-    return UITextConstants.loginServiceUnavailable;
+    return FoundationText.loginServiceUnavailable;
   }
   return sending
-      ? UITextConstants.loginOtpSendFailed
-      : UITextConstants.loginFailed;
+      ? FoundationText.loginOtpSendFailed
+      : FoundationText.loginFailed;
 }
 
 class LoginEntryPresentation {
@@ -666,22 +666,22 @@ class LoginEntryPresentation {
 
   String get primaryLabel {
     if (kind == LoginEntryKind.submitting) {
-      return UITextConstants.loginSubmitting;
+      return FoundationText.loginSubmitting;
     }
     return switch (resolvedPrimaryAction) {
-      LoginPrimaryAction.continueSession => UITextConstants.loginContinue,
-      LoginPrimaryAction.carrierOneTap => UITextConstants.loginOneTapPrimary,
+      LoginPrimaryAction.continueSession => FoundationText.loginContinue,
+      LoginPrimaryAction.carrierOneTap => FoundationText.loginOneTapPrimary,
       LoginPrimaryAction.phoneReauth =>
-        UITextConstants.loginReturningSmsPrimary,
+        FoundationText.loginReturningSmsPrimary,
       LoginPrimaryAction.socialReauth => switch (primaryProvider) {
-        'wechat' => UITextConstants.loginUseWechat,
-        'qq' => UITextConstants.loginUseQq,
-        'alipay' => UITextConstants.loginUseAlipay,
-        _ => UITextConstants.loginOtherMethodFallback,
+        'wechat' => FoundationText.loginUseWechat,
+        'qq' => FoundationText.loginUseQq,
+        'alipay' => FoundationText.loginUseAlipay,
+        _ => FoundationText.loginOtherMethodFallback,
       },
       LoginPrimaryAction.requestOtp || LoginPrimaryAction.verifyOtp =>
-        phoneOtpState?.primaryLabel ?? UITextConstants.loginSendOtp,
-      LoginPrimaryAction.none => UITextConstants.loginOtherMethodFallback,
+        phoneOtpState?.primaryLabel ?? FoundationText.loginSendOtp,
+      LoginPrimaryAction.none => FoundationText.loginOtherMethodFallback,
     };
   }
 }

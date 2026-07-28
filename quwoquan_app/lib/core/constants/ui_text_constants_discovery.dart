@@ -1,6 +1,6 @@
 part of 'ui_text_constants.dart';
 
-abstract final class _UITextDiscovery {
+abstract final class DiscoveryText {
   static const String home = '首页', discovery = '发现';
   static const String homeTabFollowing = '关注', homeTabRecommended = '推荐';
   static const String homeTabFeatured = '视频书', homeTabCircles = '圈子';
@@ -44,7 +44,7 @@ abstract final class _UITextDiscovery {
       '在 Web 上浏览视频书内容、发现兴趣相近的人，也可以下载 App 获得完整创作和消息体验。';
   static const String webPcWelcomeContinue = '继续浏览 Web';
   static const String webPcWelcomeDownload =
-      UITextConstants.webInstallBannerDownloadApp;
+      FoundationText.webInstallBannerDownloadApp;
   static const String webPcWelcomeScrollHint = '滚动鼠标也可以进入首页，工具栏会自动吸顶。';
   static const String webPcWelcomeDownloadPanelTitle = '扫码或选择安装包';
   static const String webPcWelcomeDownloadPanelBody =

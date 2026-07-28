@@ -38,6 +38,7 @@ from governance.coverage.master_list import (
     is_leaf_tag_node as _is_leaf_tag_node_shared,
     is_tag_node as _is_tag_node_shared,
 )
+from governance.coverage.admin_entity_catalog import admin_entity_catalog_report
 from governance.coverage.entity_type_taxonomy import (
     CONTRACT_TAGS_ROOT,
     PILOT_PRIMARY_TYPES,
@@ -310,6 +311,27 @@ def scan_master_list(
 def main() -> int:
     errors, file_count, leaf_count = scan_master_list()
     print(f"[verify-coverage-static-identity] files={file_count} leaves={leaf_count}")
+    catalog_report = admin_entity_catalog_report()
+    catalog_counts = catalog_report["counts"]
+    print(
+        "[verify-coverage-static-identity] "
+        f"admin-provinces={catalog_counts['province']} "
+        f"admin-prefectures={catalog_counts['prefecture']} "
+        f"admin-counties={catalog_counts['county']} "
+        f"admin-total={catalog_counts['total']}"
+    )
+    errors.extend(
+        f"C11: 行政实体 catalog 缺 taxonomy path '{path}'"
+        for path in catalog_report["missingTaxonomyPaths"]
+    )
+    errors.extend(
+        f"C12: 行政实体 canonical identity 重复 '{identity}'"
+        for identity in catalog_report["duplicateCanonicalIdentities"]
+    )
+    errors.extend(
+        f"C13: 行政实体 canonical entityRef 重复 '{entity_ref}'"
+        for entity_ref in catalog_report["duplicateCanonicalEntityRefs"]
+    )
     if errors:
         print(f"[verify-coverage-static-identity] FAILED ({len(errors)} error(s)):")
         for item in errors[:100]:

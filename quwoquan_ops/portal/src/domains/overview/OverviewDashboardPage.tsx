@@ -113,20 +113,14 @@ export function OverviewDashboardPage() {
     ],
     [summary?.pendingDualReview, workflows],
   );
-  // 只展示控制面真实返回的发布字段；SLO 成功率/延迟需待 Prometheus recording rule 落点后接入，
-  // 在此之前显式标注「暂无数据」，禁止用 index 合成趋势冒充真实健康度（T7.1）。
-  const rolloutHealthRows = useMemo(
+  const candidateAckRows = useMemo(
     () =>
       releases.slice(0, 6).map((release) => ({
         releaseId: release.releaseId,
         service: release.service,
-        stage:
-          release.currentStage != null
-            ? `${release.currentStage}%`
-            : release.grayStages.length > 0
-              ? `${release.grayStages[release.grayStages.length - 1]}%`
-              : '—',
-        state: release.stageState ?? release.releaseState,
+        configVersion: release.configVersion || '未报告',
+        state: release.releaseState || '未报告',
+        updatedAt: release.updatedAt || '未报告',
       })),
     [releases],
   );
@@ -176,14 +170,14 @@ export function OverviewDashboardPage() {
   return (
     <PageScaffold
       title="统一运营与平台总览"
-      subtitle="对齐 App 语义风格的统一门户首页，收口治理、增长、配置发布、灰度与审计，保证问题可发现、可定位、可回滚。"
+      subtitle="对齐 App 语义风格的统一门户首页，收口治理、增长、配置候选 ACK、灰度策略与审计，保证问题可发现、可定位。"
       meta={
         <>
           <span className="badge badge--neutral">总览 / Dashboard</span>
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '控制面已连接' : '等待控制面'}
           </span>
-          <span className="badge badge--warning">{summary?.pendingDualReview ?? 0} 个流程接近 SLA</span>
+          <span className="badge badge--warning">{summary ? summary.pendingDualReview : '—'} 个流程接近 SLA</span>
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实总览数据已接入' : '等待控制面连接'}
           </span>
@@ -194,15 +188,15 @@ export function OverviewDashboardPage() {
       <div className="section-grid section-grid--cards">
         <KpiCard
           label="待处理治理案例"
-          value={String(workflows.length)}
+          value={remoteReady ? String(workflows.length) : '—'}
           icon={<ShieldCheck size={20} color="#2563EB" />}
-          trendLabel={`${summary?.pendingDualReview ?? 0} 个需双签`}
+          trendLabel={summary ? `${summary.pendingDualReview} 个需双签` : '等待投影'}
           trendTone="warning"
           description="治理、申诉、恢复与实验工作流统一汇总到总览。"
         />
         <KpiCard
           label="运行中实验"
-          value={String(workflows.filter((item) => item.objectType === 'experiment').length)}
+          value={remoteReady ? String(workflows.filter((item) => item.objectType === 'experiment').length) : '—'}
           icon={<Sparkles size={20} color="#2563EB" />}
           trendLabel="来自真实工作流"
           trendTone="positive"
@@ -210,7 +204,7 @@ export function OverviewDashboardPage() {
         />
         <KpiCard
           label="页面访问事件"
-          value={String(pageAccessSummary?.totalCount ?? 0)}
+          value={pageAccessSummary ? String(pageAccessSummary.totalCount) : '—'}
           icon={<Activity size={20} color="#2563EB" />}
           trendLabel={`热点页面 ${hottestPage}`}
           trendTone="positive"
@@ -218,7 +212,7 @@ export function OverviewDashboardPage() {
         />
         <KpiCard
           label="页面访问会话"
-          value={String(pageAccessSummary?.sessionCount ?? 0)}
+          value={pageAccessSummary ? String(pageAccessSummary.sessionCount) : '—'}
           icon={<Activity size={20} color="#16A34A" />}
           trendLabel="跨迟到增量合并 HLL"
           trendTone="positive"
@@ -226,7 +220,7 @@ export function OverviewDashboardPage() {
         />
         <KpiCard
           label="SLA 风险队列"
-          value={String(summary?.pendingDualReview ?? 0)}
+          value={summary ? String(summary.pendingDualReview) : '—'}
           icon={<AlertTriangle size={20} color="#F59E0B" />}
           trendLabel="待复核队列"
           trendTone="warning"
@@ -234,7 +228,7 @@ export function OverviewDashboardPage() {
         />
         <KpiCard
           label="推荐反馈总量"
-          value={String(behaviorTotal)}
+          value={behaviorMetrics ? String(behaviorTotal) : '—'}
           icon={<Activity size={20} color="#16A34A" />}
           trendLabel={`${behaviorStates} 类反馈状态`}
           trendTone="positive"
@@ -280,15 +274,15 @@ export function OverviewDashboardPage() {
         <div className="section-grid section-grid--cards">
           <KpiCard
             label="今日 DAU"
-            value={String(growth?.todayDau ?? 0)}
+            value={growth ? String(growth.todayDau) : '—'}
             icon={<Activity size={20} color="#2563EB" />}
-            trendLabel={`PV ${growth?.todayPv ?? 0}`}
+            trendLabel={growth ? `PV ${growth.todayPv}` : '等待用户活跃投影'}
             trendTone="positive"
             description="当日 distinct 活跃用户（actorHash 去重）。"
           />
           <KpiCard
             label="WAU / MAU"
-            value={`${growth?.wau ?? 0} / ${growth?.mau ?? 0}`}
+            value={growth ? `${growth.wau} / ${growth.mau}` : '—'}
             icon={<Sparkles size={20} color="#16A34A" />}
             trendLabel="7 / 30 天窗口 union 去重"
             trendTone="positive"
@@ -296,7 +290,7 @@ export function OverviewDashboardPage() {
           />
           <KpiCard
             label="D1 留存"
-            value={`${(growth?.d1RetentionPercent ?? 0).toFixed(1)}%`}
+            value={growth ? `${growth.d1RetentionPercent.toFixed(1)}%` : '—'}
             icon={<ShieldCheck size={20} color="#2563EB" />}
             trendLabel="cohort ∩ 次日活跃"
             trendTone={(growth?.d1RetentionPercent ?? 0) >= 30 ? 'positive' : 'warning'}
@@ -304,7 +298,7 @@ export function OverviewDashboardPage() {
           />
           <KpiCard
             label="D7 留存"
-            value={`${(growth?.d7RetentionPercent ?? 0).toFixed(1)}%`}
+            value={growth ? `${growth.d7RetentionPercent.toFixed(1)}%` : '—'}
             icon={<AlertTriangle size={20} color="#F59E0B" />}
             trendLabel="cohort ∩ 第 7 日活跃"
             trendTone={(growth?.d7RetentionPercent ?? 0) >= 15 ? 'positive' : 'warning'}
@@ -379,12 +373,12 @@ export function OverviewDashboardPage() {
             <tbody>
               <tr>
                 <td>page access</td>
-                <td>{pageAccessSummary?.totalCount ?? 0}</td>
+                <td>{pageAccessSummary ? pageAccessSummary.totalCount : '—'}</td>
                 <td>{Object.keys(pageAccessSummary?.dimensions.pageName ?? {}).slice(0, 3).join(', ') || 'n/a'}</td>
               </tr>
               <tr>
                 <td>page access sessions</td>
-                <td>{pageAccessSummary?.sessionCount ?? 0}</td>
+                <td>{pageAccessSummary ? pageAccessSummary.sessionCount : '—'}</td>
                 <td>merged sessionHll</td>
               </tr>
               <tr>
@@ -437,15 +431,15 @@ export function OverviewDashboardPage() {
             <div className="stack-list">
               <div className="case-item">
                 <span>page_open PV</span>
-                <strong>{pageAccessSummary?.totalCount ?? 0}</strong>
+                <strong>{pageAccessSummary ? pageAccessSummary.totalCount : '—'}</strong>
               </div>
               <div className="case-item">
                 <span>session UV</span>
-                <strong>{pageAccessSummary?.sessionCount ?? 0}</strong>
+                <strong>{pageAccessSummary ? pageAccessSummary.sessionCount : '—'}</strong>
               </div>
               <div className="case-item">
                 <span>video QoE samples</span>
-                <strong>{qoeSummary?.totalCount ?? 0}</strong>
+                <strong>{qoeSummary ? qoeSummary.totalCount : '—'}</strong>
               </div>
             </div>
             <p className="item-subtitle">
@@ -481,30 +475,30 @@ export function OverviewDashboardPage() {
       </SectionCard>
 
       <div className="section-grid section-grid--two">
-        <SectionCard title="配置灰度健康" subtitle="仅展示控制面真实回读的阶段与状态；成功率和延迟等待 Prometheus SLO 落点">
+        <SectionCard title="当前配置候选 ACK" subtitle="仅展示当前控制面候选摘要下服务实例的实际 ACK 聚合；无候选或 ACK 时不合成发布健康度">
           <table className="table">
             <thead>
               <tr>
                 <th>服务</th>
-                <th>当前阶段</th>
+                <th>候选摘要</th>
+                <th>配置版本</th>
                 <th>状态</th>
-                <th>成功率</th>
-                <th>延迟 P95</th>
+                <th>最近上报</th>
               </tr>
             </thead>
             <tbody>
-              {rolloutHealthRows.length === 0 ? (
+              {candidateAckRows.length === 0 ? (
                 <tr>
-                  <td colSpan={5}>暂无进行中的灰度发布</td>
+                  <td colSpan={5}>暂无可验证候选 ACK</td>
                 </tr>
               ) : (
-                rolloutHealthRows.map((row) => (
-                  <tr key={row.releaseId}>
+                candidateAckRows.map((row) => (
+                  <tr key={`${row.releaseId}-${row.service}`}>
                     <td>{row.service}</td>
-                    <td>{row.stage}</td>
+                    <td>{row.releaseId.slice(0, 16)}</td>
+                    <td>{row.configVersion}</td>
                     <td>{row.state}</td>
-                    <td>暂无数据</td>
-                    <td>暂无数据</td>
+                    <td>{row.updatedAt}</td>
                   </tr>
                 ))
               )}

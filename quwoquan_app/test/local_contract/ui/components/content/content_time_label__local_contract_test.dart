@@ -7,13 +7,13 @@ void main() {
     test('未更新（updatedAt 为 null）：卡片只显示创作相对时间，无「已编辑」', () {
       final created = DateTime.now().subtract(const Duration(days: 3));
       final label = ContentTimeLabel.cardLabel(createdAt: created);
-      expect(label.contains(UITextConstants.contentEditedSuffix), isFalse);
+      expect(label.contains(ProfileText.contentEditedSuffix), isFalse);
     });
 
     test('更新时间不晚于创作时间（相等）：视为未更新', () {
       final t = DateTime(2026, 1, 1, 8);
       final label = ContentTimeLabel.cardLabel(createdAt: t, updatedAt: t);
-      expect(label.contains(UITextConstants.contentEditedSuffix), isFalse);
+      expect(label.contains(ProfileText.contentEditedSuffix), isFalse);
     });
 
     test('更新晚于创作超过 1 秒：卡片追加「已编辑」', () {
@@ -23,7 +23,7 @@ void main() {
         createdAt: created,
         updatedAt: updated,
       );
-      expect(label.contains(UITextConstants.contentEditedSuffix), isTrue);
+      expect(label.contains(ProfileText.contentEditedSuffix), isTrue);
     });
 
     test('秒级抖动（<=1s）不算更新，避免幂等导入误报', () {
@@ -33,14 +33,14 @@ void main() {
         createdAt: created,
         updatedAt: jitter,
       );
-      expect(label.contains(UITextConstants.contentEditedSuffix), isFalse);
+      expect(label.contains(ProfileText.contentEditedSuffix), isFalse);
     });
 
     test('阅读器时间行：未更新只展示「创作于 X」', () {
       final created = DateTime(2025, 5, 15);
       final line = ContentTimeLabel.readerLine(createdAt: created);
-      expect(line.startsWith(UITextConstants.contentCreatedAtPrefix), isTrue);
-      expect(line.contains(UITextConstants.contentUpdatedAtPrefix), isFalse);
+      expect(line.startsWith(ProfileText.contentCreatedAtPrefix), isTrue);
+      expect(line.contains(ProfileText.contentUpdatedAtPrefix), isFalse);
       // 跨年补 yyyy年。
       expect(line.contains('2025年'), isTrue);
     });
@@ -52,8 +52,8 @@ void main() {
         createdAt: created,
         updatedAt: updated,
       );
-      expect(line.contains(UITextConstants.contentCreatedAtPrefix), isTrue);
-      expect(line.contains(UITextConstants.contentUpdatedAtPrefix), isTrue);
+      expect(line.contains(ProfileText.contentCreatedAtPrefix), isTrue);
+      expect(line.contains(ProfileText.contentUpdatedAtPrefix), isTrue);
     });
   });
 }

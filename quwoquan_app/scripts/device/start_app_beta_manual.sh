@@ -13,6 +13,12 @@ if [[ -z "${QWQ_OBSERVABILITY_RUN_ROOT:-}" || -z "${QWQ_RUN_ROOT:-}" ]]; then
     --env beta --target beta-local --action up --output-root "$QWQ_OUTPUT_ROOT")"
 fi
 export QWQ_OUTPUT_ROOT QWQ_DEPLOY_WORK_ROOT QWQ_OBSERVABILITY_RUN_ROOT QWQ_RUN_ROOT
+eval "$(
+  PYTHONDONTWRITEBYTECODE=1 python3 \
+    "$ROOT_DIR/quwoquan_ops/cli/lib/public_domain_tls.py" paths \
+    --target beta-local \
+    --format shell
+)"
 RUNTIME_CONFIG_DIR="${QWQ_DEPLOY_WORK_ROOT}/beta-local/rendered"
 CACHE_DIR="${QWQ_OUTPUT_ROOT}/env/beta/local/beta-local/cache"
 LOG_DIR="${QWQ_OBSERVABILITY_RUN_ROOT}/logs/service"
@@ -24,9 +30,46 @@ from quwoquan_ops.cli.lib.output_paths import legal_static_deployment_package_di
 print(legal_static_deployment_package_dir("beta") / "current" / "public")
 PY
 )"
-
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
 eval "$(PYTHONPATH="$ROOT_DIR" python3 -m quwoquan_ops.cli.lib.local_environment_auth --shell beta beta-local)"
+eval "$(
+  PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import shlex
+from urllib.parse import urlsplit
+
+from quwoquan_ops.cli.lib.environment_topology import (
+    get_target,
+    load_environment_topology,
+)
+
+bases = get_target(load_environment_topology(), "beta-local")["publicBases"]
+for name, role in (
+    ("GATEWAY_BASE_URL", "api"),
+    ("LEGAL_BASE_URL", "legal"),
+    ("MEDIA_AVATAR_CDN_BASE_URL", "mediaAvatar"),
+    ("MEDIA_IMAGE_CDN_BASE_URL", "mediaImage"),
+    ("MEDIA_VIDEO_CDN_BASE_URL", "mediaVideo"),
+    ("MEDIA_UPLOAD_BASE_URL", "mediaUpload"),
+):
+    print(f"{name}={shlex.quote(str(bases[role]))}")
+for name, role in (
+    ("PUBLIC_API_HOST", "api"),
+    ("PUBLIC_WEB_HOST", "publicWeb"),
+    ("PUBLIC_PRODUCT_OPS_HOST", "productOps"),
+    ("PUBLIC_AVATAR_HOST", "mediaAvatar"),
+    ("PUBLIC_IMAGE_HOST", "mediaImage"),
+    ("PUBLIC_VIDEO_HOST", "mediaVideo"),
+    ("PUBLIC_UPLOAD_HOST", "mediaUpload"),
+):
+    print(f"{name}={shlex.quote(str(urlsplit(str(bases[role])).hostname))}")
+PY
+)"
+CANONICAL_GATEWAY_BASE_URL="$GATEWAY_BASE_URL"
+CANONICAL_LEGAL_BASE_URL="$LEGAL_BASE_URL"
+CANONICAL_MEDIA_AVATAR_BASE_URL="$MEDIA_AVATAR_CDN_BASE_URL"
+CANONICAL_MEDIA_IMAGE_BASE_URL="$MEDIA_IMAGE_CDN_BASE_URL"
+CANONICAL_MEDIA_VIDEO_BASE_URL="$MEDIA_VIDEO_CDN_BASE_URL"
+CANONICAL_MEDIA_UPLOAD_BASE_URL="$MEDIA_UPLOAD_BASE_URL"
 
 ASSISTANT_PORT="${ASSISTANT_PORT}"
 CHAT_PORT="${CHAT_PORT}"
@@ -39,18 +82,6 @@ CONTENT_PORT="${CONTENT_PORT}"
 USER_PORT="${USER_PORT}"
 PRODUCT_OPS_SERVICE_PORT="${PRODUCT_OPS_SERVICE_PORT}"
 MEDIA_PROCESSOR_PORT="${MEDIA_PROCESSOR_PORT}"
-PUBLIC_API_HOST="beta-api.quwoquan-env.test"
-PUBLIC_PRODUCT_OPS_HOST="beta-product-ops.quwoquan-env.test"
-PUBLIC_AVATAR_HOST="beta-avatar.quwoquan-env.test"
-PUBLIC_IMAGE_HOST="beta-image.quwoquan-env.test"
-PUBLIC_VIDEO_HOST="beta-video.quwoquan-env.test"
-PUBLIC_UPLOAD_HOST="beta-upload.quwoquan-env.test"
-LOCAL_API_HOST="beta-api.localhost"
-LOCAL_PRODUCT_OPS_HOST="beta-product-ops.localhost"
-LOCAL_AVATAR_HOST="beta-avatar.localhost"
-LOCAL_IMAGE_HOST="beta-image.localhost"
-LOCAL_VIDEO_HOST="beta-video.localhost"
-LOCAL_UPLOAD_HOST="beta-upload.localhost"
 CHAT_SEED_REFS="${CHAT_SEED_REFS:-chat_core,chat_settings_core,chat_contacts_core,chat_group_flow_core}"
 CHAT_MONGO_URI="${CHAT_MONGO_URI:-mongodb://localhost:27017/?directConnection=true}"
 CHAT_MONGO_DATABASE="${CHAT_MONGO_DATABASE:-quwoquan_chat_local}"
@@ -66,6 +97,7 @@ BETA_BACKING_COMPOSE_ARGS=()
 for beta_compose_file in "${BETA_BACKING_COMPOSE_FILES[@]}"; do
   BETA_BACKING_COMPOSE_ARGS+=(-f "$beta_compose_file")
 done
+
 BETA_BACKING_COMPOSE_PROJECT_NAME="${BETA_BACKING_COMPOSE_PROJECT_NAME:-quwoquan-beta-backing}"
 BETA_POSTGRES_PORT="${BETA_POSTGRES_PORT}"
 BETA_MONGO_PORT="${BETA_MONGO_PORT}"
@@ -87,7 +119,7 @@ GATEWAY_BASE_URL_EXPLICIT=0
 if [[ -n "${GATEWAY_BASE_URL:-}" ]]; then
   GATEWAY_BASE_URL_EXPLICIT=1
 else
-  GATEWAY_BASE_URL="https://${PUBLIC_API_HOST}:${GATEWAY_PORT}"
+  GATEWAY_BASE_URL="$CANONICAL_GATEWAY_BASE_URL"
 fi
 LOCAL_PUBLIC_HOST="${LOCAL_PUBLIC_HOST:-}"
 MEDIA_AVATAR_CDN_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-}"
@@ -125,7 +157,6 @@ TLS_PROXY_NAME="quwoquan_beta_tls_proxy"
 TLS_PROXY_CADDYFILE="$RUNTIME_CONFIG_DIR/beta-public-plane.Caddyfile"
 TLS_PROXY_DATA_VOLUME="${TLS_PROXY_DATA_VOLUME:-quwoquan_beta_local_caddy_data}"
 TLS_PROXY_CONFIG_VOLUME="${TLS_PROXY_CONFIG_VOLUME:-quwoquan_beta_local_caddy_config}"
-TLS_PROXY_CA_EXPORT="$QWQ_DEPLOY_WORK_ROOT/beta-local/certificates/root.crt"
 TLS_PROXY_PORT_RELEASE_TIMEOUT_SECONDS="${TLS_PROXY_PORT_RELEASE_TIMEOUT_SECONDS:-30}"
 CONTAINER_RUNTIME=""
 CONTAINER_HOST_ALIAS=""
@@ -247,6 +278,27 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+assert_canonical_url() {
+  local label="$1"
+  local actual="$2"
+  local expected="$3"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "GATE_BLOCK: beta $label URL override must equal topology projection" >&2
+    exit 2
+  fi
+}
+assert_canonical_url gateway "$GATEWAY_BASE_URL" "$CANONICAL_GATEWAY_BASE_URL"
+assert_canonical_url legal "${LEGAL_BASE_URL:-$CANONICAL_LEGAL_BASE_URL}" "$CANONICAL_LEGAL_BASE_URL"
+assert_canonical_url avatar "${MEDIA_AVATAR_CDN_BASE_URL:-$CANONICAL_MEDIA_AVATAR_BASE_URL}" "$CANONICAL_MEDIA_AVATAR_BASE_URL"
+assert_canonical_url image "${MEDIA_IMAGE_CDN_BASE_URL:-$CANONICAL_MEDIA_IMAGE_BASE_URL}" "$CANONICAL_MEDIA_IMAGE_BASE_URL"
+assert_canonical_url video "${MEDIA_VIDEO_CDN_BASE_URL:-$CANONICAL_MEDIA_VIDEO_BASE_URL}" "$CANONICAL_MEDIA_VIDEO_BASE_URL"
+assert_canonical_url upload "${MEDIA_UPLOAD_BASE_URL:-$CANONICAL_MEDIA_UPLOAD_BASE_URL}" "$CANONICAL_MEDIA_UPLOAD_BASE_URL"
+
+if [[ "$CONTENT_RELEASE_ONLY" != "1" ]]; then
+  echo "GATE_BLOCK: legacy Beta fixture workload is retired; use --content-release and activate an immutable release." >&2
+  exit 2
+fi
 
 parse_mongo_host_port() {
   python3 - "$1" <<'PY'
@@ -498,12 +550,13 @@ beta_manual_compose_up_data_plane() {
 
 beta_manual_seed_user_fixtures() {
   local seed_config=""
-  if ! seed_config="$(PYTHONDONTWRITEBYTECODE=1 python3 - "$MANIFEST" <<'PY'
+  if ! seed_config="$(PYTHONDONTWRITEBYTECODE=1 python3 - "$MANIFEST" "$ROOT_DIR" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 manifest_path = Path(sys.argv[1])
+repo_root = Path(sys.argv[2]).resolve()
 payload = json.loads(manifest_path.read_text(encoding="utf-8"))
 user_entries = [
     entry
@@ -517,13 +570,16 @@ if entry.get("resetScope") != "fixture_user_*":
     raise SystemExit("beta user seed resetScope must remain fixture_user_*")
 fixture = str(entry.get("fixturePath") or "").strip()
 fixture_path = Path(fixture)
-expected_prefix = (
-    "quwoquan_service/services/user-service/tests/support/contract_fixtures/"
-)
+expected_root = (
+    repo_root
+    / "quwoquan_service/services/user-service/tests/support/contract_fixtures"
+).resolve()
+resolved_fixture = (repo_root / fixture_path).resolve()
 if (
-    not fixture.startswith(expected_prefix)
-    or fixture_path.is_absolute()
+    fixture_path.is_absolute()
     or ".." in fixture_path.parts
+    or not resolved_fixture.is_relative_to(expected_root)
+    or not resolved_fixture.is_file()
 ):
     raise SystemExit("beta user fixture path is outside the declared user fixture root")
 refs = entry.get("refs")
@@ -531,7 +587,7 @@ if not isinstance(refs, list) or not refs or any(
     not isinstance(ref, str) or not ref.strip() for ref in refs
 ):
     raise SystemExit("beta user seed refs are missing or invalid")
-print(fixture)
+print(resolved_fixture)
 print(",".join(ref.strip() for ref in refs))
 PY
 )"; then
@@ -655,7 +711,6 @@ beta_manual_ensure_data_plane() {
   CHAT_REDIS_ADDR="$effective_redis_addr"
   beta_manual_wait_http_ok "${INTERNAL_CONTENT_BASE_URL}/healthz" "content-service" 300 || return 1
   beta_manual_wait_http_ok "http://127.0.0.1:${USER_PORT}/healthz" "user-service" 300 || return 1
-  beta_manual_seed_user_fixtures || return 1
   echo "[app-beta-manual] beta Mongo/Redis/content/user runtime OK"
 }
 
@@ -753,20 +808,10 @@ fi
 if [[ "$GATEWAY_BASE_URL_EXPLICIT" == "0" ]]; then
   GATEWAY_BASE_URL="https://${PUBLIC_API_HOST}:${GATEWAY_PORT}"
 fi
-MEDIA_AVATAR_CDN_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-https://${PUBLIC_AVATAR_HOST}:${MEDIA_PORT}}"
-MEDIA_IMAGE_CDN_BASE_URL="${MEDIA_IMAGE_CDN_BASE_URL:-https://${PUBLIC_IMAGE_HOST}:${MEDIA_PORT}}"
-MEDIA_VIDEO_CDN_BASE_URL="${MEDIA_VIDEO_CDN_BASE_URL:-https://${PUBLIC_VIDEO_HOST}:${MEDIA_PORT}}"
-MEDIA_UPLOAD_BASE_URL="${MEDIA_UPLOAD_BASE_URL:-https://${PUBLIC_UPLOAD_HOST}:${MEDIA_PORT}}"
-if [[ "$DEVICE_KIND" == android_* ]]; then
-  LOCAL_PUBLIC_HOST="$LOCAL_API_HOST"
-  if [[ "$GATEWAY_BASE_URL_EXPLICIT" == "0" ]]; then
-    GATEWAY_BASE_URL="https://${LOCAL_API_HOST}:${GATEWAY_PORT}"
-  fi
-  MEDIA_AVATAR_CDN_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL/https:\/\/${PUBLIC_AVATAR_HOST}:https:\/\/${LOCAL_AVATAR_HOST}:}"
-  MEDIA_IMAGE_CDN_BASE_URL="${MEDIA_IMAGE_CDN_BASE_URL/https:\/\/${PUBLIC_IMAGE_HOST}:https:\/\/${LOCAL_IMAGE_HOST}:}"
-  MEDIA_VIDEO_CDN_BASE_URL="${MEDIA_VIDEO_CDN_BASE_URL/https:\/\/${PUBLIC_VIDEO_HOST}:https:\/\/${LOCAL_VIDEO_HOST}:}"
-  MEDIA_UPLOAD_BASE_URL="${MEDIA_UPLOAD_BASE_URL/https:\/\/${PUBLIC_UPLOAD_HOST}:https:\/\/${LOCAL_UPLOAD_HOST}:}"
-fi
+MEDIA_AVATAR_CDN_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-$CANONICAL_MEDIA_AVATAR_BASE_URL}"
+MEDIA_IMAGE_CDN_BASE_URL="${MEDIA_IMAGE_CDN_BASE_URL:-$CANONICAL_MEDIA_IMAGE_BASE_URL}"
+MEDIA_VIDEO_CDN_BASE_URL="${MEDIA_VIDEO_CDN_BASE_URL:-$CANONICAL_MEDIA_VIDEO_BASE_URL}"
+MEDIA_UPLOAD_BASE_URL="${MEDIA_UPLOAD_BASE_URL:-$CANONICAL_MEDIA_UPLOAD_BASE_URL}"
 
 case "$VERIFY_MODE" in
   fast|full) ;;
@@ -859,11 +904,10 @@ beta_manual_prepare_tls_caddyfile() {
     cat >"$TLS_PROXY_CADDYFILE" <<EOF
 {
 	admin off
-	local_certs
 }
 
-(local_tls) {
-	tls internal
+(public_tls) {
+	tls /etc/caddy/tls/fullchain.pem /etc/caddy/tls/privkey.pem
 }
 
 (media_cors) {
@@ -876,9 +920,8 @@ beta_manual_prepare_tls_caddyfile() {
 }
 
 https://${PUBLIC_API_HOST}:${GATEWAY_PORT},
-https://${LOCAL_API_HOST}:${GATEWAY_PORT},
-https://localhost:${GATEWAY_PORT} {
-	import local_tls
+https://${PUBLIC_WEB_HOST}:${GATEWAY_PORT} {
+	import public_tls
 	handle /healthz {
 		reverse_proxy ${CONTAINER_HOST_ALIAS}:${CONTENT_PORT}
 	}
@@ -901,16 +944,9 @@ https://localhost:${GATEWAY_PORT} {
 	respond 404
 }
 
-https://${PUBLIC_AVATAR_HOST}:${MEDIA_PORT},
 https://${PUBLIC_IMAGE_HOST}:${MEDIA_PORT},
-https://${PUBLIC_VIDEO_HOST}:${MEDIA_PORT},
-https://${PUBLIC_UPLOAD_HOST}:${MEDIA_PORT},
-https://${LOCAL_AVATAR_HOST}:${MEDIA_PORT},
-https://${LOCAL_IMAGE_HOST}:${MEDIA_PORT},
-https://${LOCAL_VIDEO_HOST}:${MEDIA_PORT},
-https://${LOCAL_UPLOAD_HOST}:${MEDIA_PORT},
-https://localhost:${MEDIA_PORT} {
-	import local_tls
+https://${PUBLIC_UPLOAD_HOST}:${MEDIA_PORT} {
+	import public_tls
 	import media_cors
 	reverse_proxy ${CONTAINER_HOST_ALIAS}:${MEDIA_PROCESSOR_PORT}
 }
@@ -920,11 +956,10 @@ EOF
   cat >"$TLS_PROXY_CADDYFILE" <<EOF
 {
 	admin off
-	local_certs
 }
 
-(local_tls) {
-	tls internal
+(public_tls) {
+	tls /etc/caddy/tls/fullchain.pem /etc/caddy/tls/privkey.pem
 }
 
 (media_cors) {
@@ -937,9 +972,8 @@ EOF
 }
 
 https://${PUBLIC_API_HOST}:${GATEWAY_PORT},
-https://${LOCAL_API_HOST}:${GATEWAY_PORT},
-https://localhost:${GATEWAY_PORT} {
-	import local_tls
+https://${PUBLIC_WEB_HOST}:${GATEWAY_PORT} {
+	import public_tls
 	handle /legal/manifest.json {
 		header {
 			Cache-Control "public, max-age=300"
@@ -985,23 +1019,14 @@ https://localhost:${GATEWAY_PORT} {
 	}
 }
 
-https://${PUBLIC_PRODUCT_OPS_HOST}:${PRODUCT_OPS_PORT},
-https://${LOCAL_PRODUCT_OPS_HOST}:${PRODUCT_OPS_PORT},
-https://localhost:${PRODUCT_OPS_PORT} {
-	import local_tls
+https://${PUBLIC_PRODUCT_OPS_HOST}:${PRODUCT_OPS_PORT} {
+	import public_tls
 	reverse_proxy ${CONTAINER_HOST_ALIAS}:${PRODUCT_OPS_SERVICE_PORT}
 }
 
-https://${PUBLIC_AVATAR_HOST}:${MEDIA_PORT},
 https://${PUBLIC_IMAGE_HOST}:${MEDIA_PORT},
-https://${PUBLIC_VIDEO_HOST}:${MEDIA_PORT},
-https://${PUBLIC_UPLOAD_HOST}:${MEDIA_PORT},
-https://${LOCAL_AVATAR_HOST}:${MEDIA_PORT},
-https://${LOCAL_IMAGE_HOST}:${MEDIA_PORT},
-https://${LOCAL_VIDEO_HOST}:${MEDIA_PORT},
-https://${LOCAL_UPLOAD_HOST}:${MEDIA_PORT},
-https://localhost:${MEDIA_PORT} {
-	import local_tls
+https://${PUBLIC_UPLOAD_HOST}:${MEDIA_PORT} {
+	import public_tls
 	import media_cors
 	reverse_proxy ${CONTAINER_HOST_ALIAS}:${MEDIA_PROCESSOR_PORT}
 }
@@ -1053,6 +1078,8 @@ beta_manual_start_tls_proxy() {
   if ! container_id="$("$CONTAINER_RUNTIME" run -d \
     --name "$TLS_PROXY_NAME" \
     -v "$TLS_PROXY_CADDYFILE:/etc/caddy/Caddyfile:ro" \
+    -v "$QWQ_PUBLIC_TLS_CERT_FILE:/etc/caddy/tls/fullchain.pem:ro" \
+    -v "$QWQ_PUBLIC_TLS_KEY_FILE:/etc/caddy/tls/privkey.pem:ro" \
     -v "$BETA_LEGAL_STATIC_ROOT:/srv/legal:ro" \
     -v "$TLS_PROXY_DATA_VOLUME:/data" \
     -v "$TLS_PROXY_CONFIG_VOLUME:/config" \
@@ -1069,24 +1096,6 @@ beta_manual_start_tls_proxy() {
   echo "[app-beta-manual] content release public ingress started"
 }
 
-beta_manual_export_tls_root_ca() {
-  local deadline=$((SECONDS + 30))
-  mkdir -p "$(dirname "$TLS_PROXY_CA_EXPORT")"
-  while (( SECONDS < deadline )); do
-    if "$CONTAINER_RUNTIME" cp \
-      "$TLS_PROXY_NAME:/data/caddy/pki/authorities/local/root.crt" \
-      "$TLS_PROXY_CA_EXPORT" >/dev/null 2>&1 && [[ -s "$TLS_PROXY_CA_EXPORT" ]]; then
-      chmod 0644 "$TLS_PROXY_CA_EXPORT"
-      return 0
-    fi
-    sleep 0.5
-  done
-  echo "GATE_BLOCK: beta local root CA export failed from Caddy deployment volume: $TLS_PROXY_CA_EXPORT" >&2
-  "$CONTAINER_RUNTIME" ps -a --filter "name=^/${TLS_PROXY_NAME}$" >&2 || true
-  "$CONTAINER_RUNTIME" logs --tail 80 "$TLS_PROXY_NAME" >&2 || true
-  return 1
-}
-
 beta_manual_wait_https_ok() {
   local host="$1"
   local port="$2"
@@ -1094,8 +1103,7 @@ beta_manual_wait_https_ok() {
   local label="$4"
   local timeout="${5:-30}"
   local deadline=$((SECONDS + timeout))
-  until curl -kfsS \
-    --resolve "${host}:${port}:127.0.0.1" \
+  until curl -fsS \
     "https://${host}:${port}${path}" >/dev/null 2>&1; do
     if (( SECONDS >= deadline )); then
       echo "${label} unavailable: https://${host}:${port}${path}" >&2
@@ -1113,8 +1121,7 @@ beta_manual_verify_legal_document() {
   local content_type=""
   local body=""
   content_type="$(
-    curl -kfsSI \
-      --resolve "${host}:${port}:127.0.0.1" \
+    curl -fsSI \
       "https://${host}:${port}${path}" \
       | tr -d '\r' \
       | awk -F ': ' 'tolower($1) == "content-type" { print tolower($2); exit }'
@@ -1124,8 +1131,7 @@ beta_manual_verify_legal_document() {
     return 1
   fi
   body="$(
-    curl -kfsS \
-      --resolve "${host}:${port}:127.0.0.1" \
+    curl -fsS \
       "https://${host}:${port}${path}"
   )"
   if [[ "$body" != *"$expected_title"* ]]; then
@@ -1144,8 +1150,7 @@ beta_manual_wait_https_range_ok() {
   local status=""
   until [[ "$status" == "206" ]]; do
     status="$(
-      curl -kfsS \
-        --resolve "${host}:${port}:127.0.0.1" \
+      curl -fsS \
         -r 0-1 \
         -o /dev/null \
         -w '%{http_code}' \
@@ -1338,8 +1343,6 @@ beta_manual_start_content_release_stack() {
   beta_manual_start_release_media_runtime || return 1
   beta_manual_start_entity_service || return 1
   beta_manual_start_tls_proxy || return 1
-  echo "[app-beta-manual] exporting content release local root CA"
-  beta_manual_export_tls_root_ca || return 1
   echo "[app-beta-manual] checking content release public API ingress"
   if ! beta_manual_wait_https_ok \
     "$PUBLIC_API_HOST" \
@@ -1552,7 +1555,6 @@ beta_manual_start_notification_service || {
   exit 1
 }
 beta_manual_start_tls_proxy
-beta_manual_export_tls_root_ca || exit 2
 beta_manual_wait_https_ok "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/healthz" "gateway public health" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_ensure_filter_catalog_release || {
   echo "filter catalog release bootstrap failed" >&2
@@ -1635,7 +1637,7 @@ report = {
     "mode": "manual-beta",
     "serviceMode": "single-stack",
     "appRuntimeEnv": "beta",
-    "appDataSource": "remote",
+    "composition": "production_remote",
     "flutterDeviceId": flutter_device_id,
     "gatewayBaseUrl": gateway,
     "deviceKind": device_kind,
@@ -1675,7 +1677,7 @@ PY
 
 echo "[app-beta-manual] beta environment is ready."
 echo "[app-beta-manual] report: $REPORT"
-echo "[app-beta-manual] APP_RUNTIME_ENV=beta APP_DATA_SOURCE=remote CLOUD_GATEWAY_BASE_URL=$GATEWAY_BASE_URL APP_CURRENT_USER_ID=$APP_CURRENT_USER_ID"
+echo "[app-beta-manual] APP_RUNTIME_ENV=beta production Remote composition CLOUD_GATEWAY_BASE_URL=$GATEWAY_BASE_URL APP_CURRENT_USER_ID=$APP_CURRENT_USER_ID"
 
 if [[ "$SKIP_APP" == "1" ]]; then
   echo "[app-beta-manual] --skip-app set; beta cloud stack keeps running until Ctrl-C."
@@ -1688,19 +1690,6 @@ if [[ "$SKIP_APP" == "1" ]]; then
 fi
 
 echo "[app-beta-manual] starting Flutter app on device: $FLUTTER_DEVICE_ID"
-if [[ "$DEVICE_KIND" == android_* ]]; then
-  if [[ ! -f "$TLS_PROXY_CA_EXPORT" ]]; then
-    echo "GATE_BLOCK: beta local Android debug CA is not available from Caddy deployment volume" >&2
-    exit 2
-  fi
-  export QWQ_ANDROID_LOCAL_ENV_CA_PATH="$TLS_PROXY_CA_EXPORT"
-  export QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED=1
-fi
-if [[ "$DEVICE_KIND" == "ios_or_macos" ]] && \
-  python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_target_tls.py" \
-    is-ios-simulator --device-id "$FLUTTER_DEVICE_ID" >/dev/null; then
-  export QWQ_IOS_SIMULATOR_UDID="$FLUTTER_DEVICE_ID"
-fi
 bash "$ROOT_DIR/quwoquan_app/scripts/device/start_app_instance.sh" \
   --env beta \
   --device-id "$FLUTTER_DEVICE_ID" \

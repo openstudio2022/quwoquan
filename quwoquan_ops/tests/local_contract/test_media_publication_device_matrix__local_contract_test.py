@@ -123,10 +123,7 @@ class MediaPublicationDeviceMatrixContractTest(unittest.TestCase):
                     command[command.index("--runtime-env") + 1],
                     runtime_env,
                 )
-                self.assertEqual(
-                    command[command.index("--data-source") + 1],
-                    "remote",
-                )
+                self.assertNotIn("--data-source", command)
                 self.assertEqual(
                     command[command.index("--gateway-base-url") + 1],
                     public_bases["api"],

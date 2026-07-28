@@ -29,6 +29,7 @@ case "$2" in
   application-id) echo com.quwoquan.quwoquan_app ;;
   version-name) echo 1.8.2 ;;
   version-code) echo 18201 ;;
+  min-sdk) echo 26 ;;
   *) exit 2 ;;
 esac
 """,
@@ -46,6 +47,7 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                 public_origin="https://quwoquan.com",
                 download_origin="https://cdn.quwoquan.com",
                 expected_package="com.quwoquan.quwoquan_app",
+                expected_signing_certificate_sha256="a" * 64,
                 apkanalyzer=str(analyzer),
                 apksigner=str(signer),
             )
@@ -53,10 +55,11 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
             manifest = json.loads(Path(str(release["manifestPath"])).read_text())
             self.assertEqual(
                 manifest["apkUrl"],
-                "https://cdn.quwoquan.com/app/android/1.8.2/"
-                "quwoquan-1.8.2-18201.apk",
+                "https://cdn.quwoquan.com/downloads/android/1.8.2/18201/"
+                "quwoquan-18201.apk",
             )
             self.assertFalse(manifest["remoteVerified"])
+            self.assertEqual(manifest["minAndroidVersion"], "26")
             self.assertEqual(len(manifest["apkSHA256"]), 64)
             environment = Path(str(release["environmentPath"])).read_text()
             self.assertIn("PRODUCT_OPS_ANDROID_LATEST_BUILD=18201", environment)
@@ -81,6 +84,7 @@ case "$2" in
   application-id) echo com.quwoquan.quwoquan_app ;;
   version-name) echo 1.8.2 ;;
   version-code) echo 18201 ;;
+  min-sdk) echo 26 ;;
 esac
 """,
             )
@@ -100,6 +104,44 @@ echo 'Signer #1 certificate SHA-256 digest: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
                     public_origin="https://quwoquan.com",
                     download_origin="http://cdn.quwoquan.com",
                     expected_package="com.quwoquan.quwoquan_app",
+                    expected_signing_certificate_sha256="b" * 64,
+                    apkanalyzer=str(analyzer),
+                    apksigner=str(signer),
+                )
+
+    def test_rejects_untrusted_signing_certificate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp_path = Path(directory)
+            apk = tmp_path / "release.apk"
+            apk.write_bytes(b"signed-apk-fixture")
+            analyzer = _executable(
+                tmp_path / "apkanalyzer",
+                """#!/bin/sh
+case "$2" in
+  application-id) echo com.quwoquan.quwoquan_app ;;
+  version-name) echo 1.8.2 ;;
+  version-code) echo 18201 ;;
+  min-sdk) echo 26 ;;
+esac
+""",
+            )
+            signer = _executable(
+                tmp_path / "apksigner",
+                """#!/bin/sh
+echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+""",
+            )
+            with self.assertRaisesRegex(
+                AndroidOfficialReleaseError,
+                "trusted production identity",
+            ):
+                package_android_official_release(
+                    apk_path=apk,
+                    package_root=tmp_path / "package",
+                    public_origin="https://quwoquan.com",
+                    download_origin="https://cdn.quwoquan.com",
+                    expected_package="com.quwoquan.quwoquan_app",
+                    expected_signing_certificate_sha256="b" * 64,
                     apkanalyzer=str(analyzer),
                     apksigner=str(signer),
                 )
@@ -146,6 +188,18 @@ class _ArtifactServer:
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self) -> None:
+                requested_range = self.headers.get("Range")
+                if requested_range == "bytes=0-0":
+                    self.send_response(206)
+                    self.send_header(
+                        "Content-Type",
+                        "application/vnd.android.package-archive",
+                    )
+                    self.send_header("Content-Range", f"bytes 0-0/{len(payload)}")
+                    self.send_header("Content-Length", "1")
+                    self.end_headers()
+                    self.wfile.write(payload[:1])
+                    return
                 self.send_response(200)
                 self.send_header(
                     "Content-Type",

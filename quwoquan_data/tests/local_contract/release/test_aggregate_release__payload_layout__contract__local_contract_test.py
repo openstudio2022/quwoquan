@@ -37,7 +37,26 @@ def _write_cas(publish_root: Path, payload: bytes) -> tuple[str, dict[str, objec
     path = publish_root / object_key
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(payload)
-    return object_key, {"objectKey": object_key, "sha256": f"sha256:{digest}"}
+    return object_key, {
+        "assetId": f"asset-{digest[:16]}",
+        "kind": "image",
+        "mimeType": "image/jpeg",
+        "objectKey": object_key,
+        "sha256": f"sha256:{digest}",
+    }
+
+
+def _write_rights_snapshot(object_root: Path, asset: dict[str, object]) -> None:
+    _write_json(
+        object_root / "rights_snapshots" / f"{asset['assetId']}.json",
+        {
+            "assetId": asset["assetId"],
+            "manifestAsset": {
+                "assetId": asset["assetId"],
+                "sha256": asset["sha256"],
+            },
+        },
+    )
 
 
 def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
@@ -110,6 +129,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
         entity_root / "asset.refs.json",
         {"assets": [selected_asset]},
     )
+    _write_rights_snapshot(entity_root, selected_asset)
     _write_json(publish_root / "entities/地点/景区/其他/manifest.json", {"assets": []})
     _write_json(
         publish_root / "entities/地点/景区/其他/creator.refs.json",
@@ -146,9 +166,19 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
     desired = json.loads(payload_file(release, "desired_state.json").read_text(encoding="utf-8"))
     assert desired["desiredRefs"]["tags"] == [TAG_REF]
     media = json.loads(payload_file(release, "media_manifest.json").read_text(encoding="utf-8"))
-    assert [item["objectKey"] for item in media["assets"]] == [selected_key]
-    assert payload_file(release, selected_key).is_file()
-    assert unrelated_key not in {item["objectKey"] for item in media["assets"]}
+    assert len(media["assets"]) == 1
+    release_asset = media["assets"][0]
+    assert "objectKey" not in release_asset
+    assert release_asset["publicSliceKey"].startswith("media/image/s/asset/")
+    assert payload_file(release, release_asset["publicSliceKey"]).is_file()
+    release_objects_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(payload_file(release, "objects").rglob("*.json"))
+    )
+    assert '"objectKey"' not in release_objects_text
+    assert "media/objects/sha256/" not in release_objects_text
+    assert unrelated_key != selected_key
+    assert all(unrelated_key not in str(item) for item in media["assets"])
     aggregate = json.loads((release / "attestations/release.json").read_text(encoding="utf-8"))
     assert aggregate["payloadSha256"] == payload_digest(release)
     assert aggregate["sourceDigests"] == [current_source_digest().to_document()]
@@ -300,6 +330,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         _write_json(post_root / "creator.refs.json", {"creatorRefs": [creator_ref]})
         _write_json(post_root / "tag.refs.json", {"tagRefs": []})
         _write_json(post_root / "asset.refs.json", {"assets": [asset]})
+        _write_rights_snapshot(post_root, asset)
         add_execution(
             f"20260718--travel-{content_type}-supply--test-region-a--scale-90{len(executions) + 1}",
             entities=[],

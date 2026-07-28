@@ -1,4 +1,4 @@
 releaseRef: service-resource://policies/content/post/recommendation_policy_object_cards_v1.yaml
-digest: sha256:fc87bd663eac5dd53ef0b93cb4d58cfb804cd5bc51d23af3e88c2f564eef13fc
+digest: sha256:15225b5f9e1e0a5d4349b82501d5e5e40c3b5588767815e65d9f540f618b38b6
 target: runtime/recommendation_policy.yaml
 environmentVariable: QWQ_REC_POLICY_PATH

@@ -72,10 +72,10 @@ void main() {
       await $(find.byKey(_moreActionKey)).tap();
       await _expectVisible(
         $,
-        find.text(UITextConstants.editCircle),
+        find.text(CommunityText.editCircle),
         reason: 'Gamma 验收会话必须具有圈子管理权限',
       );
-      await $(find.text(UITextConstants.editCircle)).tap();
+      await $(find.text(CommunityText.editCircle)).tap();
       await _expectVisible(
         $,
         find.byType(CircleEditSettingsPage),

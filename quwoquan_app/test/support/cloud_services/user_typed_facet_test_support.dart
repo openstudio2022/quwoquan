@@ -1,7 +1,8 @@
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+
+import 'repository_mock_reexports.dart';
 
 RemoteGreetingRepository alphaGreetingRepository({
   String requesterSubAccountId = 'fixture_user_current',

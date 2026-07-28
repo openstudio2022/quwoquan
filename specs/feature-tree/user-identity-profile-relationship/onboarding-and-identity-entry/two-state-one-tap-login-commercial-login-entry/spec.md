@@ -43,8 +43,10 @@
 <a id="req-003"></a>
 ### REQ-003 两状态高保同构与响应式
 
-- returningAccount 与 carrierPhone 两状态共享同一 LoginFrame 信息架构。
-- 移动、平板与 Web 宽屏下关键区域不重叠、不拉伸、不漂移。
+- 一键、手机号、OTP、异常、第三方授权与绑定手机号共享同一 `LoginFrame`：顶部导航、可滚动正文、固定第三方登录 footer。
+- 一键入口依次为“本机号码一键登录”“其他手机号登录”、协议确认和微信/QQ/支付宝 footer；手机号不进入 footer。
+- 标题、副标题、状态、错误、倒计时、文字动作与协议整体居中；手机号输入左对齐，OTP 数字格内居中。
+- 移动、平板、Web、键盘、横屏与 200% 字体下关键区域不重叠、不拉伸、不漂移，footer 不随正文状态切换改变基线。
 
 <a id="req-004"></a>
 ### REQ-004 协议、错误与降级单通道且不悬空
@@ -61,13 +63,16 @@
 <a id="req-006"></a>
 ### REQ-006 手机号验证码 12 状态同构高保
 
-- 手机号验证码 12 状态在同一布局骨架内完成，不发生控件错位。
-- 验证码输入、粘贴、退格与错误恢复均有 widget 或 golden 证据。
+- 发码成功后同一位置从“60秒后可重新获取”递减到“1秒后可重新获取”，归零后替换为“重新获取验证码”；同一倒计时周期只能触发一次重发。
+- 输入、粘贴或系统自动填充第六位后自动验证一次，验证中锁定输入并显示“正在验证”，不显示额外登录按钮。
+- OTP 状态在同一布局骨架内完成，不发生控件错位；后台恢复按绝对截止时间重新计算倒计时。
 
 <a id="req-007"></a>
 ### REQ-007 手机号验证码异常不拦截用户
 
-- 每类 OTP 异常都有明确下一步，并保留用户可恢复路径。
+- `otp_mismatch` 只显示红色“验证码不正确”，六格轻抖一次、清空并将焦点回到第一格；验证码格永不变红且原倒计时继续。
+- `otp_expired/challenge_consumed` 显示“验证码已失效”，`otp_attempts_exceeded/rate_limited` 显示“尝试次数较多”，`otp_provider_failed` 显示“验证码发送失败”；恢复动作与错误文案分离。
+- 网络校验失败保留验证码并显示“暂时无法验证验证码”与“重新验证”。
 - 修改手机号会清空验证码与错误，关闭和成功目标态不回环。
 
 <a id="req-008"></a>
@@ -94,7 +99,7 @@
 - SendOtp provider failure 返回结构化可恢复错误，App 映射 sendFailed。
 - rate_limited 带 retryAfter 语义，App 进入倒计时。
 - LoginWithPhone 缺 agreementVersion/privacyVersion 返回 consent_required。
-- otp mismatch 保留验证码，otp expired 进入重新获取。
+- otp mismatch 清空验证码并允许立即重新输入，otp expired 进入重新获取；两者均不重置仍有效的重发冷却截止时间。
 - 每个 USER.AUTH 错误码都有 recovery.action、disruptionLevel、双语文案与唯一 LoginErrorSurface。
 - RuntimeErrorResponse 不向客户端返回 debugMessage、authCode、token、secret 或 provider 原始 URL。
 
@@ -107,6 +112,7 @@
 - Android/iOS 短信 provider smoke 覆盖发送成功、频控和失败。
 - Web/iPad 截图覆盖居中 frame。
 - 登录页曝光、状态解析、主按钮点击、成功、失败、关闭埋点可查。
+- 五组高保状态在 light/dark 下逐状态可复验，显式文字对齐要求优先于生成图中不一致的左对齐或临时图标效果。
 - 灰度与回滚策略写入发布 runbook 或对应商用卡点。
 
 <a id="req-012"></a>
@@ -121,23 +127,40 @@
 - 返回账号摘要必须同时满足“可识别且可执行”：定制昵称或真实脱敏标识至少存在一项，并且存在有效 refresh、可预填手机号或可执行的记住社交方式。系统默认昵称、头像或“上次使用的账号”等占位不得单独创建返回账号态。
 - 昵称与头像解耦：`nicknameCustomized=true` 且 `displayName` 非空时展示真实昵称；系统默认昵称、旧数据缺字段或空昵称统一展示“欢迎回来”，端侧禁止按 `新同学_*` 格式猜测。
 - 返回账号会话过期时主按钮统一为“短信验证码登录”；说明句保持“登录信息已过期，请用短信验证码重新登录”的完整语法。
-- 趣我圈花瓣中心使用明确的两层花蕊；登录页、欢迎页、Android、iOS、Web maskable 图标与 favicon 必须由同一个 `WelcomeAppIconPainter` 生成并通过资产哈希校验，禁止平台图标各自维护。
+- 普通登录步骤不展示营销 Hero 或应用图标；仅第三方授权和绑定步骤展示当前 provider 官方图标。
 - 验证码必须显示为 6 个独立方框；隐藏输入只能用于焦点、粘贴和键盘控制，普通输入框不得外露。
-- 所有异常态必须就近提示，并保留关闭、修改手机号、重试或切换其它方式的清晰路径。手机号格式/验证码不匹配使用字段错误。
-- 发送失败、限流、验证码过期使用表单内联错误。
-- 社交失败只在其他登录方式区域展示。
+- 所有异常态必须就近提示，并保留关闭、修改手机号、重试或切换其它方式的清晰路径。手机号格式使用字段错误。
+- 验证码、发送、限流、过期与社交失败使用居中的“红色事实 + 蓝色动作 + 灰色等待”语义，不使用错误卡重复操作指令。
 - 同一次失败只允许一个可见反馈。
+
+<a id="req-013"></a>
+### REQ-013 单一正交状态与 terminal latch
+
+- `/login` 内部步骤固定为 `resolving/oneTap/phoneEntry/otp/socialAuthorizing/socialFailed/socialPhoneEntry/socialPhoneOtp/blocked/completing`，异步 operation、consent、challenge 与 feedback 分别建模。
+- 任一 busy 状态必须有超时、取消或失败出口；迟到回调不得覆盖当前步骤。
+- 登录成功、关闭和异步竞争只能完成一次 terminal callback；内部返回回到上一登录步骤，根步骤关闭遵守宿主 `LoginDismissPolicy`。
+
+<a id="req-014"></a>
+### REQ-014 社交首登手机号绑定不可绕过
+
+- 社交登录只消费 `account_session` 的判别结果；`phoneBindingRequired` 只携带短期一次性 binding ticket，不得携带完整 session。
+- binding ticket 范围内发送 `bind_phone` OTP，完成 binding ticket、OTP challenge、手机号唯一性与 consent 校验后，由 `credential_binding` 原子返回 `AuthSessionGrant`。
+- 用户返回、ticket 过期、进程重启或绑定失败均回到可操作登录态，不进入 Shell、不消费原动作 continuation。
 
 ## 4. 契约引用
 
 - canonical：`quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart`
 - canonical：`quwoquan_app/test/local_contract/core/auth/auth_session_store__local_contract_test.dart`
 - canonical：`quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart`
-- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/operations.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/account_session/operations.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/authentication_challenge/operations.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/credential_binding/operations.yaml`
 - canonical：`quwoquan_service/services/user-service/tests/api_integration/account/user_account/auth_contract__api_integration_test.go`
 - canonical：`quwoquan_app/test/local_contract/core/widgets/app_cached_network_image__local_contract_test.dart`
 - canonical：`quwoquan_app/test/local_contract/ui/user/journeys/commercial_login_recovery_journey__local_contract_test.dart`
-- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/errors.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/account_session/errors.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/authentication_challenge/errors.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/credential_binding/errors.yaml`
 - canonical：`quwoquan_app/test/local_contract/core/auth/auth_gate_matrix_contract__local_contract_test.dart`
 - canonical：`quwoquan_app/test/local_contract/ui/user/goldens`
 
@@ -150,6 +173,20 @@
 - WHEN 参与者执行“两态一键登录与手机号登录”对应的公开行为。
 - THEN 本机号码首次登录在服务端完成账号、persona、credential、device 与 consent 持久化。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+<a id="gwt-002"></a>
+### GWT-002 登录高保状态与可恢复交互
+
+- GIVEN 用户处于一键、手机号、OTP、授权、异常或绑定手机号任一步骤。
+- WHEN 页面切换、验证码失败、倒计时归零、协议确认、返回或异步结果到达。
+- THEN 页面保持同一骨架与 footer 基线，每个状态均有明确动作或安全退出，且 terminal callback 最多执行一次。
+
+<a id="gwt-003"></a>
+### GWT-003 社交首登绑定手机号后签发会话
+
+- GIVEN 社交身份尚未绑定手机号。
+- WHEN provider 票据校验成功并完成 `bind_phone` OTP。
+- THEN binding ticket 被一次性消费，手机号与社交凭证归属同一 OwnerAccount，并且只在绑定成功后返回 `AuthSessionGrant`。
 
 <a id="gwt-011"></a>
 ### GWT-011 真机与灰度商用证据

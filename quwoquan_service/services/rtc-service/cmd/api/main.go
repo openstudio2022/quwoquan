@@ -24,6 +24,7 @@ import (
 	rtotel "quwoquan_service/runtime/otel"
 
 	runtimeconfig "quwoquan_service/runtime/config"
+	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
 	rthttp "quwoquan_service/runtime/http"
 	runtimemessaging "quwoquan_service/runtime/messaging"
@@ -97,6 +98,9 @@ func main() {
 	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
 		log.Fatalf("rtc-service config compatibility failed: %v", err)
 	}
+	controlplane.StartReleaseConfigAttestation(
+		serviceName, appEnv, configRoot, configVersion, imageVersion,
+	)
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)

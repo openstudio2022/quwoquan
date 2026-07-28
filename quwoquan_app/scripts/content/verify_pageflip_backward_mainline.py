@@ -72,15 +72,6 @@ SOFT_GEOMETRY_PATH = (
     / "layers"
     / "article_reader_soft_page_geometry.dart"
 )
-PARTITION_PATH = (
-    APP_LIB
-    / "ui"
-    / "content"
-    / "article_reader"
-    / "pageflip"
-    / "layers"
-    / "backward_sheet_partition.dart"
-)
 PAGEFLIP_WIDGET_TEST_PATH = (
     APP_TEST / "components" / "pageflip" / "pageflip_widget_test.dart"
 )
@@ -422,8 +413,16 @@ def _check_recto_verso_split_in_host() -> list[str]:
     host = _strip_comments(_host_library_text())
     dynamic_path = HOST_PATH.parent / "article_read_only_book_deck_dynamic_layers.dart"
     soft_path = HOST_PATH.parent / "article_read_only_book_deck_soft_layers.dart"
+    diagnostic_path = (
+        HOST_PATH.parent / "article_read_only_book_deck_diagnostic_geometry.dart"
+    )
     dynamic = _strip_comments(dynamic_path.read_text(encoding="utf-8")) if dynamic_path.exists() else ""
     soft = _strip_comments(soft_path.read_text(encoding="utf-8")) if soft_path.exists() else ""
+    diagnostic = (
+        _strip_comments(diagnostic_path.read_text(encoding="utf-8"))
+        if diagnostic_path.exists()
+        else ""
+    )
 
     for retired in (
         "_buildBackwardPageSpaceReplacementLayer",
@@ -473,6 +472,7 @@ def _check_recto_verso_split_in_host() -> list[str]:
         for marker in (
             "coveredWidthNormalized",
             "totalRectoVisibleWidthNormalized",
+            "resolveArticlePageBackwardSheetLocalSlices",
             "_buildBackwardSheetFaceSlice(",
             "ArticlePageSurfaceKind.front",
             "ArticlePageSurfaceKind.back",
@@ -487,6 +487,21 @@ def _check_recto_verso_split_in_host() -> list[str]:
             violations.append(
                 f"{soft_path.relative_to(ROOT)}: BACK must not choose a face from progress."
             )
+        for marker in (
+            "resolveBackwardCanonicalSheetFaces",
+            "BackwardCanonicalSheetInput",
+        ):
+            if marker in split_body or marker in diagnostic:
+                violations.append(
+                    f"{soft_path.relative_to(ROOT)}: BACK recto/verso must consume "
+                    "ArticlePageBackwardLeafFrame sheet-local intervals, not "
+                    f"{marker!r}."
+                )
+        if "resolveArticlePageBackwardSheetLocalSlices" not in diagnostic:
+            violations.append(
+                f"{diagnostic_path.relative_to(ROOT)}: diagnostics must consume "
+                "the same leaf-frame sheet-local slice resolver as paint."
+            )
 
     soft_layer_body = _extract_method_body(
         soft, r"Widget\s+_buildSoftPageLayer\([^)]*\)\s*\{"
@@ -499,6 +514,8 @@ def _check_recto_verso_split_in_host() -> list[str]:
         for marker in (
             "Transform.rotate(",
             "ClipPath(",
+            "Transform.translate(",
+            "offset: -paintOrigin",
             "_buildSoftFlippingPageSurface(",
         ):
             if marker not in soft_layer_body:

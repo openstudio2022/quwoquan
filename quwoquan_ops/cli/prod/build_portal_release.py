@@ -32,14 +32,18 @@ from lib.output_paths import (  # noqa: E402
     portal_deployment_package_dir,
     remove_deployment_tree,
 )
+from lib.environment_topology import (  # noqa: E402
+    get_target,
+    load_environment_topology,
+)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True, help="release 版本号（与 service release 对齐，例如 1.20260719.123）")
-    parser.add_argument("--ops-base-url", default="https://ops.quwoquan.com", help="Portal 同源控制面基地址")
-    parser.add_argument("--content-base-url", default="https://api.quwoquan.com", help="content-service 公网基地址")
-    parser.add_argument("--entity-base-url", default="https://api.quwoquan.com", help="entity-service 公网基地址")
+    parser.add_argument("--ops-base-url", default="", help="必须等于 topology 的 productOps role")
+    parser.add_argument("--content-base-url", default="", help="必须等于 topology 的 api role")
+    parser.add_argument("--entity-base-url", default="", help="必须等于 topology 的 api role")
     parser.add_argument("--oidc-issuer", required=True, help="生产 OIDC issuer")
     parser.add_argument("--oidc-client-id", required=True, help="生产 OIDC client id")
     parser.add_argument("--oidc-audience", required=True, help="生产控制面 API audience")
@@ -66,6 +70,22 @@ def main() -> int:
         target_name = deployment_target_for_env("prod", target=args.target)
     except ValueError as exc:
         raise SystemExit(f"FAIL: {exc}") from exc
+    public_bases = get_target(
+        load_environment_topology(),
+        target_name,
+    )["publicBases"]
+    role_values = {
+        "ops_base_url": str(public_bases["productOps"]),
+        "content_base_url": str(public_bases["api"]),
+        "entity_base_url": str(public_bases["api"]),
+    }
+    for attribute, canonical in role_values.items():
+        supplied = str(getattr(args, attribute) or "").rstrip("/")
+        if supplied and supplied != canonical.rstrip("/"):
+            raise SystemExit(
+                f"FAIL: --{attribute.replace('_', '-')} must equal topology projection"
+            )
+        setattr(args, attribute, canonical)
 
     if not args.skip_install:
         subprocess.run(["npm", "install", "--no-audit", "--no-fund"], cwd=PORTAL_DIR, check=True)

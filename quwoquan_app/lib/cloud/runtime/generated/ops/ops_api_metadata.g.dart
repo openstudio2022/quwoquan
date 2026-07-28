@@ -32,9 +32,11 @@ class OpsApiMetadata {
     'GetRuntimeLogSummary': '/ops/runtime-logs/summary',
     'GetVisitStats': '/ops/visits/stats',
     'ListConfigDomains': '/control-plane/platform/configs/domains',
+    'ListConfigInstanceReports': '/control-plane/platform/configs/instances',
     'ListExperiments': '/control-plane/product/experiments',
     'ListServiceConfigs': '/control-plane/platform/configs',
     'RecordVisit': '/ops/visits',
+    'ReportConfigInstance': '/control-plane/platform/configs/instances/{instanceId}:report',
     'ReportEventBatch': '/ops/events',
     'ReportRecoveryFailure': '/ops/recovery-failures',
     'ReportRuntimeLogBatch': '/ops/runtime-logs',
@@ -57,9 +59,11 @@ class OpsApiMetadata {
     'GetRuntimeLogSummary': 'GET',
     'GetVisitStats': 'GET',
     'ListConfigDomains': 'GET',
+    'ListConfigInstanceReports': 'GET',
     'ListExperiments': 'GET',
     'ListServiceConfigs': 'GET',
     'RecordVisit': 'POST',
+    'ReportConfigInstance': 'POST',
     'ReportEventBatch': 'POST',
     'ReportRecoveryFailure': 'POST',
     'ReportRuntimeLogBatch': 'POST',
@@ -83,9 +87,11 @@ class OpsApiMetadata {
     'GetRuntimeLogSummary': 'required',
     'GetVisitStats': 'required',
     'ListConfigDomains': 'required',
+    'ListConfigInstanceReports': 'required',
     'ListExperiments': 'required',
     'ListServiceConfigs': 'required',
     'RecordVisit': 'required',
+    'ReportConfigInstance': 'required',
     'ReportEventBatch': 'required',
     'ReportRecoveryFailure': 'optional',
     'ReportRuntimeLogBatch': 'required',
@@ -117,9 +123,11 @@ class OpsApiMetadata {
   static const String getRuntimeLogSummaryOperation = 'GetRuntimeLogSummary';
   static const String getVisitStatsOperation = 'GetVisitStats';
   static const String listConfigDomainsOperation = 'ListConfigDomains';
+  static const String listConfigInstanceReportsOperation = 'ListConfigInstanceReports';
   static const String listExperimentsOperation = 'ListExperiments';
   static const String listServiceConfigsOperation = 'ListServiceConfigs';
   static const String recordVisitOperation = 'RecordVisit';
+  static const String reportConfigInstanceOperation = 'ReportConfigInstance';
   static const String reportEventBatchOperation = 'ReportEventBatch';
   static const String reportRecoveryFailureOperation = 'ReportRecoveryFailure';
   static const String reportRuntimeLogBatchOperation = 'ReportRuntimeLogBatch';
@@ -155,9 +163,16 @@ class OpsApiMetadata {
   static const String getRuntimeLogSummaryPath = '/ops/runtime-logs/summary';
   static const String getVisitStatsPath = '/ops/visits/stats';
   static const String listConfigDomainsPath = '/control-plane/platform/configs/domains';
+  static const String listConfigInstanceReportsPath = '/control-plane/platform/configs/instances';
   static const String listExperimentsPath = '/control-plane/product/experiments';
   static const String listServiceConfigsPath = '/control-plane/platform/configs';
   static const String recordVisitPath = '/ops/visits';
+  static const String reportConfigInstancePathTemplate = '/control-plane/platform/configs/instances/{instanceId}:report';
+  static String reportConfigInstancePath({required String instanceId}) {
+    return _fillPath(reportConfigInstancePathTemplate, <String, String>{
+      'instanceId': instanceId,
+    });
+  }
   static const String reportEventBatchPath = '/ops/events';
   static const String reportRecoveryFailurePath = '/ops/recovery-failures';
   static const String reportRuntimeLogBatchPath = '/ops/runtime-logs';

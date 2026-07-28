@@ -81,6 +81,13 @@ type ExposureFilter interface {
 	FilterCandidates(ctx context.Context, userID string, candidates []ContentCandidate, at time.Time) ([]ContentCandidate, error)
 }
 
+// RelaxedExposureFilter is used only for an initial recommend page whose
+// otherwise eligible real candidates were exhausted by served/impressed memory.
+// Implementations must still enforce subject closure and explicit negatives.
+type RelaxedExposureFilter interface {
+	FilterCandidatesRelaxedExposure(ctx context.Context, userID string, candidates []ContentCandidate, at time.Time) ([]ContentCandidate, error)
+}
+
 // FeedbackIngestor provides cloud-side idempotency for client behavior events.
 type FeedbackIngestor interface {
 	AcceptEvent(ctx context.Context, signal BehaviorSignal) (bool, error)
@@ -781,6 +788,44 @@ func (h *HotPath) FilterCandidates(ctx context.Context, userID string, candidate
 	}
 	RecordDuplicateExposureFiltered("served", dupServed)
 	RecordDuplicateExposureFiltered("impressed", dupImpressed)
+	return filtered, nil
+}
+
+// FilterCandidatesRelaxedExposure relaxes only served/impressed history.
+// Explicit negatives and subject-closure erasure semantics remain fail-closed.
+func (h *HotPath) FilterCandidatesRelaxedExposure(
+	ctx context.Context,
+	userID string,
+	candidates []ContentCandidate,
+	_ time.Time,
+) ([]ContentCandidate, error) {
+	if len(candidates) == 0 || strings.TrimSpace(userID) == "" {
+		return candidates, nil
+	}
+	closed, err := h.isSubjectClosed(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if closed {
+		return nil, nil
+	}
+	negativeKey := negativeKeyPrefix + userScopedKey(userID)
+	filtered := make([]ContentCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		contentID := strings.TrimSpace(candidate.ContentID)
+		if contentID == "" {
+			continue
+		}
+		blocked, readErr := h.redis.SIsMember(ctx, negativeKey, contentID)
+		if readErr != nil {
+			return nil, readErr
+		}
+		if blocked {
+			feedNegativeCandidateSuppressedTotal.Inc()
+			continue
+		}
+		filtered = append(filtered, candidate)
+	}
 	return filtered, nil
 }
 

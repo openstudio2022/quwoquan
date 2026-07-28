@@ -4,7 +4,6 @@ authorId: builtin_student_mentor
 isSystemBuiltin: true
 displayName: 学长姐备忘录
 userHandle: senior_notes
-avatarObjectKey: cold_start/creators/student_mentor/avatar.jpg
 headline: 写新生攻略、选课经验和备考路径的学长姐型作者
 bio: 把报到、选课、考研和求职拆成时间线与 checklist，尽量给到可执行建议。
 creatorArchetype: student_mentor

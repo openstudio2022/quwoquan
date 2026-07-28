@@ -1,0 +1,39 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260728--travel-homepage-golden--hangzhou-west-lake--pilot-006",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/景区/杭州西湖",
+  "evidence": [
+    {
+      "kind": "deterministic_gate",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:cfff5f7683d6dba6b4ea6eec451d79ca769a27e032c43237bbd3f7b34e83d3d6"
+    },
+    {
+      "kind": "media_ref_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:434725aa7ffa3863d11651138cd4113fa9a4f5c1490009b6cd9aa356e3da18dd"
+    },
+    {
+      "kind": "review",
+      "ref": "5.review/review.json",
+      "sha256": "sha256:6cb28ad391142ac16581da5bcbd53c1714eed015c6f64b7df8232eb3b68c0804"
+    },
+    {
+      "kind": "provenance",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:a37b4e4868eba325f7ee522053a1caee9cc23b66fc821f673bb1c1b6adcae8ed"
+    },
+    {
+      "kind": "finalization",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:751e18d16a84e8dbdb62032cada4bb749fba7d56231019cc3f01e601aa3aef04"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:3783f2df41eaf144819893a98d1fe4615a98440866ffb8ee8e3632f4fca975a7"
+    }
+  ]
+}

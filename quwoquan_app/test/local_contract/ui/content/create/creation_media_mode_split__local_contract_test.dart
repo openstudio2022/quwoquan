@@ -29,7 +29,7 @@ void main() {
       expect(categories, isEmpty);
       expect(
         actions.map((action) => action.label),
-        contains(UITextConstants.mediaPickerOneTapMovie),
+        contains(MediaText.mediaPickerOneTapMovie),
       );
       expect(actions.map((action) => action.label), contains('下一步(2)'));
       expect(payload['contentType'], 'image');
@@ -57,7 +57,7 @@ void main() {
       expect(categories, isEmpty);
       expect(actions, hasLength(1));
       expect(actions.single.action, CreateMediaPickerBottomAction.nextStep);
-      expect(actions.single.label, isNot(UITextConstants.mediaPickerEditImage));
+      expect(actions.single.label, isNot(MediaText.mediaPickerEditImage));
       expect(payload['contentType'], 'video');
       expect(payload['videoUrl'], '/tmp/video.mp4');
     });

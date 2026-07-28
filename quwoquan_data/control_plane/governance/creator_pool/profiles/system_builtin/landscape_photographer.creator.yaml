@@ -4,7 +4,6 @@ authorId: builtin_travel_landscape_photographer
 isSystemBuiltin: true
 displayName: 林间取景
 userHandle: frame_in_mountains
-avatarObjectKey: cold_start/creators/landscape_photographer/avatar.jpg
 headline: 关注山地光线、机位和图文画报的风光摄影师
 bio: 用图集、长图和机位说明记录旅行地，不夸大滤镜，不省略拍摄限制。
 creatorArchetype: landscape_photographer

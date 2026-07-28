@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "entityId",
+    "aliases",
+    "topics",
+    "requestedLimit",
+    "observedAt",
+    "frontierDigest",
+    "sites",
+    "sources"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan.content.article_source_discovery_evidence"
+    },
+    "entityId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "topics": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "requestedLimit": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "observedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "frontierDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sites": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/siteEvidence"
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceEvidence"
+      }
+    }
+  },
+  "$defs": {
+    "frontierRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url",
+        "canonicalUrl",
+        "parentUrl",
+        "depth",
+        "discoveryMethod",
+        "query",
+        "decision",
+        "reason",
+        "statusCode",
+        "relevanceScore"
+      ],
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "canonicalUrl": {
+          "type": "string"
+        },
+        "parentUrl": {
+          "type": "string"
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "discoveryMethod": {
+          "type": "string",
+          "minLength": 1
+        },
+        "query": {
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "accepted",
+            "discarded",
+            "blocked",
+            "expanded"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "statusCode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "relevanceScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "siteEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "siteId",
+        "articleCommercialAdmission",
+        "rightsPolicy",
+        "robotsPolicy",
+        "termsUrl",
+        "maxDepth",
+        "maxPagesPerDay",
+        "maxRequestsPerSecond",
+        "profileDigest",
+        "pagesReserved",
+        "frontier",
+        "issues"
+      ],
+      "properties": {
+        "siteId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "articleCommercialAdmission": {
+          "const": "commercial_release"
+        },
+        "rightsPolicy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "robotsPolicy": {
+          "const": "respect_robots_txt"
+        },
+        "termsUrl": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "maxDepth": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxPagesPerDay": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxRequestsPerSecond": {
+          "type": "number",
+          "minimum": 0
+        },
+        "profileDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "pagesReserved": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "frontier": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/frontierRecord"
+          }
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "../_common/data_issue.schema.json"
+          }
+        }
+      }
+    },
+    "sourceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceId",
+        "siteId",
+        "canonicalUrl",
+        "sourceUseMode",
+        "discoveryMethod",
+        "relevanceScore"
+      ],
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "siteId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "canonicalUrl": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "sourceUseMode": {
+          "const": "factual_reference_only"
+        },
+        "discoveryMethod": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relevanceScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    }
+  }
+}

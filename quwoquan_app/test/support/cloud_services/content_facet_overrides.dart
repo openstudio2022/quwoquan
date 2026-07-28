@@ -10,12 +10,15 @@ import 'content/mock_content_repository.dart';
 /// 这是测试容器 wiring，不是业务 Repository 聚合或 App 运行时 Provider。
 List<Override> mockContentFacetOverrides(
   MockContentRepository adapter, {
+  ContentPostDetailReader? workBrowserDetailReader,
   ContentCommentFacet? commentFacet,
   ContentPostReactionFacet? postReactionFacet,
 }) {
   return <Override>[
     contentDiscoveryFeedQueryProvider.overrideWithValue(adapter),
-    workBrowserContentPostDetailReaderProvider.overrideWithValue(adapter),
+    workBrowserContentPostDetailReaderProvider.overrideWithValue(
+      workBrowserDetailReader ?? adapter,
+    ),
     globalSearchContentPostDetailReaderProvider.overrideWithValue(adapter),
     userProfileContentAuthorPostsReaderProvider.overrideWithValue(adapter),
     contentWriteRepositoryProvider.overrideWithValue(adapter),

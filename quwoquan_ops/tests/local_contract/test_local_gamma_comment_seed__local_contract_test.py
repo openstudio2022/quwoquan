@@ -221,7 +221,7 @@ class LocalGammaCommentSeedContractTest(unittest.TestCase):
                 self.assertEqual(local_gamma_t3.main(), 0)
 
             wait_url.assert_called_once_with(
-                "https://gamma-api.quwoquan-env.test:19000/healthz",
+                "https://api.gamma.quwoquan.com:19000/healthz",
                 45,
             )
             report = json.loads(report_path.read_text(encoding="utf-8"))

@@ -47,10 +47,10 @@ void main() {
     expect(find.text('256'), findsOneWidget);
     expect(find.text('8'), findsOneWidget);
     expect(find.text('5'), findsNothing);
-    expect(find.text(UITextConstants.profileStatRecords), findsNothing);
-    expect(find.text(UITextConstants.profileStatFollowers), findsOneWidget);
-    expect(find.text(UITextConstants.follow), findsOneWidget);
-    expect(find.text(UITextConstants.circleLikes), findsOneWidget);
+    expect(find.text(ProfileText.profileStatRecords), findsNothing);
+    expect(find.text(ProfileText.profileStatFollowers), findsOneWidget);
+    expect(find.text(FoundationText.follow), findsOneWidget);
+    expect(find.text(CommunityText.circleLikes), findsOneWidget);
     expect(find.text(ChatText.contactsTabCircles), findsOneWidget);
   });
 
@@ -69,9 +69,9 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text(UITextConstants.profileStatFollowers));
-    await tester.tap(find.text(UITextConstants.follow));
-    await tester.tap(find.text(UITextConstants.circleLikes));
+    await tester.tap(find.text(ProfileText.profileStatFollowers));
+    await tester.tap(find.text(FoundationText.follow));
+    await tester.tap(find.text(CommunityText.circleLikes));
     await tester.tap(find.text(ChatText.contactsTabCircles));
     await tester.pump();
 

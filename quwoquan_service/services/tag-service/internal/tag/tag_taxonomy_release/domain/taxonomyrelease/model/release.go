@@ -20,6 +20,13 @@ const (
 	StatusRejected Status = "rejected"
 )
 
+type ReleaseKind string
+
+const (
+	ReleaseKindContent       ReleaseKind = "content"
+	ReleaseKindEmptyBaseline ReleaseKind = "empty_baseline"
+)
+
 var (
 	ErrInvalidArgument    = errors.New("tag taxonomy release invalid argument")
 	ErrNotFound           = errors.New("tag taxonomy release not found")
@@ -32,29 +39,39 @@ var (
 
 // Release 是聚合文档。
 type Release struct {
-	ReleaseID       string     `bson:"_id" json:"releaseId"`
-	SourceOwner     string     `bson:"sourceOwner" json:"-"`
-	CanonicalDigest string     `bson:"canonicalDigest" json:"-"`
-	NodeCount       int        `bson:"nodeCount" json:"nodeCount"`
-	Status          Status     `bson:"status" json:"status"`
-	Version         int64      `bson:"version" json:"-"`
-	ImportedAt      time.Time  `bson:"importedAt" json:"importedAt"`
-	ActivatedAt     *time.Time `bson:"activatedAt,omitempty" json:"activatedAt,omitempty"`
+	ReleaseID       string      `bson:"_id" json:"releaseId"`
+	SourceOwner     string      `bson:"sourceOwner" json:"-"`
+	CanonicalDigest string      `bson:"canonicalDigest" json:"-"`
+	ReleaseKind     ReleaseKind `bson:"releaseKind" json:"releaseKind"`
+	NodeCount       int         `bson:"nodeCount" json:"nodeCount"`
+	Status          Status      `bson:"status" json:"status"`
+	Version         int64       `bson:"version" json:"-"`
+	ImportedAt      time.Time   `bson:"importedAt" json:"importedAt"`
+	ActivatedAt     *time.Time  `bson:"activatedAt,omitempty" json:"activatedAt,omitempty"`
 }
 
 // NewStaged 构造 staged release（首次 Stage）。
-func NewStaged(releaseID, sourceOwner, canonicalDigest string, nodeCount int, now time.Time) (Release, error) {
+func NewStaged(
+	releaseID, sourceOwner, canonicalDigest string,
+	releaseKind ReleaseKind,
+	nodeCount int,
+	now time.Time,
+) (Release, error) {
 	releaseID = strings.TrimSpace(releaseID)
 	sourceOwner = strings.TrimSpace(sourceOwner)
 	canonicalDigest = strings.TrimSpace(canonicalDigest)
 	if releaseID == "" || len(releaseID) > 96 ||
-		sourceOwner == "" || canonicalDigest == "" || nodeCount <= 0 {
+		sourceOwner == "" || canonicalDigest == "" ||
+		(releaseKind == ReleaseKindContent && nodeCount <= 0) ||
+		(releaseKind == ReleaseKindEmptyBaseline && nodeCount != 0) ||
+		(releaseKind != ReleaseKindContent && releaseKind != ReleaseKindEmptyBaseline) {
 		return Release{}, ErrInvalidArgument
 	}
 	return Release{
 		ReleaseID:       releaseID,
 		SourceOwner:     sourceOwner,
 		CanonicalDigest: canonicalDigest,
+		ReleaseKind:     releaseKind,
 		NodeCount:       nodeCount,
 		Status:          StatusStaged,
 		Version:         1,
@@ -62,10 +79,10 @@ func NewStaged(releaseID, sourceOwner, canonicalDigest string, nodeCount int, no
 	}, nil
 }
 
-// Activate 从 staged 迁移到 active；其它状态返回 ErrInvalidTransition
-// （already active 由调用方按 no-op 重放处理，不进入本行为）。
+// Activate 从 staged 或 retired 迁移到 active；retired 再激活用于 immutable
+// snapshot rollback/replay。already active 由调用方按 no-op 重放处理。
 func (r *Release) Activate(now time.Time) error {
-	if r.Status != StatusStaged {
+	if r.Status != StatusStaged && r.Status != StatusRetired {
 		return ErrInvalidTransition
 	}
 	r.Status = StatusActive

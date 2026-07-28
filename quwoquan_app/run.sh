@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# 使用 env-package-backed alpha 启动入口，避免直接裸跑 flutter run 漏掉 runtime 合同。
+# 使用 env-package-backed Alpha Remote 启动入口，避免裸跑漏掉 runtime/release 合同。
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$APP_DIR/.." && pwd)"
+export QWQ_APP_RUNTIME_ENV=alpha
+export QWQ_LAUNCH_TARGET=alpha-local
+export QWQ_APP_BUILD_CONTEXT=runtime
 
 cd "$APP_DIR"
 
@@ -45,9 +48,27 @@ parse_flutter_device_id() {
   return 0
 }
 
-DEVICE_ID="$(parse_flutter_device_id "$@")"
+for argument in "$@"; do
+  case "$argument" in
+    -t|--target|--target=*)
+      echo "[run] GATE_BLOCK: the Alpha launcher target is fixed by the production Remote handoff."
+      exit 2
+      ;;
+  esac
+done
 
-bash "$ROOT_DIR/quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh" up
+export QWQ_RUN_DEVICE_ID="$(parse_flutter_device_id "$@")"
+DEVICE_ID="$QWQ_RUN_DEVICE_ID"
+
+if [[ -z "$DEVICE_ID" ]]; then
+  echo "[run] GATE_BLOCK: pass -d/--device-id so runtime ports and the consumer lease bind to one device."
+  exit 2
+fi
+
+python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" up \
+  --target alpha-local \
+  --skip-app \
+  --workload content-release
 
 ANDROID_LOCAL_GATEWAY_BASE_URL=""
 ANDROID_LOCAL_LEGAL_BASE_URL=""
@@ -55,10 +76,38 @@ ANDROID_LOCAL_MEDIA_AVATAR_BASE_URL=""
 ANDROID_LOCAL_MEDIA_IMAGE_BASE_URL=""
 ANDROID_LOCAL_MEDIA_VIDEO_BASE_URL=""
 ANDROID_LOCAL_MEDIA_UPLOAD_BASE_URL=""
+QWQ_ANDROID_LOCAL_PORTS=""
+export QWQ_RUN_CONSUMER_ID="flutter-run-$$"
+export QWQ_CONSUMER_LEASE_ACQUIRED=0
+export QWQ_CONSUMER_LEASE_ID=""
+
+release_consumer_lease() {
+  if [[ "$QWQ_CONSUMER_LEASE_ACQUIRED" != "1" ]]; then
+    return
+  fi
+  if command -v adb >/dev/null 2>&1; then
+    IFS=',' read -r -a reverse_ports <<< "$QWQ_ANDROID_LOCAL_PORTS"
+    for port in "${reverse_ports[@]}"; do
+      [[ -z "$port" ]] && continue
+      if ! adb -s "$DEVICE_ID" reverse --remove "tcp:$port" >/dev/null 2>&1; then
+        echo "[run] WARN: failed to remove owned adb reverse tcp:$port."
+      fi
+    done
+  fi
+  python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" consumer-lease release \
+    --target alpha-local \
+    --device "$DEVICE_ID" \
+    --consumer "$QWQ_RUN_CONSUMER_ID" >/dev/null || \
+    echo "[run] WARN: failed to release Android runtime consumer lease."
+  QWQ_CONSUMER_LEASE_ACQUIRED=0
+}
+
+trap release_consumer_lease EXIT
 
 if [[ -n "$DEVICE_ID" ]]; then
-  eval "$(
-    python3 - "$DEVICE_ID" <<'PY'
+  DEVICE_EXPORTS="$(
+    PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - "$DEVICE_ID" <<'PY'
+import hashlib
 import shlex
 import sys
 
@@ -67,7 +116,6 @@ from quwoquan_ops.cli.lib.dev_up import (
     enable_android_adb_reverse,
     find_device,
     load_environment_topology,
-    local_target_android_debug_ca_cert,
     resolve_app_endpoint_overrides,
 )
 
@@ -81,11 +129,18 @@ device_kind = detect_device_kind(
 print(f"export QWQ_RUN_DEVICE_KIND={shlex.quote(device_kind)}")
 if device_kind.startswith("android"):
     topology = load_environment_topology()
-    enable_android_adb_reverse(device_id, "alpha-local", topology=topology)
+    ports = enable_android_adb_reverse(device_id, "alpha-local", topology=topology)
     overrides = resolve_app_endpoint_overrides("alpha", device_kind, topology=topology)
-    ca_path = local_target_android_debug_ca_cert("alpha-local")
-    print("export QWQ_ANDROID_LOCAL_ENV_CA_PATH=" + shlex.quote(str(ca_path)))
-    print("export QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED=1")
+    port_list = ",".join(str(port) for port in ports)
+    print("export QWQ_ANDROID_LOCAL_PORTS=" + shlex.quote(port_list))
+    print("export QWQ_ANDROID_REVERSE_EXPECTED_PORTS=" + shlex.quote(port_list))
+    print("export QWQ_ANDROID_REVERSE_ACTUAL_PORTS=" + shlex.quote(port_list))
+    print("export QWQ_ANDROID_REVERSE_RECEIPT_DIGEST=" + shlex.quote(
+        "sha256:" + hashlib.sha256(
+            f"alpha-local\0{device_id}\0{port_list}".encode("utf-8")
+        ).hexdigest()
+    ))
+    print("export QWQ_ANDROID_LOCAL_TARGET=alpha-local")
     print("export ANDROID_LOCAL_GATEWAY_BASE_URL=" + shlex.quote(overrides["gatewayBaseUrl"]))
     print("export ANDROID_LOCAL_LEGAL_BASE_URL=" + shlex.quote(overrides["legalBaseUrl"]))
     print(
@@ -105,41 +160,160 @@ if device_kind.startswith("android"):
         + shlex.quote(overrides["mediaUploadBaseUrl"])
     )
 PY
-  )"
+  )" || {
+    echo "[run] GATE_BLOCK: failed to resolve device-specific Remote topology." >&2
+    exit 2
+  }
+  eval "$DEVICE_EXPORTS"
 fi
 
-DART_DEFINES=()
-DEFINE_CMD=(
-  python3 "$APP_DIR/scripts/env/print_app_env_dart_defines.py"
+if [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
+  export ANDROID_SERIAL="$DEVICE_ID"
+  if [[ -z "$QWQ_ANDROID_LOCAL_PORTS" ]]; then
+    echo "[run] GATE_BLOCK: Android topology did not provide reverse ports."
+    exit 2
+  fi
+  LEASE_JSON="$(
+    python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
+      consumer-lease acquire \
+      --target alpha-local \
+      --device "$DEVICE_ID" \
+      --consumer "$QWQ_RUN_CONSUMER_ID" \
+      --package-name com.quwoquan.quwoquan_app \
+      --ports "$QWQ_ANDROID_LOCAL_PORTS"
+  )"
+  QWQ_CONSUMER_LEASE_ID="$(
+    python3 - "$LEASE_JSON" <<'PY'
+import json
+import sys
+
+lease_id = str((json.loads(sys.argv[1]).get("lease") or {}).get("leaseId") or "")
+if not lease_id:
+    raise SystemExit("consumer lease response is missing leaseId")
+print(lease_id)
+PY
+  )"
+  export QWQ_CONSUMER_LEASE_ID
+  QWQ_CONSUMER_LEASE_ACQUIRED=1
+
+fi
+
+echo "[run] verifying alpha gateway and media entry before Flutter launch..."
+python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" health \
+  --target alpha-local --scope edge --request-timeout-seconds 3
+python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" health \
+  --target alpha-local --scope media --request-timeout-seconds 3
+
+HANDOFF_CMD=(
+  python3 "$APP_DIR/scripts/device/build_launcher_handoff.py"
   --env alpha
-  --format args
+  --target alpha-local
+  --launch-mode canonical_launcher
   --app-instance-id alpha-run
   --app-instance-namespace alpha-run
 )
 if [[ -n "$ANDROID_LOCAL_GATEWAY_BASE_URL" ]]; then
-  DEFINE_CMD+=(--gateway-base-url "$ANDROID_LOCAL_GATEWAY_BASE_URL")
+  HANDOFF_CMD+=(--gateway-base-url "$ANDROID_LOCAL_GATEWAY_BASE_URL")
 fi
 if [[ -n "$ANDROID_LOCAL_LEGAL_BASE_URL" ]]; then
-  DEFINE_CMD+=(--legal-base-url "$ANDROID_LOCAL_LEGAL_BASE_URL")
+  HANDOFF_CMD+=(--legal-base-url "$ANDROID_LOCAL_LEGAL_BASE_URL")
 fi
 if [[ -n "$ANDROID_LOCAL_MEDIA_AVATAR_BASE_URL" ]]; then
-  DEFINE_CMD+=(--media-avatar-base-url "$ANDROID_LOCAL_MEDIA_AVATAR_BASE_URL")
+  HANDOFF_CMD+=(--media-avatar-base-url "$ANDROID_LOCAL_MEDIA_AVATAR_BASE_URL")
 fi
 if [[ -n "$ANDROID_LOCAL_MEDIA_IMAGE_BASE_URL" ]]; then
-  DEFINE_CMD+=(--media-image-base-url "$ANDROID_LOCAL_MEDIA_IMAGE_BASE_URL")
+  HANDOFF_CMD+=(--media-image-base-url "$ANDROID_LOCAL_MEDIA_IMAGE_BASE_URL")
 fi
 if [[ -n "$ANDROID_LOCAL_MEDIA_VIDEO_BASE_URL" ]]; then
-  DEFINE_CMD+=(--media-video-base-url "$ANDROID_LOCAL_MEDIA_VIDEO_BASE_URL")
+  HANDOFF_CMD+=(--media-video-base-url "$ANDROID_LOCAL_MEDIA_VIDEO_BASE_URL")
 fi
 if [[ -n "$ANDROID_LOCAL_MEDIA_UPLOAD_BASE_URL" ]]; then
-  DEFINE_CMD+=(--media-upload-base-url "$ANDROID_LOCAL_MEDIA_UPLOAD_BASE_URL")
+  HANDOFF_CMD+=(--media-upload-base-url "$ANDROID_LOCAL_MEDIA_UPLOAD_BASE_URL")
 fi
+if [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
+  HANDOFF_CMD+=(
+    --transport-required
+    --reverse-expected-ports "$QWQ_ANDROID_REVERSE_EXPECTED_PORTS"
+    --reverse-actual-ports "$QWQ_ANDROID_REVERSE_ACTUAL_PORTS"
+    --reverse-receipt-digest "$QWQ_ANDROID_REVERSE_RECEIPT_DIGEST"
+    --consumer-lease-id "$QWQ_CONSUMER_LEASE_ID"
+  )
+fi
+
+HANDOFF_JSON="$("${HANDOFF_CMD[@]}")"
+HANDOFF_EXPORTS="$(
+  python3 - "$HANDOFF_JSON" <<'PY'
+import json
+import shlex
+import sys
+
+handoff = json.loads(sys.argv[1])
+print("ENTRYPOINT=" + shlex.quote(handoff["entrypoint"]))
+print("DART_DEFINES_DIGEST=" + shlex.quote(handoff["dartDefinesDigest"]))
+print("RUNTIME_CONFIG_DIGEST=" + shlex.quote(handoff["runtimeConfigDigest"]))
+print("EFFECTIVE_LAUNCH_MANIFEST_DIGEST=" + shlex.quote(
+    handoff["effectiveLaunchManifestDigest"]
+))
+print("EFFECTIVE_LAUNCH_MANIFEST_JSON=" + shlex.quote(json.dumps(
+    handoff["effectiveLaunchManifest"],
+    ensure_ascii=False,
+    separators=(",", ":"),
+)))
+print("RECOVERY_BASE_URL=" + shlex.quote(handoff["recoveryBaseUrl"]))
+print("PUBLIC_WEB_BASE_URL=" + shlex.quote(handoff["publicWebBaseUrl"]))
+print("DEFINES_JSON=" + shlex.quote(json.dumps(
+    handoff["dartDefines"],
+    ensure_ascii=False,
+    separators=(",", ":"),
+)))
+PY
+)" || {
+  echo "[run] GATE_BLOCK: failed to parse launcher handoff." >&2
+  exit 2
+}
+eval "$HANDOFF_EXPORTS"
+export QWQ_DART_DEFINES_DIGEST="$DART_DEFINES_DIGEST"
+export QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST="$RUNTIME_CONFIG_DIGEST"
+export QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST="$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
+export QWQ_APP_RECOVERY_BASE_URL="$RECOVERY_BASE_URL"
+export QWQ_APP_PUBLIC_WEB_URL="$PUBLIC_WEB_BASE_URL"
+VERIFY_HANDOFF_CMD=(
+  python3 "$APP_DIR/scripts/device/verify_flutter_run_defines.py"
+  --env alpha
+  --target alpha-local
+  --entrypoint "$ENTRYPOINT"
+  --defines-digest "$DART_DEFINES_DIGEST"
+  --runtime-config-digest "$RUNTIME_CONFIG_DIGEST"
+  --effective-launch-manifest-json "$EFFECTIVE_LAUNCH_MANIFEST_JSON"
+  --effective-launch-manifest-digest "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
+  --defines-json "$DEFINES_JSON"
+)
+if [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
+  VERIFY_HANDOFF_CMD+=(
+    --transport-required
+    --reverse-expected-ports "$QWQ_ANDROID_REVERSE_EXPECTED_PORTS"
+    --reverse-actual-ports "$QWQ_ANDROID_REVERSE_ACTUAL_PORTS"
+    --reverse-receipt-digest "$QWQ_ANDROID_REVERSE_RECEIPT_DIGEST"
+    --consumer-lease-id "$QWQ_CONSUMER_LEASE_ID"
+  )
+fi
+"${VERIFY_HANDOFF_CMD[@]}"
+
+DART_DEFINES=()
 while IFS= read -r line; do
   [[ -n "$line" ]] && DART_DEFINES+=("$line")
-done < <("${DEFINE_CMD[@]}")
+done < <(
+  python3 - "$DEFINES_JSON" <<'PY'
+import json
+import sys
+for key, value in json.loads(sys.argv[1]).items():
+    print(f"--dart-define={key}={value}")
+PY
+)
 
-exec flutter run \
+flutter run \
   --no-pub \
+  --target "$ENTRYPOINT" \
   --host-vmservice-port=8888 \
   --dds-port=8889 \
   "${DART_DEFINES[@]}" \

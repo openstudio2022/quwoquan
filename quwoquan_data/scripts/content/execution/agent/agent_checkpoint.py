@@ -21,6 +21,15 @@ def _managed_author_ref(prompt: str) -> str:
         prefix = "内容 ref:"
         if line.startswith(prefix):
             return line[len(prefix):].strip()
+        task_ref = re.match(r"^\s*-\s*ref:\s*`([^`]+)`", line)
+        if task_ref:
+            return task_ref.group(1).strip()
+        localized_task_ref = re.match(
+            r"^\s*-\s*内容\s*ref:\s*`([^`]+)`",
+            line,
+        )
+        if localized_task_ref:
+            return localized_task_ref.group(1).strip()
     return ""
 
 def _managed_author_failure_refs(
@@ -273,7 +282,7 @@ def _finalize_managed_author_outputs(
                 ref,
                 run_id=outcome.run_id or str(meta.get("agentRunId") or ""),
                 agent_id=outcome.agent_id or meta.get("agentId"),
-                model=str(meta.get("model") or ctx.model or ""),
+                model=str(ctx.model or meta.get("model") or ""),
             )
             write_post_author_evidence(ctx, ref=ref, outcome=outcome)
             continue

@@ -9,6 +9,7 @@ import (
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
+	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
@@ -69,6 +70,9 @@ func main() {
 	if err := preflightConfig(cfg, appEnv); err != nil {
 		log.Fatalf("content-service config preflight failed: %v", err)
 	}
+	controlplane.StartReleaseConfigAttestation(
+		serviceName, appEnv, configRoot, configVersion, imageVersion,
+	)
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)
@@ -132,22 +136,18 @@ func main() {
 		log.Fatalf("content-service message transport preflight failed: %v", err)
 	}
 	subjectClosureGuard := newDeferredSubjectClosureGuard()
-	hotPath := rtrec.NewHotPath(
-		rtredis.NewRecAdapter(router.Scene("rec")),
-		rtrec.WithSubjectClosureGuard(subjectClosureGuard),
-	)
 	eventPub := messaging.NewRedisEventPublisherWithTransport(messageTransport, "content-service", logger)
-
-	// Read path: SessionCache wraps HotPath with L1 cache + singleflight
-	sessionCache := rtrec.NewSessionCache(hotPath, 2*time.Second, 10000)
-
-	// Write path: BufferedHotPath wraps HotPath with async channel
-	bufferedWriter := rtrec.NewBufferedHotPath(hotPath, rtrec.WithBufferLogger(logger))
+	sessionCache, bufferedWriter := buildRecommendationSignalRuntime(
+		router,
+		subjectClosureGuard,
+		logger,
+	)
 	defer bufferedWriter.Stop()
 
 	// SIT6 商用装配：Mongo/PostgreSQL/OSS 均为启动必需依赖，不存在内存降级。
 	var store *persistence.MongoPostStore
 	var postQueryReader *persistence.MongoPostQueryReader
+	var activeSupplyReader feedapp.ActiveSupplyReader
 	var reactionStore *persistence.MongoContentReactionStore
 	var reactionServiceCore *reactionapp.Service
 	var commentDataAdapter *persistence.MongoCommentDataAdapter
@@ -249,6 +249,7 @@ func main() {
 		}
 		store = mongoStore
 		postQueryReader = persistence.NewMongoPostQueryReader(db.Collection(collName))
+		activeSupplyReader = persistence.NewMongoActiveSupplyReader(db, appEnv)
 		outboundShareSink := outboundshareinfra.NewMongoAppendSink(db)
 		if err := outboundShareSink.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("content-service OutboundShareFact indexes init failed: %v", err)
@@ -903,33 +904,20 @@ func main() {
 	defer closeMediaRuntime()
 	commentServiceCore = mediaRuntime.commentServiceCore
 
-	accountClosureProcessor, err := accountclosure.NewProcessor(
+	accountClosureConsumer, err := startAccountClosureRuntime(
+		ctx,
+		router.Scene("general"),
+		logger,
+		healthChecker,
+		instanceID,
 		accountClosureStore,
 		accountClosureCache,
 		accountClosureSearch,
 		mediaRuntime.mediaObjectGateway,
 	)
 	if err != nil {
-		log.Fatalf("content-service UserAccountClosed processor assembly failed: %v", err)
+		log.Fatalf("content-service UserAccountClosed runtime assembly failed: %v", err)
 	}
-	accountClosureConsumer, err := accountclosure.NewConsumer(
-		router.Scene("general"),
-		accountClosureProcessor,
-		accountClosureStore,
-		"content-service-"+instanceID,
-		logger,
-		accountclosure.DefaultConsumerConfig(),
-	)
-	if err != nil {
-		log.Fatalf("content-service UserAccountClosed consumer assembly failed: %v", err)
-	}
-	if err := accountClosureConsumer.EnsureGroup(ctx); err != nil {
-		log.Fatalf("content-service UserAccountClosed consumer group init failed: %v", err)
-	}
-	go accountClosureConsumer.Run(ctx)
-	healthChecker.Register("user-account-closed-consumer", func(context.Context) error {
-		return accountClosureConsumer.Healthy(15 * time.Second)
-	})
 
 	source := recinfra.NewPostProjectionSource(store, store)
 	rawCandidateSources := recommendationCandidateSources(mongoCandidateSources, source)
@@ -958,6 +946,7 @@ func main() {
 		policyStore:               policyStore,
 		postStore:                 store,
 		postQueryReader:           postQueryReader,
+		activeSupplyReader:        activeSupplyReader,
 		viewerBlockReader:         viewerBlockReader,
 		reactionStore:             reactionStore,
 		reactionService:           reactionServiceCore,

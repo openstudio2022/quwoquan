@@ -8,7 +8,24 @@ from nonfunctional_coverage_lib import Failures, ROOT
 
 def main() -> int:
     failures = Failures()
-    failures.require_path(ROOT / "quwoquan_data" / "publish", "data publish truth source")
+    # `publish/**` is the approved object set and may legitimately be empty before
+    # the first reviewed promotion. Git cannot preserve an empty directory, and a
+    # marker file would violate publish purity. Gate the versioned contract and
+    # canonical producer instead; release/UAT gates own proof of non-empty hosted
+    # content for a production candidate.
+    failures.require_path(
+        ROOT / "quwoquan_data" / "schema" / "publish",
+        "canonical publish schema truth source",
+    )
+    failures.require_path(
+        ROOT
+        / "quwoquan_data"
+        / "scripts"
+        / "content"
+        / "release"
+        / "canonical",
+        "canonical publish producer",
+    )
     failures.require_any_canonical_test(
         label="data consistency coverage",
         patterns=(

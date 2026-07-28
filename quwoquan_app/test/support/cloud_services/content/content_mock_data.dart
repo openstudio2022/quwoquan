@@ -3,7 +3,8 @@ import 'dart:convert';
 
 import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+
+import '../repository_mock_reexports.dart';
 import 'home_showcase_core_fixture.g.dart';
 
 /// 内容域 mock 数据（canonical 字段，与 FeedItemDto schema 严格对齐）。
@@ -58,7 +59,7 @@ class ContentMockData {
   /// （content_scenarios[.lite|.gamma-curated].json），四环境同源 archived 媒体。
   /// MockRepository 与发现区 wire 查找均消费本 getter，端侧不再维护第二套样本列表。
   static List<FeedItemDto> get seededShowcaseFeedItems {
-    final seed = alphaFixtureSeedReader.contentSeedSet('home_showcase_core');
+    final seed = objectScenarioSeedReader.contentSeedSet('home_showcase_core');
     final hostSeed = _feedItemsFromSeed(seed);
     if (hostSeed.isNotEmpty) {
       return hostSeed;

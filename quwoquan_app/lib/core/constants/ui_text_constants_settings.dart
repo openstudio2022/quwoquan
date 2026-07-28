@@ -1,6 +1,6 @@
 part of 'ui_text_constants.dart';
 
-abstract final class _UITextSettings {
+abstract final class SettingsText {
   static const String editProfile = '编辑资料', settings = '设置';
   static const String settingsAccountSection = '账号';
   static const String settingsPrivacySection = '权限';

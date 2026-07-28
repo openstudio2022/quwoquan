@@ -16,9 +16,9 @@ void main() {
     skip: !kRunPatrolT4,
     ($) async {
       final methodLabel = switch (_method.trim().toLowerCase()) {
-        'wechat' => UITextConstants.loginMethodWechat,
-        'qq' => UITextConstants.loginMethodQq,
-        'alipay' => UITextConstants.loginMethodAlipay,
+        'wechat' => FoundationText.loginMethodWechat,
+        'qq' => FoundationText.loginMethodQq,
+        'alipay' => FoundationText.loginMethodAlipay,
         _ => '',
       };
       expect(
@@ -30,7 +30,7 @@ void main() {
       await acceptLoginAgreement($);
 
       if (find.text(methodLabel).evaluate().isEmpty) {
-        await $(find.text(UITextConstants.loginOtherMethodFallback)).tap();
+        await $(find.text(FoundationText.loginOtherMethodFallback)).tap();
         await $(
           find.text(methodLabel),
         ).waitUntilVisible(timeout: const Duration(seconds: 15));

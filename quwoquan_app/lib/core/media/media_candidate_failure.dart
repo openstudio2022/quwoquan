@@ -22,6 +22,9 @@ enum MediaCandidateFailureKind {
   /// Timed out while waiting for a bounded native controller slot.
   controllerSlotTimeout,
 
+  /// The shared source lookup + decoder + native initialization budget ended.
+  initializationTimeout,
+
   /// Native decoder rejected the media during controller initialization.
   decoderInitialization,
 

@@ -154,14 +154,19 @@ def _homepage_base_ready(
     if not source_path.is_file():
         return False
     try:
-        from content.post.article.base_draft import load_base_draft_text
+        from content.homepage.homepage_text import load_homepage_base_draft_text
 
         source_ref = source_path.resolve().relative_to(batch_dir.resolve()).as_posix()
-        text = load_base_draft_text(execution_id, source_ref)
+        text = load_homepage_base_draft_text(execution_id, source_ref)
     except Exception:  # noqa: BLE001
         return False
     try:
         from content.homepage.homepage_text import homepage_base_draft_readiness
+        from content.homepage.quality_policy import (
+            homepage_body_char_minimum,
+            homepage_fact_count_minimum,
+            homepage_fact_char_minimum,
+        )
 
         # source_dir 即 source unit 目录：传 unit_dir 让 homepage_source_judge
         # 消费已写回的 source.judge.json（灰区无 verdict 时 fail-closed）。
@@ -174,6 +179,9 @@ def _homepage_base_ready(
             entity_name=entity,
             aliases=(qualified_authority_title,) if qualified_authority_title else (),
             unit_dir=source_dir,
+            minimum_body_chars=homepage_body_char_minimum(execution_id),
+            minimum_fact_count=homepage_fact_count_minimum(execution_id),
+            minimum_fact_chars=homepage_fact_char_minimum(execution_id),
         )
     except Exception:  # noqa: BLE001
         return False
@@ -360,6 +368,11 @@ def gate_download(execution_id: str, *, target_entities: set[str] | None = None)
                     source_assets = read_json(index_path).get("assets") or []
                 except Exception:  # noqa: BLE001
                     source_assets = []
+            # Text-source snapshots may retain inline images as provenance, but
+            # they are not image-lane publication candidates. They must neither
+            # satisfy the independent image quota nor block the text carrier on
+            # media-rights fields.
+            if is_image_unit:
                 for asset in source_assets:
                     if not isinstance(asset, dict):
                         continue
@@ -436,7 +449,7 @@ def gate_download(execution_id: str, *, target_entities: set[str] | None = None)
                 recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
                 message=(
                     f"{rel}: homepage baseDraft-ready sources={homepage_base_ready_count} need>=1 "
-                    "(homepage lane must yield a primary-authority encyclopedia source with >=4 usable facts)"
+                    "(homepage lane must yield a primary-authority encyclopedia source with the policy minimum usable facts)"
                 ),
                 attributes={"retained": homepage_base_ready_count, "required": 1},
             ))

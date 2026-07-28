@@ -738,7 +738,7 @@ export const platformConfig = {
       "key": "sys.chat-service.runtime.media.group_avatar_cdn_base_url",
       "type": "string",
       "owner": "",
-      "default": "https://alpha-avatar.quwoquan-env.test:17100",
+      "default": null,
       "scope": "workload",
       "reload": "restart",
       "rollout": "progressive",
@@ -3747,7 +3747,7 @@ export const platformConfig = {
       "sensitive": false
     },
     {
-      "key": "sys.product-ops-service.app_release.ios.app_store_url",
+      "key": "sys.product-ops-service.app_release.android.min_android_version",
       "type": "string",
       "owner": "",
       "default": "",
@@ -3772,6 +3772,18 @@ export const platformConfig = {
     },
     {
       "key": "sys.product-ops-service.app_release.ios.latest_version",
+      "type": "string",
+      "owner": "",
+      "default": "",
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.product-ops-service.app_release.ios.pwa_url",
       "type": "string",
       "owner": "",
       "default": "",
@@ -5826,7 +5838,7 @@ export const platformConfig = {
       "key": "sys.user-service.mongodb.database",
       "type": "string",
       "owner": "",
-      "default": "quwoquan",
+      "default": "quwoquan_user",
       "scope": "workload",
       "reload": "restart",
       "rollout": "progressive",

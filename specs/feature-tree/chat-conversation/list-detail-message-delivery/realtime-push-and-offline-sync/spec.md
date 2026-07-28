@@ -18,10 +18,10 @@
 
 - “实时推送与离线同步（Realtime Push & Offline Sync）”的输入、可观察主路径、失败语义以及与父能力的交接。
 - `RealtimeConnectionDelegate`、`RealtimeConnectionNotifier` 与 `realtimeConnectionManagerProvider` 的唯一 production Remote 入口。
-- alpha runner 通过 composition-root override 注入 fixture delegate，production kernel 不可达。
+- alpha/beta/gamma/prod 通过同一 composition root 注入 Remote delegate，环境 kernel 不可达任何 fixture delegate。
 - `QuWoQuanAppRoot` 的 foreground/background lifecycle 接线。
 - Remote idle long-poll、active websocket、background disconnect 的最小状态机闭环。
-- `chat_realtime_fixture_core` fixture 驱动的 `MessageSent` 与 `ConversationMemberAdded` alpha realtime 事件。
+- 测试树 typed event double 驱动的 `MessageSent` 与 `ConversationMemberAdded` handler 契约。
 
 ### Out of Scope
 
@@ -35,9 +35,9 @@
 - `ConversationMemberAdded` 必须进入独立 handler 分支，并生成可回读的群成员系统消息。
 
 <a id="req-002"></a>
-### REQ-002 群聊 fixture 的 ConversationMemberAdded 事件能走统一 handler 分支
+### REQ-002 测试树的 ConversationMemberAdded 事件能走统一 handler 分支
 
-- contract fixture 中的 `ConversationMemberAdded` 必须经统一 handler 生成群成员系统消息。
+- 测试树 typed event 中的 `ConversationMemberAdded` 必须经与 Remote 共用的 handler 生成群成员系统消息。
 
 <a id="req-003"></a>
 ### REQ-003 Remote foreground idle / active / background 状态切换可验证
@@ -45,37 +45,37 @@
 - foreground idle、active 与 background 切换必须按 policy 建立或释放 Remote transport，不得遗留 timer。
 
 <a id="req-004"></a>
-### REQ-004 Production Remote 与 alpha fixture 通过 composition root 物理隔离
+### REQ-004 四环境 Remote 与 test-only double 物理隔离
 
-- Production composition 只能注入 Remote；alpha fixture 只能由 alpha runner 注入，二者不得互相可达。
+- alpha/beta/gamma/prod composition 只能注入 Remote；typed double 只能由测试树直接装配，二者不得互相可达。
 
 <a id="req-005"></a>
-### REQ-005 Mock 演示不可信：Mock 只能切 transport state，不能推送 contract 对齐的新消息/入群事件，无法证明 handler 和 UI 更新链路
+### REQ-005 环境 Mock 演示不可信，Remote 与本地 handler 证据必须分层
 
 - **Mock 演示不可信**：Mock 只能切 transport state，不能推送 contract 对齐的新消息/入群事件，无法证明 handler 和 UI 更新链路。
 - **background**：统一 `disconnected`，transport 全部释放。
 - `RealtimeConnectionNotifier` 是 UI 层唯一可见入口；页面不得直接 new `LongPollTransport` / `WebSocketTransport`
-- Production realtime source 禁止 import alpha/mock package、fixture loader 或任意 mock 数据目录。
-- Alpha 事件 payload 的唯一真相源是生成 bundle 内的 contract fixture；未登记会话不生成伪造 realtime 事件，新增场景必须先登记 fixture。
+- 四环境 realtime source 禁止 import alpha/mock package、fixture loader 或任意 mock 数据目录。
+- 环境事件 payload 只来自 Remote gateway；测试事件只存在测试树，未登记会话不得由 runner/UAT 生成伪造 realtime 事件。
 - Long-poll 请求路径与 page id 必须来自 `realtime_api_metadata.g.dart` 与 `realtime_request_page_ids.g.dart`
-- Production Remote、alpha runner 与 test fixture 都必须复用同一个 `RealtimeMessageHandler`，不得维护第二条消息插入链路。
-- 群聊 fixture 必须能证明 `ConversationMemberAdded` 分支会产生系统消息。
+- Remote 与测试树 typed event 必须复用同一个 `RealtimeMessageHandler`，不得维护第二条消息插入链路。
+- 测试树必须证明 `ConversationMemberAdded` 分支会产生系统消息。
 - 页面卸载、退后台不得留下 leaked timer 或继续追加延迟推送；runtime mode 变化不得替换 realtime delegate。
 
 <a id="req-006"></a>
-### REQ-006 Remote 单轨连接、Alpha 隔离与生命周期收敛
+### REQ-006 四环境 Remote 单轨连接与生命周期收敛
 
-- Production 必须使用 Remote-only realtime；alpha runner 的 fixture 必须物理隔离，生命周期切换与聊天页更新经同一 handler 收敛。
+- 四环境必须使用 Remote-only realtime；测试 double 与环境 artifact 物理隔离，生命周期切换与聊天页更新经同一 handler 收敛。
 
 ## 4. 契约引用
 
-- fixture：`quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json`
-- canonical：`quwoquan_service/contracts/metadata/_shared/test_fixtures/app_alpha_seed_manifest.json`
+- 测试 fixture：`quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json`
 - canonical：`quwoquan_service/services/realtime-gateway/contracts/realtime/connection/operations.yaml`
 - canonical：`quwoquan_app/lib/cloud/runtime/generated/realtime/realtime_api_metadata.g.dart`
 - canonical：`quwoquan_app/lib/cloud/runtime/generated/realtime/realtime_request_page_ids.g.dart`
 - canonical：[`app-cloud-business-object-commercial-closure`](../../../runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#req-004)
-- canonical：`quwoquan_app/runners/alpha/lib/alpha_realtime_connection_delegate.dart`
+- canonical：`quwoquan_app/lib/cloud/services/realtime/remote_realtime_connection_delegate.dart`
+- local_contract double：`quwoquan_app/test/support/fixtures/chat/fixture_realtime_connection_delegate.dart`
 
 ## 5. 验收场景
 

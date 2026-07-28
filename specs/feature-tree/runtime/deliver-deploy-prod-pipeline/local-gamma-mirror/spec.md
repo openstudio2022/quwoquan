@@ -38,6 +38,9 @@
 - edge-media（realtime-gateway/rtc-service/livekit-sfu/coturn）统一在本 compose 以 profile 按需组装；realtime-gateway 实现未就绪以 edge-media-pending 显式占位收敛。
 - full 镜像栈使用唯一的 Caddy 路由真相源与各服务声明的内部监听端口；非生产环境不会因生产 operator OIDC 前提阻塞健康检查。
 - 以已有 package provenance image 启动时必须先验证本地 image 可用，缺镜像为可诊断的 GATE_BLOCK，禁止通过手工重标记、拉取 localhost tag 或旧 Caddyfile 路径绕开。
+- 领域 readback 使用 `app_gamma_seed_manifest.json` 声明的独立 verification principal；不得复用 App user_acceptance principal 消耗推荐曝光、改写关系或污染后续自然入口证据。
+- 首页、视频书、消息与我的统一由 metadata `app-core-readback` scope 验证；每次执行使用新的 ephemeral owner/persona，Content 必须读到非空 recommend/video feed，Chat 必须经公开命令创建并回读会话，User 必须经公开命令 provision 账号事实并校验 `/me` canonical 字段。禁止复用已耗尽曝光预算的固定账号把首页空集合误判为可用。
+- 每个 T3/API 验证段必须同时记录执行前和执行后 readiness；验证后 edge 或所需控制面未恢复健康时结果为 `GATE_BLOCK`，不得用已经通过的业务断言掩盖环境失稳。
 
 <a id="req-002"></a>
 ### REQ-002 远端复验只在 prod gray-initial 执行
@@ -72,12 +75,16 @@
 ### GWT-001 gamma-local 提交前左移主验证链
 
 - GIVEN 开发机具备 Docker mirror 栈与至少一台模拟器/浏览器 runner。
-- GIVEN 服务以 APP_ENV=gamma 启动，端侧以 APP_RUNTIME_ENV=gamma、APP_DATA_SOURCE=remote 接入本地 mirror endpoint。
+- GIVEN 服务以 APP_ENV=gamma 启动，端侧以 APP_RUNTIME_ENV=gamma 的 production Remote composition 接入本地 mirror endpoint，代码图中不存在运行时 Mock/Remote 开关。
 - GIVEN 测试数据仅来自 app_gamma_seed_manifest.json 与 metadata fixtures。
 - WHEN 提交前运行 make gate-local-gamma。
 - THEN 启动 gamma 语义镜像栈并完成 CONFIG_VERSION/依赖/health/DNS/TLS/media 前置检查。
 - THEN 依次执行 local_contract->user_acceptance 并生成 artifacts/local-gamma/report.json；缺 DNS/TLS/设备/服务依赖时状态为 GATE_BLOCK。
 - THEN full health 覆盖 platform-ops、content、user、Elasticsearch 与 proxy；受保护 user route 经 canonical Caddy 上游抵达 user-service。
+- THEN content 等领域探针从 metadata 解析独立 verification principal，App user_acceptance principal 的推荐曝光与关系事实保持不变。
+- THEN `app-core-readback` 在同一 production Remote composition 中断言首页推荐非空、视频书只返回可播放 video work、Chat API contract 可发送/撤回/回读消息、`/me` 的 owner/persona/displayName/postCount 与本次 ephemeral principal 一致。
+- THEN ContactDiscovery、Conversation 与 Message 验收事实经公开 operation 与幂等键建立；fixture 只提供 immutable input，不得直接写服务存储冒充在线业务 provisioning。
+- THEN 每段集成探针结束后重新验证 edge/readiness；PostgreSQL 连接耗尽、outbox heartbeat stale 或任一依赖降级均阻断通过。
 - THEN 复用 package 时的 image 缺失在启动前失败并给出修复动作，而非运行时拉取或人工 image tag 修补。
 
 <a id="gwt-002"></a>

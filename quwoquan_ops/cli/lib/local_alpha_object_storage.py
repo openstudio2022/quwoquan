@@ -19,7 +19,7 @@ def prepare_local_alpha_object_storage(*, edge_port: int) -> LocalAlphaObjectSto
         environment="alpha",
         target_name="alpha-local",
         edge_port=edge_port,
-        public_host="alpha-upload.quwoquan-env.test",
+        public_host="upload.alpha.quwoquan.com",
         local_host="alpha-upload.localhost",
         environment_prefix="ALPHA",
     )

@@ -35,11 +35,11 @@ extension _CreateMediaPickerPageChrome on _CreateMediaPickerPageState {
               Text(
                 switch (widget.entryMode) {
                   MediaPickerEntryMode.video =>
-                    UITextConstants.mediaPickerVideoCameraEntry,
+                    MediaText.mediaPickerVideoCameraEntry,
                   MediaPickerEntryMode.mixed =>
-                    UITextConstants.mediaPickerMixedCameraEntry,
+                    MediaText.mediaPickerMixedCameraEntry,
                   MediaPickerEntryMode.image =>
-                    UITextConstants.mediaPickerCameraEntry,
+                    MediaText.mediaPickerCameraEntry,
                 },
                 style: TextStyle(
                   color: AppColorsFunctional.getColor(

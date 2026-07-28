@@ -8,13 +8,13 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/greeting_reply_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
-    show SubAccountProfileViewData, UserHomepageBundleViewData;
+    show SubAccountProfileViewData;
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/services/app_request_wait_controller.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
@@ -30,11 +30,15 @@ class ProfileState {
     this.interactionDirection = InteractionDirection.received,
     this.creations = const [],
     this.circles = const [],
-    this.isLoading = false,
+    this.isIdentityLoading = false,
+    this.isIdentitySlow = false,
+    this.identityFailure,
+    this.isWorksLoading = false,
+    this.isWorksSlow = false,
+    this.worksFailure,
     this.isFollowing = false,
     this.capability,
     this.optimisticFollowOverride,
-    this.failure,
   });
 
   final String userId;
@@ -47,24 +51,31 @@ class ProfileState {
 
   final List<PostBaseDto> creations;
   final List<CircleDto> circles;
-  final bool isLoading;
+  final bool isIdentityLoading;
+  final bool isIdentitySlow;
+  final RuntimeFailureBase? identityFailure;
+  final bool isWorksLoading;
+  final bool isWorksSlow;
+  final RuntimeFailureBase? worksFailure;
   final bool isFollowing;
 
   /// 关系能力位投影（null = 未载入）
   final RelationshipCapabilityDto? capability;
   final bool? optimisticFollowOverride;
 
-  /// 首屏聚合失败的结构化错误（null = 无错误）。
-  final RuntimeFailureBase? failure;
+  bool get isLoading => isIdentityLoading || isWorksLoading;
+
+  /// 兼容只读取一个错误的旧消费方；新页面必须分别消费身份与作品状态。
+  RuntimeFailureBase? get failure => identityFailure ?? worksFailure;
 
   /// 结构化首屏错误文案（null = 无错误）。
   String? get errorMessage =>
       failure == null ? null : runtimeFailureDisplayMessage(failure!).trim();
 
   /// 首屏聚合是否失败（用于错误态分支：重试 / 降级提示）。
-  bool get hasLoadError => failure != null;
+  bool get hasLoadError => identityFailure != null || worksFailure != null;
 
-  bool get hasCacheFallback => failure != null && profile != null;
+  bool get hasCacheFallback => hasLoadError && profile != null;
 
   RelationshipCapabilityDto? get displayCapability {
     final base = capability;
@@ -84,14 +95,19 @@ class ProfileState {
     InteractionDirection? interactionDirection,
     List<PostBaseDto>? creations,
     List<CircleDto>? circles,
-    bool? isLoading,
+    bool? isIdentityLoading,
+    bool? isIdentitySlow,
+    RuntimeFailureBase? identityFailure,
+    bool? isWorksLoading,
+    bool? isWorksSlow,
+    RuntimeFailureBase? worksFailure,
     bool? isFollowing,
     RelationshipCapabilityDto? capability,
     bool? optimisticFollowOverride,
-    RuntimeFailureBase? failure,
     bool clearCapability = false,
     bool clearOptimisticFollowOverride = false,
-    bool clearError = false,
+    bool clearIdentityFailure = false,
+    bool clearWorksFailure = false,
   }) {
     return ProfileState(
       userId: userId,
@@ -103,13 +119,21 @@ class ProfileState {
       interactionDirection: interactionDirection ?? this.interactionDirection,
       creations: creations ?? this.creations,
       circles: circles ?? this.circles,
-      isLoading: isLoading ?? this.isLoading,
+      isIdentityLoading: isIdentityLoading ?? this.isIdentityLoading,
+      isIdentitySlow: isIdentitySlow ?? this.isIdentitySlow,
+      identityFailure: clearIdentityFailure
+          ? null
+          : (identityFailure ?? this.identityFailure),
+      isWorksLoading: isWorksLoading ?? this.isWorksLoading,
+      isWorksSlow: isWorksSlow ?? this.isWorksSlow,
+      worksFailure: clearWorksFailure
+          ? null
+          : (worksFailure ?? this.worksFailure),
       isFollowing: isFollowing ?? this.isFollowing,
       capability: clearCapability ? null : (capability ?? this.capability),
       optimisticFollowOverride: clearOptimisticFollowOverride
           ? null
           : (optimisticFollowOverride ?? this.optimisticFollowOverride),
-      failure: clearError ? null : (failure ?? this.failure),
     );
   }
 }
@@ -118,16 +142,39 @@ class ProfileNotifier extends Notifier<ProfileState> {
   ProfileNotifier(this._userId);
 
   final String _userId;
+  AppRequestWaitController _identityWaitController = AppRequestWaitController();
+  AppRequestWaitController _worksWaitController = AppRequestWaitController();
+  Completer<void>? _identityGenerationDone;
+  Completer<void>? _worksGenerationDone;
 
   @override
   ProfileState build() {
+    if (_identityWaitController.isDisposed) {
+      _identityWaitController = AppRequestWaitController();
+    }
+    if (_worksWaitController.isDisposed) {
+      _worksWaitController = AppRequestWaitController();
+    }
+    ref.onDispose(() {
+      _finishIdentityGeneration(_identityGenerationDone);
+      _finishWorksGeneration(_worksGenerationDone);
+      _identityWaitController.dispose();
+      _worksWaitController.dispose();
+    });
     ref.listen<UserRelationshipState>(userRelationshipStateProvider, (
       previous,
       next,
     ) {
       _syncFollowStateFromShared(next);
     });
-    Future.microtask(loadProfile);
+    Future.microtask(() {
+      if (!ref.mounted ||
+          _identityWaitController.isDisposed ||
+          _worksWaitController.isDisposed) {
+        return;
+      }
+      unawaited(loadProfile());
+    });
     return ProfileState(userId: _userId);
   }
 
@@ -167,40 +214,194 @@ class ProfileNotifier extends Notifier<ProfileState> {
   }
 
   Future<void> loadProfile() async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    if (!ref.mounted ||
+        _identityWaitController.isDisposed ||
+        _worksWaitController.isDisposed) {
+      return;
+    }
+    state = state.copyWith(
+      isIdentityLoading: true,
+      isIdentitySlow: false,
+      isWorksLoading: true,
+      isWorksSlow: false,
+      clearIdentityFailure: true,
+      clearWorksFailure: true,
+    );
     _recordProfileState(
       phase: 'onlineLoading',
       source: 'online',
       hasCache: state.profile != null,
       itemCount: state.creations.length,
     );
+    final identityDone = _nextIdentityGeneration();
+    final identityGeneration = _identityWaitController.start(
+      mode: AppRequestWaitMode.foreground,
+      onSlow: (generation) {
+        if (!ref.mounted || generation != _identityWaitController.generation) {
+          return;
+        }
+        state = state.copyWith(isIdentitySlow: true);
+      },
+      onTimeout: (generation) {
+        _finishIdentityGeneration(identityDone);
+        if (!ref.mounted || generation != _identityWaitController.generation) {
+          return;
+        }
+        state = state.copyWith(
+          isIdentityLoading: false,
+          isIdentitySlow: false,
+          identityFailure: _profileTimeoutFailure('identity'),
+        );
+      },
+    );
+    final worksDone = _nextWorksGeneration();
+    final worksGeneration = _worksWaitController.start(
+      mode: AppRequestWaitMode.foreground,
+      onSlow: (generation) {
+        if (!ref.mounted || generation != _worksWaitController.generation) {
+          return;
+        }
+        state = state.copyWith(isWorksSlow: true);
+      },
+      onTimeout: (generation) {
+        _finishWorksGeneration(worksDone);
+        if (!ref.mounted || generation != _worksWaitController.generation) {
+          return;
+        }
+        state = state.copyWith(
+          isWorksLoading: false,
+          isWorksSlow: false,
+          worksFailure: _profileTimeoutFailure('works'),
+        );
+      },
+    );
+    unawaited(
+      _loadIdentity(
+        identityGeneration,
+      ).whenComplete(() => _finishIdentityGeneration(identityDone)),
+    );
+    unawaited(
+      _loadWorks(
+        worksGeneration,
+      ).whenComplete(() => _finishWorksGeneration(worksDone)),
+    );
+    await Future.wait<void>(<Future<void>>[
+      identityDone.future,
+      worksDone.future,
+    ]);
+    if (!ref.mounted) return;
+    // bundle 未提供关系能力（本人态 / 异常降级）时，异步精确校准（不阻塞首屏）。
+    if (state.capability == null && state.identityFailure == null) {
+      unawaited(_loadRelationshipCapability());
+    }
+  }
+
+  Future<void> reloadIdentity() async {
+    state = state.copyWith(
+      isIdentityLoading: true,
+      isIdentitySlow: false,
+      clearIdentityFailure: true,
+    );
+    final done = _nextIdentityGeneration();
+    final generation = _identityWaitController.start(
+      mode: AppRequestWaitMode.foreground,
+      onSlow: (current) {
+        if (ref.mounted && current == _identityWaitController.generation) {
+          state = state.copyWith(isIdentitySlow: true);
+        }
+      },
+      onTimeout: (current) {
+        _finishIdentityGeneration(done);
+        if (!ref.mounted || current != _identityWaitController.generation) {
+          return;
+        }
+        state = state.copyWith(
+          isIdentityLoading: false,
+          isIdentitySlow: false,
+          identityFailure: _profileTimeoutFailure('identity'),
+        );
+      },
+    );
+    unawaited(
+      _loadIdentity(
+        generation,
+      ).whenComplete(() => _finishIdentityGeneration(done)),
+    );
+    await done.future;
+  }
+
+  Future<void> reloadWorks() async {
+    state = state.copyWith(
+      isWorksLoading: true,
+      isWorksSlow: false,
+      clearWorksFailure: true,
+    );
+    final done = _nextWorksGeneration();
+    final generation = _worksWaitController.start(
+      mode: AppRequestWaitMode.foreground,
+      onSlow: (current) {
+        if (ref.mounted && current == _worksWaitController.generation) {
+          state = state.copyWith(isWorksSlow: true);
+        }
+      },
+      onTimeout: (current) {
+        _finishWorksGeneration(done);
+        if (!ref.mounted || current != _worksWaitController.generation) {
+          return;
+        }
+        state = state.copyWith(
+          isWorksLoading: false,
+          isWorksSlow: false,
+          worksFailure: _profileTimeoutFailure('works'),
+        );
+      },
+    );
+    unawaited(
+      _loadWorks(generation).whenComplete(() => _finishWorksGeneration(done)),
+    );
+    await done.future;
+  }
+
+  Completer<void> _nextIdentityGeneration() {
+    _finishIdentityGeneration(_identityGenerationDone);
+    final next = Completer<void>();
+    _identityGenerationDone = next;
+    return next;
+  }
+
+  Completer<void> _nextWorksGeneration() {
+    _finishWorksGeneration(_worksGenerationDone);
+    final next = Completer<void>();
+    _worksGenerationDone = next;
+    return next;
+  }
+
+  void _finishIdentityGeneration(Completer<void>? generation) {
+    if (generation == null) return;
+    if (!generation.isCompleted) generation.complete();
+    if (identical(_identityGenerationDone, generation)) {
+      _identityGenerationDone = null;
+    }
+  }
+
+  void _finishWorksGeneration(Completer<void>? generation) {
+    if (generation == null) return;
+    if (!generation.isCompleted) generation.complete();
+    if (identical(_worksGenerationDone, generation)) {
+      _worksGenerationDone = null;
+    }
+  }
+
+  Future<void> _loadIdentity(int generation) async {
     try {
-      final profileQuery = ref.read(
-        profileQueryProvider(AppUiSurfaces.userProfile),
-      );
-      final contentRepo = ref.read(userProfileContentAuthorPostsReaderProvider);
-      // 锁定决策 #1：homepage-bundle 一次聚合身份域真相（profile/stats/关系能力/
-      // viewerContext），与作品/帖子内容并发补充，消除首屏串行阻塞。
-      // 作品 Tab 由 content 域 ListUserPosts 单轨承载（user_work 投影已删除）。
-      final results = await Future.wait(<Future<Object>>[
-        profileQuery.getUserHomepageBundle(_userId),
-        contentRepo.listUserPosts(userId: _userId),
-      ]);
-      final bundle = results[0] as UserHomepageBundleViewData;
-      final postsPage = results[1] as CursorPage<PostBaseDto>;
-      final posts = postsPage.items;
+      final bundle = await ref
+          .read(profileQueryProvider(AppUiSurfaces.userProfile))
+          .getUserHomepageBundle(_userId);
+      if (!_identityWaitController.complete(generation) || !ref.mounted) return;
       final profile = bundle.profileWithStats;
-      if (!ref.mounted) {
-        return;
-      }
-      ref
-          .read(postInteractionStateProvider.notifier)
-          .applyConfirmedPosts(posts);
       final subAccountId = profile.subAccountId.isNotEmpty
           ? profile.subAccountId
           : _userId;
-      // bundle 自带首屏关系能力快照（user 域聚合 follow/block 同源），作为 capability
-      // seed，免去首屏额外 getCapability 串行请求。
       final bundleCapability = bundle.relationshipCapability;
       final reconcileCap = ref
           .read(relationshipCapabilityRepositoryProvider)
@@ -209,7 +410,6 @@ class ProfileNotifier extends Notifier<ProfileState> {
           .read(userRelationshipStateProvider)
           .isFollowing(subAccountId);
       final pendingFollowIntent = _pendingFollowIntent(subAccountId);
-      final RelationshipCapabilityDto? seededCapability = bundleCapability;
       bool? optimisticFollowOverride;
       if (bundleCapability != null && reconcileCap) {
         final desiredFollowing = pendingFollowIntent ?? sharedFollowing;
@@ -220,51 +420,85 @@ class ProfileNotifier extends Notifier<ProfileState> {
       final seededFollowing =
           optimisticFollowOverride ??
           pendingFollowIntent ??
-          seededCapability?.viewerFollowsTarget ??
+          bundleCapability?.viewerFollowsTarget ??
           sharedFollowing;
+      state = state.copyWith(
+        profile: profile,
+        isIdentityLoading: false,
+        isIdentitySlow: false,
+        isFollowing: seededFollowing,
+        capability: bundleCapability,
+        optimisticFollowOverride: optimisticFollowOverride,
+        clearIdentityFailure: true,
+      );
+      ref
+          .read(userRelationshipStateProvider.notifier)
+          .setFollowing(subAccountId, seededFollowing);
+    } catch (error) {
+      if (!_identityWaitController.complete(generation) || !ref.mounted) return;
+      final failure = CloudErrorMapper.runtimeFailureFromException(error);
+      state = state.copyWith(
+        isIdentityLoading: false,
+        isIdentitySlow: false,
+        identityFailure: failure,
+      );
+      _recordProfileState(
+        phase: state.profile == null ? 'blockingFailure' : 'cacheFallback',
+        source: state.profile == null ? 'online' : 'retained',
+        error: failure,
+        copyKey: 'recovery.reloadLater',
+        hasCache: state.profile != null,
+        itemCount: state.creations.length,
+      );
+    }
+  }
+
+  Future<void> _loadWorks(int generation) async {
+    try {
+      final postsPage = await ref
+          .read(userProfileContentAuthorPostsReaderProvider)
+          .listUserPosts(userId: _userId);
+      if (!_worksWaitController.complete(generation) || !ref.mounted) return;
+      final posts = postsPage.items;
+      ref
+          .read(postInteractionStateProvider.notifier)
+          .applyConfirmedPosts(posts);
       final fallbackError = postsPage.cacheFallbackError;
       final fallbackFailure = fallbackError == null
           ? null
           : CloudErrorMapper.runtimeFailureFromException(fallbackError);
       state = state.copyWith(
-        profile: profile,
         creations: posts,
-        isLoading: false,
-        isFollowing: seededFollowing,
-        capability: seededCapability,
-        optimisticFollowOverride: optimisticFollowOverride,
-        failure: fallbackFailure,
-        clearError: fallbackError == null,
+        isWorksLoading: false,
+        isWorksSlow: false,
+        worksFailure: fallbackFailure,
+        clearWorksFailure: fallbackError == null,
       );
       _recordProfileState(
         phase: fallbackError == null ? 'onlineSuccess' : 'cacheFallback',
         source: fallbackError == null ? 'online' : 'cache',
         error: fallbackError,
-        copyKey: fallbackError == null ? null : 'profileCacheFallback',
+        copyKey: fallbackError == null ? null : 'recovery.reloadLater',
         hasCache: fallbackError != null,
         cacheAgeMs: postsPage.cacheAgeMs,
         itemCount: posts.length,
       );
-      ref
-          .read(userRelationshipStateProvider.notifier)
-          .setFollowing(subAccountId, seededFollowing);
-    } catch (e) {
-      final failure = CloudErrorMapper.runtimeFailureFromException(e);
-      state = state.copyWith(isLoading: false, failure: failure);
+    } catch (error) {
+      if (!_worksWaitController.complete(generation) || !ref.mounted) return;
+      final failure = CloudErrorMapper.runtimeFailureFromException(error);
+      state = state.copyWith(
+        isWorksLoading: false,
+        isWorksSlow: false,
+        worksFailure: failure,
+      );
       _recordProfileState(
-        phase: state.profile == null ? 'blockingFailure' : 'cacheFallback',
-        source: state.profile == null ? 'online' : 'retained',
+        phase: state.creations.isEmpty ? 'sectionFailure' : 'cacheFallback',
+        source: state.creations.isEmpty ? 'online' : 'retained',
         error: failure,
-        copyKey: state.profile == null
-            ? 'homepageLoadFailedTitle'
-            : 'profileCacheFallback',
-        hasCache: state.profile != null,
+        copyKey: 'recovery.reloadLater',
+        hasCache: state.creations.isNotEmpty,
         itemCount: state.creations.length,
       );
-    }
-    // bundle 未提供关系能力（本人态 / 异常降级）时，异步精确校准（不阻塞首屏）。
-    if (state.capability == null && !state.hasLoadError) {
-      _loadRelationshipCapability();
     }
   }
 
@@ -526,6 +760,26 @@ RelationshipCapabilityDto _copyCapabilityWithFollowState(
     isBlockedBy: capability.isBlockedBy,
     hasFormalConversation: capability.hasFormalConversation,
     hasPendingGreeting: capability.hasPendingGreeting,
+  );
+}
+
+RuntimeFailure _profileTimeoutFailure(String area) {
+  return RuntimeFailure(
+    code: RuntimeFailureCodes.appTimeoutRequestTimeout,
+    semanticReason: 'profile_${area}_deadline_exceeded',
+    origin: RuntimeFailureOrigin.localClient,
+    kind: RuntimeFailureKind.timeout,
+    nature: RuntimeFailureNature.transient,
+    location: const RuntimeFailureLocation(
+      businessObject: 'user.profile',
+      functionModule: 'profile_load',
+    ),
+    context: RuntimeFailureContext(
+      attributes: <RuntimeContextAttribute>[
+        RuntimeContextAttribute(key: 'area', value: area),
+      ],
+    ),
+    recovery: const RuntimeRecoveryDirective(action: 'retry'),
   );
 }
 

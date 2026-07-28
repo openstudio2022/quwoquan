@@ -225,13 +225,13 @@ void main() {
 
       expect(find.byType(WelcomeBrandCluster), findsOneWidget);
       expect(find.byType(WelcomeBrandFooter), findsOneWidget);
-      expect(find.text(UITextConstants.welcomeMainSlogan), findsOneWidget);
+      expect(find.text(FoundationText.welcomeMainSlogan), findsOneWidget);
       // 「趣我圈」只作为底部品牌落款出现一次，不再有中央大标题。
-      expect(find.text(UITextConstants.welcomeTitle), findsOneWidget);
+      expect(find.text(FoundationText.welcomeTitle), findsOneWidget);
       expect(find.byType(ShaderMask), findsNothing);
       expect(petalBloomAmounts(tester), everyElement(1));
       expect(
-        find.text(UITextConstants.startupStillStartingInline),
+        find.text(FoundationText.startupStillStartingInline),
         findsNothing,
       );
     });
@@ -325,27 +325,27 @@ void main() {
       await tester.pump();
       await pumpFor(tester, const Duration(milliseconds: 45));
       expect(
-        find.text(UITextConstants.startupStillStartingInline),
+        find.text(FoundationText.startupStillStartingInline),
         findsNothing,
       );
 
       await pumpUntil(
         tester,
         () => find
-            .text(UITextConstants.startupStillStartingInline)
+            .text(FoundationText.startupStillStartingInline)
             .evaluate()
             .isNotEmpty,
       );
       final hint = tester.widget<Text>(
-        find.text(UITextConstants.startupStillStartingInline),
+        find.text(FoundationText.startupStillStartingInline),
       );
       expect(hint.maxLines, 1);
       expect(hint.overflow, TextOverflow.ellipsis);
       // 提示固定挂在底部品牌名上方，出现时不推动品牌名重新布局。
       final hintRect = tester.getRect(
-        find.text(UITextConstants.startupStillStartingInline),
+        find.text(FoundationText.startupStillStartingInline),
       );
-      final brandRect = tester.getRect(find.text(UITextConstants.welcomeTitle));
+      final brandRect = tester.getRect(find.text(FoundationText.welcomeTitle));
       expect(hintRect.bottom, lessThan(brandRect.top));
 
       await pumpUntil(tester, () => finishCount == 1);
@@ -458,7 +458,7 @@ void main() {
       expect(events.last.exitReason, WelcomeExitReason.entryComplete);
       expect(events.last.replayCount, 0);
       expect(
-        find.text(UITextConstants.startupStillStartingInline),
+        find.text(FoundationText.startupStillStartingInline),
         findsNothing,
       );
     });
@@ -614,13 +614,13 @@ void main() {
       await pumpFrozenFrame(tester);
 
       final slogan = tester.widget<Text>(
-        find.text(UITextConstants.welcomeMainSlogan),
+        find.text(FoundationText.welcomeMainSlogan),
       );
       expect(slogan.style?.fontFamily, AppTypography.welcomeBrandFontFamily);
       expect(
         slogan.style?.fontSize,
         AppTypography.welcomeSloganResponsive(
-          tester.element(find.text(UITextConstants.welcomeMainSlogan)),
+          tester.element(find.text(FoundationText.welcomeMainSlogan)),
         ),
       );
       expect(slogan.style?.fontSize, 32);
@@ -668,7 +668,7 @@ void main() {
       final flowerVisibleBottom =
           flowerRect.center.dy + flowerVisibleDiameter / 2;
       final sloganRect = tester.getRect(
-        find.text(UITextConstants.welcomeMainSlogan),
+        find.text(FoundationText.welcomeMainSlogan),
       );
 
       expect(
@@ -688,7 +688,7 @@ void main() {
       await pumpFrozenFrame(tester);
 
       final footerCenter = tester.getCenter(
-        find.text(UITextConstants.welcomeTitle),
+        find.text(FoundationText.welcomeTitle),
       );
       expect(footerCenter.dy / 852, inInclusiveRange(0.89, 0.91));
       expect(footerCenter.dx, closeTo(393 / 2, 0.5));
@@ -701,7 +701,7 @@ void main() {
 
       // slogan 一行居中，位于花朵下方、品牌名上方。
       final sloganRect = tester.getRect(
-        find.text(UITextConstants.welcomeMainSlogan),
+        find.text(FoundationText.welcomeMainSlogan),
       );
       final flowerRect = tester.getRect(find.byType(WelcomeFlowerMark));
       expect(sloganRect.top, greaterThan(flowerRect.bottom - 0.5));
@@ -719,10 +719,10 @@ void main() {
       );
       // slogan / 品牌名文本不得再单独暴露语义节点。
       expect(
-        find.bySemanticsLabel(UITextConstants.welcomeMainSlogan),
+        find.bySemanticsLabel(FoundationText.welcomeMainSlogan),
         findsNothing,
       );
-      expect(find.bySemanticsLabel(UITextConstants.welcomeTitle), findsNothing);
+      expect(find.bySemanticsLabel(FoundationText.welcomeTitle), findsNothing);
       semantics.dispose();
     });
 
@@ -736,7 +736,7 @@ void main() {
 
       expect(tester.takeException(), isNull);
       final sloganRect = tester.getRect(
-        find.text(UITextConstants.welcomeMainSlogan),
+        find.text(FoundationText.welcomeMainSlogan),
       );
       expect(sloganRect.width, lessThanOrEqualTo(320));
     });
@@ -753,7 +753,7 @@ void main() {
       );
       expect(flowerRect.top, greaterThanOrEqualTo(0));
       final sloganRect = tester.getRect(
-        find.text(UITextConstants.welcomeMainSlogan),
+        find.text(FoundationText.welcomeMainSlogan),
       );
       expect(sloganRect.bottom, lessThanOrEqualTo(393));
     });

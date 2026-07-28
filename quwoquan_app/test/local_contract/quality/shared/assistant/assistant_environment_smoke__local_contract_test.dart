@@ -7,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
@@ -35,9 +34,6 @@ void main() {
   testWidgets('私人助理 alpha/beta/gamma 环境自动验证', (tester) async {
     final scenarioPack = await loadAssistantScenarioPackAsync();
     final runtimeEnv = CloudRuntimeConfig.appRuntimeEnv;
-    final repositoryMode = expectedRepositoryModeForCurrentRuntimeEnv(
-      scenarioPack,
-    );
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -55,7 +51,6 @@ void main() {
     expect(find.text('找私助'), findsOneWidget);
     expect(find.byKey(TestKeys.assistantChatInputField), findsOneWidget);
 
-    expect(_modeFromWidgetTree(tester), repositoryMode);
     const scenarioId = String.fromEnvironment('ASSISTANT_SCENARIO_ID');
     final allScenarios = scenarioPack.assistantTurnScenariosFor(runtimeEnv);
     final scenarios = scenarioId.trim().isEmpty
@@ -103,13 +98,6 @@ void _mockPathProviderForEnvironmentTest() {
             return null;
         }
       });
-}
-
-AppDataSourceMode _modeFromWidgetTree(WidgetTester tester) {
-  final context = tester.element(
-    find.byType(PersonalAssistantConversationPage),
-  );
-  return ProviderScope.containerOf(context).read(appDataSourceModeProvider);
 }
 
 void _expectScreenClass(WidgetTester tester) {

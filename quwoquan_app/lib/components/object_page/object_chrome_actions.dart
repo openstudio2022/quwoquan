@@ -40,7 +40,7 @@ class ObjectChromeActions extends ConsumerWidget {
         _action(
           keyValue: 'object-chrome-search',
           icon: CupertinoIcons.search,
-          label: UITextConstants.search,
+          label: DiscoveryText.search,
           onPressed: onSearch,
         ),
         SizedBox(width: AppSpacing.intraGroupXs),
@@ -54,7 +54,7 @@ class ObjectChromeActions extends ConsumerWidget {
         _action(
           keyValue: 'object-chrome-share',
           icon: CupertinoIcons.arrowshape_turn_up_right,
-          label: UITextConstants.share,
+          label: FoundationText.share,
           onPressed: onShare,
         ),
         if (onMore != null) ...<Widget>[

@@ -150,6 +150,7 @@ def _merge_auto_reports(base: dict[str, Any], incoming: dict[str, Any]) -> None:
         "updated",
         "issues",
         "candidates",
+        "articleSourceDiscovery",
         "imageCollections",
         "homepageMediaCollections",
         "homepageMediaAdvisories",

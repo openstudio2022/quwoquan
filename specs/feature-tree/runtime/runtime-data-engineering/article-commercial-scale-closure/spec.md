@@ -34,6 +34,10 @@
 ### REQ-002 each approved article closes one execution and release lifecycle
 
 - 任何缺失对象、来源、rights 或环境 receipt 均阻断 release。
+- `payload/release.json`、`payload/desired_state.json`、environment `run/result`、`applied_ref`、`rollback_ref` 与各 importer/API readback report 分别由对应 JSON Schema 唯一约束；`release_manifest` 不承担 canonical release 或环境激活真相源。
+- empty baseline 是 release-bound、零 execution、零对象/creator/tag 的 immutable snapshot；Tag taxonomy 允许激活该零节点 snapshot，并允许 retired snapshot rollback/replay，历史 snapshot 不物理删除。
+- Alpha/Beta/Gamma 必须分别以真实 importer receipt、`applied_ref` 和 post/homepage（或 baseline）API report 证明激活；Prod `prepared` / `dry-run` 只能证明准备或演练，不得生成或冒充激活证据。
+- entity 的 `creatorProfileId` 必须进入 creator object closure；avatar 仅在 creator profile 绑定可校验 CAS bytes、摘要与 rights snapshot 时投影，禁止合成 URL。
 
 <a id="req-003"></a>
 ### REQ-003 capacity conclusions use only measured execution receipts
@@ -44,8 +48,10 @@
 ### REQ-004 开放式旅行/摄影文章来源站点统一 onboarding 合同与 shared commercial pool
 
 - 开放式旅行/摄影文章来源站点统一 onboarding 合同与 shared commercial pool
-- homepage 必须通过显式 `homepageExecutionId` 绑定已冻结、已发布的同档主页批次。
+- article 必须从 campaign 冻结的 canonical entity catalog 独立选择 target；不得依赖 homepage execution 或已发布主页批次。
 - 搜索补全供给使用独立 execution，不能和主线共享冻结目标、状态或准出口径。
+- article source discovery 只允许进入 registry 已声明可抓取、允许 crawl、包含 article lane 且具备 commercial release admission 的站点；robots/terms、allowed path、速率/退避、深度/日页数、canonical 去重与实体/别名/主题相关性均须形成不可变审计证据。
+- 登录墙、robots deny、网络不可达与不相关候选必须形成 typed blocked/discard；`factual_reference_only` 只保留事实引用身份，不得保存原文或伪造成功。
 
 ## 4. 契约引用
 
@@ -65,14 +71,17 @@
 - WHEN 任一文章 execution 以 request 选择 provider 和主题。
 - THEN provider admission、文本事实来源和插图 rights/provenance 使用同一合同。
 - THEN 静态 policy 不包含实体 URL、区域、数量或运行结论。
+- THEN 真实 source discovery 主线可回读 provider policy、frontier 决策、canonical URL 与 typed blocked/discard evidence。
 
 <a id="gwt-002"></a>
 ### GWT-002 each approved article closes one execution and release lifecycle
 
 - GIVEN request 已冻结 target set、provider 选择、模型与 source digest。
 - WHEN article 完成 source、compose、draft、review、canonical promotion 和 release aggregate。
-- THEN 文章、关联主页、creator、资产、tag 和 source digest 可闭包追溯。
+- THEN 文章、canonical entity identity、creator、资产、tag 和 source digest 可闭包追溯；关联主页不是文章 execution 的前置条件。
 - THEN Beta/Gamma integration 证明 full-sync、API、幂等、rollback 与 replay。
+- THEN rollback receipt 明确绑定 `rollbackFromReleaseId`；empty baseline 由 baseline API readback 证明隔离下线，历史内容由后续 replay 的 importer/API readback 证明恢复。
+- THEN 生命周期 gate 不读取测试专用 activation smoke，也不把 Prod prepared/dry-run 报告计为 activated。
 
 <a id="gwt-003"></a>
 ### GWT-003 capacity conclusions use only measured execution receipts
@@ -96,7 +105,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：缺来源或权利的对象保持 typed GATE_BLOCK，不能进入 canonical publish。
+- 影响或价值：尚缺真实 M100 article execution 对 source/rights closure 的完整 receipt；frontier 的本地合同与单站 probe 不能替代规模准出。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>
@@ -105,7 +114,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：任何缺失对象、来源、rights 或环境 receipt 均阻断 release。
+- 影响或价值：尚缺实现与验收证据，包括 article 对 canonical entity identity 的独立闭包、Alpha/Beta/Gamma 真实激活、baseline rollback 和历史 replay 环境 receipts；当前 immutable pilot-001 不得原地补写 creator closure。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-003"></a>
@@ -114,5 +123,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：容量评估可重算且不被当作生产完成。
+- 影响或价值：尚无真实 M100 execution receipt；容量评估不得依据 frontier probe、fixture 或估算结论关闭。
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效

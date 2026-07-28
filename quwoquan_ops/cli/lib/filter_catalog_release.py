@@ -87,8 +87,6 @@ def execute_filter_catalog_command(
     ]
     if rollback_release_id.strip():
         argv.extend(["--rollback-release-id", rollback_release_id.strip()])
-    if target_name in LOCAL_FILTER_CATALOG_TARGETS:
-        argv.append("--insecure-local-tls")
     if prod_gray_activation:
         argv.append("--prod-gray-activation")
     result = subprocess.run(

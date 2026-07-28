@@ -49,6 +49,10 @@ _TITLE_PLATFORM_SUFFIX_RE = re.compile(
 _TITLE_NOISE_RE = re.compile(r"[\u3010\u3008\u300a\[\(（【].*?[\u3011\u3009\u300b\]\)）】]\s*$")
 
 _SOURCE_ID_LIKE_RE = re.compile(r"^[0-9]+[\._-]|_(base|src|source)_?\d*$|^[a-z0-9]+[._][a-z0-9_]+$")
+_TITLE_SEO_SEPARATOR_RE = re.compile(r"[,，/／|｜]+")
+_TITLE_SEO_KEYWORD_RE = re.compile(
+    r"^(?:[\w\u4e00-\u9fff]*?)?(?:门票|地址|图片|照片|开放时间|营业时间|价格|电话|攻略)$"
+)
 
 def _clean_source_title(raw: str) -> str:
     title = re.sub(r"\s+", " ", str(raw or "").strip())
@@ -62,6 +66,17 @@ def _clean_source_title(raw: str) -> str:
         title = stripped
     # 去掉尾部括注（如「（图）」「【攻略】」）。
     title = _TITLE_NOISE_RE.sub("", title).strip(" _|｜·–—-")
+    seo_parts = [
+        part.strip()
+        for part in _TITLE_SEO_SEPARATOR_RE.split(title)
+        if part.strip()
+    ]
+    if len(seo_parts) >= 3 and sum(
+        bool(_TITLE_SEO_KEYWORD_RE.match(part))
+        for part in seo_parts[1:]
+    ) >= 2:
+        title = seo_parts[0]
+    title = re.sub(r"游玩攻略简介$", "游玩攻略", title)
     if len(re.sub(r"\s+", "", title)) > SOURCE_TITLE_MAX_CHARS:
         title = title[:SOURCE_TITLE_MAX_CHARS].rstrip(" _|｜·–—-，,、")
     return title

@@ -46,7 +46,6 @@ class RuntimeExecutionRequest:
     quota: int
     topic: str | None
     source_providers: tuple[str, ...]
-    homepage_execution_id: str | None
     target_names: tuple[str, ...]
 
     def __post_init__(self) -> None:
@@ -94,9 +93,6 @@ class RuntimeExecutionRequest:
                 f"[task execute] GATE_BLOCK --selector must be one of: {choices}"
             ) from exc
         topic = str(getattr(args, "topic", "") or "").strip() or None
-        homepage_execution_id = str(
-            getattr(args, "homepage_execution_id", "") or ""
-        ).strip() or None
         providers = tuple(
             sorted(
                 {
@@ -119,7 +115,6 @@ class RuntimeExecutionRequest:
             quota=quota,
             topic=topic,
             source_providers=providers,
-            homepage_execution_id=homepage_execution_id,
             target_names=target_names,
         )
 
@@ -135,7 +130,6 @@ class RuntimeExecutionRequest:
                 "quota",
                 "topic",
                 "sourceProviders",
-                "homepageExecutionId",
                 "targetNames",
             }
             if set(document.to_document()) != expected:
@@ -151,7 +145,6 @@ class RuntimeExecutionRequest:
                 quota=document.integer("quota"),
                 topic=document.optional_string("topic"),
                 source_providers=document.string_list("sourceProviders"),
-                homepage_execution_id=document.optional_string("homepageExecutionId"),
                 target_names=document.string_list("targetNames"),
             )
         except (JsonObjectDecodeError, ValueError) as exc:
@@ -166,7 +159,6 @@ class RuntimeExecutionRequest:
             "quota": self.quota,
             "topic": self.topic,
             "sourceProviders": list(self.source_providers),
-            "homepageExecutionId": self.homepage_execution_id,
             "targetNames": list(self.target_names),
         }
 

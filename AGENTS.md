@@ -58,8 +58,8 @@
 ## 商用品质默认门
 
 - Review：从产品、架构、代码、质量、测试、用户、运维、运营八角色检查契约漂移、无测试、无观测、体验断点、第二真相源和不合理抽象。
-- 三层测试：`local_contract`、`api_integration`、`user_acceptance` 必须映射 UAT/DOM/SIT/GWT/contract；Remote 行为必须能回到端侧 Mock/Provider/Widget/领域规则覆盖。
-- 四环境：`alpha`、`beta`、`gamma`、`prod` 分层证明数据源、配置、包纯度、URL/topology、部署与回滚；不存在 `prod-gray`，生产灰度只是 `prod` rollout stage。
+- 三层测试：`local_contract`、`api_integration`、`user_acceptance` 必须映射 UAT/DOM/SIT/GWT/contract；Remote 行为必须能回到测试树内对象级 typed double/Provider/Widget/领域规则覆盖，任何测试 double 不得进入环境 App。
+- 四环境：`alpha`、`beta`、`gamma`、`prod` 的 App 均使用同一 Remote composition，第一方业务数据均来自 canonical immutable release activation；分层证明配置、包纯度、URL/topology、部署与回滚。不存在 `prod-gray`，生产灰度只是 `prod` rollout stage。
 - 错误链路：metadata errors、HTTP 响应、端侧 mapper/UI、恢复动作、埋点、日志、告警和测试必须同源。
 - 可观测与配置：新增页面、API、行为信号、推荐策略和数据发布必须声明 SLI/SLO、指标、采样、保留、告警、配置来源、灰度与回滚。
 - 无法证明时返回 `GATE_BLOCK`，补规格、metadata、测试或运维证据。
@@ -80,4 +80,5 @@
 
 - 默认中文说明与注释；代码标识符、命令和路径保持原文。
 - 优先做可验证的小改动，执行与影响面匹配的 gate/test。
+- 本地 `/commit` pre-commit 仅跑 L0 `quwoquan_ops/gate/commit_gate.sh`（目标 ≤10 分钟，硬顶 15 分钟）；全量 local_contract 由 CI Delivery Gate 分片承接，禁止把 `--no-verify` 当常规合入手段。
 - 稳定、反复出现的规则写入最近的 `AGENTS.md`、特性树 README 或对应命令，不留在会话临时约定中。

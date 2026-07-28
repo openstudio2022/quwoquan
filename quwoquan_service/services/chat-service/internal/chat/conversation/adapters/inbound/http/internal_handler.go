@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 )
 
@@ -14,14 +15,6 @@ func (h *ChatHandler) registerInternalRoutes(mux *http.ServeMux) {
 }
 
 func (h *ChatHandler) handleInternalCreateDirect(w http.ResponseWriter, r *http.Request) {
-	if !isInternalServiceRequest(r) {
-		writeHTTPError(w, r, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
-			"无权访问内部接口",
-			"internal chat route requires trusted service header",
-		))
-		return
-	}
 	var body struct {
 		CreatorID string `json:"creatorId"`
 		PeerID    string `json:"peerId"`
@@ -36,6 +29,10 @@ func (h *ChatHandler) handleInternalCreateDirect(w http.ResponseWriter, r *http.
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "creatorId 与 peerId 必填", "creatorId and peerId required"))
 		return
 	}
+	if !isAuthorizedUserServiceRequest(r, creatorID) {
+		writeInternalRouteForbidden(w, r)
+		return
+	}
 	conv, err := h.conversationService.CreateOrReuseDirect(r.Context(), creatorID, peerID)
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -45,18 +42,14 @@ func (h *ChatHandler) handleInternalCreateDirect(w http.ResponseWriter, r *http.
 }
 
 func (h *ChatHandler) handleInternalLookupDirect(w http.ResponseWriter, r *http.Request) {
-	if !isInternalServiceRequest(r) {
-		writeHTTPError(w, r, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
-			"无权访问内部接口",
-			"internal chat route requires trusted service header",
-		))
-		return
-	}
 	memberA := strings.TrimSpace(r.URL.Query().Get("memberA"))
 	memberB := strings.TrimSpace(r.URL.Query().Get("memberB"))
 	if memberA == "" || memberB == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "memberA 与 memberB 必填", "memberA and memberB required"))
+		return
+	}
+	if !isAuthorizedUserServiceRequest(r, memberA) {
+		writeInternalRouteForbidden(w, r)
 		return
 	}
 	exists, err := h.conversationService.HasDirectBetween(r.Context(), memberA, memberB)
@@ -67,6 +60,30 @@ func (h *ChatHandler) handleInternalLookupDirect(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, map[string]any{"exists": exists})
 }
 
-func isInternalServiceRequest(r *http.Request) bool {
-	return strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Internal-Service")), "user-service")
+func writeInternalRouteForbidden(w http.ResponseWriter, r *http.Request) {
+	writeHTTPError(w, r, rterr.NewAppError(
+		rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
+		"无权访问内部接口",
+		"internal chat route requires delegated user-service persona authorization",
+	))
+}
+
+func isAuthorizedUserServiceRequest(r *http.Request, personaID string) bool {
+	principal, ok := rtauth.PrincipalFromContext(r.Context())
+	if !ok ||
+		principal.Subject != "service:user-service" ||
+		principal.Actor.PersonaID != strings.TrimSpace(personaID) ||
+		!containsGrant(strings.Fields(principal.Scope), "chat.conversation.internal_direct") {
+		return false
+	}
+	return containsGrant(principal.Roles, "service")
+}
+
+func containsGrant(grants []string, wanted string) bool {
+	for _, grant := range grants {
+		if strings.TrimSpace(grant) == wanted {
+			return true
+		}
+	}
+	return false
 }

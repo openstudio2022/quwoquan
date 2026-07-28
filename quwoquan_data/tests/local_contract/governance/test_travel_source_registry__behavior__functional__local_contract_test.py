@@ -76,7 +76,7 @@ def test_registry_matches_runtime_sites_and_extractors():
         "https://baike.baidu.com/item/稻城亚丁"
     )
     assert baidu["extractor"] == "baidu_baike_html"
-    assert baidu["fetchable"] is True
+    assert baidu["fetchable"] is False
     assert resolve_travel_source_runtime(
         "https://www.baike.com/wikiid/7360066735180479986"
     )["extractor"] == "toutiao_baike_html"

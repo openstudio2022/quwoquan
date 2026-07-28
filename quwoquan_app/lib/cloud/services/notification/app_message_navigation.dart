@@ -45,22 +45,15 @@ class AppMessageNavigationTarget {
         _commentNotificationSources.contains(message.source.trim())) {
       final commentId = message.sourceId.trim();
       if (commentId.isNotEmpty) {
-        final route = Uri.parse(
-          AppRoutePaths.workBrowser(workId: targetId, source: 'notification'),
-        );
         return AppMessageNavigationTarget._(
-          route
-              .replace(
-                queryParameters: <String, String>{
-                  ...route.queryParameters,
-                  ...MediaViewerCommentContext.buildDeepLinkQuery(
-                    entrySource:
-                        MediaViewerCommentContext.entrySourceNotification,
-                    targetCommentId: commentId,
-                  ),
-                },
-              )
-              .toString(),
+          AppRoutePaths.workBrowser(
+            workId: targetId,
+            source: 'notification',
+            openComments: 'true',
+            commentEntrySource:
+                MediaViewerCommentContext.entrySourceNotification,
+            targetCommentId: commentId,
+          ),
         );
       }
     }

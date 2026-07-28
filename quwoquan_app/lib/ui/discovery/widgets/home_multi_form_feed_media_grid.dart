@@ -1,6 +1,8 @@
 // ignore_for_file: unnecessary_non_null_assertion
 part of 'home_multi_form_feed.dart';
 
+const double _feedMediaGap = AppSpacing.xs;
+
 class _HomeFeedMediaOverlayPill extends StatelessWidget {
   const _HomeFeedMediaOverlayPill({super.key, required this.label});
 

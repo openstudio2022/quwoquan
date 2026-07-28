@@ -119,14 +119,16 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
             icon: CupertinoIcons.back,
             onPressed: _back,
           ),
-          middle: const Text(UITextConstants.objectHomepageDefaultTitle),
+          middle: const Text(ObjectHomepageText.objectHomepageDefaultTitle),
         ),
         body: AppPageErrorState(
-          semantic: _errorSemantic!,
+          semantic: ensureRetryUiErrorSemantic(_errorSemantic!),
           onAction: (action) async {
             if (action.type == UiErrorActionType.retry ||
                 action.type == UiErrorActionType.resubmit) {
               await _load();
+            } else if (action.type == UiErrorActionType.dismiss) {
+              _back();
             }
           },
         ),

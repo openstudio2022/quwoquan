@@ -65,9 +65,13 @@ ReverseFlipPose resolveReverseFlipPose({
   final cylinderProgress = Curves.easeInOutCubic.transform(
     ((settledProgress - 0.18) / 0.44).clamp(0.0, 1.0).toDouble(),
   );
-  final unrollProgress = Curves.easeOutCubic.transform(
-    ((settledProgress - 0.62) / 0.38).clamp(0.0, 1.0).toDouble(),
-  );
+  // Spread the unroll linearly across the active BACK pull. The native
+  // geometry supplies the visual easing; applying another ease-out here made
+  // a small drag step cross most of the laid-down leaf and jump the
+  // recto/verso boundary across the viewport.
+  final unrollProgress = ((settledProgress - 0.28) / 0.72)
+      .clamp(0.0, 1.0)
+      .toDouble();
 
   final emergenceWidth =
       (lerpDouble(

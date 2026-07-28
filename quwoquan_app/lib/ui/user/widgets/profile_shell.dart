@@ -389,6 +389,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
         maybeResumeFollowContinuation(notifier);
         maybeResumeDirectMessageContinuation(context, notifier);
         maybeResumeDirectCallContinuation(context, notifier);
+        if (state.identityFailure != null || state.worksFailure != null) {
+          unawaited(notifier.loadProfile());
+        }
       }
     });
     final userData = ref.watch(userDataProvider);
@@ -405,6 +408,72 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     );
     final profile = state.profile;
     final isMine = widget.mode == ProfileMode.mine;
+    final impactRequest = (
+      subAccountId: widget.userId,
+      surface: isMine ? AppUiSurfaces.profileHome : AppUiSurfaces.userProfile,
+    );
+    final impact = ref.watch(authorImpactProvider(impactRequest));
+    final identitySemantic = state.identityFailure == null
+        ? null
+        : runtimeErrorSemantic(
+            context,
+            error: state.identityFailure!,
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+          );
+    final worksSemantic = state.worksFailure == null
+        ? null
+        : runtimeErrorSemantic(
+            context,
+            error: state.worksFailure!,
+            category: UiErrorCategory.sectionLoad,
+            scope: UiErrorScope.section,
+          );
+    final impactSemantic = impact.hasError
+        ? runtimeErrorSemantic(
+            context,
+            error: impact.error!,
+            category: UiErrorCategory.sectionLoad,
+            scope: UiErrorScope.section,
+          )
+        : null;
+    final loadDecision = AppPageLoadArbiter.decide(<AppPageLoadSlice>[
+      AppPageLoadSlice(
+        id: 'identity',
+        isCritical: true,
+        hasUsableContent: profile != null,
+        phase: state.isIdentityLoading
+            ? AppPageLoadPhase.loading
+            : state.identityFailure != null
+            ? AppPageLoadPhase.failure
+            : profile == null
+            ? AppPageLoadPhase.empty
+            : AppPageLoadPhase.content,
+        semantic: identitySemantic,
+      ),
+      AppPageLoadSlice(
+        id: 'works',
+        hasUsableContent: state.creations.isNotEmpty,
+        phase: state.isWorksLoading
+            ? AppPageLoadPhase.loading
+            : state.worksFailure != null
+            ? AppPageLoadPhase.failure
+            : state.creations.isEmpty
+            ? AppPageLoadPhase.empty
+            : AppPageLoadPhase.content,
+        semantic: worksSemantic,
+      ),
+      AppPageLoadSlice(
+        id: 'impact',
+        hasUsableContent: impact.hasValue,
+        phase: impact.isLoading
+            ? AppPageLoadPhase.loading
+            : impact.hasError
+            ? AppPageLoadPhase.failure
+            : AppPageLoadPhase.content,
+        semantic: impactSemantic,
+      ),
+    ]);
     // 头像源在 Shell 层只选择一次，避免主头像与吸顶头像走不同兜底路径。
     final avatarUrl = _firstNonEmptyString([
       widget.initialAvatarUrl,
@@ -461,15 +530,20 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
           showCoverPrompt: isMine && !hasCoverImage,
           onCoverPrompt: () => context.push(AppRoutePaths.profileEdit),
         ),
-        summaryBuilder: (c) => _buildSummarySection(
-          c,
-          isDark: isDark,
-          avatarUrl: avatarUrl,
-          displayName: displayName,
-          bio: bio,
-          state: state,
-          notifier: notifier,
-        ),
+        summaryBuilder: (c) =>
+            profile == null &&
+                (state.isIdentityLoading || state.identityFailure != null)
+            ? const SizedBox.shrink()
+            : _buildSummarySection(
+                c,
+                isDark: isDark,
+                avatarUrl: avatarUrl,
+                displayName: displayName,
+                bio: bio,
+                state: state,
+                notifier: notifier,
+                suppressImpactFailure: loadDecision.suppresses('impact'),
+              ),
         toolbarBuilder: (c, identity, bgOpacity) => _buildToolbarOverlay(
           c,
           isDark: isDark,
@@ -490,9 +564,16 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
           padding: EdgeInsets.only(bottom: bottomPadding),
           // 首屏聚合失败且无可展示档案时，渲染结构化可见错误态（重试），不让
           // 乐观壳层静默吞掉失败（R17/R20）。已有档案则保留乐观渲染。
-          child: state.hasLoadError && profile == null
+          child: state.isIdentityLoading && profile == null
+              ? AppRequestFeedback.page(showSlowHint: state.isIdentitySlow)
+              : state.identityFailure != null && profile == null
               ? _buildFirstScreenError(c, state)
-              : _buildInlineTabContent(c, isDark),
+              : _buildInlineTabContent(
+                  c,
+                  isDark,
+                  loadDecision: loadDecision,
+                  impactRequest: impactRequest,
+                ),
         ),
       ),
     );

@@ -11,7 +11,7 @@
 //	go run ./services/entity-service/cmd/homepage-import \
 //	  --release-root /path/to/release/<releaseId> \
 //	  --mongo-uri mongodb://localhost:27017 --entity-db quwoquan_entity \
-//	  --media-base-url http://media.local:9080 --env gamma --report import-homepage-gamma.json
+//	  --media-image-base-url http://media.local:9080 --env gamma --report import-homepage-gamma.json
 package main
 
 import (
@@ -26,6 +26,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	runtimemedia "quwoquan_service/runtime/media"
 	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration"
 	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/homepageimport"
 	homepagepersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence"
@@ -43,7 +44,7 @@ func main() {
 	releaseRoot := flag.String("release-root", "", "immutable release root with payload/desired_state.json (required)")
 	mongoURI := flag.String("mongo-uri", "", "mongo connection uri (required unless --dry-run)")
 	entityDB := flag.String("entity-db", "quwoquan_entity", "entity database name")
-	mediaBase := flag.String("media-base-url", "", "media origin/CDN base url for CAS objectKey mapping")
+	mediaImageBase := flag.String("media-image-base-url", "", "image media public base URL")
 	env := flag.String("env", "", "environment label (for logging/report)")
 	runID := flag.String("run-id", "", "environment import run identity (required)")
 	reportPath := flag.String("report", "", "write import report json to this path")
@@ -83,7 +84,16 @@ func main() {
 	if err != nil || !objectInfo.IsDir() {
 		log.Fatalf("[homepage-import] release object closure unavailable: %s: %v", objectRoot, err)
 	}
-	inputs, issues, err := homepageimport.LoadHomepageProjections(objectRoot, filter, *mediaBase)
+	releaseAssets, err := runtimemedia.LoadReleaseMediaAssets(*releaseRoot, desired.ReleaseID)
+	if err != nil {
+		log.Fatalf("[homepage-import] load release media authority: %v", err)
+	}
+	inputs, issues, err := homepageimport.LoadHomepageProjections(
+		objectRoot,
+		filter,
+		releaseAssets,
+		runtimemedia.MediaDeliveryBases{Image: *mediaImageBase},
+	)
 	if err != nil {
 		log.Fatalf("[homepage-import] load projections: %v", err)
 	}

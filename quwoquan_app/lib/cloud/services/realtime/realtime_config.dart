@@ -26,24 +26,29 @@ class RealtimeConfig {
     this.reconnectMaxDelayMs = 30000,
   });
 
-  factory RealtimeConfig.fromGateway({
+  factory RealtimeConfig.fromRuntime({
     String gatewayBaseUrl = CloudRuntimeConfig.gatewayBaseUrl,
+    String realtimeBaseUrl = CloudRuntimeConfig.realtimeConnectionUrl,
   }) {
-    final base = gatewayBaseUrl;
-    final wsBase = base
-        .replaceFirst('https://', 'wss://')
-        .replaceFirst('http://', 'ws://');
     return RealtimeConfig(
-      wsUrl: '$wsBase${RealtimeApiMetadata.webSocketUpgradePath}',
-      gatewayBaseUrl: base,
+      wsUrl:
+          '${realtimeBaseUrl.replaceAll(RegExp(r'/+$'), '')}'
+          '${RealtimeApiMetadata.webSocketUpgradePath}',
+      gatewayBaseUrl: gatewayBaseUrl,
     );
   }
 
   factory RealtimeConfig.fromMap(Map<String, dynamic> map) {
+    final canonical = RealtimeConfig.fromRuntime();
+    final declaredWsUrl = (map['wsUrl'] as String? ?? '').trim();
+    if (declaredWsUrl.isNotEmpty && declaredWsUrl != canonical.wsUrl) {
+      throw const FormatException(
+        'Realtime config cannot replace the topology WebSocket URL',
+      );
+    }
     return RealtimeConfig(
-      wsUrl: map['wsUrl'] as String? ?? '',
-      gatewayBaseUrl:
-          map['gatewayBaseUrl'] as String? ?? CloudRuntimeConfig.gatewayBaseUrl,
+      wsUrl: canonical.wsUrl,
+      gatewayBaseUrl: canonical.gatewayBaseUrl,
       heartbeatIntervalSec:
           (map['heartbeatIntervalSec'] as num?)?.toInt() ?? 15,
       authAckTimeoutSec: (map['authAckTimeoutSec'] as num?)?.toInt() ?? 5,

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:math';
 
 import 'package:quwoquan_app/app/startup/startup_native_journal_adapter.dart';
@@ -375,6 +376,7 @@ final class StartupTelemetryReporter {
     required String platform,
     required String runtimeEnv,
     required String appVersion,
+    String initialAttemptId = '',
     bool Function(String attemptId)? isDetailedAttemptSampled,
   }) {
     return StartupTelemetryReporter._(
@@ -383,6 +385,7 @@ final class StartupTelemetryReporter {
       platform,
       runtimeEnv,
       appVersion,
+      initialAttemptId,
       isDetailedAttemptSampled ?? _isStartupAttemptDetailedSampled,
     );
   }
@@ -393,6 +396,7 @@ final class StartupTelemetryReporter {
     this._platform,
     this._runtimeEnv,
     this._appVersion,
+    this._initialAttemptId,
     this._isDetailedAttemptSampled,
   );
 
@@ -401,6 +405,7 @@ final class StartupTelemetryReporter {
   final String _platform;
   final String _runtimeEnv;
   final String _appVersion;
+  final String _initialAttemptId;
   final bool Function(String attemptId) _isDetailedAttemptSampled;
   late final StartupAttempt _attempt;
   Future<void>? _startFuture;
@@ -437,6 +442,8 @@ final class StartupTelemetryReporter {
     _attempt = StartupAttempt(
       id: StartupTelemetrySupport.isValidAttemptId(nativeAttemptId)
           ? nativeAttemptId
+          : StartupTelemetrySupport.isValidAttemptId(_initialAttemptId)
+          ? _initialAttemptId
           : StartupTelemetrySupport.randomUrlSafeToken(24),
       proof: proof,
       startedAt: DateTime.now().toUtc(),
@@ -560,6 +567,15 @@ final class StartupTelemetryReporter {
             final ack = await _transport.report(batch, proof: _attempt.proof);
             if (!ack.acknowledges(batch.length)) {
               return;
+            }
+            for (final attemptId
+                in batch.map((event) => event.attemptId).toSet()) {
+              developer.log(
+                'QWQStartup startup_telemetry_ack attemptId=$attemptId '
+                'acceptedCount=${ack.acceptedCount} '
+                'duplicateCount=${ack.duplicateCount}',
+                name: 'QWQStartup',
+              );
             }
             try {
               await _journal.acknowledge(batch);

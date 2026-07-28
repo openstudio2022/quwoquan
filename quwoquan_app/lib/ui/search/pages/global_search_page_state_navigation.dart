@@ -90,20 +90,20 @@ extension _GlobalSearchPageStateNavigation on _GlobalSearchPageState {
       context: context,
       builder: (dialogContext) {
         return CupertinoAlertDialog(
-          title: const Text(UITextConstants.searchHistoryClearTitle),
+          title: const Text(SearchText.searchHistoryClearTitle),
           content: const Padding(
             padding: EdgeInsets.only(top: AppSpacing.containerXs),
-            child: Text(UITextConstants.searchHistoryClearMessage),
+            child: Text(SearchText.searchHistoryClearMessage),
           ),
           actions: [
             CupertinoDialogAction(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text(UITextConstants.cancel),
+              child: const Text(FoundationText.cancel),
             ),
             CupertinoDialogAction(
               isDestructiveAction: true,
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text(UITextConstants.searchHistoryClearAction),
+              child: const Text(SearchText.searchHistoryClearAction),
             ),
           ],
         );

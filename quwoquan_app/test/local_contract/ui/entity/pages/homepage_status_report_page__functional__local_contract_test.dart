@@ -9,6 +9,7 @@ import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_status_report_page.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 import '../../../../support/recording_app_telemetry_recorder.dart';
 
@@ -26,19 +27,19 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('open-status-report')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(UITextConstants.homepageStatusReportSubmit));
+    await tester.tap(find.text(ObjectHomepageText.homepageStatusReportSubmit));
     await tester.pump();
     expect(
-      find.text(UITextConstants.homepageStatusReportReasonRequired),
+      find.text(ObjectHomepageText.homepageStatusReportReasonRequired),
       findsOneWidget,
     );
     expect(repository.createCalls, 0);
 
     await tester.tap(
-      find.text(UITextConstants.homepageStatusReportReasonIncorrectInfo),
+      find.text(ObjectHomepageText.homepageStatusReportReasonIncorrectInfo),
     );
     await tester.enterText(find.byType(CupertinoTextField), '地址已经变更');
-    await tester.tap(find.text(UITextConstants.homepageStatusReportSubmit));
+    await tester.tap(find.text(ObjectHomepageText.homepageStatusReportSubmit));
     await tester.pumpAndSettle();
 
     expect(repository.createCalls, 1);
@@ -65,9 +66,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('open-status-report')));
     await tester.pumpAndSettle();
     await tester.tap(
-      find.text(UITextConstants.homepageStatusReportReasonOffline),
+      find.text(ObjectHomepageText.homepageStatusReportReasonOffline),
     );
-    await tester.tap(find.text(UITextConstants.homepageStatusReportSubmit));
+    await tester.tap(find.text(ObjectHomepageText.homepageStatusReportSubmit));
     await tester.pumpAndSettle();
 
     expect(find.byType(AppFormErrorCard), findsOneWidget);
@@ -76,7 +77,8 @@ void main() {
         (event) =>
             event.action == 'status_report_submit' &&
             event.extensions['result'] == 'failure' &&
-            event.extensions['failReasonCode'] == 'StateError',
+            event.extensions['failReasonCode'] ==
+                RuntimeFailureCodes.appContractInvalidResponse,
       ),
       isTrue,
     );

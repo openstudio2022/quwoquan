@@ -18,6 +18,7 @@ import (
 	"quwoquan_service/internal/platform/reliabletaskmongo"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
+	"quwoquan_service/runtime/controlplane"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
@@ -52,6 +53,13 @@ func run() error {
 	if err := validateRuntimeConfig(cfg); err != nil {
 		return fmt.Errorf("config validation failed: %w", err)
 	}
+	controlplane.StartReleaseConfigAttestation(
+		"integration-service",
+		strings.TrimSpace(cfg.Environment),
+		strings.TrimSpace(os.Getenv("CONFIG_ROOT")),
+		strings.TrimSpace(os.Getenv("CONFIG_VERSION")),
+		strings.TrimSpace(os.Getenv("IMAGE_VERSION")),
+	)
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)

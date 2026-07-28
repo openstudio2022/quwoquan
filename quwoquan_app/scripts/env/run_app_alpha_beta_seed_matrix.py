@@ -1,189 +1,124 @@
 #!/usr/bin/env python3
-"""Run app alpha/beta seed smoke from shared manifests."""
+"""Verify Alpha/Beta Remote packages against one immutable data release."""
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
-import time
-import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-# 统一输出根：app seed-matrix 报告属于 alpha 环境运行证据；正式 stackctl 证据写入 .qwq_output/env/<env>/runs/<runId>。
-OUTPUT_ROOT = Path(os.environ.get("QWQ_OUTPUT_ROOT", ROOT / ".qwq_output"))
-APP_ARTIFACTS_ROOT = Path(
-    os.environ.get(
-        "QWQ_APP_ARTIFACTS_ROOT",
-        OUTPUT_ROOT / "env" / "alpha" / "runs" / "app-seed-matrix",
-    )
-)
-APP = ROOT / "quwoquan_app"
-USER_POOL = (
+DEFAULT_REPORT = (
     ROOT
-    / "quwoquan_service/services/user-service/tests/support/contract_fixtures/user_pool.json"
+    / ".qwq_output"
+    / "env"
+    / "repo"
+    / "runs"
+    / "app-release-matrix"
+    / "alpha-beta.json"
 )
-ALPHA_MANIFEST = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "app_alpha_seed_manifest.json"
 
 
-def run(cmd: list[str], cwd: Path = ROOT, env: dict[str, str] | None = None) -> str:
-    merged_env = os.environ.copy()
-    if env:
-        merged_env.update(env)
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def run(command: list[str]) -> dict[str, object]:
     result = subprocess.run(
-        cmd,
-        cwd=cwd,
-        env=merged_env,
+        command,
+        cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=False,
     )
-    if result.returncode != 0:
-        raise RuntimeError(f"command failed: {' '.join(cmd)}\n{result.stdout}")
-    return result.stdout
-
-
-def wait_url(url: str, timeout: int = 30) -> None:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            with urllib.request.urlopen(url, timeout=2) as resp:
-                if 200 <= resp.status < 300:
-                    return
-        except Exception:
-            time.sleep(0.5)
-    raise RuntimeError(f"timeout waiting for {url}")
-
-
-def beta_gateway_smoke(port: int) -> dict[str, object]:
-    proc = subprocess.Popen(
-        [
-            sys.executable,
-            "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/smoke/dev_assistant_beta_gateway.py",
-            "--listen-host",
-            "127.0.0.1",
-            "--listen-port",
-            str(port),
-            "--entity-upstream-port",
-            "0",
-        ],
-        cwd=ROOT,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    try:
-        base = f"http://127.0.0.1:{port}"
-        checks = [
-            "/healthz",
-            "/content/feed",
-            "/content/profile-subjects/fixture_user_current/posts",
-            "/chat/inbox",
-            "/chat/contacts",
-            "/chat/conversations",
-            "/circles",
-            "/circles/fixture_circle_photo/feed",
-            "/user/profile",
-            "/me",
-            "/users/fixture_user_current/works",
-            "/users/fixture_user_current/circles",
-            "/homepages/search",
-            "/integration/external_integration/locations/pois",
-            "/app-messages",
-            "/rtc/calls",
-        ]
-        for path in checks:
-            wait_url(base + path)
-        return {"gatewayBaseUrl": base, "checkedRoutes": checks}
-    finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-
-
-def load_shared_pool_summary() -> dict[str, object]:
-    pool = json.loads(USER_POOL.read_text(encoding="utf-8"))
     return {
-        "schema": pool.get("schema"),
-        "statistics": pool.get("statistics"),
-        "sourceCatalogDigest": pool.get("sourceCatalogDigest"),
-    }
-
-
-def load_alpha_delivery_channels() -> dict[str, list[str]]:
-    manifest = json.loads(ALPHA_MANIFEST.read_text(encoding="utf-8"))
-    return {
-        str(item.get("domain")): [str(value) for value in item.get("deliveryChannels", [])]
-        for item in manifest.get("seedRefs", [])
+        "command": command,
+        "exitCode": result.returncode,
+        "status": "passed" if result.returncode == 0 else "failed",
+        "outputTail": (result.stdout or "")[-4000:],
     }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--report",
-        default=str(APP_ARTIFACTS_ROOT / "seed-matrix" / "app_alpha_beta_seed_matrix.json"),
-    )
-    parser.add_argument("--gateway-port", type=int, default=18090)
+    parser.add_argument("--release-id", required=True)
+    parser.add_argument("--alpha-import-run-id", required=True)
+    parser.add_argument("--beta-import-run-id", required=True)
+    parser.add_argument("--report", default=str(DEFAULT_REPORT))
     args = parser.parse_args()
 
-    report: dict[str, object] = {
-        "status": "passed",
-        "sharedPool": {},
-        "alpha": {},
-        "beta": {},
-    }
-    try:
-        run([sys.executable, "quwoquan_app/scripts/env/verify_app_seed_manifests.py"])
-        run([sys.executable, "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/gate/verify_avatar_user_pool_consistency.py"])
-        run(["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", "alpha"])
-        run(
-            ["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", "beta"],
-            env={"CDN_DOMAIN": "cdn.beta.local"},
-        )
-        report["sharedPool"] = load_shared_pool_summary()
-        alpha_output = run(
-            [
-                "flutter",
-                "test",
-                "--dart-define=APP_RUNTIME_ENV=alpha",
-                "--dart-define=APP_DATA_SOURCE=mock",
-                "--dart-define=CONTRACT_FIXTURE_PROFILE=full",
-                "test/local_contract/cloud/services/contract_seeded_mock_repository__local_contract_test.dart",
-            ],
-            cwd=APP,
-        )
-        report["alpha"] = {
-            "dataSource": "mock",
-            "test": "test/local_contract/cloud/services/contract_seeded_mock_repository__local_contract_test.dart",
-            "outputTail": alpha_output[-2000:],
-            "deliveryChannels": load_alpha_delivery_channels(),
-        }
-        report["beta"] = {
-            "dataSource": "remote",
-            **beta_gateway_smoke(args.gateway_port),
-            "gatewayProbe": run([sys.executable, "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke/probe_avatar_user_pool_gateway.py"])[-1000:],
-        }
-    except Exception as exc:  # noqa: BLE001
-        report["status"] = "failed"
-        report["error"] = str(exc)
-        Path(args.report).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.report).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        print(str(exc), file=sys.stderr)
-        return 1
-
-    report_path = Path(args.report) if Path(args.report).is_absolute() else ROOT / args.report
+    report_path = Path(args.report)
+    if not report_path.is_absolute():
+        report_path = ROOT / report_path
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"app alpha/beta seed matrix report written: {report_path}")
-    return 0
+
+    report: dict[str, object] = {
+        "schema": "app-remote-release-matrix",
+        "releaseId": args.release_id,
+        "startedAt": utc_now(),
+        "composition": "production_remote",
+        "environments": {},
+    }
+    environments = report["environments"]
+    assert isinstance(environments, dict)
+    for environment, import_run_id in (
+        ("alpha", args.alpha_import_run_id),
+        ("beta", args.beta_import_run_id),
+    ):
+        package = run(
+            [
+                "bash",
+                "quwoquan_app/scripts/env/build_app_env_package.sh",
+                "--env",
+                environment,
+            ]
+        )
+        verify = run(
+            [
+                sys.executable,
+                "-B",
+                "quwoquan_data/scripts/cli.py",
+                "ship",
+                "verify",
+                "--release-id",
+                args.release_id,
+                "--env",
+                environment,
+                "--import-run-id",
+                import_run_id,
+            ]
+        )
+        environments[environment] = {
+            "importRunId": import_run_id,
+            "package": package,
+            "releaseConsumer": verify,
+        }
+
+    failed = [
+        environment
+        for environment, evidence in environments.items()
+        if any(
+            check.get("status") != "passed"
+            for check in (
+                evidence["package"],
+                evidence["releaseConsumer"],
+            )
+        )
+    ]
+    report["endedAt"] = utc_now()
+    report["status"] = "failed" if failed else "passed"
+    report["failedEnvironments"] = failed
+    report_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"App Remote release matrix report written: {report_path}")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

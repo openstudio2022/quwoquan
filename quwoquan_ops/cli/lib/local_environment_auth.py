@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import ipaddress
 import json
 import os
@@ -213,7 +214,10 @@ def open_local_acceptance_session(
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ValueError("local environment auth base URL must be an absolute HTTP(S) URL")
     if subject is None:
-        owner_id, persona_id = _load_acceptance_principal()
+        owner_id, persona_id = _local_acceptance_principal(
+            environment,
+            target_name,
+        )
     else:
         canonical_subject = subject.strip()
         allowed = frozenset(
@@ -384,20 +388,17 @@ def _required_string(payload: dict[str, Any], field: str, context: str) -> str:
     return value.strip()
 
 
-def _load_acceptance_principal() -> tuple[str, str]:
-    root = Path(__file__).resolve().parents[3]
-    manifest_path = (
-        root
-        / "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json"
-    )
-    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    principal = payload.get("acceptancePrincipal")
-    if not isinstance(principal, dict):
-            raise RuntimeError("acceptance fixture manifest missing acceptancePrincipal")
-    return (
-        _required_string(principal, "ownerId", "acceptance principal"),
-        _required_string(principal, "personaId", "acceptance principal"),
-    )
+def _local_acceptance_principal(
+    environment: str,
+    target_name: str,
+) -> tuple[str, str]:
+    """Return a technical UAT identity independent of business release data."""
+
+    digest = hashlib.sha256(
+        f"{environment}\0{target_name}".encode("utf-8")
+    ).hexdigest()[:16]
+    prefix = f"uat_{environment}_{digest}"
+    return f"{prefix}_owner", f"{prefix}_persona"
 
 
 def _canonical_acceptance_profile(value: str) -> str:
@@ -503,7 +504,10 @@ def write_local_report_account_backfill(
     _require_local_environment(environment, target_name)
     entries: list[dict[str, str]] = []
     if include_acceptance_principal:
-        owner_id, persona_id = _load_acceptance_principal()
+        owner_id, persona_id = _local_acceptance_principal(
+            environment,
+            target_name,
+        )
         entries.append({"reporterId": persona_id, "accountId": owner_id})
     payload: dict[str, object] = {
         "kind": _REPORT_ACCOUNT_BACKFILL_KIND,

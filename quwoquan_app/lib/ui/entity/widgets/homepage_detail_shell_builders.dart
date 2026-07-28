@@ -21,9 +21,9 @@ extension _HomepageBuilders on _HomepageDetailShellState {
         return ObjectIntersectionSection(
           key: const ValueKey<String>('homepage-my-intersection-card'),
           query: query,
-          title: UITextConstants.objectMyIntersectionsTitle,
+          title: ObjectHomepageText.objectMyIntersectionsTitle,
           isDark: isDark,
-          emptyText: UITextConstants.objectIntersectionEmptyEntity,
+          emptyText: ObjectHomepageText.objectIntersectionEmptyEntity,
           emptyKey: const ValueKey<String>('homepage-my-intersection-empty'),
         );
       },
@@ -39,8 +39,8 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       objectId: objectId,
       target: ObjectImpactTarget.homepage,
       referralSource: ReferralSource.entityPage,
-      title: UITextConstants.objectImpactTitleEntity,
-      enumerableHint: UITextConstants.impactEnumerableHintEntity,
+      title: ObjectHomepageText.objectImpactTitleEntity,
+      enumerableHint: ObjectHomepageText.impactEnumerableHintEntity,
       cardKey: const ValueKey<String>('homepage-impact-card'),
       topDivider: false,
     );
@@ -185,7 +185,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                       ? widget.onShare
                       : () => AppToast.show(
                           context,
-                          UITextConstants.homepageShareUnavailable,
+                          ObjectHomepageText.homepageShareUnavailable,
                         ),
                   onMore: _hasMoreActions
                       ? () => _showMoreActions(context)
@@ -307,17 +307,17 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       if (followerCount > 0)
         ObjectStatItem(
           value: formatCompactActionCount(followerCount),
-          label: UITextConstants.follow,
+          label: FoundationText.follow,
         ),
       if (recordCount > 0)
         ObjectStatItem(
           value: formatCompactActionCount(recordCount),
-          label: UITextConstants.objectTabRecord,
+          label: ObjectHomepageText.objectTabRecord,
         ),
       if (discussionCount > 0)
         ObjectStatItem(
           value: formatCompactActionCount(discussionCount),
-          label: UITextConstants.objectTabDiscussion,
+          label: ObjectHomepageText.objectTabDiscussion,
         ),
     ];
 
@@ -350,7 +350,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
             ObjectIdentityHeader(
               title:
                   reference?.title ??
-                  UITextConstants.objectHomepageDefaultTitle,
+                  ObjectHomepageText.objectHomepageDefaultTitle,
               media: ObjectIdentityAvatar(
                 kind: ObjectIdentityKind.entity,
                 child: _buildIdentityMedia(context, _resolvedHeroImageUrl()),
@@ -441,11 +441,11 @@ extension _HomepageBuilders on _HomepageDetailShellState {
         : (widget.detail?.viewerFollowsHomepage ?? false);
     final primaryIntentLabel = usesWishlistIntent
         ? (primaryIntentSelected
-              ? UITextConstants.homepageWishlistedAction
-              : UITextConstants.homepageWishlistAction)
+              ? ObjectHomepageText.homepageWishlistedAction
+              : ObjectHomepageText.homepageWishlistAction)
         : (primaryIntentSelected
-              ? UITextConstants.following
-              : UITextConstants.follow);
+              ? FoundationText.following
+              : FoundationText.follow);
     final reference = _reference;
     return ObjectActionBar(
       actions: <ObjectAction>[
@@ -468,7 +468,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                 style: ProfileIosActionStyle.filled,
               ),
         ObjectAction(
-          label: UITextConstants.entityActionPublishRecord,
+          label: ObjectHomepageText.entityActionPublishRecord,
           icon: CupertinoIcons.pencil,
           onPressed: reference == null
               ? null
@@ -480,7 +480,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
         ),
         if (_canMessageOwner)
           ObjectAction(
-            label: UITextConstants.profileDirectMessage,
+            label: ProfileText.profileDirectMessage,
             icon: CupertinoIcons.chat_bubble,
             onPressed: widget.onMessageOwner,
             style: ProfileIosActionStyle.outlined,
@@ -549,7 +549,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
   }) {
     return _buildSectionBlock(
       context: context,
-      title: title ?? UITextConstants.homepageInfoUnavailableTitle,
+      title: title ?? ContentText.homepageInfoUnavailableTitle,
       child: ProfileIosSectionCard(child: child),
     );
   }
@@ -560,15 +560,15 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       if (widget.isLoading) {
         return _buildMessageCard(
           context,
-          title: UITextConstants.loading,
-          child: const Center(child: CupertinoActivityIndicator()),
+          title: FoundationText.loading,
+          child: AppRequestFeedback.section(),
         );
       }
       return _buildMessageCard(
         context,
-        title: UITextConstants.homepageInfoUnavailableTitle,
+        title: ContentText.homepageInfoUnavailableTitle,
         child: Text(
-          widget.errorText ?? UITextConstants.contentLoadSoftFailed,
+          widget.errorText ?? FoundationText.contentLoadSoftFailed,
           style: TextStyle(
             fontSize: AppTypography.iosBody,
             color: AppColors.iosSecondaryLabel(context),

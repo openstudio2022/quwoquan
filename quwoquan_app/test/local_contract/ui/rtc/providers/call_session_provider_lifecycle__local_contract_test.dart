@@ -166,35 +166,35 @@ void main() {
     test('过程态文案映射到 UITextConstants', () {
       expect(
         CallStageBanner.messageFor(CallStage.connecting),
-        UITextConstants.callStageConnecting,
+        CallText.callStageConnecting,
       );
       expect(
         CallStageBanner.messageFor(CallStage.ringing),
-        UITextConstants.callStageRinging,
+        CallText.callStageRinging,
       );
       expect(
         CallStageBanner.messageFor(CallStage.waitingPeer),
-        UITextConstants.callStageWaitingPeer,
+        CallText.callStageWaitingPeer,
       );
       expect(
         CallStageBanner.messageFor(CallStage.reconnecting),
-        UITextConstants.callStageReconnecting,
+        CallText.callStageReconnecting,
       );
       expect(
         CallStageBanner.messageFor(CallStage.weakNetwork),
-        UITextConstants.callStageWeakNetwork,
+        CallText.callStageWeakNetwork,
       );
       expect(
         CallStageBanner.messageFor(CallStage.peerNoAnswer),
-        UITextConstants.callStagePeerNoAnswer,
+        CallText.callStagePeerNoAnswer,
       );
       expect(
         CallStageBanner.messageFor(CallStage.peerLeft),
-        UITextConstants.callStagePeerLeft,
+        CallText.callStagePeerLeft,
       );
       expect(
         CallStageBanner.messageFor(CallStage.ended),
-        UITextConstants.callStageEnded,
+        CallText.callStageEnded,
       );
     });
 
@@ -217,8 +217,8 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.retry), findsOneWidget);
-      await tester.tap(find.text(UITextConstants.retry));
+      expect(find.text(FoundationText.retry), findsOneWidget);
+      await tester.tap(find.text(FoundationText.retry));
       expect(retryCount, 1);
     });
   });

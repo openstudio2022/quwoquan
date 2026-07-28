@@ -13,6 +13,8 @@ import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/user/pages/my_footprint_page.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_footprint_tab.dart';
 
+import '../../../../support/cloud_services/behavior_repository_double.dart';
+
 void main() {
   testWidgets('我的足迹：渲染条目，点击带 referralSource 进作品浏览器', (tester) async {
     final repo = _StubFootprintRepository(
@@ -59,8 +61,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text(UITextConstants.myFootprintTitle), findsOneWidget);
-    expect(find.text(UITextConstants.myFootprintPrivacyHint), findsOneWidget);
+    expect(find.text(FoundationText.myFootprintTitle), findsOneWidget);
+    expect(find.text(FoundationText.myFootprintPrivacyHint), findsOneWidget);
     expect(find.text('post_a'), findsOneWidget);
     expect(find.text('post_b'), findsOneWidget);
 
@@ -186,15 +188,15 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
     expect(find.text('post_1'), findsOneWidget);
-    expect(find.text(UITextConstants.myFootprintLoadMore), findsOneWidget);
+    expect(find.text(FoundationText.myFootprintLoadMore), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.myFootprintLoadMore));
+    await tester.tap(find.text(FoundationText.myFootprintLoadMore));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
     expect(repo.requestedCursors, <String?>[null, '1']);
     expect(find.text('post_1'), findsOneWidget);
     expect(find.text('post_2'), findsOneWidget);
-    expect(find.text(UITextConstants.myFootprintLoadMore), findsNothing);
+    expect(find.text(FoundationText.myFootprintLoadMore), findsNothing);
   });
 
   testWidgets('我的足迹：加载失败展示统一页态并可重试', (tester) async {
@@ -213,10 +215,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
-    expect(
-      find.text(UITextConstants.myFootprintUnavailableTitle),
-      findsOneWidget,
-    );
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
   });
 
   testWidgets('我的足迹：空列表展示空态文案', (tester) async {
@@ -238,7 +237,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text(UITextConstants.myFootprintEmpty), findsOneWidget);
+    expect(find.text(FoundationText.myFootprintEmpty), findsOneWidget);
   });
 }
 

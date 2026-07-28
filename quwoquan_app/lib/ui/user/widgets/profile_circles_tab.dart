@@ -32,7 +32,7 @@ class ProfileCirclesTab extends ConsumerWidget {
     if (state.isLoading && state.circles.isEmpty) {
       return Padding(
         padding: EdgeInsets.symmetric(vertical: AppSpacing.interGroupXl),
-        child: Center(child: CupertinoActivityIndicator()),
+        child: AppRequestFeedback.section(),
       );
     }
 

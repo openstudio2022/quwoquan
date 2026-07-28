@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	httpadapter "quwoquan_service/services/product-ops-service/internal/product_ops/app_release/adapters/inbound/http"
@@ -51,7 +52,7 @@ func TestAppReleaseVersionResponseContainsOnlyRecoveryContractFields(t *testing.
 	}
 }
 
-func TestOfficialDownloadRouteDetectsPlatformAndUsesTrustedTargets(t *testing.T) {
+func TestOfficialDownloadRouteRecommendsPlatformWithoutAutomaticBinaryDownload(t *testing.T) {
 	service := newAppReleaseService(t)
 	mux := http.NewServeMux()
 	httpadapter.NewHandler(service).Register(mux)
@@ -59,17 +60,17 @@ func TestOfficialDownloadRouteDetectsPlatformAndUsesTrustedTargets(t *testing.T)
 	tests := []struct {
 		name      string
 		userAgent string
-		location  string
+		contains  string
 	}{
 		{
-			name:      "android downloads signed apk",
+			name:      "android recommends signed apk",
 			userAgent: "Mozilla/5.0 (Linux; Android 15)",
-			location:  "https://cdn.quwoquan.example/releases/quwoquan-18201.apk",
+			contains:  "趣我圈 Android 版",
 		},
 		{
-			name:      "ios opens app store",
+			name:      "ios recommends pwa",
 			userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X)",
-			location:  "https://apps.apple.com/cn/app/quwoquan/id1234567890",
+			contains:  "趣我圈 iOS 网页版",
 		},
 	}
 	for _, test := range tests {
@@ -78,13 +79,41 @@ func TestOfficialDownloadRouteDetectsPlatformAndUsesTrustedTargets(t *testing.T)
 			request.Header.Set("User-Agent", test.userAgent)
 			response := httptest.NewRecorder()
 			mux.ServeHTTP(response, request)
-			if response.Code != http.StatusTemporaryRedirect {
+			if response.Code != http.StatusOK {
 				t.Fatalf("download status=%d body=%s", response.Code, response.Body.String())
 			}
-			if got := response.Header().Get("Location"); got != test.location {
-				t.Fatalf("download location=%q want=%q", got, test.location)
+			if got := response.Body.String(); !strings.Contains(got, test.contains) {
+				t.Fatalf("download body=%q missing=%q", got, test.contains)
+			}
+			if got := response.Header().Get("Location"); got != "" {
+				t.Fatalf("download must wait for explicit click, location=%q", got)
 			}
 		})
+	}
+}
+
+func TestAndroidExplicitDownloadAndLatestManifestUseVerifiedRelease(t *testing.T) {
+	service := newAppReleaseService(t)
+	mux := http.NewServeMux()
+	httpadapter.NewHandler(service).Register(mux)
+
+	download := httptest.NewRecorder()
+	mux.ServeHTTP(download, httptest.NewRequest(http.MethodGet, "/download/android", nil))
+	if download.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("android download status=%d body=%s", download.Code, download.Body.String())
+	}
+	if got := download.Header().Get("Location"); got != "https://cdn.quwoquan.example/releases/quwoquan-18201.apk" {
+		t.Fatalf("android location=%q", got)
+	}
+
+	manifest := httptest.NewRecorder()
+	mux.ServeHTTP(manifest, httptest.NewRequest(http.MethodGet, "/downloads/android/latest.json", nil))
+	var payload map[string]any
+	if err := json.Unmarshal(manifest.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode android manifest: %v", err)
+	}
+	if payload["minAndroidVersion"] != "26" || payload["latestBuild"] != "18201" {
+		t.Fatalf("android manifest=%v", payload)
 	}
 }
 
@@ -160,8 +189,8 @@ func appReleaseCatalog() apprelease.Catalog {
 		IOS: apprelease.Release{
 			LatestVersion: "1.8.2",
 			LatestBuild:   "18201",
-			UpdateURL:     "https://apps.apple.com/cn/app/quwoquan/id1234567890",
-			RecoveryURL:   "https://download.quwoquan.example/download",
+			UpdateURL:     "",
+			RecoveryURL:   "https://download.quwoquan.example/download/ios",
 		},
 		Android: apprelease.Release{
 			LatestVersion:               "1.8.2",
@@ -174,6 +203,7 @@ func appReleaseCatalog() apprelease.Catalog {
 			APKSHA256:                   testSHA256,
 			APKSizeBytes:                42,
 			APKSigningCertificateSHA256: testCertificate,
+			MinAndroidVersion:           "26",
 		},
 	}
 }

@@ -18,6 +18,7 @@ import (
 	platformredis "quwoquan_service/internal/platform/redis"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
+	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
@@ -50,6 +51,13 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("runtime config invalid: %w", err)
 	}
+	controlplane.StartReleaseConfigAttestation(
+		serviceName,
+		appEnv,
+		strings.TrimSpace(os.Getenv("CONFIG_ROOT")),
+		strings.TrimSpace(os.Getenv("CONFIG_VERSION")),
+		strings.TrimSpace(os.Getenv("IMAGE_VERSION")),
+	)
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)

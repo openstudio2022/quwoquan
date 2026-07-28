@@ -169,17 +169,17 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
       ),
       AppPermissionKind.camera => const AppPermissionCopy(
         label: ChatText.permissionCameraLabel,
-        primerTitle: UITextConstants.cameraPermissionRequiredTitle,
+        primerTitle: MediaText.cameraPermissionRequiredTitle,
         primerMessage: UITextConstants.cameraPermissionPrimerMessage,
-        settingsPathMessage: UITextConstants.cameraPermissionRequiredRecovery,
-        deniedMessage: UITextConstants.cameraPermissionRequired,
+        settingsPathMessage: MediaText.cameraPermissionRequiredRecovery,
+        deniedMessage: MediaText.cameraPermissionRequired,
       ),
       AppPermissionKind.photos => const AppPermissionCopy(
         label: ChatText.permissionPhotosLabel,
         primerTitle: ChatText.permissionPhotosPrimerTitle,
         primerMessage: ChatText.permissionPhotosPrimerMessage,
         settingsPathMessage: ChatText.permissionPhotosOpenSettings,
-        deniedMessage: UITextConstants.mediaPickerPermissionDenied,
+        deniedMessage: MediaText.mediaPickerPermissionDenied,
       ),
       AppPermissionKind.location => const AppPermissionCopy(
         label: ChatText.permissionLocationLabel,
@@ -189,11 +189,11 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
         deniedMessage: ChatText.permissionLocationDenied,
       ),
       AppPermissionKind.contacts => const AppPermissionCopy(
-        label: UITextConstants.permissionContactsLabel,
-        primerTitle: UITextConstants.permissionContactsPrimerTitle,
+        label: ContactText.permissionContactsLabel,
+        primerTitle: ContactText.permissionContactsPrimerTitle,
         primerMessage: UITextConstants.permissionContactsPrimerMessage,
-        settingsPathMessage: UITextConstants.permissionContactsOpenSettings,
-        deniedMessage: UITextConstants.permissionContactsDenied,
+        settingsPathMessage: ContactText.permissionContactsOpenSettings,
+        deniedMessage: ContactText.permissionContactsDenied,
       ),
       AppPermissionKind.notifications => const AppPermissionCopy(
         label: ChatText.permissionNotificationsLabel,
@@ -355,38 +355,25 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
   UiErrorSemantic permissionSemantic(
     AppPermissionKind kind, {
     required bool openSettings,
-    bool includeRetry = false,
   }) {
+    if (openSettings) {
+      return AppUserRecoveryContract.semanticFor(
+        group: AppUserRecoveryGroup.enablePermission,
+        category: UiErrorCategory.permissionRequired,
+        scope: UiErrorScope.dialog,
+        presentation: UiErrorPresentation.gateCard,
+      );
+    }
     final copy = copyFor(kind);
     return UiErrorSemantic(
       category: UiErrorCategory.permissionRequired,
       scope: UiErrorScope.dialog,
-      title: openSettings
-          ? ChatText.permissionSettingsGateTitle(copy.label)
-          : copy.primerTitle,
-      message: openSettings ? copy.settingsPathMessage : copy.deniedMessage,
+      title: copy.primerTitle,
+      message: copy.deniedMessage,
       primaryAction: UiErrorAction(
-        type: openSettings
-            ? UiErrorActionType.openSettings
-            : (includeRetry
-                  ? UiErrorActionType.retry
-                  : UiErrorActionType.dismiss),
-        label: openSettings
-            ? UITextConstants.openSettings
-            : (includeRetry
-                  ? ChatText.permissionRetryAuthorization
-                  : UITextConstants.confirm),
+        type: UiErrorActionType.dismiss,
+        label: FoundationText.confirm,
       ),
-      secondaryAction: openSettings
-          ? UiErrorAction(
-              type: includeRetry
-                  ? UiErrorActionType.retry
-                  : UiErrorActionType.dismiss,
-              label: includeRetry
-                  ? ChatText.permissionRetryAuthorization
-                  : UITextConstants.cancel,
-            )
-          : null,
       dismissible: true,
       presentation: UiErrorPresentation.gateCard,
       tone: UiErrorTone.info,
@@ -464,7 +451,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text(UITextConstants.cancel),
+            child: const Text(FoundationText.cancel),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
@@ -472,7 +459,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
               Navigator.of(dialogContext).pop();
               unawaited(openSettings(kind));
             },
-            child: const Text(UITextConstants.openSettings),
+            child: const Text(FoundationText.openSettings),
           ),
         ],
       ),
@@ -537,7 +524,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text(UITextConstants.cancel),
+            child: const Text(FoundationText.cancel),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,

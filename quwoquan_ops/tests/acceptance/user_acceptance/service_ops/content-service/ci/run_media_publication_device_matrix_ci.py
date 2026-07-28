@@ -80,8 +80,6 @@ def build_command(args: argparse.Namespace) -> list[str]:
         runtime_env,
         "--api-contract-env",
         runtime_env,
-        "--data-source",
-        "remote",
         "--gateway-base-url",
         _required_url(public_bases, "api"),
         "--product-ops-base-url",

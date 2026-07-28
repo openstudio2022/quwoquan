@@ -38,11 +38,11 @@ void main() {
       await _pumpAddContactPage(tester, CapabilityProfile.mobile);
 
       expect(
-        find.text(UITextConstants.editProfileQrScanAction),
+        find.text(ProfileText.editProfileQrScanAction),
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.addContactPhoneEntryTitle),
+        find.text(ContactText.addContactPhoneEntryTitle),
         findsOneWidget,
       );
     });
@@ -51,11 +51,11 @@ void main() {
       await _pumpAddContactPage(tester, CapabilityProfile.web);
 
       expect(
-        find.text(UITextConstants.editProfileQrScanAction),
+        find.text(ProfileText.editProfileQrScanAction),
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.addContactPhoneEntryTitle),
+        find.text(ContactText.addContactPhoneEntryTitle),
         findsNothing,
       );
     });
@@ -64,7 +64,7 @@ void main() {
       await _pumpAddContactPage(tester, CapabilityProfile.ohos);
 
       expect(
-        find.text(UITextConstants.addContactPhoneEntryTitle),
+        find.text(ContactText.addContactPhoneEntryTitle),
         findsNothing,
       );
     });

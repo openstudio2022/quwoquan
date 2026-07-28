@@ -34,7 +34,7 @@ class _SettingsPrivacyPageState extends ConsumerState<SettingsPrivacyPage> {
     final settings = state.privacy;
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
-      title: UITextConstants.settingsPrivacyPreferences,
+      title: SettingsText.settingsPrivacyPreferences,
       onBack: () => _goBack(context),
       body: WebPageMaxWidthFrame(
         child: SafeArea(
@@ -57,7 +57,7 @@ class _SettingsPrivacyPageState extends ConsumerState<SettingsPrivacyPage> {
                         children: <Widget>[
                           SettingsInsetSwitchRow(
                             isDark: isDark,
-                            label: UITextConstants.settingsAllowStrangerMessage,
+                            label: SettingsText.settingsAllowStrangerMessage,
                             value: settings.allowStrangerMsg,
                             onChanged: (value) => unawaited(
                               _update(
@@ -70,7 +70,7 @@ class _SettingsPrivacyPageState extends ConsumerState<SettingsPrivacyPage> {
                           SettingsInsetFormSectionDivider(isDark: isDark),
                           SettingsInsetSwitchRow(
                             isDark: isDark,
-                            label: UITextConstants.settingsAssistantEnabled,
+                            label: SettingsText.settingsAssistantEnabled,
                             value: settings.assistantEnabled,
                             onChanged: (value) => unawaited(
                               _update(
@@ -89,21 +89,20 @@ class _SettingsPrivacyPageState extends ConsumerState<SettingsPrivacyPage> {
                     ),
                     SettingsInsetGroupedSection(
                       isDark: isDark,
-                      header: UITextConstants.settingsProfileVisibility,
+                      header: SettingsText.settingsProfileVisibility,
                       child: Column(
                         children: <Widget>[
                           _visibilityRow(
                             isDark: isDark,
-                            label:
-                                UITextConstants.settingsProfileVisibilityPublic,
+                            label: SettingsText.settingsProfileVisibilityPublic,
                             value: ProfileVisibility.public,
                             selected: settings.profileVisibility,
                           ),
                           SettingsInsetFormSectionDivider(isDark: isDark),
                           _visibilityRow(
                             isDark: isDark,
-                            label: UITextConstants
-                                .settingsProfileVisibilityPrivate,
+                            label:
+                                SettingsText.settingsProfileVisibilityPrivate,
                             value: ProfileVisibility.privateProfile,
                             selected: settings.profileVisibility,
                           ),
@@ -137,7 +136,7 @@ class _SettingsPrivacyPageState extends ConsumerState<SettingsPrivacyPage> {
 
   Widget _buildUnavailable(UserSettingsSectionsState state) {
     if (state.isLoading) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     return AppPageErrorState(
       semantic: UiErrorSemanticResolver.resolve(

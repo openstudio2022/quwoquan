@@ -62,7 +62,7 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
               content: Text(ChatText.maxAdminsReached),
               actions: [
                 CupertinoDialogAction(
-                  child: Text(UITextConstants.confirm),
+                  child: Text(FoundationText.confirm),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
@@ -118,7 +118,7 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
         secondaryMessage: resolved.secondaryMessage,
         primaryAction: const UiErrorAction(
           type: UiErrorActionType.retry,
-          label: UITextConstants.tryAgain,
+          label: ContentText.tryAgain,
         ),
         secondaryAction: resolved.secondaryAction,
         dismissible: resolved.dismissible,
@@ -200,7 +200,7 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
       title: ChatText.selectGroupMembers,
       onBack: () => context.pop(),
       trailing: AppNavigationBarTextAction(
-        label: '${UITextConstants.done}(${_selectedIds.length})',
+        label: '${CommunityText.done}(${_selectedIds.length})',
         enabled: _selectedIds.isNotEmpty,
         onPressed: _selectedIds.isEmpty ? null : _onDone,
       ),
@@ -209,14 +209,14 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
           EmbeddedMemberSearchBarWithChips(
             isDark: isDark,
             controller: _searchController,
-            placeholder: UITextConstants.search,
+            placeholder: DiscoveryText.search,
             onChanged: (v) => setState(() => _searchQuery = v),
             selectedMembers: selectedMembers,
             onSelectedMemberTap: _toggleMember,
           ),
           Expanded(
             child: membersState.isLoading
-                ? const Center(child: CupertinoActivityIndicator())
+                ? AppRequestFeedback.section()
                 : ListView(
                     padding: EdgeInsets.fromLTRB(
                       AppSpacing.containerMd,

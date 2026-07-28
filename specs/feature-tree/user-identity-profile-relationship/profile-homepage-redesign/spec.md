@@ -100,7 +100,7 @@
 
 - /profile/career-interests 独立页面从编辑资料页进入，页面结构为职业身份、我的标签、全部兴趣，不展示推荐标签。
 - 职业通过 Audience/用户/职业 查询并保存单个叶子 tagRef；兴趣通过 Audience/用户/兴趣偏好 查询并保存有序叶子 tagRefs，最多 30 个、允许清空。
-- 端侧通过 ListTagChildren / ResolveTag / ValidateTagRefs 查询与校验；alpha mock 不再接受 Topic/兴趣/*。
+- 端侧在四环境通过 Remote ListTagChildren / ResolveTag / ValidateTagRefs 查询与校验；服务契约不接受 Topic/兴趣/*。
 - user-service 拒绝非法根、分类父节点、职业多选与兴趣超限；保存成功后投影 object_tag_index 的 user 对象 tagRefs。
 - alpha/beta/gamma/prod 均由 control_plane/governance/taxonomy 生成同一标签发布包；beta/gamma/prod 通过 tag import 与 object index import/backfill 灌入。
 
@@ -195,7 +195,7 @@
 - WHEN 参与者发起“职业与兴趣资料页标签同源、编辑保存与交集索引投影”对应动作。
 - THEN /profile/career-interests 独立页面从编辑资料页进入，页面结构为职业身份、我的标签、全部兴趣，不展示推荐标签。
 - THEN 职业通过 Audience/用户/职业 查询并保存单个叶子 tagRef；兴趣通过 Audience/用户/兴趣偏好 查询并保存有序叶子 tagRefs，最多 30 个、允许清空。
-- THEN 端侧通过 ListTagChildren / ResolveTag / ValidateTagRefs 查询与校验；alpha mock 不再接受 Topic/兴趣/*。
+- THEN 端侧在四环境通过 Remote ListTagChildren / ResolveTag / ValidateTagRefs 查询与校验；服务契约不接受 Topic/兴趣/*。
 - THEN user-service 拒绝非法根、分类父节点、职业多选与兴趣超限；保存成功后投影 object_tag_index 的 user 对象 tagRefs。
 - THEN alpha/beta/gamma/prod 均由 control_plane/governance/taxonomy 生成同一标签发布包；beta/gamma/prod 通过 tag import 与 object index import/backfill 灌入。
 

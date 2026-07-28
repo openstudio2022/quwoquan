@@ -207,7 +207,7 @@ class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
         : const SizedBox.shrink();
     if (!widget.interactive) {
       return Semantics(
-        label: UITextConstants.videoPlaybackProgressLabel,
+        label: MediaText.videoPlaybackProgressLabel,
         value: semanticsValue,
         readOnly: true,
         child: child,
@@ -217,8 +217,8 @@ class _VideoPlaybackTimelineState extends State<VideoPlaybackTimeline> {
       canRequestFocus: snapshot.canSeek,
       onKeyEvent: _handleKeyEvent,
       child: Semantics(
-        label: UITextConstants.videoPlaybackProgressLabel,
-        hint: UITextConstants.videoPlaybackProgressHint,
+        label: MediaText.videoPlaybackProgressLabel,
+        hint: MediaText.videoPlaybackProgressHint,
         value: semanticsValue,
         increasedValue: formatVideoPlaybackDuration(
           snapshot.duration < current + _keyboardSeekStep

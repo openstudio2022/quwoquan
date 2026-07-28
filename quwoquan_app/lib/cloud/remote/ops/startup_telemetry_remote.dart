@@ -56,9 +56,11 @@ final class RemoteStartupTelemetryTransport
       decoded is String ? jsonDecode(decoded) : decoded,
       context: OpsApiMetadata.reportStartupEventBatchOperation,
     );
+    final serverAcceptedCount = _asInt(object['acceptedCount']);
+    final duplicateBatch = object['duplicateBatch'] == true;
     return StartupTelemetryBatchAck(
-      acceptedCount: _asInt(object['acceptedCount']),
-      duplicateCount: _asInt(object['duplicateCount']),
+      acceptedCount: duplicateBatch ? 0 : serverAcceptedCount,
+      duplicateCount: duplicateBatch ? serverAcceptedCount : 0,
     );
   }
 }

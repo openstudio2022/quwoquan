@@ -45,13 +45,13 @@ class ImpactTimeline extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return state.when(
-      loading: () => const Center(child: CupertinoActivityIndicator()),
+      loading: () => AppRequestFeedback.section(),
       error: (error, _) {
         return AppPageErrorState(
           semantic: resolveIntersectionDetailErrorSemantic(
             context,
             error: error,
-            title: UITextConstants.profileImpactUnavailableTitle,
+            title: ContentText.profileImpactUnavailableTitle,
           ),
           onAction: (action) async {
             if (action.type == UiErrorActionType.retry ||
@@ -79,7 +79,7 @@ class ImpactTimeline extends ConsumerWidget {
             padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
             child: Center(
               child: Text(
-                UITextConstants.profileImpactEmptyMine,
+                ContentText.profileImpactEmptyMine,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: AppTypography.iosSubheadline,

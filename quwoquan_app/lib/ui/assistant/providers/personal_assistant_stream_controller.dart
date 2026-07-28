@@ -33,6 +33,7 @@ import 'package:uuid/uuid.dart';
 
 part 'personal_assistant_stream_controller_projection.dart';
 part 'personal_assistant_stream_controller_models.dart';
+part 'personal_assistant_stream_controller_telemetry.dart';
 
 class PersonalAssistantStreamController
     extends Notifier<PersonalAssistantStreamState> {
@@ -532,6 +533,7 @@ class PersonalAssistantStreamController
           const <AssistantIntersectionEvidenceRef>[];
       runStarted = true;
       _recordAssistantTurnQuality(
+        ref,
         turnAction: _assistantTurnActionSubmit,
         result: _assistantTurnResultSuccess,
         startedAt: turnStartedAt,
@@ -595,6 +597,7 @@ class PersonalAssistantStreamController
             !firstAnswerObserved) {
           firstAnswerObserved = true;
           _recordAssistantTurnQuality(
+            ref,
             turnAction: _assistantTurnActionFirstAnswer,
             result: _assistantTurnResultSuccess,
             startedAt: startedAt,
@@ -604,6 +607,7 @@ class PersonalAssistantStreamController
         if (streamEvent.type.isTerminal) {
           terminalEventObserved = true;
           _recordAssistantTurnQuality(
+            ref,
             turnAction: switch (streamEvent.type) {
               AssistantRunStreamEventType.completed =>
                 _assistantTurnActionCompleted,
@@ -762,6 +766,7 @@ class PersonalAssistantStreamController
         retryAvailable: true,
       );
       _recordAssistantTurnQuality(
+        ref,
         turnAction: runStarted
             ? _assistantTurnActionStreamFailure
             : _assistantTurnActionSubmit,
@@ -853,49 +858,6 @@ class PersonalAssistantStreamController
     _retryValue = '';
     _retryRunClientRequestId = '';
     _retryConversationClientRequestId = '';
-  }
-
-  void _recordAssistantTurnQuality({
-    required String turnAction,
-    required String result,
-    required DateTime startedAt,
-    String? failReasonCode,
-    String? operationId,
-  }) {
-    if (!ref.mounted) {
-      return;
-    }
-    final durationMs = DateTime.now()
-        .difference(startedAt)
-        .inMilliseconds
-        .clamp(0, 1 << 31)
-        .toInt();
-    unawaited(() async {
-      try {
-        await ref
-            .read(appTelemetryReporterProvider)
-            .record(
-              AppTelemetryPayload.assistantTurnQuality(
-                turnAction: turnAction,
-                result: result,
-                durationMs: durationMs,
-                failReasonCode: failReasonCode?.trim().isEmpty ?? true
-                    ? null
-                    : failReasonCode!.trim(),
-                operationId: operationId?.trim().isEmpty ?? true
-                    ? null
-                    : operationId!.trim(),
-              ),
-            );
-      } catch (error, stackTrace) {
-        developer.log(
-          'assistant turn telemetry failed',
-          name: 'personal_assistant',
-          error: error.runtimeType,
-          stackTrace: stackTrace,
-        );
-      }
-    }());
   }
 
   @visibleForTesting

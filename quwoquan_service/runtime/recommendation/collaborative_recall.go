@@ -2,6 +2,8 @@ package recommendation
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -58,7 +60,7 @@ func NewCollaborativeRecallSource(store CollaborativeCandidateStore, cfg Collabo
 
 func (s *CollaborativeRecallSource) Recall(ctx context.Context, req RecallRequest) ([]ContentCandidate, error) {
 	if s == nil || !s.enabled {
-		return nil, nil
+		return nil, SkipRecall("collaborative recall is disabled")
 	}
 	limit := req.Limit
 	if limit <= 0 {
@@ -75,12 +77,15 @@ func (s *CollaborativeRecallSource) Recall(ctx context.Context, req RecallReques
 	}
 
 	var out []ContentCandidate
+	var recallErrs []error
 	seen := map[string]struct{}{}
 	if i2iLimit > 0 {
 		i2i, err := s.store.GetI2ICandidates(ctx, collaborativeSeedIDs(req), i2iLimit*2)
 		if err == nil {
 			i2i = filterCollaborativeVertical(i2i, req.Vertical)
 			appendCollaborative(&out, seen, i2i, RecallPathCollaborativeI2I, quota, i2iLimit)
+		} else {
+			recallErrs = append(recallErrs, fmt.Errorf("collaborative i2i recall: %w", err))
 		}
 	}
 	if len(out) < quota && s.maxU2ICandidates > 0 {
@@ -89,12 +94,14 @@ func (s *CollaborativeRecallSource) Recall(ctx context.Context, req RecallReques
 		if err == nil {
 			u2i = filterCollaborativeVertical(u2i, req.Vertical)
 			appendCollaborative(&out, seen, u2i, RecallPathCollaborativeU2I, quota, u2iLimit)
+		} else {
+			recallErrs = append(recallErrs, fmt.Errorf("collaborative u2i recall: %w", err))
 		}
 	}
 	if len(out) > quota {
-		return out[:quota], nil
+		out = out[:quota]
 	}
-	return out, nil
+	return out, errors.Join(recallErrs...)
 }
 
 func collaborativeSeedIDs(req RecallRequest) []string {

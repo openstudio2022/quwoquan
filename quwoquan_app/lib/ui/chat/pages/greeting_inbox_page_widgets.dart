@@ -73,7 +73,7 @@ class _GreetingRequestCard extends StatelessWidget {
                       child: CupertinoButton.filled(
                         onPressed: busy ? null : onReply,
                         child: busy
-                            ? const CupertinoActivityIndicator()
+                            ? AppRequestFeedback.inline()
                             : const Text(ChatText.chatGreetingInboxReply),
                       ),
                     ),
@@ -90,7 +90,7 @@ class _GreetingRequestCard extends StatelessWidget {
                   child: CupertinoButton(
                     onPressed: busy ? null : onCancel,
                     child: busy
-                        ? const CupertinoActivityIndicator()
+                        ? AppRequestFeedback.inline()
                         : const Text(ChatText.chatGreetingCancel),
                   ),
                 ),
@@ -102,7 +102,7 @@ class _GreetingRequestCard extends StatelessWidget {
                 alignment: Alignment.centerRight,
                 child: CupertinoButton(
                   onPressed: onOpenConversation,
-                  child: const Text(UITextConstants.profileDirectMessage),
+                  child: const Text(ProfileText.profileDirectMessage),
                 ),
               ),
             ],

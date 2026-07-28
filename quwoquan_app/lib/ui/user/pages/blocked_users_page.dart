@@ -95,17 +95,17 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
     final confirmed = await showAppCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
-        title: const Text(UITextConstants.blockedUsersUnblockConfirmTitle),
-        content: const Text(UITextConstants.blockedUsersUnblockConfirmMessage),
+        title: const Text(ContentText.blockedUsersUnblockConfirmTitle),
+        content: const Text(ContentText.blockedUsersUnblockConfirmMessage),
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text(UITextConstants.cancel),
+            child: const Text(FoundationText.cancel),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text(UITextConstants.blockedUsersUnblock),
+            child: const Text(ContentText.blockedUsersUnblock),
           ),
         ],
       ),
@@ -148,7 +148,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
               targetKey: item.targetSubAccountId,
             ),
       );
-      AppToast.show(context, UITextConstants.blockedUsersUnblockSuccess);
+      AppToast.show(context, ContentText.blockedUsersUnblockSuccess);
     } catch (error) {
       if (!mounted) {
         return;
@@ -202,7 +202,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
     );
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
-      title: UITextConstants.blockedUsersTitle,
+      title: ContentText.blockedUsersTitle,
       onBack: () {
         if (context.canPop()) {
           context.pop();
@@ -223,7 +223,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
 
   Widget _buildAuthenticatedBody(bool isDark) {
     if (_loading && _items.isEmpty) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     if (_rawError case final error? when _items.isEmpty) {
       return AppPageErrorState(
@@ -274,10 +274,10 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
             padding: EdgeInsets.only(top: AppSpacing.interGroupMd),
             child: Center(
               child: _loadingMore
-                  ? const CupertinoActivityIndicator()
+                  ? AppRequestFeedback.inline()
                   : CupertinoButton(
                       onPressed: () => _load(reset: false),
-                      child: const Text(UITextConstants.loadMore),
+                      child: const Text(ContentText.loadMore),
                     ),
             ),
           ),
@@ -299,7 +299,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
             ),
             SizedBox(height: AppSpacing.interGroupMd),
             Text(
-              UITextConstants.blockedUsersLoginTitle,
+              ContentText.blockedUsersLoginTitle,
               style: TextStyle(
                 color: AppColors.iosLabel(context),
                 fontSize: AppTypography.iosTitle3,
@@ -308,7 +308,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
             ),
             SizedBox(height: AppSpacing.intraGroupSm),
             Text(
-              UITextConstants.blockedUsersLoginSubtitle,
+              ContentText.blockedUsersLoginSubtitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.iosSecondaryLabel(context),
@@ -318,7 +318,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
             SizedBox(height: AppSpacing.interGroupLg),
             CupertinoButton.filled(
               onPressed: _requestLogin,
-              child: const Text(UITextConstants.profileLoginNow),
+              child: const Text(FoundationText.profileLoginNow),
             ),
           ],
         ),
@@ -402,8 +402,8 @@ class _BlockedUserRow extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
             onPressed: busy ? null : onUnblock,
             child: busy
-                ? const CupertinoActivityIndicator()
-                : const Text(UITextConstants.blockedUsersUnblock),
+                ? AppRequestFeedback.inline()
+                : const Text(ContentText.blockedUsersUnblock),
           ),
         ],
       ),
@@ -431,7 +431,7 @@ class _BlockedUsersEmptyState extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.interGroupMd),
             Text(
-              UITextConstants.blockedUsersEmptyTitle,
+              ContentText.blockedUsersEmptyTitle,
               style: TextStyle(
                 color: SettingsSemanticConstants.labelColor(isDark),
                 fontSize: AppTypography.iosTitle3,
@@ -440,7 +440,7 @@ class _BlockedUsersEmptyState extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.intraGroupSm),
             Text(
-              UITextConstants.blockedUsersEmptySubtitle,
+              ContentText.blockedUsersEmptySubtitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.iosSecondaryLabel(context),

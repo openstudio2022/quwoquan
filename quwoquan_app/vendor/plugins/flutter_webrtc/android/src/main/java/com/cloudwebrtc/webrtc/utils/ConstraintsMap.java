@@ -2,6 +2,7 @@ package com.cloudwebrtc.webrtc.utils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class ConstraintsMap {
@@ -12,8 +13,8 @@ public class ConstraintsMap {
         mMap = new HashMap<String,Object>();
     }
 
-    public ConstraintsMap(Map<String, Object> map){
-        this.mMap = map;
+    public ConstraintsMap(Map<?, ?> map){
+        this.mMap = copyStringKeyedMap(map);
     }
 
     public Map<String, Object> toMap() {
@@ -52,7 +53,10 @@ public class ConstraintsMap {
         if (value == null) {
             return null;
         }
-        return new ConstraintsMap((Map<String, Object>) value);
+        if (!(value instanceof Map<?, ?>)) {
+            throw new IllegalArgumentException("Value for " + name + " is not a map");
+        }
+        return new ConstraintsMap((Map<?, ?>) value);
     }
 
     public ObjectType getType(String name) {
@@ -122,11 +126,29 @@ public class ConstraintsMap {
         if (value == null) {
             return null;
         }
-        return new ConstraintsArray((ArrayList<Object>) value);
+        if (!(value instanceof List<?>)) {
+            throw new IllegalArgumentException("Value for " + name + " is not an array");
+        }
+        return new ConstraintsArray((List<?>) value);
     }
 
     public ArrayList<Object> getListArray(String name){
-        return (ArrayList<Object>) mMap.get(name);
+        Object value = mMap.get(name);
+        if (!(value instanceof List<?>)) {
+            throw new IllegalArgumentException("Value for " + name + " is not an array");
+        }
+        return new ArrayList<>((List<?>) value);
+    }
+
+    private static Map<String, Object> copyStringKeyedMap(Map<?, ?> source) {
+        Map<String, Object> result = new HashMap<>();
+        for (Map.Entry<?, ?> entry : source.entrySet()) {
+            if (!(entry.getKey() instanceof String)) {
+                throw new IllegalArgumentException("Constraint map keys must be strings");
+            }
+            result.put((String) entry.getKey(), entry.getValue());
+        }
+        return result;
     }
 
     @Override

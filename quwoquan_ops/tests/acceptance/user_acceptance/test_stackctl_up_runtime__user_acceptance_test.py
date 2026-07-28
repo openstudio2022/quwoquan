@@ -1012,12 +1012,12 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 ),
             ):
                 result = local_gamma_t3.seed_relationships(
-                    "https://gamma-api.quwoquan-env.test:19000",
+                    "https://api.gamma.quwoquan.com:19000",
                 )
 
         self.assertEqual(result["status"], "passed")
         open_session.assert_called_once_with(
-            "https://gamma-api.quwoquan-env.test:19000",
+            "https://api.gamma.quwoquan.com:19000",
             environment="gamma",
             target_name="gamma-local",
             subject="fixture_source",
@@ -1068,9 +1068,9 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     [
                         "run_local_gamma_t3.py",
                         "--base-url",
-                        "https://gamma-api.quwoquan-env.test:19000",
+                        "https://api.gamma.quwoquan.com:19000",
                         "--product-ops-base-url",
-                        "https://gamma-product-ops.quwoquan-env.test:19010",
+                        "https://ops.gamma.quwoquan.com:19010",
                         "--skip-seed",
                         "--skip-flutter-contracts",
                         "--report",
@@ -1081,13 +1081,17 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 self.assertEqual(local_gamma_t3.main(), 0)
 
             open_session.assert_called_once_with(
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
                 environment="gamma",
                 target_name="gamma-local",
             )
             self.assertEqual(
                 json.loads(report_path.read_text(encoding="utf-8"))["auth"],
-                {"status": "passed", "principal": "seeded_persona"},
+                {
+                    "status": "passed",
+                    "principal": "fixture_persona",
+                    "isolation": "app_acceptance",
+                },
             )
 
     def test_local_gamma_seed_only_persists_user_profile_for_authenticated_probes(
@@ -1095,6 +1099,11 @@ class StackctlUpRuntimeTest(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             report_path = Path(tmp_dir) / "t3-seed-report.json"
+            session = local_gamma_t3.LocalGammaAcceptanceSession(
+                owner_id="fixture_owner",
+                persona_id="fixture_persona",
+                access_token="test-token",
+            )
             with (
                 mock.patch.object(
                     local_gamma_t3,
@@ -1116,6 +1125,11 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 ) as seed_relationships,
                 mock.patch.object(
                     local_gamma_t3,
+                    "provision_contact_discovery",
+                    return_value={"status": "passed", "matchCount": 1},
+                ) as provision_contact_discovery,
+                mock.patch.object(
+                    local_gamma_t3,
                     "seed_circle",
                     return_value={"status": "passed", "refs": ["circle_core"]},
                 ) as seed_circle,
@@ -1124,6 +1138,17 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     "seed_chat",
                     return_value={"status": "passed", "refs": ["chat_core"]},
                 ) as seed_chat,
+                mock.patch.object(
+                    local_gamma_t3,
+                    "resolve_running_local_deployment_work_root",
+                    return_value=None,
+                ),
+                mock.patch.object(
+                    local_gamma_t3,
+                    "open_local_acceptance_session",
+                    return_value=session,
+                ) as open_session,
+                mock.patch.object(local_gamma_t3, "_ACTIVE_SESSION", None),
                 mock.patch.object(
                     local_gamma_t3.sys,
                     "argv",
@@ -1139,7 +1164,15 @@ class StackctlUpRuntimeTest(unittest.TestCase):
 
             seed_user.assert_called_once_with()
             seed_relationships.assert_called_once_with(
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
+            )
+            provision_contact_discovery.assert_called_once_with(
+                "https://api.gamma.quwoquan.com:19000",
+            )
+            open_session.assert_called_once_with(
+                "https://api.gamma.quwoquan.com:19000",
+                environment="gamma",
+                target_name="gamma-local",
             )
             seed_circle.assert_called_once_with()
             seed_chat.assert_called_once_with()
@@ -1151,6 +1184,10 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             self.assertEqual(
                 report["domainSeeds"]["relationship"],
                 {"status": "passed", "refs": ["relationship_core"]},
+            )
+            self.assertEqual(
+                report["domainSeeds"]["contactDiscovery"],
+                {"status": "passed", "matchCount": 1},
             )
             self.assertEqual(
                 report["domainSeeds"]["circle"],
@@ -1317,7 +1354,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         env.pop("LOCAL_GAMMA_RTC_SERVICE_IMAGE", None)
         env["QWQ_WORKLOAD"] = "content-release"
         env["LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL"] = (
-            "https://gamma-upload.quwoquan-env.test:19100"
+            "https://upload.gamma.quwoquan.com:19100"
         )
         runtime = json.loads(
             (root / "quwoquan_ops/environments/gamma/runtime.yaml").read_text(
@@ -1463,7 +1500,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         ):
             checks = local_gamma_t3.endpoint_checks(
                 manifest,
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
                 {"content", "user"},
                 {"{activePersonaId}": "persona-runtime"},
             )
@@ -1582,8 +1619,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "env": "beta",
             "backend": "local",
             "publicBases": {
-                "api": "https://beta-api.quwoquan-env.test:18000",
-                "productOps": "https://beta-product-ops.quwoquan-env.test:18010",
+                "api": "https://api.beta.quwoquan.com:18000",
+                "productOps": "https://ops.beta.quwoquan.com:18010",
             },
         }
 
@@ -1616,7 +1653,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 "beta",
                 "beta-local",
                 VerificationProfile.INTEGRATION,
-                "https://beta-api.quwoquan-env.test:18000",
+                "https://api.beta.quwoquan.com:18000",
                 "local",
                 "lifecycle",
                 True,
@@ -1625,7 +1662,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 "gamma",
                 "gamma-local",
                 VerificationProfile.RELEASE,
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
                 "local",
                 "lifecycle",
                 True,
@@ -1718,7 +1755,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 "beta",
                 "beta-local",
                 VerificationProfile.INTEGRATION,
-                "https://beta-api.quwoquan-env.test:18000",
+                "https://api.beta.quwoquan.com:18000",
                 "local",
                 "lifecycle",
                 True,
@@ -1727,7 +1764,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 "gamma",
                 "gamma-local",
                 VerificationProfile.RELEASE,
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
                 "local",
                 "lifecycle",
                 True,
@@ -1736,7 +1773,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 "prod",
                 "prod-sim",
                 VerificationProfile.INTEGRATION,
-                "https://prod-sim-api.quwoquan-env.test:20000",
+                "https://api.sim.quwoquan.com:20000",
                 "local",
                 "lifecycle",
                 True,
@@ -1859,7 +1896,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 "beta",
                 "beta-local",
                 VerificationProfile.INTEGRATION,
-                "https://beta-api.quwoquan-env.test:18000",
+                "https://api.beta.quwoquan.com:18000",
                 "local",
                 True,
                 True,
@@ -1868,7 +1905,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 "gamma",
                 "gamma-local",
                 VerificationProfile.RELEASE,
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
                 "local",
                 True,
                 True,
@@ -1959,7 +1996,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         target = {
             "env": "beta",
             "backend": "local",
-            "publicBases": {"api": "https://beta-api.quwoquan-env.test:18000"},
+            "publicBases": {"api": "https://api.beta.quwoquan.com:18000"},
             "origins": {"contentService": "http://127.0.0.1:18220"},
         }
         with (
@@ -1973,6 +2010,11 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 stackctl,
                 "_local_target_runtime_ready",
                 return_value=True,
+            ),
+            mock.patch.object(
+                stackctl,
+                "_current_runtime_health_scope",
+                return_value="full",
             ),
         ):
             commands = stackctl._selected_profile_commands(
@@ -2053,7 +2095,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "env": "gamma",
             "backend": "local",
             "publicBases": {
-                "api": "https://gamma-api.quwoquan-env.test:19000",
+                "api": "https://api.gamma.quwoquan.com:19000",
                 "productOps": "http://ops.example",
             },
         }
@@ -2085,7 +2127,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             )
 
         login.assert_called_once_with(
-            "https://gamma-api.quwoquan-env.test:19000",
+            "https://api.gamma.quwoquan.com:19000",
             environment="gamma",
             target_name="gamma-local",
             resolve_host="127.0.0.1",
@@ -2183,7 +2225,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         ):
             checks = local_gamma_t3.endpoint_checks(
                 manifest,
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
                 {"content"},
                 {},
                 scope_name="object-homepage-gamma-real-data-closure",
@@ -2212,7 +2254,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         ).encode("utf-8")
         with mock.patch.object(local_gamma_t3, "http_get", return_value=(200, payload)):
             checks = local_gamma_t3.strict_endpoint_checks(
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
                 {},
                 scope,
             )

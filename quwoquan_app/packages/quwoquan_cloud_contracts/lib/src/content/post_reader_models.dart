@@ -236,3 +236,28 @@ final class ContentAuthorPostPageSlice {
   final String? nextCursor;
   final int? totalCount;
 }
+
+/// 首页发现流的强类型分页投影与服务端归因上下文。
+final class ContentDiscoveryFeedPageSlice {
+  ContentDiscoveryFeedPageSlice({
+    required Iterable<ContentPostProjection> items,
+    Iterable<ContentPostStructuredObject> objectCards =
+        const <ContentPostStructuredObject>[],
+    this.nextCursor,
+    this.feedRequestId,
+    this.rankingVersion,
+    this.reasonVersion,
+    this.hasMore,
+  }) : items = List<ContentPostProjection>.unmodifiable(items),
+       objectCards = List<ContentPostStructuredObject>.unmodifiable(
+         objectCards,
+       );
+
+  final List<ContentPostProjection> items;
+  final List<ContentPostStructuredObject> objectCards;
+  final String? nextCursor;
+  final String? feedRequestId;
+  final String? rankingVersion;
+  final String? reasonVersion;
+  final bool? hasMore;
+}

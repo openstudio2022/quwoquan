@@ -1,9 +1,7 @@
-/// Assistant 域 alpha/test 替身（B8 批次阶段 3a 从 lib 物理迁出）。
+/// Assistant 域 local_contract 替身（B8 批次阶段 3a 从 lib 物理迁出）。
 ///
 /// production `lib/**` 不再包含任何 assistant Mock；本文件位于 test/support，
-/// 仅测试与 alpha 场景经 provider override 注入（production 不可达）。
-/// 落位依据：`quwoquan_cloud_mock` 只依赖 `quwoquan_cloud_contracts`，而
-/// assistant Facet 与 wire 类型均在 quwoquan_app 包内，故 Mock 不能进 cloud_mock。
+/// 仅对象级测试可注入，Patrol/UAT 与 production composition 不可达。
 library;
 
 import 'package:quwoquan_app/cloud/services/assistant/assistant_consent_store.dart';

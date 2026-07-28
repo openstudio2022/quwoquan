@@ -6,8 +6,6 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.SurfaceTexture;
-import android.hardware.Camera;
-import android.hardware.Camera.CameraInfo;
 import android.media.AudioManager;
 import android.media.MediaRecorder;
 import android.media.AudioAttributes;
@@ -1234,6 +1232,7 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
     return iceServers;
   }
 
+  @SuppressWarnings("deprecation") // WebRTC still exposes PLAN_B and pruneTurnPorts for explicit legacy RTC configurations.
   private RTCConfiguration parseRTCConfiguration(ConstraintsMap map) {
     ConstraintsArray iceServersArray = null;
     if (map != null) {
@@ -1469,6 +1468,7 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
     return conf;
   }
 
+  @SuppressWarnings("deprecation") // The constraints-bearing overload is required by the Flutter wire contract.
   public String peerConnectionInit(ConstraintsMap configuration, ConstraintsMap constraints) {
     String peerConnectionId = getNextStreamUUID();
     RTCConfiguration conf = parseRTCConfiguration(configuration);
@@ -1653,11 +1653,12 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
     getUserMediaImpl.getDisplayMedia(constraints, result, mediaStream);
   }
 
+  @SuppressWarnings("deprecation") // Enumerates the intentional Camera1 compatibility fallback.
   public void getSources(Result result) {
     ConstraintsArray array = new ConstraintsArray();
-    String[] names = new String[Camera.getNumberOfCameras()];
+    String[] names = new String[android.hardware.Camera.getNumberOfCameras()];
 
-    for (int i = 0; i < Camera.getNumberOfCameras(); ++i) {
+    for (int i = 0; i < android.hardware.Camera.getNumberOfCameras(); ++i) {
       ConstraintsMap info = getCameraInfo(i);
       if (info != null) {
         array.pushMap(info);
@@ -1840,11 +1841,12 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
     }
   }
 
+  @SuppressWarnings("deprecation") // Reads metadata for the Camera1 compatibility fallback.
   public ConstraintsMap getCameraInfo(int index) {
-    CameraInfo info = new CameraInfo();
+    android.hardware.Camera.CameraInfo info = new android.hardware.Camera.CameraInfo();
 
     try {
-      Camera.getCameraInfo(index, info);
+      android.hardware.Camera.getCameraInfo(index, info);
     } catch (Exception e) {
       Logging.e("CameraEnumerationAndroid", "getCameraInfo failed on index " + index, e);
       return null;

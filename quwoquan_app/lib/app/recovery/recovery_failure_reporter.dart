@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_api_metadata.g.dart';
 import 'package:quwoquan_app/core/platform/app_recovery_native_bridge.dart';
 
 abstract interface class RecoveryFailureStore {
@@ -230,12 +231,13 @@ final class RecoveryFailureReporter {
     }
     final host = origin.host.toLowerCase();
     if (host != 'quwoquan.com' &&
-        !host.endsWith('.quwoquan.com') &&
-        host != 'quwoquan-env.test' &&
-        !host.endsWith('.quwoquan-env.test')) {
+        !host.endsWith('.quwoquan.com')) {
       return null;
     }
-    return origin.replace(path: '/ops/recovery-failures', query: null);
+    return origin.replace(
+      path: OpsApiMetadata.reportRecoveryFailurePath,
+      query: null,
+    );
   }
 
   static String _normalizeSource(String raw) {

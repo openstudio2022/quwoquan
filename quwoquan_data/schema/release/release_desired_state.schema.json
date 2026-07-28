@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Canonical immutable release desired state",
+  "type": "object",
+  "required": ["schema", "releaseId", "desiredRefs"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.release_desired_state"},
+    "releaseId": {"type": "string", "minLength": 1},
+    "desiredRefs": {
+      "type": "object",
+      "required": ["entities", "posts", "creators", "tags"],
+      "additionalProperties": false,
+      "properties": {
+        "entities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "posts": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "creators": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "tags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

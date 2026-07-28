@@ -20,19 +20,26 @@ func NewHandler(facades *filtercatalogapp.Facades) *Handler {
 }
 
 func (handler *Handler) Stage(writer http.ResponseWriter, request *http.Request) {
-	handler.handleStageFilterCatalogRelease(writer, request)
+	handler.handleStageFilterCatalogRelease(writer, bindFilterCatalogIdempotencyKey(request))
 }
 
 func (handler *Handler) Activate(writer http.ResponseWriter, request *http.Request) {
-	handler.handleActivateFilterCatalogRelease(writer, request)
+	handler.handleActivateFilterCatalogRelease(writer, bindFilterCatalogIdempotencyKey(request))
 }
 
 func (handler *Handler) Rollback(writer http.ResponseWriter, request *http.Request) {
-	handler.handleRollbackFilterCatalogRelease(writer, request)
+	handler.handleRollbackFilterCatalogRelease(writer, bindFilterCatalogIdempotencyKey(request))
 }
 
 func (handler *Handler) GetActive(writer http.ResponseWriter, request *http.Request) {
 	handler.handleGetActiveFilterCatalog(writer, request)
+}
+
+func bindFilterCatalogIdempotencyKey(request *http.Request) *http.Request {
+	return request.WithContext(filtercatalogapp.WithIdempotencyKey(
+		request.Context(),
+		strings.TrimSpace(request.Header.Get("Idempotency-Key")),
+	))
 }
 
 // Route dispatches FilterCatalogRelease routes and delegates all other routes
@@ -47,11 +54,7 @@ func (handler *Handler) Route(next http.Handler) http.Handler {
 			next.ServeHTTP(writer, request)
 			return
 		}
-		request = request.WithContext(filtercatalogapp.WithIdempotencyKey(
-			request.Context(),
-			strings.TrimSpace(request.Header.Get("Idempotency-Key")),
-		))
-		handler.dispatch(operation, writer, request)
+		handler.dispatch(operation, writer, bindFilterCatalogIdempotencyKey(request))
 	})
 }
 

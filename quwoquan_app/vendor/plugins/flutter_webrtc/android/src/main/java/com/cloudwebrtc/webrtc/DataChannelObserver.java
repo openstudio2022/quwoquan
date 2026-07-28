@@ -8,6 +8,7 @@ import org.webrtc.DataChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Map;
 
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.EventChannel;
@@ -19,7 +20,7 @@ class DataChannelObserver implements DataChannel.Observer, EventChannel.StreamHa
 
     private final EventChannel eventChannel;
     private EventChannel.EventSink eventSink;
-    private final ArrayList eventQueue = new ArrayList();
+    private final ArrayList<Map<String, Object>> eventQueue = new ArrayList<>();
 
     DataChannelObserver(BinaryMessenger messenger, String peerConnectionId, String flutterId,
                         DataChannel dataChannel) {

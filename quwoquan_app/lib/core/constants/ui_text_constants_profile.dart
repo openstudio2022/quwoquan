@@ -1,6 +1,6 @@
 part of 'ui_text_constants.dart';
 
-abstract final class _UITextProfile {
+abstract final class ProfileText {
   static const String personaManage = '管理分身';
   static const String personaSwitchProfile = '切换分身';
   static const String personaDefaultOnlyHint = '为不同兴趣创建分身，记录和互动会更清晰';
@@ -235,7 +235,7 @@ abstract final class _UITextProfile {
   static const String profileWorksFilterTitle = '筛选';
   static const String profileTabCircles = '圈子';
   static const String profileTabInteraction = '互动';
-  static const String profileTabFootprint = UITextConstants.myFootprint;
+  static const String profileTabFootprint = FoundationText.myFootprint;
   static const String profileTabLifestyle = '生活';
   static const String lifestyleSubFootprint = '足迹';
   static const String lifestyleSubSoul = '书影音';

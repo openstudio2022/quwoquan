@@ -211,7 +211,7 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                     child: current == null
                         ? Center(
                             child: Text(
-                              UITextConstants.mediaPickerImageOnly,
+                              MediaText.mediaPickerImageOnly,
                               style: TextStyle(
                                 color: AppColors.white.withValues(alpha: 0.7),
                                 fontSize: AppTypography.base,
@@ -344,8 +344,8 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
               ),
               child: MediaCreationBottomButton(
                 label: _composing
-                    ? UITextConstants.mediaPickerOneTapMovieComposing
-                    : UITextConstants.mediaPickerNextStep,
+                    ? MediaText.mediaPickerOneTapMovieComposing
+                    : MediaText.mediaPickerNextStep,
                 variant: MediaCreationBottomButtonVariant.fullWidthNeutral,
                 isLoading: _composing,
                 onPressed: _images.isEmpty || _composing
@@ -382,18 +382,18 @@ abstract final class _OneTapMovieEffectIds {
 const _oneTapMovieEffects = <_OneTapMovieEffect>[
   _OneTapMovieEffect(
     id: _OneTapMovieEffectIds.original,
-    label: UITextConstants.mediaPickerOneTapMovieOriginal,
+    label: MediaText.mediaPickerOneTapMovieOriginal,
   ),
   _OneTapMovieEffect(
     id: 'gentle_motion',
-    label: UITextConstants.mediaPickerOneTapMovieGentleMotion,
+    label: MediaText.mediaPickerOneTapMovieGentleMotion,
   ),
   _OneTapMovieEffect(
     id: 'beat',
-    label: UITextConstants.mediaPickerOneTapMovieBeat,
+    label: MediaText.mediaPickerOneTapMovieBeat,
   ),
   _OneTapMovieEffect(
     id: 'scenery',
-    label: UITextConstants.mediaPickerOneTapMovieScenery,
+    label: MediaText.mediaPickerOneTapMovieScenery,
   ),
 ];

@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
@@ -55,13 +55,8 @@ class StreamingScrollFab extends StatelessWidget {
               width: size - 6,
               height: size - 6,
               child: progress == null
-                  ? const CupertinoActivityIndicator()
-                  : CircularProgressIndicator(
-                      value: progress,
-                      strokeWidth: 2.5,
-                      backgroundColor: accentColor.withValues(alpha: 0.15),
-                      valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-                    ),
+                  ? AppRequestFeedback.inline()
+                  : AppRequestFeedback.progress(progress: progress!),
             ),
             Icon(
               CupertinoIcons.chevron_down,

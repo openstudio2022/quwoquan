@@ -161,19 +161,19 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
         return const <_WebContextTabSpec>[
           _WebContextTabSpec(
             id: 'video',
-            label: UITextConstants.webPcCreateTabVideo,
+            label: DiscoveryText.webPcCreateTabVideo,
           ),
           _WebContextTabSpec(
             id: 'gallery',
-            label: UITextConstants.webPcCreateTabGallery,
+            label: DiscoveryText.webPcCreateTabGallery,
           ),
           _WebContextTabSpec(
             id: 'write',
-            label: UITextConstants.webPcCreateTabText,
+            label: DiscoveryText.webPcCreateTabText,
           ),
           _WebContextTabSpec(
             id: 'drafts',
-            label: UITextConstants.webPcCreateTabDrafts,
+            label: DiscoveryText.webPcCreateTabDrafts,
           ),
         ];
       case MainTabDestination.chat:
@@ -202,7 +202,7 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
         return const <_WebContextTabSpec>[
           _WebContextTabSpec(
             id: _profileContextId,
-            label: UITextConstants.webPcProfileContextTitle,
+            label: DiscoveryText.webPcProfileContextTitle,
           ),
         ];
     }
@@ -228,17 +228,17 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
   String _searchHintFor(MainTabDestination destination) {
     switch (destination) {
       case MainTabDestination.home:
-        return UITextConstants.webPcSearchHintHome;
+        return DiscoveryText.webPcSearchHintHome;
       case MainTabDestination.featured:
-        return UITextConstants.webPcSearchHintFeatured;
+        return DiscoveryText.webPcSearchHintFeatured;
       case MainTabDestination.create:
-        return UITextConstants.webPcSearchHintCreate;
+        return DiscoveryText.webPcSearchHintCreate;
       case MainTabDestination.chat:
         return ChatText.webPcSearchHintMessages;
       case MainTabDestination.interestMatch:
-        return UITextConstants.webPcSearchHintHome;
+        return DiscoveryText.webPcSearchHintHome;
       case MainTabDestination.profile:
-        return UITextConstants.webPcSearchHintProfile;
+        return DiscoveryText.webPcSearchHintProfile;
     }
   }
 

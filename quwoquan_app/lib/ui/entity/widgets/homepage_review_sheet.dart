@@ -68,7 +68,7 @@ final class _HomepageReviewSheetState extends State<_HomepageReviewSheet> {
   void _submit() {
     if (_rating < 1) {
       setState(
-        () => _validationMessage = UITextConstants.homepageReviewRatingRequired,
+        () => _validationMessage = ObjectHomepageText.homepageReviewRatingRequired,
       );
       return;
     }
@@ -100,8 +100,8 @@ final class _HomepageReviewSheetState extends State<_HomepageReviewSheet> {
           children: <Widget>[
             Text(
               _isEditing
-                  ? UITextConstants.homepageReviewSheetEditTitle
-                  : UITextConstants.homepageReviewSheetTitle,
+                  ? ObjectHomepageText.homepageReviewSheetEditTitle
+                  : ObjectHomepageText.homepageReviewSheetTitle,
               style: TextStyle(
                 fontSize: AppTypography.iosTitle2,
                 fontWeight: AppTypography.semiBold,
@@ -110,7 +110,7 @@ final class _HomepageReviewSheetState extends State<_HomepageReviewSheet> {
             ),
             SizedBox(height: AppSpacing.containerSm),
             Text(
-              UITextConstants.homepageReviewRatingLabel,
+              ObjectHomepageText.homepageReviewRatingLabel,
               style: TextStyle(
                 fontSize: AppTypography.iosFootnote,
                 color: AppColors.iosSecondaryLabel(context),
@@ -157,7 +157,7 @@ final class _HomepageReviewSheetState extends State<_HomepageReviewSheet> {
             CupertinoTextField(
               key: const ValueKey<String>('homepage-review-body-field'),
               controller: _bodyController,
-              placeholder: UITextConstants.homepageReviewBodyPlaceholder,
+              placeholder: ObjectHomepageText.homepageReviewBodyPlaceholder,
               maxLines: 5,
               minLines: 3,
               maxLength: 1000,
@@ -174,7 +174,7 @@ final class _HomepageReviewSheetState extends State<_HomepageReviewSheet> {
             if (_tagOptions.isNotEmpty) ...<Widget>[
               SizedBox(height: AppSpacing.containerSm),
               Text(
-                UITextConstants.homepageReviewTagsLabel,
+                ObjectHomepageText.homepageReviewTagsLabel,
                 style: TextStyle(
                   fontSize: AppTypography.iosFootnote,
                   color: AppColors.iosSecondaryLabel(context),
@@ -227,8 +227,8 @@ final class _HomepageReviewSheetState extends State<_HomepageReviewSheet> {
               onPressed: _submit,
               child: Text(
                 _isEditing
-                    ? UITextConstants.homepageReviewUpdateAction
-                    : UITextConstants.homepageReviewSubmitAction,
+                    ? ObjectHomepageText.homepageReviewUpdateAction
+                    : ObjectHomepageText.homepageReviewSubmitAction,
               ),
             ),
           ],

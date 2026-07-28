@@ -179,7 +179,7 @@ extension _ImageEditorPageMosaicText on _ImageEditorPageState {
                           ),
                         ),
                         child: Text(
-                          UITextConstants.imageEditorMosaicPaintHint,
+                          MediaText.imageEditorMosaicPaintHint,
                           style: TextStyle(
                             color: AppColors.white.withValues(alpha: 0.9),
                             fontSize: AppTypography.sm,
@@ -250,7 +250,7 @@ extension _ImageEditorPageMosaicText on _ImageEditorPageState {
       barrierDismissible: true,
       builder: (dialogContext) {
         return CupertinoAlertDialog(
-          title: Text(UITextConstants.imageEditorTextEditHint),
+          title: Text(MediaText.imageEditorTextEditHint),
           content: Padding(
             padding: EdgeInsets.only(top: AppSpacing.sm),
             child: CupertinoTextField(
@@ -265,12 +265,12 @@ extension _ImageEditorPageMosaicText on _ImageEditorPageState {
           actions: [
             CupertinoDialogAction(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(UITextConstants.cancel),
+              child: Text(FoundationText.cancel),
             ),
             CupertinoDialogAction(
               isDefaultAction: true,
               onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-              child: Text(UITextConstants.confirm),
+              child: Text(FoundationText.confirm),
             ),
           ],
         );
@@ -336,7 +336,7 @@ extension _ImageEditorPageMosaicText on _ImageEditorPageState {
                       ),
                     ),
                     child: Text(
-                      UITextConstants.imageEditorTextEmptyHint,
+                      MediaText.imageEditorTextEmptyHint,
                       style: TextStyle(
                         color: AppColors.white.withValues(alpha: 0.9),
                         fontSize: AppTypography.sm,

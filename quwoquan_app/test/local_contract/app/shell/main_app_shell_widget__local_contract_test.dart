@@ -21,6 +21,8 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
+import 'package:quwoquan_app/core/platform/platform_providers.dart';
+import 'package:quwoquan_app/core/platform/web_install_context.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
@@ -481,7 +483,7 @@ void main() {
       expect(find.text('首页'), findsWidgets);
       expect(find.text('视频书'), findsWidgets);
       expect(find.text('我'), findsWidgets);
-      expect(find.text(UITextConstants.bottomNavGuestProfile), findsNothing);
+      expect(find.text(FoundationText.bottomNavGuestProfile), findsNothing);
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
@@ -579,7 +581,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
-          matching: find.text(UITextConstants.bottomNavGuestProfile),
+          matching: find.text(FoundationText.bottomNavGuestProfile),
         ),
         findsOneWidget,
       );
@@ -607,34 +609,31 @@ void main() {
 
       expect(find.text('发布'), findsNothing);
       expect(find.text('互动'), findsNothing);
-      expect(find.text(UITextConstants.createActionWriteLong), findsOneWidget);
+      expect(find.text(CreationText.createActionWriteLong), findsOneWidget);
       expect(
-        find.text(UITextConstants.createActionPostPhotoShort),
+        find.text(CreationText.createActionPostPhotoShort),
+        findsOneWidget,
+      );
+      expect(find.text(CreationText.createActionPhotoSubtitle), findsOneWidget);
+      expect(
+        find.text(CreationText.createActionCameraSubtitle),
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.createActionPhotoSubtitle),
-        findsOneWidget,
-      );
-      expect(
-        find.text(UITextConstants.createActionCameraSubtitle),
-        findsOneWidget,
-      );
-      expect(
-        find.text(UITextConstants.createActionAddContactShort),
+        find.text(CreationText.createActionAddContactShort),
         findsOneWidget,
       );
       expect(find.text(ChatText.createActionCreateGroupShort), findsOneWidget);
       expect(
-        find.text(UITextConstants.createActionCreateCircleShort),
+        find.text(CreationText.createActionCreateCircleShort),
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.createActionInterestMatchShort),
+        find.text(CreationText.createActionInterestMatchShort),
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.createActionInterestMatchSubtitle),
+        find.text(CreationText.createActionInterestMatchSubtitle),
         findsOneWidget,
       );
     });
@@ -652,9 +651,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.text(UITextConstants.createActionInterestMatchShort),
-      );
+      await tester.tap(find.text(CreationText.createActionInterestMatchShort));
       await tester.pumpAndSettle();
 
       expect(find.byType(InterestMatchPage), findsOneWidget);
@@ -677,14 +674,14 @@ void main() {
 
       // 加号后置登录：先出现动作面板，不弹登录页。
       expect(find.byType(LoginPage), findsNothing);
-      expect(find.text(UITextConstants.createActionWriteLong), findsOneWidget);
+      expect(find.text(CreationText.createActionWriteLong), findsOneWidget);
       expect(
-        find.text(UITextConstants.createActionAddContactShort),
+        find.text(CreationText.createActionAddContactShort),
         findsOneWidget,
       );
 
       // 选具体创作动作时才触发登录。
-      await tester.tap(find.text(UITextConstants.createActionWriteLong));
+      await tester.tap(find.text(CreationText.createActionWriteLong));
       await tester.pumpAndSettle();
 
       expect(find.byType(LoginPage), findsOneWidget);
@@ -1214,6 +1211,13 @@ void main() {
               platformCapabilitiesProvider.overrideWithValue(
                 CapabilityProfile.web,
               ),
+              webInstallContextProvider.overrideWithValue(
+                const WebInstallContext(
+                  recommendation: WebInstallRecommendation.android,
+                  isStandalone: false,
+                  dismissedForSession: false,
+                ),
+              ),
               _openStartupAuthGateOverride(),
               authSessionStoreProvider.overrideWithValue(
                 const _TestAuthSessionStore(authenticated: true),
@@ -1234,16 +1238,16 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text(UITextConstants.webInstallBannerTitle), findsOneWidget);
       expect(
-        find.text(UITextConstants.webInstallBannerDownloadApp),
+        find.text(FoundationText.webInstallBannerAndroidTitle),
         findsOneWidget,
       );
       expect(
-        find.descendant(
-          of: find.byType(WebAppInstallBanner),
-          matching: find.text(UITextConstants.share),
-        ),
+        find.text(FoundationText.webInstallBannerDownload),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('web-install-dismiss')),
         findsOneWidget,
       );
     });
@@ -1276,6 +1280,13 @@ void main() {
               platformCapabilitiesProvider.overrideWithValue(
                 CapabilityProfile.web,
               ),
+              webInstallContextProvider.overrideWithValue(
+                const WebInstallContext(
+                  recommendation: WebInstallRecommendation.desktop,
+                  isStandalone: false,
+                  dismissedForSession: false,
+                ),
+              ),
               _openStartupAuthGateOverride(),
               authSessionStoreProvider.overrideWithValue(
                 const _TestAuthSessionStore(authenticated: true),
@@ -1296,19 +1307,25 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text(UITextConstants.webPcWelcomeHeadline), findsNothing);
-      expect(find.text(UITextConstants.webPcWelcomeSubtitle), findsNothing);
-      expect(find.text(UITextConstants.webPcWelcomeScrollHint), findsNothing);
-      expect(find.text(UITextConstants.webPcBrandName), findsOneWidget);
-      expect(find.text(UITextConstants.webPcWelcomeContinue), findsNothing);
-      expect(find.text(UITextConstants.webPcWelcomeDownload), findsNothing);
-      expect(find.text(UITextConstants.webPcWelcomeLogin), findsNothing);
+      expect(find.text(DiscoveryText.webPcWelcomeHeadline), findsNothing);
+      expect(find.text(DiscoveryText.webPcWelcomeSubtitle), findsNothing);
+      expect(find.text(DiscoveryText.webPcWelcomeScrollHint), findsNothing);
+      expect(find.text(DiscoveryText.webPcBrandName), findsOneWidget);
+      expect(find.text(DiscoveryText.webPcWelcomeContinue), findsNothing);
+      expect(find.text(DiscoveryText.webPcWelcomeDownload), findsNothing);
+      expect(find.text(DiscoveryText.webPcWelcomeLogin), findsNothing);
       expect(find.byType(WelcomeFlowerMark), findsOneWidget);
-      expect(find.byType(WebAppInstallBanner), findsNothing);
+      expect(find.byType(WebAppInstallBanner), findsOneWidget);
+      expect(
+        find.text(FoundationText.webInstallBannerAndroidPackage),
+        findsOneWidget,
+      );
+      expect(
+        find.text(FoundationText.webInstallBannerIosPackage),
+        findsOneWidget,
+      );
 
-      final recommendedTab = find
-          .text(UITextConstants.homeTabRecommended)
-          .first;
+      final recommendedTab = find.text(DiscoveryText.homeTabRecommended).first;
       final tabLeftBeforePinned = tester.getTopLeft(recommendedTab).dx;
 
       await tester.drag(
@@ -1345,10 +1362,10 @@ void main() {
       );
       // 首页内容流复用 HomeMultiFormFeed 后，「关注」既是频道页签也是卡片关注按钮文案，
       // 与「推荐」一致允许多处出现（频道页签仍在其中）。
-      expect(find.text(UITextConstants.homeTabFollowing), findsWidgets);
-      expect(find.text(UITextConstants.homeTabRecommended), findsWidgets);
-      expect(find.text(UITextConstants.webPcSearchHintHome), findsOneWidget);
-      expect(find.text(UITextConstants.globalXiaoquSearchAsk), findsNothing);
+      expect(find.text(DiscoveryText.homeTabFollowing), findsWidgets);
+      expect(find.text(DiscoveryText.homeTabRecommended), findsWidgets);
+      expect(find.text(DiscoveryText.webPcSearchHintHome), findsOneWidget);
+      expect(find.text(DiscoveryText.globalXiaoquSearchAsk), findsNothing);
       // 首页内容流复用移动端 HomeMultiFormFeed（多列 + 同源埋点），而非 Web 自绘卡片。
       expect(
         find.byKey(const ValueKey<String>('web-content-feed-recommend')),
@@ -1360,7 +1377,7 @@ void main() {
       );
       scrollView.controller!.jumpTo(0);
       await tester.pump(const Duration(milliseconds: 120));
-      expect(find.text(UITextConstants.webPcBrandName), findsWidgets);
+      expect(find.text(DiscoveryText.webPcBrandName), findsWidgets);
       scrollView.controller!.jumpTo(AppSpacing.webPcWelcomeHeroHeight);
       await tester.pump(const Duration(milliseconds: 120));
       expect(
@@ -1374,27 +1391,21 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text(UITextConstants.workFormatFilterAll), findsWidgets);
-      expect(find.text(UITextConstants.workFormatFilterVideo), findsWidgets);
-      expect(find.text(UITextConstants.workFormatFilterImage), findsOneWidget);
-      expect(
-        find.text(UITextConstants.workFormatFilterArticle),
-        findsOneWidget,
-      );
-      expect(
-        find.text(UITextConstants.webPcSearchHintFeatured),
-        findsOneWidget,
-      );
+      expect(find.text(DiscoveryText.workFormatFilterAll), findsWidgets);
+      expect(find.text(DiscoveryText.workFormatFilterVideo), findsWidgets);
+      expect(find.text(DiscoveryText.workFormatFilterImage), findsOneWidget);
+      expect(find.text(DiscoveryText.workFormatFilterArticle), findsOneWidget);
+      expect(find.text(DiscoveryText.webPcSearchHintFeatured), findsOneWidget);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('web-primary-create')),
       );
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text(UITextConstants.webPcCreateTabGallery), findsOneWidget);
-      expect(find.text(UITextConstants.webPcCreateTabText), findsOneWidget);
-      expect(find.text(UITextConstants.webPcCreateTabDrafts), findsOneWidget);
-      expect(find.text(UITextConstants.webPcSearchHintCreate), findsOneWidget);
+      expect(find.text(DiscoveryText.webPcCreateTabGallery), findsOneWidget);
+      expect(find.text(DiscoveryText.webPcCreateTabText), findsOneWidget);
+      expect(find.text(DiscoveryText.webPcCreateTabDrafts), findsOneWidget);
+      expect(find.text(DiscoveryText.webPcSearchHintCreate), findsOneWidget);
     });
 
     testWidgets('Web 宽屏未登录点创作主入口先进入创建工作台，不直接登录', (tester) async {
@@ -1461,9 +1472,9 @@ void main() {
 
       expect(find.byType(WebInlineLoginSurface), findsNothing);
       expect(find.byType(LoginPage), findsNothing);
-      expect(find.text(UITextConstants.webPcCreateTabGallery), findsOneWidget);
-      expect(find.text(UITextConstants.webPcCreateTabText), findsOneWidget);
-      expect(find.text(UITextConstants.webPcCreateTabDrafts), findsOneWidget);
+      expect(find.text(DiscoveryText.webPcCreateTabGallery), findsOneWidget);
+      expect(find.text(DiscoveryText.webPcCreateTabText), findsOneWidget);
+      expect(find.text(DiscoveryText.webPcCreateTabDrafts), findsOneWidget);
       await tester.pump(const Duration(milliseconds: 1200));
     });
   });

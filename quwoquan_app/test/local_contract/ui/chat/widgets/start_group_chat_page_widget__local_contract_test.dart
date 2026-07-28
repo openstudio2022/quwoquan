@@ -344,9 +344,9 @@ void main() {
 
     expect(repository.receivedIdempotencyKeys, hasLength(1));
     expect(repository.receivedIdempotencyKeys.single, isNotEmpty);
-    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+    expect(find.text(ContentText.tryAgain), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.tap(find.text(ContentText.tryAgain));
     await tester.pumpAndSettle();
 
     expect(repository.receivedIdempotencyKeys, hasLength(2));

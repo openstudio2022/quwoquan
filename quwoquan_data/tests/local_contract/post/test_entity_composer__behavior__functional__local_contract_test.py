@@ -237,6 +237,7 @@ def _seed_sources() -> str:
         },
         platform="curated",
         source_category="internal-curated",
+        source_use_mode="licensed_adaptation",
         research_lane="article",
         url="https://example.com/sanxingdui",
         title="sample",

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Canonical immutable release header",
+  "type": "object",
+  "required": [
+    "schema",
+    "releaseId",
+    "releaseKind",
+    "canonicalMerkle",
+    "executionIds",
+    "sourceDigests"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.release"},
+    "releaseId": {"type": "string", "minLength": 1},
+    "releaseKind": {"enum": ["content", "empty_baseline"]},
+    "canonicalMerkle": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "executionIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "sourceDigests": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["algorithm", "digest", "inputs"],
+        "additionalProperties": false,
+        "properties": {
+          "algorithm": {"const": "sha256"},
+          "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+          "inputs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    }
+  }
+}

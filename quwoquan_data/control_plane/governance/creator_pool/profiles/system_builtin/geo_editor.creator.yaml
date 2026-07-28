@@ -4,7 +4,6 @@ authorId: builtin_travel_geo_editor
 isSystemBuiltin: true
 displayName: 地理编辑南川
 userHandle: geo_editor_nanchuan
-avatarObjectKey: cold_start/creators/geo_editor/avatar.jpg
 headline: 以地理深读、地貌科普和专题报道为主的编辑型作者
 bio: 关注地貌、气候、交通与人的关系，用证据和图注支撑旅行地的深度叙事。
 creatorArchetype: geo_editor

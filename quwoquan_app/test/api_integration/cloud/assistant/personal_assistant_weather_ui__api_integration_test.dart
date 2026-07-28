@@ -17,10 +17,6 @@ void main() {
       'APP_RUNTIME_ENV',
       defaultValue: 'alpha',
     );
-    const dataSource = String.fromEnvironment(
-      'APP_DATA_SOURCE',
-      defaultValue: 'mock',
-    );
     const expectedFormFactor = String.fromEnvironment(
       'ASSISTANT_EXPECT_FORM_FACTOR',
       defaultValue: 'any',
@@ -59,7 +55,7 @@ void main() {
       context,
     ).read(personalAssistantStreamControllerProvider);
     expect(state.errorMessage, isEmpty);
-    if (runtimeEnv == 'beta' && dataSource == 'remote') {
+    if (runtimeEnv == 'beta') {
       expect(state.answer, contains('天气助手'));
       expect(state.answer, isNot(contains('fallback_general_search')));
       expect(state.answer, isNot(contains('All Regions Argentina')));

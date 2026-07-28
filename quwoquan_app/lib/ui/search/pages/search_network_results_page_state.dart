@@ -472,7 +472,7 @@ class _SearchNetworkResultsPageState
                     key: const ValueKey<String>('search_network_field'),
                     controller: _controller,
                     focusNode: _focusNode,
-                    placeholder: UITextConstants.globalSearchTitle,
+                    placeholder: ContactText.globalSearchTitle,
                     onSubmitted: _handleSearchSubmitted,
                     onChanged: (value) {
                       setState(() {
@@ -512,7 +512,7 @@ class _SearchNetworkResultsPageState
                             onPressed: () =>
                                 _handleSearchSubmitted(_controller.text),
                             child: Text(
-                              UITextConstants.search,
+                              DiscoveryText.search,
                               style: TextStyle(
                                 fontSize: AppTypography.iosSubheadline,
                                 fontWeight: AppTypography.medium,

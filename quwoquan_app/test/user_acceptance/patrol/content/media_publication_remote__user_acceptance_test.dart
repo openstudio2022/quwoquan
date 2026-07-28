@@ -50,17 +50,34 @@ void main() {
     ),
     ($) => _runMediaPublicationJourney($, mediaKind: CreateMediaKind.video),
   );
+
+  patrolTest(
+    'micro publication reaches result and canonical work browser through Remote',
+    tags: const <String>['t4', 'content', 'text-publication', 'micro'],
+    skip: !kRunPatrolT4,
+    config: PatrolTesterConfig(
+      visibleTimeout: const Duration(seconds: 15),
+      printLogs: true,
+    ),
+    ($) => _runTextPublicationJourney($, publishAsArticle: false),
+  );
+
+  patrolTest(
+    'article publication reaches result and canonical work browser through Remote',
+    tags: const <String>['t4', 'content', 'text-publication', 'article'],
+    skip: !kRunPatrolT4,
+    config: PatrolTesterConfig(
+      visibleTimeout: const Duration(seconds: 15),
+      printLogs: true,
+    ),
+    ($) => _runTextPublicationJourney($, publishAsArticle: true),
+  );
 }
 
 Future<void> _runMediaPublicationJourney(
   PatrolIntegrationTester $, {
   required CreateMediaKind mediaKind,
 }) async {
-  expect(
-    const String.fromEnvironment('APP_DATA_SOURCE'),
-    'remote',
-    reason: '媒体发布 UAT 只能运行 production Remote composition。',
-  );
   await launchPatrolAppOnce($);
 
   final navigator = find.byType(Navigator).evaluate().first;
@@ -151,8 +168,8 @@ Future<void> _runMediaPublicationJourney(
       reason: '后台重试必须把真实媒体发布推进到 pending_review/published 并保留 postId。',
     );
     final expectedResultTitle = acceptedState == 'pending_review'
-        ? UITextConstants.publishResultPendingReviewTitle
-        : UITextConstants.publishResultSuccessTitle;
+        ? CreationText.publishResultPendingReviewTitle
+        : CreationText.publishResultSuccessTitle;
     final resultPresentationConverged = await _waitFor(
       $,
       () => find.text(expectedResultTitle).evaluate().isNotEmpty,
@@ -210,6 +227,135 @@ Future<void> _runMediaPublicationJourney(
   }
 }
 
+Future<void> _runTextPublicationJourney(
+  PatrolIntegrationTester $, {
+  required bool publishAsArticle,
+}) async {
+  await launchPatrolAppOnce($);
+
+  final navigator = find.byType(Navigator).evaluate().first;
+  final container = ProviderScope.containerOf(navigator);
+  await container.read(createDraftStoreProvider.future);
+  container.read(postPublicationIntentQueueProvider);
+
+  final nonce = DateTime.now().microsecondsSinceEpoch;
+  final contentType = publishAsArticle ? 'article' : 'micro';
+  final draftId = 'remote-text-uat-$contentType-$nonce';
+  final marker = 'remote $contentType publication $nonce';
+  final body = publishAsArticle
+      ? '$marker\n\n${List<String>.filled(6, '这是一段远端文章发布验收正文。').join()}'
+      : marker;
+  String? postId;
+  String? acceptedState;
+  final subscription = container.listen<PostPublicationIntentQueueState>(
+    postPublicationIntentQueueProvider,
+    (_, next) {
+      for (final intent in next.intents) {
+        if (intent.command.localDraftId != draftId) {
+          continue;
+        }
+        final observedPostId = intent.postId?.trim() ?? '';
+        if (observedPostId.isNotEmpty) {
+          postId = observedPostId;
+        }
+        final state = intent.publicationState?.wireValue;
+        if (state == 'pending_review' || state == 'published') {
+          acceptedState = state;
+        }
+      }
+    },
+    fireImmediately: true,
+  );
+
+  try {
+    final state =
+        CreateEditorState.initial(
+          editorKind: CreateEditorKind.text,
+          draftFlowKind: CreateDraftFlowKind.article,
+        ).copyWith(
+          draftId: draftId,
+          title: publishAsArticle ? marker : '',
+          body: body,
+        );
+    await container
+        .read(createDraftStoreProvider.notifier)
+        .saveDraft(
+          CreateDraft(
+            id: draftId,
+            updatedAtMs: DateTime.now().millisecondsSinceEpoch,
+            state: state,
+            sourceType: 'text',
+          ),
+          currentDraftId: draftId,
+        );
+
+    await patrolGoTo(
+      $,
+      '${AppRoutePaths.createPathTemplate}?draftId=${Uri.encodeQueryComponent(draftId)}',
+    );
+    await $(
+      TestKeys.createPage,
+    ).waitUntilVisible(timeout: const Duration(seconds: 20));
+    await $(TestKeys.createPublishButton).tap();
+    await $(
+      TestKeys.createPublishConfirmSheet,
+    ).waitUntilVisible(timeout: const Duration(seconds: 15));
+    await $(TestKeys.createPublishConfirmButton).tap();
+    await _waitForPublicationResultWithRecovery($);
+    expect(
+      await _waitFor(
+        $,
+        () => postId != null && acceptedState != null,
+        timeout: const Duration(minutes: 2),
+      ),
+      isTrue,
+      reason: '真实 $contentType 发布必须推进到受理状态并保留 canonical postId。',
+    );
+    await $(TestKeys.createPublishResultDoneButton).tap();
+
+    final detail = await container
+        .read(workBrowserContentPostDetailReaderProvider)
+        .getPost(postId: postId!);
+    expect(detail.post.type, contentType);
+    expect(
+      publishAsArticle ? detail.post.title : detail.post.normalizedBody,
+      contains(marker),
+      reason: 'Remote 回读必须保留 $contentType 的 canonical 内容。',
+    );
+
+    await patrolGoTo($, AppRoutePaths.workBrowser(workId: postId!));
+    expect(
+      await _waitFor(
+        $,
+        () => find
+            .byKey(const ValueKey<String>('works-top-rail'))
+            .evaluate()
+            .isNotEmpty,
+        timeout: const Duration(seconds: 30),
+      ),
+      isTrue,
+      reason: '$contentType 发布结果必须能进入 canonical workBrowser。',
+    );
+    expect(
+      find.byKey(const ValueKey<String>('work-browser-entry-error')),
+      findsNothing,
+    );
+  } finally {
+    subscription.close();
+    if (postId != null) {
+      await container
+          .read(contentWriteRepositoryProvider)
+          .deletePost(
+            postId: postId!,
+            idempotencyKey: contentPostDeleteIdempotencyKey(postId!),
+          );
+    }
+    await container
+        .read(createDraftStoreProvider.notifier)
+        .deleteDraft(draftId);
+  }
+}
+
 Future<void> _waitForPublicationResultWithRecovery(
   PatrolIntegrationTester $,
 ) async {
@@ -219,7 +365,7 @@ Future<void> _waitForPublicationResultWithRecovery(
       $,
       () =>
           find.byKey(TestKeys.createPublishResultSheet).evaluate().isNotEmpty ||
-          find.text(UITextConstants.tryAgain).evaluate().isNotEmpty,
+          find.text(ContentText.tryAgain).evaluate().isNotEmpty,
       timeout: const Duration(seconds: 90),
     );
     expect(outcomeVisible, isTrue, reason: '媒体发布必须在 90 秒内进入结果面或展示可执行的结构化恢复动作。');
@@ -227,7 +373,7 @@ Future<void> _waitForPublicationResultWithRecovery(
       return;
     }
     expect(retry, lessThan(maxUserRetries), reason: '连续恢复后仍未进入发布结果面。');
-    await $(UITextConstants.tryAgain).tap();
+    await $(ContentText.tryAgain).tap();
     await $(
       TestKeys.createPublishConfirmSheet,
     ).waitUntilVisible(timeout: const Duration(seconds: 20));

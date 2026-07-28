@@ -81,7 +81,7 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
     if (_selectedToolIndex == kImageEditorToolPro &&
         _selectedProCategory == kImageEditorProCategoryLocal &&
         _selectedLocalAnchor == null) {
-      _showLocalHint(UITextConstants.imageEditorProAnchorSelectHint);
+      _showLocalHint(MediaText.imageEditorProAnchorSelectHint);
       return;
     }
     final clamped = value.clamp(-100.0, 100.0);
@@ -121,7 +121,7 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
     final toEnable = !_localAddMode;
     if (toEnable &&
         _localAnchors.length >= _ImageEditorPageState._kLocalAnchorMaxCount) {
-      _showLocalHint(UITextConstants.imageEditorProAnchorLimitReached);
+      _showLocalHint(MediaText.imageEditorProAnchorLimitReached);
       return;
     }
     _setEditorState(() {
@@ -129,7 +129,7 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
       _localShowAnchorMenu = false;
     });
     if (toEnable) {
-      _showLocalHint(UITextConstants.imageEditorProAnchorScaleHint);
+      _showLocalHint(MediaText.imageEditorProAnchorScaleHint);
     }
   }
 
@@ -147,7 +147,7 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
 
   void _addLocalAnchorAt(Offset localPosition, Size imageSize) {
     if (_localAnchors.length >= _ImageEditorPageState._kLocalAnchorMaxCount) {
-      _showLocalHint(UITextConstants.imageEditorProAnchorLimitReached);
+      _showLocalHint(MediaText.imageEditorProAnchorLimitReached);
       _setEditorState(() => _localAddMode = false);
       return;
     }
@@ -222,7 +222,7 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
     final selected = _selectedLocalAnchor;
     if (selected == null) return;
     if (_localAnchors.length >= _ImageEditorPageState._kLocalAnchorMaxCount) {
-      _showLocalHint(UITextConstants.imageEditorProAnchorLimitReached);
+      _showLocalHint(MediaText.imageEditorProAnchorLimitReached);
       return;
     }
     final nextId = ++_localAnchorIdSeed;
@@ -528,7 +528,7 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
       final afterPath = await _bakeProCategoryToCurrentImage(subType);
       if (afterPath == null) {
         await _showEditorActionFailure(
-          title: UITextConstants.imageEditorProTools,
+          title: MediaText.imageEditorProTools,
         );
         return;
       }

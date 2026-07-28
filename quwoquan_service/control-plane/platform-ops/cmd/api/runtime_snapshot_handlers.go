@@ -3,17 +3,20 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 
+	configreportgenerated "quwoquan_service/control-plane/platform-ops/generated/platform_ops/config_instance_report"
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/controlplane"
+	rterr "quwoquan_service/runtime/errors"
 )
 
 func (s *platformService) handleListConfigInstanceReports(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.ListDocuments("config_instance_reports")
 	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
+		writeConfigInstanceReportError(w, r, configreportgenerated.AppErrorFromConfigInstanceReportStorageFailed(err.Error()))
 		return
 	}
 	summary := controlplane.SummarizeConfigDrift(items)
@@ -34,11 +37,11 @@ func (s *platformService) handleReportConfigInstance(w http.ResponseWriter, r *h
 	before := cloneMap(current)
 	var body map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", "invalid config instance report: "+err.Error())
+		writeConfigInstanceReportError(w, r, configreportgenerated.AppErrorFromConfigInstanceReportInvalid("decode report: "+err.Error()))
 		return
 	}
 	if body == nil {
-		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", "config instance report body is required")
+		writeConfigInstanceReportError(w, r, configreportgenerated.AppErrorFromConfigInstanceReportInvalid("config instance report body is required"))
 		return
 	}
 	reportedService := strings.TrimSpace(stringifyDocumentValue(body["service"]))
@@ -47,8 +50,33 @@ func (s *platformService) handleReportConfigInstance(w http.ResponseWriter, r *h
 		writeControlPlaneUnauthorized(w, r, err.Error())
 		return
 	}
+	if !isCanonicalSHA256(s.releaseManifestDigest) {
+		writeConfigInstanceReportError(w, r, configreportgenerated.AppErrorFromConfigInstanceReportCandidateUnavailable("control-plane release manifest digest is unavailable"))
+		return
+	}
+	reportedReleaseManifestDigest := strings.TrimSpace(stringifyDocumentValue(body["releaseManifestDigest"]))
+	if reportedReleaseManifestDigest != s.releaseManifestDigest {
+		writeConfigInstanceReportError(w, r, configreportgenerated.AppErrorFromConfigInstanceReportConflict("reported release manifest digest differs from control-plane candidate"))
+		return
+	}
+	body["releaseManifestDigest"] = s.releaseManifestDigest
+	if strings.EqualFold(reportedEnvironment, "prod") &&
+		strings.TrimSpace(stringifyDocumentValue(body["source"])) != "config-center" {
+		writeConfigInstanceReportError(w, r, configreportgenerated.AppErrorFromConfigInstanceReportInvalid("prod config ACK must originate from config-center"))
+		return
+	}
+	if strings.TrimSpace(stringifyDocumentValue(body["effectiveHash"])) == "" {
+		writeConfigInstanceReportError(w, r, configreportgenerated.AppErrorFromConfigInstanceReportInvalid("effective config hash is required"))
+		return
+	}
+	if strings.EqualFold(reportedEnvironment, "prod") &&
+		strings.TrimSpace(stringifyDocumentValue(body["configVersion"])) == "" {
+		writeConfigInstanceReportError(w, r, configreportgenerated.AppErrorFromConfigInstanceReportInvalid("prod config ACK requires config version"))
+		return
+	}
 	body["id"] = instanceID
 	body["instanceId"] = instanceID
+	body["principalSubject"] = strings.TrimSpace(principal.Actor.AccountID)
 	body["updatedAt"] = nowRFC3339()
 	if s.configLayer != nil {
 		// desiredHash 始终由控制面发布包快照回填，机器上报的 hash 只能用于
@@ -58,27 +86,35 @@ func (s *platformService) handleReportConfigInstance(w http.ResponseWriter, r *h
 			Service:     reportedService,
 		})
 		if err != nil {
-			writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", "resolve config report desired hash: "+err.Error())
+			writeConfigInstanceReportError(w, r, configreportgenerated.AppErrorFromConfigInstanceReportInvalid("resolve desired hash: "+err.Error()))
 			return
 		}
 		if resolved.DesiredHash == "" {
-			writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", "resolved desired hash is required")
+			writeConfigInstanceReportError(w, r, configreportgenerated.AppErrorFromConfigInstanceReportInvalid("resolved desired hash is required"))
 			return
 		}
 		reportedDesiredHash := strings.TrimSpace(stringifyDocumentValue(body["desiredHash"]))
 		if reportedDesiredHash != "" && reportedDesiredHash != resolved.DesiredHash {
-			writeRuntimeError(w, r, http.StatusConflict, "请求处理失败", "reported desired hash differs from control-plane snapshot")
+			writeConfigInstanceReportError(w, r, configreportgenerated.AppErrorFromConfigInstanceReportConflict("reported desired hash differs from control-plane snapshot"))
 			return
 		}
 		body["desiredHash"] = resolved.DesiredHash
 	}
 	body["inSync"] = body["desiredHash"] == body["effectiveHash"]
 	if err := s.store.PutDocument("config_instance_reports", instanceID, body); err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
+		writeConfigInstanceReportError(w, r, configreportgenerated.AppErrorFromConfigInstanceReportStorageFailed(err.Error()))
 		return
 	}
 	_ = s.appendAudit("config_instance_report", instanceID, "config_instance_reported", before, body, r)
 	writeJSON(w, http.StatusOK, body)
+}
+
+func writeConfigInstanceReportError(w http.ResponseWriter, r *http.Request, err *rterr.AppError) {
+	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptionsFromRequest(r))
+}
+
+func isCanonicalSHA256(value string) bool {
+	return regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(strings.TrimSpace(value))
 }
 
 func validateConfigInstanceReportPrincipal(

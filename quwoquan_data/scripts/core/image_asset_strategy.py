@@ -170,14 +170,15 @@ def image_asset_strategy_scale_issues(
     configured_minimum = minimum_publishable_images_per_target(spec)
     minimum_images_per_target = max(
         configured_minimum,
-        per_target_images if count_policy == IMAGE_COUNT_POLICY_HARD_QUOTA else 0,
+        (
+            per_target_images
+            if count_policy == IMAGE_COUNT_POLICY_HARD_QUOTA
+            else (1 if per_target_images > 0 else 0)
+        ),
     )
     if (
         required_targets < COMMERCIAL_SCALE_TARGET_THRESHOLD
-        or (
-            per_target_images < 2
-            and minimum_images_per_target < 1
-        )
+        or minimum_images_per_target < 1
     ):
         return []
     required_images = required_targets * minimum_images_per_target

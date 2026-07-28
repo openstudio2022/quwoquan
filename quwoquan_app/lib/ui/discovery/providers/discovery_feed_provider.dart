@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
@@ -11,6 +14,44 @@ import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/services/app_request_wait_controller.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+
+const String _discoveryFeedRequestPath = '/content/feed';
+
+CloudException _normalizeDiscoveryFeedError(Object error) {
+  if (error is CloudException) return error;
+  return CloudErrorMapper.fromException(
+    error,
+    requestPath: _discoveryFeedRequestPath,
+  );
+}
+
+/// 推荐首屏成功响应却没有任何可展示内容时的本地一致性失败。
+///
+/// 该失败由 App 根据响应不变量判定，不填充 status/request/trace 等服务端 wire 字段。
+/// `following` 的合法空态和分页 continuation end 不会调用此构造器。
+RuntimeFailure discoveryFeedInitialEmptyPageFailure(String channelId) {
+  return RuntimeFailure(
+    code: ContentErrorCode.requiredDependencyUnavailable.code,
+    semanticReason: 'discovery_feed_initial_page_empty',
+    origin: RuntimeFailureOrigin.localClient,
+    kind: RuntimeFailureKind.unavailable,
+    nature: RuntimeFailureNature.transient,
+    location: const RuntimeFailureLocation(
+      businessObject: 'content.discovery_feed',
+      functionModule: 'discovery_feed_provider',
+    ),
+    context: RuntimeFailureContext(
+      attributes: <RuntimeContextAttribute>[
+        RuntimeContextAttribute(key: 'channelId', value: channelId),
+      ],
+    ),
+    recovery: const RuntimeRecoveryDirective(
+      action: 'retry',
+      disruptionLevel: 'fullPage',
+    ),
+  );
+}
 
 /// 单类 feed 状态：items + nextCursor
 class DiscoveryFeedState {
@@ -248,8 +289,10 @@ class DiscoveryFeedMapNotifier
       onTimeout: (_) {
         final value = state[channelId]?.value;
         if (value == null) return;
-        final error = TimeoutException(
-          'Home foreground read exceeded the 6 second budget.',
+        final error = _normalizeDiscoveryFeedError(
+          TimeoutException(
+            'Home foreground read exceeded the 6 second budget.',
+          ),
         );
         state = {
           ...state,
@@ -311,6 +354,49 @@ class DiscoveryFeedMapNotifier
         ),
       );
       if (!controller.isCurrent(generation)) return;
+      final hasRetainedItems = currentValue?.items.isNotEmpty ?? false;
+      final hasInitialEmptyProtocolViolation =
+          channelId != 'following' &&
+          page.items.isEmpty &&
+          page.cacheFallbackError == null;
+      if (hasInitialEmptyProtocolViolation) {
+        final error = discoveryFeedInitialEmptyPageFailure(channelId);
+        developer.log(
+          'Initial discovery feed page contained no displayable items.',
+          name: 'DiscoveryFeed',
+          error: error,
+        );
+        state = {
+          ...state,
+          channelId: AsyncData(
+            hasRetainedItems
+                ? currentValue!.copyWith(
+                    isLoading: false,
+                    isSlow: false,
+                    blockingError: null,
+                    staleDataError: error,
+                    appendError: null,
+                  )
+                : DiscoveryFeedState(
+                    blockingError: error,
+                    isLoading: false,
+                    isSlow: false,
+                  ),
+          ),
+        };
+        _recordPageState(
+          channelId,
+          phase: hasRetainedItems ? 'cacheFallback' : 'blockingFailure',
+          source: hasRetainedItems ? 'retained' : 'localConsistency',
+          error: error,
+          copyKey: hasRetainedItems ? 'homeCacheFallback' : null,
+          hasCache: hasRetainedItems,
+          itemCount: hasRetainedItems ? currentValue!.items.length : 0,
+          requestId: hasRetainedItems ? currentValue!.feedRequestId : null,
+        );
+        controller.complete(generation);
+        return;
+      }
       // 采纳服务端下发的归因 id，使后续曝光/点击/打开复用同一 feedRequestId。
       feedSession.adoptServerFeedRequestId(
         page.feedRequestId,
@@ -324,7 +410,10 @@ class DiscoveryFeedMapNotifier
           .map((item) => item.id)
           .where((id) => id.isNotEmpty)
           .toList(growable: false);
-      final fallbackError = page.cacheFallbackError;
+      final fallbackError = page.cacheFallbackError == null
+          ? null
+          : _normalizeDiscoveryFeedError(page.cacheFallbackError!);
+      final hasDisplayableCache = page.items.isNotEmpty;
       state = {
         ...state,
         channelId: AsyncData(
@@ -334,19 +423,33 @@ class DiscoveryFeedMapNotifier
             seenItemIds: seen,
             nextCursor: page.nextCursor,
             feedRequestId: page.feedRequestId,
-            staleDataError: fallbackError,
+            blockingError: fallbackError != null && !hasDisplayableCache
+                ? fallbackError
+                : null,
+            staleDataError: fallbackError != null && hasDisplayableCache
+                ? fallbackError
+                : null,
             isLoading: false,
             isSlow: false,
           ),
         ),
       };
+      final phase = fallbackError == null
+          ? 'onlineSuccess'
+          : hasDisplayableCache
+          ? 'cacheFallback'
+          : 'blockingFailure';
       _recordPageState(
         channelId,
-        phase: fallbackError == null ? 'onlineSuccess' : 'cacheFallback',
-        source: fallbackError == null ? 'online' : 'cache',
+        phase: phase,
+        source: fallbackError != null && hasDisplayableCache
+            ? 'cache'
+            : 'online',
         error: fallbackError,
-        copyKey: fallbackError == null ? null : 'homeCacheFallback',
-        hasCache: fallbackError != null,
+        copyKey: fallbackError != null && hasDisplayableCache
+            ? 'homeCacheFallback'
+            : null,
+        hasCache: fallbackError != null && hasDisplayableCache,
         cacheAgeMs: page.cacheAgeMs,
         itemCount: page.items.length,
         requestId: page.feedRequestId,
@@ -354,10 +457,25 @@ class DiscoveryFeedMapNotifier
       controller.complete(generation);
     } catch (e, st) {
       if (!controller.isCurrent(generation)) return;
+      final error = _normalizeDiscoveryFeedError(e);
+      if (error.runtimeFailure.kind == RuntimeFailureKind.cancelled) {
+        state = {
+          ...state,
+          channelId: AsyncData(
+            (currentValue ?? const DiscoveryFeedState()).copyWith(
+              isLoading: false,
+              isSlow: false,
+              blockingError: null,
+              staleDataError: null,
+            ),
+          ),
+        };
+        return;
+      }
       developer.log(
-        'load error: $e',
+        'load error: $error',
         name: 'DiscoveryFeed',
-        error: e,
+        error: error,
         stackTrace: st,
       );
       if (currentValue != null && currentValue.items.isNotEmpty) {
@@ -367,7 +485,7 @@ class DiscoveryFeedMapNotifier
             currentValue.copyWith(
               isLoading: false,
               isSlow: false,
-              staleDataError: e,
+              staleDataError: error,
               blockingError: null,
             ),
           ),
@@ -376,7 +494,7 @@ class DiscoveryFeedMapNotifier
           channelId,
           phase: 'cacheFallback',
           source: 'retained',
-          error: e,
+          error: error,
           copyKey: 'homeCacheFallback',
           hasCache: true,
           itemCount: currentValue.items.length,
@@ -387,14 +505,14 @@ class DiscoveryFeedMapNotifier
       state = {
         ...state,
         channelId: AsyncData(
-          DiscoveryFeedState(blockingError: e, isLoading: false),
+          DiscoveryFeedState(blockingError: error, isLoading: false),
         ),
       };
       _recordPageState(
         channelId,
         phase: 'blockingFailure',
         source: 'online',
-        error: e,
+        error: error,
         hasCache: false,
         itemCount: 0,
       );
@@ -431,8 +549,10 @@ class DiscoveryFeedMapNotifier
           channelId: AsyncData(
             latest.copyWith(
               isLoading: false,
-              appendError: TimeoutException(
-                'Home pagination exceeded the 6 second budget.',
+              appendError: _normalizeDiscoveryFeedError(
+                TimeoutException(
+                  'Home pagination exceeded the 6 second budget.',
+                ),
               ),
             ),
           ),
@@ -531,15 +651,25 @@ class DiscoveryFeedMapNotifier
       controller.complete(generation);
     } catch (e, st) {
       if (!controller.isCurrent(generation)) return;
+      final error = _normalizeDiscoveryFeedError(e);
+      if (error.runtimeFailure.kind == RuntimeFailureKind.cancelled) {
+        state = {
+          ...state,
+          channelId: AsyncData(value.copyWith(isLoading: false)),
+        };
+        return;
+      }
       developer.log(
-        'append error: $e',
+        'append error: $error',
         name: 'DiscoveryFeed',
-        error: e,
+        error: error,
         stackTrace: st,
       );
       state = {
         ...state,
-        channelId: AsyncData(value.copyWith(isLoading: false, appendError: e)),
+        channelId: AsyncData(
+          value.copyWith(isLoading: false, appendError: error),
+        ),
       };
       _recordAppend(
         channelId,
@@ -548,7 +678,7 @@ class DiscoveryFeedMapNotifier
         hasMore: value.nextCursor?.isNotEmpty ?? false,
         itemCountBefore: value.items.length,
         itemCountAfter: value.items.length,
-        error: e,
+        error: error,
         copyKey: 'appendFailedRetry',
       );
     } finally {

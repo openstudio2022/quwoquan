@@ -260,19 +260,19 @@ export function ProductL1L4MetricsPage() {
           />
           <KpiCard
             label="实时覆盖"
-            value={`${metricsPayload?.coverage.liveMetrics ?? 0}/${metricsPayload?.coverage.totalMetrics ?? 0}`}
+            value={metricsPayload ? `${metricsPayload.coverage.liveMetrics}/${metricsPayload.coverage.totalMetrics}` : '—'}
             icon={<ShieldCheck size={20} color="#16A34A" />}
-            trendLabel={`unavailable=${metricsPayload?.coverage.unavailableMetrics ?? 0}`}
-            trendTone={(metricsPayload?.coverage.unavailableMetrics ?? 0) > 0 ? 'warning' : 'positive'}
-            description={`eventSignals=${metricsPayload?.coverage.eventSignals ?? 0}`}
+            trendLabel={metricsPayload ? `unavailable=${metricsPayload.coverage.unavailableMetrics}` : '等待指标投影'}
+            trendTone={metricsPayload ? (metricsPayload.coverage.unavailableMetrics > 0 ? 'warning' : 'positive') : 'warning'}
+            description={metricsPayload ? `eventSignals=${metricsPayload.coverage.eventSignals}` : '等待指标投影'}
           />
           <KpiCard
             label="告警态"
-            value={String(metricsPayload?.alerts.length ?? 0)}
+            value={metricsPayload ? String(metricsPayload.alerts.length) : '—'}
             icon={<AlertTriangle size={20} color="#F59E0B" />}
-            trendLabel={metricsPayload?.alerts[0]?.state ?? 'quiet'}
-            trendTone={metricsPayload?.alerts[0]?.state === 'firing' ? 'warning' : 'positive'}
-            description={metricsPayload?.alerts[0]?.metric ?? '当前无实时告警'}
+            trendLabel={metricsPayload?.alerts[0]?.state ?? (metricsPayload ? 'quiet' : '等待告警投影')}
+            trendTone={metricsPayload ? (metricsPayload.alerts[0]?.state === 'firing' ? 'warning' : 'positive') : 'warning'}
+            description={metricsPayload?.alerts[0]?.metric ?? (metricsPayload ? '当前无实时告警' : '等待告警投影')}
           />
           <KpiCard
             label="当前主指标"

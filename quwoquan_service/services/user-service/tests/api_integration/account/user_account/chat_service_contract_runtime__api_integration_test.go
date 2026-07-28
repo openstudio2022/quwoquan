@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration"
 )
@@ -18,14 +19,33 @@ type chatServiceContractRuntime struct {
 	server        *httptest.Server
 	mu            sync.Mutex
 	conversations map[string]string
+	verifier      *rtauth.Verifier
 }
 
 func startChatServiceContractRuntime() (*chatServiceContractRuntime, application.ConversationGateway) {
-	runtime := &chatServiceContractRuntime{conversations: make(map[string]string)}
+	credentials, err := rtauth.NewHS256DelegatedPersonaAuthorizationProvider(
+		testAccessConfig,
+		"user-service",
+		[]string{"chat.conversation.internal_direct"},
+	)
+	if err != nil {
+		panic(err)
+	}
+	runtime := &chatServiceContractRuntime{
+		conversations: make(map[string]string),
+		verifier:      testAccessVerifier,
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/internal/chat/conversations/direct", runtime.handleDirectConversation)
 	runtime.server = httptest.NewServer(mux)
-	client := integration.NewChatServiceClient(runtime.server.URL, runtime.server.Client())
+	client, err := integration.NewAuthorizedChatServiceClient(
+		runtime.server.URL,
+		runtime.server.Client(),
+		credentials,
+	)
+	if err != nil {
+		panic(err)
+	}
 	return runtime, client
 }
 
@@ -42,11 +62,6 @@ func (runtime *chatServiceContractRuntime) Reset() {
 }
 
 func (runtime *chatServiceContractRuntime) handleDirectConversation(writer http.ResponseWriter, request *http.Request) {
-	if request.Header.Get("X-Internal-Service") != "user-service" ||
-		strings.TrimSpace(request.Header.Get("X-Client-User-Id")) == "" {
-		http.Error(writer, "internal attribution required", http.StatusUnauthorized)
-		return
-	}
 	switch request.Method {
 	case http.MethodPost:
 		var input struct {
@@ -57,9 +72,12 @@ func (runtime *chatServiceContractRuntime) handleDirectConversation(writer http.
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&input); err != nil ||
 			strings.TrimSpace(input.CreatorID) == "" ||
-			strings.TrimSpace(input.PeerID) == "" ||
-			request.Header.Get("X-Client-User-Id") != input.CreatorID {
+			strings.TrimSpace(input.PeerID) == "" {
 			http.Error(writer, "invalid direct conversation request", http.StatusBadRequest)
+			return
+		}
+		if !runtime.hasDelegatedUserServicePersona(request, input.CreatorID) {
+			http.Error(writer, "delegated internal attribution required", http.StatusUnauthorized)
 			return
 		}
 		key := directConversationPairKey(input.CreatorID, input.PeerID)
@@ -74,8 +92,12 @@ func (runtime *chatServiceContractRuntime) handleDirectConversation(writer http.
 	case http.MethodGet:
 		memberA := strings.TrimSpace(request.URL.Query().Get("memberA"))
 		memberB := strings.TrimSpace(request.URL.Query().Get("memberB"))
-		if memberA == "" || memberB == "" || request.Header.Get("X-Client-User-Id") != memberA {
+		if memberA == "" || memberB == "" {
 			http.Error(writer, "invalid direct conversation lookup", http.StatusBadRequest)
+			return
+		}
+		if !runtime.hasDelegatedUserServicePersona(request, memberA) {
+			http.Error(writer, "delegated internal attribution required", http.StatusUnauthorized)
 			return
 		}
 		runtime.mu.Lock()
@@ -89,6 +111,31 @@ func (runtime *chatServiceContractRuntime) handleDirectConversation(writer http.
 	default:
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (runtime *chatServiceContractRuntime) hasDelegatedUserServicePersona(
+	request *http.Request,
+	personaID string,
+) bool {
+	if runtime == nil || runtime.verifier == nil {
+		return false
+	}
+	if strings.TrimSpace(request.Header.Get("X-Internal-Service")) != "" ||
+		strings.TrimSpace(request.Header.Get("X-Client-User-Id")) != "" {
+		return false
+	}
+	token := strings.TrimSpace(strings.TrimPrefix(
+		request.Header.Get("Authorization"),
+		"Bearer ",
+	))
+	claims, err := runtime.verifier.Verify(token)
+	if err != nil ||
+		claims.Subject != "service:user-service" ||
+		claims.Persona != personaID ||
+		!strings.Contains(" "+claims.Scope+" ", " chat.conversation.internal_direct ") {
+		return false
+	}
+	return strings.Contains(" "+strings.Join(claims.Roles, " ")+" ", " service ")
 }
 
 func directConversationPairKey(left, right string) string {

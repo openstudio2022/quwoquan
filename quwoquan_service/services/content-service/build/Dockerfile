@@ -3,6 +3,7 @@
 
 ARG GO_BASE_IMAGE
 ARG ALPINE_BASE_IMAGE
+ARG ALPINE_PACKAGE_REPOSITORY=https://mirrors.aliyun.com/alpine
 ARG GO_BUILD_FLAGS=-p=1
 ARG IP2REGION_DATA_VERSION=v3.17.0+incompatible
 ARG IP2REGION_V4_SHA256=6307a9696f5711f84bcb8b25f07894de68a64a0ed4a1cc7e990562dd3084f210
@@ -39,7 +40,14 @@ RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
 # ffmpeg/ffprobe 是 media-processing worker（UGC 视频转码/封面/预览轨道）的
 # 硬依赖；缺失时服务启动 fail-fast。
 FROM ${ALPINE_BASE_IMAGE}
+ARG ALPINE_PACKAGE_REPOSITORY
 RUN if command -v apk >/dev/null 2>&1; then \
+      test -n "${ALPINE_PACKAGE_REPOSITORY}" \
+      && alpine_branch="$(. /etc/os-release && printf '%s' "${VERSION_ID%.*}")" \
+      && printf '%s/%s/main\n%s/%s/community\n' \
+        "${ALPINE_PACKAGE_REPOSITORY}" "v${alpine_branch}" \
+        "${ALPINE_PACKAGE_REPOSITORY}" "v${alpine_branch}" > /etc/apk/repositories \
+      && \
       apk add --no-cache ca-certificates tzdata ffmpeg; \
     else \
       if [ -f /etc/apt/sources.list.d/debian.sources ]; then \

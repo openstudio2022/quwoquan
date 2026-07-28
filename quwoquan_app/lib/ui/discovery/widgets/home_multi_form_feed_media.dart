@@ -497,7 +497,7 @@ class _ArticleBodyPreview extends StatelessWidget {
               const SizedBox(height: AppSpacing.intraGroupXs),
               Text(
                 key: const ValueKey('home-article-full-text'),
-                '${UITextConstants.ellipsis}${UITextConstants.fullText}',
+                '${CommunityText.ellipsis}${CommunityText.fullText}',
                 style: TextStyle(
                   fontSize: AppTypography.iosFootnote,
                   color: AppColors.iosAccent(context),
@@ -785,7 +785,7 @@ class _ExpandableText extends StatelessWidget {
               minimumSize: Size.zero,
               onPressed: onToggle,
               child: Text(
-                expanded ? UITextConstants.collapse : UITextConstants.fullText,
+                expanded ? CommunityText.collapse : CommunityText.fullText,
                 style: TextStyle(
                   fontSize: AppTypography.iosFootnote,
                   color: AppColors.iosAccent(context),

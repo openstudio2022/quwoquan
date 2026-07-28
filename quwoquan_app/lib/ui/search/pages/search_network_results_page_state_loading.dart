@@ -279,27 +279,11 @@ extension _SearchNetworkResultsPageStateLoading
   }
 
   UiErrorSemantic _searchFailureSemantic(Object error) {
-    final resolved = runtimeErrorSemantic(
+    return runtimeErrorSemantic(
       context,
       error: error,
       category: UiErrorCategory.pageLoad,
       scope: UiErrorScope.page,
-    );
-    return UiErrorSemantic(
-      category: resolved.category,
-      scope: resolved.scope,
-      title: UITextConstants.searchUnavailableTitle,
-      message: UITextConstants.searchUnavailableMessage,
-      secondaryMessage: resolved.secondaryMessage,
-      primaryAction: resolved.primaryAction,
-      secondaryAction: resolved.secondaryAction,
-      dismissible: resolved.dismissible,
-      sourceCode: resolved.sourceCode,
-      failureKind: resolved.failureKind,
-      copyKey: 'searchUnavailableTitle',
-      recoveryAction: resolved.recoveryAction,
-      presentation: resolved.presentation,
-      tone: resolved.tone,
     );
   }
 

@@ -103,17 +103,14 @@ api_routes:
   - deviceId
   - platform
   - appVersion
+  - agreementVersion
+  - privacyVersion
   response_fields:
-  - accessToken
-  - refreshToken
-  - ownerId
-  - activeSub
-  - subAccountCount
-  - accountState
-  - identityOrigin
-  - logicalShard
-  - anonymousRetentionPolicy
-  - sessionRememberTtlSeconds
+  - status
+  - session
+  - bindingTicket
+  - provider
+  - expiresInSeconds
   authorization:
     principal: public
     ownership_policy: account_session_bootstrap
@@ -133,6 +130,7 @@ api_routes:
   - USER.AUTH.wechat_auth_failed
   - USER.AUTH.social_provider_cancelled
   - USER.AUTH.social_provider_unavailable
+  - USER.AUTH.consent_required
   - USER.AUTH.credential_conflict
   - USER.AUTH.account_suspended
   - USER.AUTH.account_deleted
@@ -161,9 +159,9 @@ api_routes:
   client_contract:
     dart_import: ../user/account_session_contracts.dart
     request_type: LoginWithWechatCommand
-    response_type: AuthSessionGrant
+    response_type: FederatedLoginOutcome
     request_encoder: encodeLoginWithWechatCommand
-    response_decoder: decodeAuthSessionGrant
+    response_decoder: decodeFederatedLoginOutcome
 - method: POST
   path: /auth/login/alipay
   operation: LoginWithAlipay
@@ -181,17 +179,14 @@ api_routes:
   - deviceId
   - platform
   - appVersion
+  - agreementVersion
+  - privacyVersion
   response_fields:
-  - accessToken
-  - refreshToken
-  - ownerId
-  - activeSub
-  - subAccountCount
-  - accountState
-  - identityOrigin
-  - logicalShard
-  - anonymousRetentionPolicy
-  - sessionRememberTtlSeconds
+  - status
+  - session
+  - bindingTicket
+  - provider
+  - expiresInSeconds
   authorization:
     principal: public
     ownership_policy: account_session_bootstrap
@@ -211,6 +206,7 @@ api_routes:
   - USER.AUTH.alipay_auth_failed
   - USER.AUTH.social_provider_cancelled
   - USER.AUTH.social_provider_unavailable
+  - USER.AUTH.consent_required
   - USER.AUTH.credential_conflict
   - USER.AUTH.account_suspended
   - USER.AUTH.account_deleted
@@ -239,9 +235,9 @@ api_routes:
   client_contract:
     dart_import: ../user/account_session_contracts.dart
     request_type: LoginWithAlipayCommand
-    response_type: AuthSessionGrant
+    response_type: FederatedLoginOutcome
     request_encoder: encodeLoginWithAlipayCommand
-    response_decoder: decodeAuthSessionGrant
+    response_decoder: decodeFederatedLoginOutcome
 - method: POST
   path: /auth/login/qq
   operation: LoginWithQq
@@ -259,17 +255,14 @@ api_routes:
   - deviceId
   - platform
   - appVersion
+  - agreementVersion
+  - privacyVersion
   response_fields:
-  - accessToken
-  - refreshToken
-  - ownerId
-  - activeSub
-  - subAccountCount
-  - accountState
-  - identityOrigin
-  - logicalShard
-  - anonymousRetentionPolicy
-  - sessionRememberTtlSeconds
+  - status
+  - session
+  - bindingTicket
+  - provider
+  - expiresInSeconds
   authorization:
     principal: public
     ownership_policy: account_session_bootstrap
@@ -289,6 +282,7 @@ api_routes:
   - USER.AUTH.qq_auth_failed
   - USER.AUTH.social_provider_cancelled
   - USER.AUTH.social_provider_unavailable
+  - USER.AUTH.consent_required
   - USER.AUTH.credential_conflict
   - USER.AUTH.account_suspended
   - USER.AUTH.account_deleted
@@ -317,9 +311,9 @@ api_routes:
   client_contract:
     dart_import: ../user/account_session_contracts.dart
     request_type: LoginWithQqCommand
-    response_type: AuthSessionGrant
+    response_type: FederatedLoginOutcome
     request_encoder: encodeLoginWithQqCommand
-    response_decoder: decodeAuthSessionGrant
+    response_decoder: decodeFederatedLoginOutcome
 - method: POST
   path: /auth/login/one-tap
   operation: LoginOneTap

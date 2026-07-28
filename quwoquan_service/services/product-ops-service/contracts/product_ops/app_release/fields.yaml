@@ -29,7 +29,7 @@ fields:
 - name: updateUrl
   source: updateUrl
   type: string
-  constraints: [NOT_NULL, HTTPS_URL]
+  constraints: [NULLABLE, HTTPS_URL]
   classification: PUBLIC
   log_policy: metadata_only
   api_exposure: read

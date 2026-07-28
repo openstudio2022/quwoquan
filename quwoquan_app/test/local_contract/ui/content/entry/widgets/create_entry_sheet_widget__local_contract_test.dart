@@ -49,46 +49,46 @@ void main() {
     await tester.pump();
 
     expect(
-      find.text(UITextConstants.createActionPublishGroupTitle),
+      find.text(CreationText.createActionPublishGroupTitle),
       findsNothing,
     );
     expect(
-      find.text(UITextConstants.createActionSocialGroupTitle),
+      find.text(CreationText.createActionSocialGroupTitle),
       findsNothing,
     );
     expect(
-      find.text(UITextConstants.createActionPostPhotoShort),
+      find.text(CreationText.createActionPostPhotoShort),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.createActionPhotoSubtitle),
+      find.text(CreationText.createActionPhotoSubtitle),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.createActionWriteLong), findsOneWidget);
+    expect(find.text(CreationText.createActionWriteLong), findsOneWidget);
     expect(
-      find.text(UITextConstants.createActionPostVideoShort),
+      find.text(CreationText.createActionPostVideoShort),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.createActionCameraSubtitle),
+      find.text(CreationText.createActionCameraSubtitle),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.createActionResumeDraft), findsNothing);
+    expect(find.text(CreationText.createActionResumeDraft), findsNothing);
     expect(find.text(ChatText.createActionCreateGroupShort), findsOneWidget);
     expect(
-      find.text(UITextConstants.createActionAddContactShort),
+      find.text(CreationText.createActionAddContactShort),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.createActionCreateCircleShort),
+      find.text(CreationText.createActionCreateCircleShort),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.createActionInterestMatchShort),
+      find.text(CreationText.createActionInterestMatchShort),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.createActionInterestMatchSubtitle),
+      find.text(CreationText.createActionInterestMatchSubtitle),
       findsOneWidget,
     );
     expect(find.text('发图片'), findsNothing);
@@ -97,7 +97,7 @@ void main() {
     expect(find.text('续草稿'), findsNothing);
     expect(find.text('加联系'), findsNothing);
     expect(find.text('建圈子'), findsNothing);
-    expect(find.text(UITextConstants.cancel), findsOneWidget);
+    expect(find.text(FoundationText.cancel), findsOneWidget);
     expect(find.byKey(TestKeys.createActionContinueFromDraft), findsNothing);
     expect(find.byType(ConversationSheetListCard), findsNWidgets(2));
     expect(find.byIcon(CupertinoIcons.chevron_forward), findsNothing);
@@ -110,41 +110,41 @@ void main() {
     );
     expect(
       tester
-          .getCenter(find.text(UITextConstants.createActionPostPhotoShort))
+          .getCenter(find.text(CreationText.createActionPostPhotoShort))
           .dy,
       lessThan(
         tester
-            .getCenter(find.text(UITextConstants.createActionPostVideoShort))
+            .getCenter(find.text(CreationText.createActionPostVideoShort))
             .dy,
       ),
     );
     expect(
       tester
-          .getCenter(find.text(UITextConstants.createActionPostVideoShort))
+          .getCenter(find.text(CreationText.createActionPostVideoShort))
           .dy,
       lessThan(
-        tester.getCenter(find.text(UITextConstants.createActionWriteLong)).dy,
+        tester.getCenter(find.text(CreationText.createActionWriteLong)).dy,
       ),
     );
     expect(
-      tester.getCenter(find.text(UITextConstants.createActionWriteLong)).dy,
+      tester.getCenter(find.text(CreationText.createActionWriteLong)).dy,
       greaterThan(
         tester
-            .getCenter(find.text(UITextConstants.createActionPostVideoShort))
+            .getCenter(find.text(CreationText.createActionPostVideoShort))
             .dy,
       ),
     );
     expect(
-      tester.getCenter(find.text(UITextConstants.createActionWriteLong)).dy,
+      tester.getCenter(find.text(CreationText.createActionWriteLong)).dy,
       lessThan(
         tester
-            .getCenter(find.text(UITextConstants.createActionAddContactShort))
+            .getCenter(find.text(CreationText.createActionAddContactShort))
             .dy,
       ),
     );
     expect(
       tester
-          .getCenter(find.text(UITextConstants.createActionAddContactShort))
+          .getCenter(find.text(CreationText.createActionAddContactShort))
           .dy,
       lessThan(
         tester.getCenter(find.text(ChatText.createActionCreateGroupShort)).dy,
@@ -154,18 +154,18 @@ void main() {
       tester.getCenter(find.text(ChatText.createActionCreateGroupShort)).dy,
       lessThan(
         tester
-            .getCenter(find.text(UITextConstants.createActionCreateCircleShort))
+            .getCenter(find.text(CreationText.createActionCreateCircleShort))
             .dy,
       ),
     );
     expect(
       tester
-          .getCenter(find.text(UITextConstants.createActionCreateCircleShort))
+          .getCenter(find.text(CreationText.createActionCreateCircleShort))
           .dy,
       lessThan(
         tester
             .getCenter(
-              find.text(UITextConstants.createActionInterestMatchShort),
+              find.text(CreationText.createActionInterestMatchShort),
             )
             .dy,
       ),
@@ -180,7 +180,7 @@ void main() {
       greaterThan(0),
     );
 
-    await tester.tap(find.text(UITextConstants.createActionPostVideoShort));
+    await tester.tap(find.text(CreationText.createActionPostVideoShort));
     await tester.pump();
 
     expect(selected, EditorStartAction.video);
@@ -214,27 +214,27 @@ void main() {
         await tester.pump();
 
         expect(
-          find.text(UITextConstants.createActionPostPhotoShort),
+          find.text(CreationText.createActionPostPhotoShort),
           findsOneWidget,
         );
         expect(
-          find.text(UITextConstants.createActionPhotoSubtitle),
+          find.text(CreationText.createActionPhotoSubtitle),
           findsOneWidget,
         );
         expect(
-          find.text(UITextConstants.createActionPostVideoShort),
+          find.text(CreationText.createActionPostVideoShort),
           findsOneWidget,
         );
         expect(
-          find.text(UITextConstants.createActionCameraSubtitle),
+          find.text(CreationText.createActionCameraSubtitle),
           findsOneWidget,
         );
         expect(
-          find.text(UITextConstants.createActionWriteLong),
+          find.text(CreationText.createActionWriteLong),
           findsOneWidget,
         );
         expect(
-          find.text(UITextConstants.createActionAddContactShort),
+          find.text(CreationText.createActionAddContactShort),
           findsOneWidget,
         );
         expect(
@@ -242,11 +242,11 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.text(UITextConstants.createActionCreateCircleShort),
+          find.text(CreationText.createActionCreateCircleShort),
           findsOneWidget,
         );
         expect(
-          find.text(UITextConstants.createActionInterestMatchShort),
+          find.text(CreationText.createActionInterestMatchShort),
           findsOneWidget,
         );
         expect(find.text('发布'), findsNothing);
@@ -327,10 +327,10 @@ void main() {
     await tester.pump();
 
     final galleryY = tester
-        .getCenter(find.text(UITextConstants.createActionPostPhotoShort))
+        .getCenter(find.text(CreationText.createActionPostPhotoShort))
         .dy;
     final cameraY = tester
-        .getCenter(find.text(UITextConstants.createActionPostVideoShort))
+        .getCenter(find.text(CreationText.createActionPostVideoShort))
         .dy;
     expect(galleryY, lessThan(cameraY));
     expect(find.text(ChatText.createActionCreateGroupShort), findsOneWidget);
@@ -364,20 +364,20 @@ void main() {
     await tester.pump();
 
     expect(
-      find.text(UITextConstants.createActionCreateCircleShort),
+      find.text(CreationText.createActionCreateCircleShort),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.createActionAddContactShort),
+      find.text(CreationText.createActionAddContactShort),
       findsOneWidget,
     );
     expect(find.text(ChatText.createActionCreateGroupShort), findsOneWidget);
     expect(
-      find.text(UITextConstants.createActionInterestMatchShort),
+      find.text(CreationText.createActionInterestMatchShort),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.createActionInterestMatchSubtitle),
+      find.text(CreationText.createActionInterestMatchSubtitle),
       findsOneWidget,
     );
     expect(find.byType(ConversationSheetListCard), findsNWidgets(2));
@@ -389,12 +389,12 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.text(UITextConstants.createActionCreateCircleShort));
+    await tester.tap(find.text(CreationText.createActionCreateCircleShort));
     await tester.pump();
 
     expect(createCircleTapped, isTrue);
 
-    await tester.tap(find.text(UITextConstants.createActionInterestMatchShort));
+    await tester.tap(find.text(CreationText.createActionInterestMatchShort));
     await tester.pump();
 
     expect(interestMatchTapped, isTrue);

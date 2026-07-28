@@ -66,7 +66,12 @@
 <a id="req-006"></a>
 ### REQ-006 配置 ACK、可信灰度维度与真实 Portal 数据
 
-- 四维分流、ACK 矩阵和 Portal 数据源对账必须有直接 UAT 证据。
+- 所有 governed workload 必须以 service/environment/instance 绑定的机器主体 ACK
+  当前 ReleaseManifest、configVersion 与 effectiveHash；发布编排只接受全实例的新鲜零
+  drift 收敛，不得把 liveness 当作配置已生效。
+- appVersion/userId 是当前唯一可用的灰度维度；province/carrier 只有在可信边缘
+  attestation 已部署并有 hosted UAT 后才能启用，客户端自报头一律不得参与分流。
+- Portal 数据源对账必须有直接 UAT 证据。
 
 <a id="req-007"></a>
 ### REQ-007 验收追踪和开放事项零漂移
@@ -86,7 +91,8 @@
 ### REQ-009 第一方容器预验证不得提升生产资格
 
 - prod-hosted 第一方容器预验证只消费 reviewed main 的不可变 Service Pipeline 制品，并在镜像传输前执行主机硬门禁。
-- Service Pipeline 将 ReleaseManifest 配置包作为带 digest 的 GHCR OCI 制品交付；Actions Artifact 配额不得成为发布输入传递的单点依赖，也不得通过本地重生清单绕过。
+- Service Pipeline 只把已固定 OCI/config/SBOM/provenance 的 `component-ready` 服务组件包作为 GHCR OCI 制品交付，不得提前声称它是整应用可部署清单。
+- `stackctl package --env prod --target prod-hosted --kind release-manifest` 必须在该组件包上原位绑定真实 Web、Android、Portal、ContractGraph、Provider binding 与三层测试证据；只有六项 schema 和摘要全部通过后，同一 `mainline-release-artifact` 才转为 `deployable`。Actions Artifact 配额不得成为发布输入传递的单点依赖，也不得通过占位文件或本地重生服务清单绕过。
 - 受限单机可把声明允许的旧 `Created/Exited` 容器和未使用镜像计入可回收空间，但必须在镜像传输前完成精确回收和二次实测；数据恢复容器与全部 volume 必须保留。
 - 预验证与正式 rollout transaction、ledger/receipt 和 Provider readiness 分轨；容器验证通过不能改变 release `GATE_BLOCK`。
 - 隔离数据模式使用重新摘要的不可提升配置投影与独立随机认证材料；不得继承正式 credentials 文件。Provider 绑定只能返回 unavailable，禁止切到 fixture/Mock。
@@ -129,7 +135,7 @@
 - WHEN service/app/portal/config 进入 pre-release 与生产 rollout。
 - THEN ReleaseManifest 绑定 git commit、OCI/config/portal/SBOM/provenance/signature/test evidence digest。
 - THEN gray-initial/carry-on/full 只消费同一 manifest，禁止 latest 与部署时重建。
-- THEN ReleaseManifest 配置包以 GHCR OCI digest 交付；Actions Artifact 无容量时仍 fail-closed 地消费同一 OCI 内容，不允许在部署 job 重生 manifest。
+- THEN Service Pipeline 的 `component-ready` 包与六项真实组件完成原位总装后，最终 `deployable` ReleaseManifest 以新的 GHCR OCI digest 交付；Actions Artifact 无容量时仍 fail-closed 地消费同一 OCI 内容，不允许在部署 job 重建服务组件或伪造测试证据。
 
 <a id="sit-004"></a>
 ### SIT-004 灰度发布串行、真实 SLO 回读并可回滚
@@ -155,11 +161,14 @@
 
 - GIVEN 全部 governed workloads 使用同一 ConfigSnapshot/ACK 契约。
 - GIVEN 每个自治服务 package 仅保留 config/config.yaml，部署时平铺为 config-root/<service>.yaml；服务 loader 与 Platform ConfigSnapshot 读取同一工件。
-- GIVEN 可信边缘可解析 province/carrier。
-- WHEN 发布高版本并按 appVersion/userId/province/carrier 分流。
+- GIVEN province/carrier 尚未取得可信边缘 attestation 时，IaC 策略显式禁用这两个维度。
+- WHEN 发布高版本并按 appVersion/userId 分流。
 - THEN 所有实例 ACK 收敛，drift 为零。
+- THEN 每份 ACK 与 service/environment/instance、ReleaseManifest digest、configVersion、
+  desired/effective hash 绑定；过期、disk fallback、缺实例或候选不一致时 hosted rollout
+  必须停在 config-convergence readiness。
 - THEN 服务有效配置缺失、摘要不匹配或无法解析时 beta/gamma/prod 不能启动；不得回退旧分层路径、空配置或第二套默认配置。
-- THEN 客户端伪造 province/carrier 被覆盖，未知维度不命中。
+- THEN 客户端伪造 province/carrier 不命中；只有可信边缘上下文与 hosted UAT 同时到位后才可启用。
 - THEN 未知 rollout stage 被拒绝，不能回退全局 dimensions 或静默退化为稳定流量。
 - THEN Portal 页面只展示真实控制面、SLS、Prometheus 或业务投影数据。
 
@@ -224,14 +233,6 @@
 - 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
 
 <a id="open-006"></a>
-### OPEN-006 治理、推荐与运营页仍依赖 seed 或硬编码
-
-- 类型：`risk`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：治理、推荐与运营页仍依赖 seed 或硬编码，无法证明生产数据源和权限边界。
-- 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
-
 <a id="open-007"></a>
 ### OPEN-007 无注册备份恢复演练、RPO/RTO 与容量成本水位
 
@@ -291,14 +292,6 @@
 - 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
 
 <a id="open-013"></a>
-### OPEN-013 文档声明 ACK 与真实 SSH-hosted 执行面冲突
-
-- 类型：`risk`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：文档声明 ACK 与真实 SSH-hosted 执行面冲突
-- 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
-
 <a id="open-014"></a>
 ### OPEN-014 配置中心（platform-ops-service）生产链路收口
 
@@ -354,15 +347,18 @@
 - 完成判定：`SIT-005` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-020"></a>
-### OPEN-020 配置 ACK、可信灰度维度与真实 Portal 数据
+### OPEN-020 可信 province/carrier 边缘证明与 hosted UAT 未取得
 
-- 类型：`capability_gap`
+- 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前仍缺全部 governed workload 的 authenticated ACK 与可信 edge attestation；ACK 未绑定机器身份或未覆盖全部实例时无法证明配置收敛，province/carrier 信任客户端头还会允许伪造分流，因此当前仅允许 appVersion/userId。
-- 完成判定：`SIT-006` 对应行为满足；所有 governed workload 对本次 release 的
-  service/environment/instance/config digest 有新鲜、鉴权 ACK，drift=0；伪造
-  province/carrier 不能命中，可信边缘上下文的 hosted UAT 证据有效。
+- 影响或价值：机器 ACK、候选摘要收敛门和真实 Portal ACK 数据均已在仓内收口；客户端自报
+  province/carrier 已被 render 与 policy gate 拒绝。当前仍没有外部受控边缘提供的可信
+  地域/运营商证明，也没有对应 hosted UAT，因此这两个维度绝不能启用。
+- 完成判定：受审批的边缘服务以不可伪造的 server-side attestation 传入 region/carrier；
+  该信任链、边缘到服务的身份边界和 hosted UAT 证明它们命中/不命中均符合策略。未取得
+  该证据时，`appVersion/userId` 是唯一可用维度，release 保持 `GATE_BLOCK`，不得将“空数组禁用”
+  误报为该项完成。
 
 <a id="open-021"></a>
 ### OPEN-021 验收路径和风险台账零漂移

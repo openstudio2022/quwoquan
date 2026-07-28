@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
@@ -235,7 +236,7 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
             )
             .toList(growable: false);
       });
-      AppToast.show(context, UITextConstants.addContactConfirmedToast);
+      AppToast.show(context, ContactText.addContactConfirmedToast);
       unawaited(
         ref
             .read(journeyEventTrackerProvider)
@@ -330,7 +331,7 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
           },
         ),
         middle: Text(
-          UITextConstants.addContactPhoneEntryTitle,
+          ContactText.addContactPhoneEntryTitle,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
       ),
@@ -341,23 +342,23 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
   Widget _buildBody(BuildContext context) {
     switch (_status) {
       case _PhoneContactsStatus.unavailable:
-        return _CenteredHint(text: UITextConstants.phoneContactsUnavailable);
+        return _CenteredHint(text: ContactText.phoneContactsUnavailable);
       case _PhoneContactsStatus.initial:
         return _PermissionGate(
-          title: UITextConstants.phoneContactsPermissionTitle,
-          body: UITextConstants.phoneContactsPermissionBody,
-          cta: UITextConstants.phoneContactsPermissionCta,
+          title: ContactText.phoneContactsPermissionTitle,
+          body: ContactText.phoneContactsPermissionBody,
+          cta: ContactText.phoneContactsPermissionCta,
           onPressed: () => unawaited(_requestAndLoad()),
         );
       case _PhoneContactsStatus.loading:
-        return const Center(child: CupertinoActivityIndicator());
+        return AppRequestFeedback.section();
       case _PhoneContactsStatus.denied:
         return _PermissionGate(
-          title: UITextConstants.phoneContactsPermissionDenied,
-          body: UITextConstants.phoneContactsPermissionBody,
+          title: ContactText.phoneContactsPermissionDenied,
+          body: ContactText.phoneContactsPermissionBody,
           cta: _permanentlyDenied
-              ? UITextConstants.openSettings
-              : UITextConstants.phoneContactsPermissionCta,
+              ? FoundationText.openSettings
+              : ContactText.phoneContactsPermissionCta,
           onPressed: _permanentlyDenied
               ? () => unawaited(_openContactsSettings())
               : () => unawaited(_requestAndLoad()),
@@ -388,7 +389,7 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
         Padding(
           padding: EdgeInsets.all(AppSpacing.containerMd),
           child: AppSearchField(
-            placeholder: UITextConstants.phoneContactsSearchPlaceholder,
+            placeholder: ContactText.phoneContactsSearchPlaceholder,
             onChanged: (value) => setState(() => _query = value),
           ),
         ),
@@ -420,8 +421,8 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
     if (list.isEmpty) {
       return _CenteredHint(
         text: _matches.isEmpty
-            ? UITextConstants.phoneContactsNoMatch
-            : UITextConstants.addContactSearchNoResult,
+            ? ContactText.phoneContactsNoMatch
+            : ContactText.addContactSearchNoResult,
       );
     }
     final grouped = _group(list);
@@ -449,7 +450,7 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
       Padding(
         padding: EdgeInsets.all(AppSpacing.containerLg),
         child: Text(
-          UITextConstants.addContactPrivacyHashNote,
+          ContactText.addContactPrivacyHashNote,
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: AppTypography.iosFootnote,

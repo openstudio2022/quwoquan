@@ -364,6 +364,11 @@ def _compact_ready_evidence(report: dict) -> dict:
     network = preflight.get("network") if isinstance(preflight.get("network"), dict) else {}
     startup = report.get("cursorStartup") if isinstance(report.get("cursorStartup"), dict) else {}
     capacity = report.get("capacitySoak") if isinstance(report.get("capacitySoak"), dict) else {}
+    fleet = (
+        preflight.get("reliableTaskFleet")
+        if isinstance(preflight.get("reliableTaskFleet"), dict)
+        else {}
+    )
     return {
         "ready": bool(report.get("ready")),
         "runtime": {
@@ -384,12 +389,12 @@ def _compact_ready_evidence(report: dict) -> dict:
             "issues": list(network.get("issues") or []),
         },
         "reliableTaskFleet": {
-            "checked": bool((report.get("reliableTaskFleet") or {}).get("checked")),
-            "ready": bool((report.get("reliableTaskFleet") or {}).get("ready")),
-            "target": (report.get("reliableTaskFleet") or {}).get("target"),
-            "mongo": bool((report.get("reliableTaskFleet") or {}).get("mongo")),
-            "redis": bool((report.get("reliableTaskFleet") or {}).get("redis")),
-            "issues": list((report.get("reliableTaskFleet") or {}).get("issues") or []),
+            "checked": bool(fleet.get("checked")),
+            "ready": bool(fleet.get("ready")),
+            "target": fleet.get("target"),
+            "mongo": bool(fleet.get("mongo")),
+            "redis": bool(fleet.get("redis")),
+            "issues": list(fleet.get("issues") or []),
         },
         "cursorStartup": {
             "checked": bool(startup.get("checked")),

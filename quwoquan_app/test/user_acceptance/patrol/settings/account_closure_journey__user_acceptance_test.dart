@@ -10,7 +10,6 @@
 ///     test/user_acceptance/patrol/settings/account_closure_journey__user_acceptance_test.dart \
 ///     -d `<device-id>` \
 ///     --dart-define=APP_RUNTIME_ENV=gamma \
-///     --dart-define=APP_DATA_SOURCE=remote \
 ///     --dart-define=API_CONTRACT_ENV=gamma \
 ///     --dart-define=RUN_T4_PATROL=true \
 ///     --dart-define=QWQ_PATROL_SESSION_MODE=gamma_local_anonymous_runtime \
@@ -52,7 +51,6 @@ const _apiContractEnv = String.fromEnvironment(
   defaultValue: 'gamma',
 );
 const _appRuntimeEnv = String.fromEnvironment('APP_RUNTIME_ENV');
-const _appDataSource = String.fromEnvironment('APP_DATA_SOURCE');
 const _patrolSessionMode = String.fromEnvironment('QWQ_PATROL_SESSION_MODE');
 const _installId = String.fromEnvironment('QWQ_PATROL_INSTALL_ID');
 const _gatewayBaseUrl = String.fromEnvironment('CLOUD_GATEWAY_BASE_URL');
@@ -111,9 +109,6 @@ void main() {
           'API_CONTRACT_ENV=$_apiContractEnv',
         );
       }
-      if (_appDataSource != 'remote') {
-        throw StateError('Account closure UAT requires APP_DATA_SOURCE=remote');
-      }
       final gatewayUri = Uri.tryParse(_gatewayBaseUrl);
       if (gatewayUri == null ||
           gatewayUri.scheme != 'https' ||
@@ -160,7 +155,7 @@ void main() {
       expect(authenticatedSession.accessToken, isNotEmpty);
       expect(authenticatedSession.refreshToken, isNotEmpty);
 
-      final closeEntry = find.text(UITextConstants.settingsCloseAccountEntry);
+      final closeEntry = find.text(SettingsText.settingsCloseAccountEntry);
       final closeEntryReached = await _waitFor(
         $,
         closeEntry,
@@ -173,16 +168,16 @@ void main() {
       await $.pumpAndSettle();
 
       expect(
-        find.text(UITextConstants.settingsCloseAccountConfirmTitle),
+        find.text(SettingsText.settingsCloseAccountConfirmTitle),
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.settingsCloseAccountConfirmMessage),
+        find.text(SettingsText.settingsCloseAccountConfirmMessage),
         findsOneWidget,
       );
       final confirm = find.descendant(
         of: find.byType(CupertinoAlertDialog),
-        matching: find.text(UITextConstants.settingsCloseAccountConfirmAction),
+        matching: find.text(SettingsText.settingsCloseAccountConfirmAction),
       );
       await $.tester.tap(confirm);
 

@@ -74,6 +74,8 @@ alerts:
   recommendation_commercial_alerting:
     source: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model
     rules:
+      - RecEmptyFeedRateHigh
+      - RecInitialRecommendTerminalFailureRateHigh
       - RecommendationAttributionUnknownRateHigh
       - RecommendationAttributionNegativeFeedbackBySupplySourceHigh
       - RecommendationAttributionCTRByRecallPathLow
@@ -89,11 +91,13 @@ metrics:
 
   # P0 已接入真实 emitter 的业务指标：runtime/recommendation/observability.go。
   # 未接入的 P1/P2 指标仍保留 objective_only/observe_only，不得据此宣称已触发告警。
-  # 管线请求/空结果/模型回退口径由 rec_pipeline_* 真实 emitter 承载（observability.go
-  # RecordPipelineResult/RecordModelTimeoutMetric），与 quwoquan_alerts.yaml 同名，不再
-  # 引用不存在的 recommendation_feed_requests/empty/fallback_total。
+  # 引擎管线请求/模型回退口径由 rec_pipeline_* emitter 承载；服务装配后的
+  # success/degraded/empty/failure 由 recommendation_feed_terminal_total 承载，
+  # following/continuation 合法空态不得再混入首刷空结果 SLO。
   feed_requests_total: rec_pipeline_requests_total
   feed_empty_total: rec_pipeline_empty_results_total
+  # 服务装配后的最终终态；request_class/outcome/failure_stage 均为闭集低基数标签。
+  feed_terminal_total: recommendation_feed_terminal_total
   feed_model_hits_total: rec_pipeline_model_hits_total
   feed_rule_hits_total: rec_pipeline_rule_hits_total
   feed_model_timeouts_total: rec_pipeline_model_timeouts_total
@@ -174,9 +178,17 @@ slis:
       p95_ms: 100
 
   - id: empty_feed_rate
-    description: feed 空结果率。真实 emitter rec_pipeline_*，与 RecEmptyFeedRateHigh 告警同名。
-    source: rec_pipeline_empty_results_total / rec_pipeline_requests_total
+    description: discovery/recommend 首刷成功空结果率；following 健康空与有效
+      continuation end 不进入该分子。
+    source: recommendation_feed_terminal_total{request_class="initial_recommend",outcome="empty"} / recommendation_feed_terminal_total{request_class="initial_recommend"}
     objective_max: 0.001
+    measured: true
+
+  - id: initial_recommend_terminal_failure_rate
+    description: discovery/recommend 首刷 canonical failure 占比；failure_stage 仅允许
+      recall/scorer/active_supply/hydration/exposure 等闭集值。
+    source: recommendation_feed_terminal_total{request_class="initial_recommend",outcome="failure"} / recommendation_feed_terminal_total{request_class="initial_recommend"}
+    objective_max: 0.005
     measured: true
 
   - id: model_fallback_rate

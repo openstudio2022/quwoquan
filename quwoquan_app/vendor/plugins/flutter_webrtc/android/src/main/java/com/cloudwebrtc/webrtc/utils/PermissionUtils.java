@@ -1,8 +1,6 @@
 package com.cloudwebrtc.webrtc.utils;
 
 import android.app.Activity;
-import android.app.Fragment;
-import android.app.FragmentTransaction;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -10,10 +8,14 @@ import android.os.Build.VERSION_CODES;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Parcelable;
 import android.os.ResultReceiver;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.core.app.ActivityCompat;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentActivity;
+import androidx.fragment.app.FragmentTransaction;
 
 import java.util.ArrayList;
 
@@ -84,10 +86,10 @@ public class PermissionUtils {
     RequestPermissionsFragment fragment = new RequestPermissionsFragment();
     fragment.setArguments(args);
 
-    if(activity != null){
+    if(activity instanceof FragmentActivity){
       FragmentTransaction transaction =
-              activity
-                      .getFragmentManager()
+              ((FragmentActivity) activity)
+                      .getSupportFragmentManager()
                       .beginTransaction()
                       .add(fragment, fragment.getClass().getName() + "-" + requestCode);
 
@@ -139,6 +141,7 @@ public class PermissionUtils {
    */
   @RequiresApi(api = VERSION_CODES.M)
   public static class RequestPermissionsFragment extends Fragment {
+    @SuppressWarnings("deprecation") // AndroidX permission callback retained for WebRTC compatibility.
     private void checkSelfPermissions(boolean requestPermissions) {
       // Figure out which of the requested permissions are actually denied
       // because we do not want to ask about the granted permissions
@@ -170,7 +173,11 @@ public class PermissionUtils {
         // All permissions have already been granted or we cannot ask
         // the user about the denied ones.
         finish();
-        send(args.getParcelable(RESULT_RECEIVER), requestCode, permissions, grantResults);
+        send(
+            getParcelable(args, RESULT_RECEIVER, ResultReceiver.class),
+            requestCode,
+            permissions,
+            grantResults);
       } else {
         // Ask the user about the denied permissions.
         requestPermissions(
@@ -182,11 +189,12 @@ public class PermissionUtils {
       Activity activity = getActivity();
 
       if (activity != null) {
-        activity.getFragmentManager().beginTransaction().remove(this).commitAllowingStateLoss();
+        getParentFragmentManager().beginTransaction().remove(this).commitAllowingStateLoss();
       }
     }
 
     @Override
+    @SuppressWarnings("deprecation") // AndroidX callback retained until upstream ActivityResult migration.
     public void onRequestPermissionsResult(
         int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
       Bundle args = getArguments();
@@ -207,7 +215,7 @@ public class PermissionUtils {
                 getContext(),
                 getActivity(),
                 args.getStringArray(PERMISSIONS),
-                (ResultReceiver) args.getParcelable(RESULT_RECEIVER));
+                getParcelable(args, RESULT_RECEIVER, ResultReceiver.class));
       } else {
         // We did not ask for all requested permissions, just the denied
         // ones. But when we send the result, we have to answer about
@@ -222,5 +230,18 @@ public class PermissionUtils {
 
       checkSelfPermissions(/* requestPermissions */ true);
     }
+  }
+
+  private static <T extends Parcelable> T getParcelable(
+      Bundle bundle, String key, Class<T> type) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      return bundle.getParcelable(key, type);
+    }
+    return getLegacyParcelable(bundle, key);
+  }
+
+  @SuppressWarnings("deprecation") // Typed Bundle API is available only on API 33+.
+  private static <T extends Parcelable> T getLegacyParcelable(Bundle bundle, String key) {
+    return bundle.getParcelable(key);
   }
 }

@@ -28,6 +28,9 @@
 ### REQ-001 内容流回退降级
 
 - “内容流回退降级”必须通过父能力公开契约交付可观察结果；失败时返回 canonical failure，不写入成功事实。
+- discovery/recommend 首刷只有两种合法终态：至少一条通过 published/safety/block/negative/hide/hydration 检查的真实内容，或所属服务 contracts 已声明的 canonical failure；禁止用 HTTP 成功空数组伪装供给、召回、打分或装配成功。
+- following 在所有适用召回源健康且确实无候选时可返回成功空数组；持有有效 continuation 的分页请求到达自然末尾时也可返回成功空数组。召回源失败、scorer 对非空输入返回空输出、active supply 缺失或非空候选全量 hydration miss 不属于合法空态。
+- 服务边界复用 `CONTENT.SYSTEM.required_dependency_unavailable`，不得为推荐阶段新增公开错误码；内部只以低基数 `failureStage` 区分 `recall_all_failed`、`recall_partial_failed_empty`、`scorer_unavailable`、`scorer_empty_output`、`active_supply_missing`、`hydration_full_miss`、`exposure_exhausted`。
 
 <a id="req-002"></a>
 ### REQ-002 服务本地契约引用边界
@@ -47,20 +50,11 @@
 - WHEN 参与者执行“内容流回退降级”对应的公开行为。
 - THEN 通过父能力公开契约交付“内容流回退降级”的可观察结果。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
+- AND discovery/recommend 首刷非空；若 active release、召回、scorer 或 hydration 无法形成可下发内容，则返回 `CONTENT.SYSTEM.required_dependency_unavailable` 并携带低基数 `failureStage`。
+- AND following 健康零候选及有效 continuation 自然结束可返回成功空数组。
 
 ## 6. 依赖
 
 - 前置要求：[`feed-orchestration-recommendation`](../spec.md) 的范围、要求与 SIT。
 - 下游结果：本 Story 声明的 GWT 可观察结果。
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
-
-## 7. 开放事项
-
-<a id="open-001"></a>
-### OPEN-001 内容流回退降级 验收证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺少能够证明“内容流回退降级”已满足当前规格的真实测试证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

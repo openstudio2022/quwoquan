@@ -56,7 +56,6 @@ echo "[runtime-media] go test user-service avatar sync contract"
 echo "[runtime-media] image delivery policy static gates"
 python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_network_image_surface.py"
 python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_avatar_rendering_policy.py"
-python3 "${ROOT_DIR}/quwoquan_app/scripts/chat/verify_chat_mock_remote_parity.py"
 python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_media_url_policy.py"
 python3 "${ROOT_DIR}/quwoquan_service/scripts/media/verify_media_variant_registry_metadata.py"
 python3 "${ROOT_DIR}/quwoquan_ops/gate/verify_media_delivery_contract.py"
@@ -89,7 +88,6 @@ echo "[runtime-media] Android native first-frame / seek-settle / safe-dispose co
   python3 -m unittest \
     quwoquan_ops.tests.local_contract.test_environment_patrol_smoke__local_contract_test \
     quwoquan_ops.tests.local_contract.test_local_gamma_media__local_contract_test \
-    quwoquan_ops.tests.local_contract.test_local_target_tls__local_contract_test \
     quwoquan_ops.tests.local_contract.test_runtime_media_t4_evidence__local_contract_test \
     quwoquan_ops.tests.local_contract.test_video_playback_canary__local_contract_test \
     quwoquan_ops.tests.local_contract.test_prod_rollout_stage__local_contract_test
@@ -110,14 +108,14 @@ fi
   "${ROOT_DIR}/quwoquan_data/tests/local_contract/governance/test_media_probe__video_playback__functional__local_contract_test.py" \
   -q
 
-echo "[runtime-media] fixture media reverse reachability gate"
-PYTHONDONTWRITEBYTECODE=1 python3 \
-  "${ROOT_DIR}/quwoquan_ops/gate/verify_alpha_media_fixture_surface.py" \
-  --files-only
-
-echo "[runtime-media] alpha HTTPS media fixture surface gate"
-QWQ_ALPHA_LOCAL_PUBLIC_HOST_SETUP=skip bash "${ROOT_DIR}/quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh" up
-python3 "${ROOT_DIR}/quwoquan_ops/gate/verify_alpha_media_fixture_surface.py"
+echo "[runtime-media] Alpha Remote media health gate"
+python3 "${ROOT_DIR}/quwoquan_ops/cli/stackctl.py" up \
+  --target alpha-local \
+  --skip-app \
+  --workload content-release
+python3 "${ROOT_DIR}/quwoquan_ops/cli/stackctl.py" health \
+  --target alpha-local \
+  --scope media
 
 echo "[runtime-media] flutter test realtime/cache coverage"
 (

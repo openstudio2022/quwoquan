@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Environment release activation receipt",
+  "type": "object",
+  "required": ["schema", "environment", "releaseId", "releaseRef", "evidenceRef"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.applied_release_ref"},
+    "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+    "releaseId": {"type": "string", "minLength": 1},
+    "releaseRef": {"type": "string", "minLength": 1},
+    "evidenceRef": {"type": "string", "minLength": 1}
+  }
+}

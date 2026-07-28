@@ -2,6 +2,7 @@ package recommendation
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -139,7 +140,7 @@ func GatePremiumStreamSource(source rtrec.CandidateSource) rtrec.CandidateSource
 func (s premiumStreamGateSource) Recall(ctx context.Context, req rtrec.RecallRequest) ([]rtrec.ContentCandidate, error) {
 	if premiumPoolRoute(req) && !s.allowPremium {
 		rtrec.RecordFeedGateFiltered("premium_stream", 1)
-		return nil, nil
+		return nil, rtrec.SkipRecall("source is not applicable to premium stream")
 	}
 	return s.source.Recall(ctx, req)
 }
@@ -164,8 +165,11 @@ func (s *PremiumPoolSource) SetNow(now func() time.Time) {
 }
 
 func (s *PremiumPoolSource) Recall(ctx context.Context, req rtrec.RecallRequest) ([]rtrec.ContentCandidate, error) {
-	if s == nil || s.reader == nil || !premiumPoolRoute(req) {
-		return nil, nil
+	if s == nil || !premiumPoolRoute(req) {
+		return nil, rtrec.SkipRecall("premium pool is not applicable to this route")
+	}
+	if s.reader == nil {
+		return nil, fmt.Errorf("premium pool candidate reader is unavailable")
 	}
 	limit := req.Limit
 	if limit <= 0 {

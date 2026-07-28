@@ -138,12 +138,12 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     await showAppActionSheet<bool>(
       context,
       title: title,
-      message: message ?? UITextConstants.operationFailed,
+      message: message ?? CreationText.operationFailed,
       sections: const <AppActionSheetSection<bool>>[
         AppActionSheetSection<bool>(
           items: <AppActionSheetItem<bool>>[
             AppActionSheetItem<bool>(
-              label: UITextConstants.confirm,
+              label: FoundationText.confirm,
               value: true,
             ),
           ],

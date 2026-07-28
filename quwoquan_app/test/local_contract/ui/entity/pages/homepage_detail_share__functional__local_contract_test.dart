@@ -4,11 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../../../../support/cloud_services/behavior_repository_double.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
-import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_share_sheet.dart';
@@ -87,7 +87,7 @@ void main() {
     await tester.tap(moreButton);
     await tester.pumpAndSettle();
 
-    final shareAction = find.text(UITextConstants.homepageShareAction);
+    final shareAction = find.text(ObjectHomepageText.homepageShareAction);
     expect(shareAction, findsOneWidget);
     await tester.tap(shareAction);
     await tester.pumpAndSettle();

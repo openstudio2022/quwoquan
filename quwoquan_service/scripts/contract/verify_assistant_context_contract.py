@@ -89,11 +89,9 @@ def main() -> int:
 
     required_entities = [
         "AssistantContextSnapshot",
-        "AssistantConversationGroundingView",
-        "AssistantConversationGroundingMessage",
-        "AssistantConversationGroundingMember",
         "AssistantObjectGroundingView",
         "AssistantUserActionGroundingView",
+        "AssistantIntersectionEvidenceRef",
         "AssistantConsentMatrix",
     ]
     for entity_name in required_entities:
@@ -101,19 +99,38 @@ def main() -> int:
             failures.append(f"missing entity {entity_name}")
 
     assert_field(failures, entities, "AssistantContextSnapshot", "pageObjects", "[]AssistantObjectGroundingView")
+    assert_field(failures, entities, "AssistantContextSnapshot", "consentMatrix", "AssistantConsentMatrix")
+    assert_field(failures, entities, "AssistantContextSnapshot", "userActions", "[]AssistantUserActionGroundingView")
     assert_field(
         failures,
         entities,
         "AssistantContextSnapshot",
-        "conversationGrounding",
-        "AssistantConversationGroundingView",
+        "intersectionEvidenceRefs",
+        "[]AssistantIntersectionEvidenceRef",
     )
-    assert_field(failures, entities, "AssistantContextSnapshot", "consentMatrix", "AssistantConsentMatrix")
-    assert_field(failures, entities, "AssistantConversationGroundingView", "recentMessages", "[]AssistantConversationGroundingMessage")
-    assert_field(failures, entities, "AssistantConversationGroundingView", "members", "[]AssistantConversationGroundingMember")
     assert_field(failures, entities, "AssistantObjectGroundingView", "objectTypeRef", "string")
-    assert_field(failures, entities, "AssistantConsentMatrix", "canReadConversation", "bool")
-    assert_field(failures, entities, "AssistantConsentMatrix", "canDeliverProactively", "bool")
+    assert_field(failures, entities, "AssistantConsentMatrix", "canReadCurrentPage", "bool")
+
+    context_fields = field_map(entities.get("AssistantContextSnapshot") or {})
+    expected_context_fields = {
+        "capturedAt",
+        "pageType",
+        "pageObjects",
+        "userActions",
+        "intersectionEvidenceRefs",
+        "consentMatrix",
+    }
+    if set(context_fields) != expected_context_fields:
+        failures.append(
+            "AssistantContextSnapshot fields must stay minimal: "
+            f"got {sorted(context_fields)}, want {sorted(expected_context_fields)}"
+        )
+    consent_fields = field_map(entities.get("AssistantConsentMatrix") or {})
+    if set(consent_fields) != {"canReadCurrentPage"}:
+        failures.append(
+            "AssistantConsentMatrix may only declare current-page read consent; "
+            "conversation and proactive-delivery consent belong to their own objects"
+        )
 
     for citation_field in ("destination", "score", "recallSource", "objectTypeRef"):
         assert_field(failures, entities, "AssistantSearchCitationView", citation_field)

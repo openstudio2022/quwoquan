@@ -1,14 +1,81 @@
 part of 'ui_text_constants.dart';
 
-abstract final class _UITextSearch {
+abstract final class SearchText {
+  static const String recoveryConnectNetworkTitle = '网络未连接';
+  static const String recoveryConnectNetworkMessage =
+      '打开手机的 Wi‑Fi 或移动数据后，重新加载。';
+  static const String recoveryReloadLaterTitle = '暂时无法加载';
+  static const String recoveryReloadLaterMessage = '趣我圈暂时没有响应，请稍后重新加载。';
+  static const String recoveryLoginAgainTitle = '需要重新登录';
+  static const String recoveryLoginAgainMessage = '登录后，可以继续刚才的操作。';
+  static const String recoveryLoginAgainAction = '重新登录';
+  static const String recoveryEnablePermissionTitle = '需要开启权限';
+  static const String recoveryEnablePermissionMessage = '在设置中允许此权限后，返回继续。';
+  static const String recoveryEnablePermissionAction = '去设置';
+  static const String recoveryWaitThenReloadTitle = '请稍等一下';
+  static const String recoveryUpdateAppTitle = '需要更新应用';
+  static const String recoveryUpdateAppMessage = '更新到最新版本后，可以继续使用。';
+  static const String recoveryUpdateAppAction = '立即更新';
+  static const String recoveryNoAccessTitle = '当前不能查看';
+  static const String recoveryNoAccessMessage = '你的账号暂时不能查看此内容。';
+  static const String recoveryContentGoneTitle = '内容已不可用';
+  static const String recoveryContentGoneMessage = '内容已被删除或下架。';
+  static const String recoveryContentUnavailableTitle = '当前内容无法使用';
+  static const String recoveryContentUnavailableMessage = '返回后，可以继续查看其他内容。';
+  static const String recoveryReturnAction = '返回';
+
+  static String recoveryWaitThenReloadMessage(int seconds) {
+    return seconds > 0 ? '操作有点频繁，$seconds 秒后可以重新加载。' : '操作有点频繁，请稍后重新加载。';
+  }
+
+  static String recoveryCountdownLabel(int seconds) => '$seconds 秒后加载';
+
   static const String appendFailedTitle = '后面没加载出来';
-  static const String pageLoadFailedTitle = '这页没加载出来';
-  static const String pageLoadFailedMessage = '可能是网络问题。';
-  static const String searchUnavailableTitle = '搜索没连上';
-  static const String searchUnavailableMessage = '请稍后再搜一次。';
+  static const String pageLoadFailedTitle = applicationLoadFailedTitle;
+  static const String pageLoadFailedMessage = applicationLoadFailedMessage;
+  static const String reload = '重新加载';
+  static const String deviceOfflineTitle = '设备未连接网络';
+  static const String deviceOfflineMessage = '请连接 Wi‑Fi 或移动网络后重新加载。';
+  static const String serviceNameResolutionTitle = '无法找到内容服务';
+  static const String serviceNameResolutionMessage = '当前连接无法解析内容服务地址。';
+  static const String serviceConnectionTitle = '无法连接内容服务';
+  static const String serviceConnectionMessage = '内容服务当前没有接受连接。';
+  static const String secureConnectionTitle = '无法建立安全连接';
+  static const String secureConnectionMessage = '应用未能验证内容服务的安全证书。';
+  static const String contentLoadTimeoutTitle = '内容加载超时';
+  static const String contentLoadTimeoutMessage = '内容服务在等待时限内没有响应。';
+  static const String sessionExpiredTitle = '登录状态已失效';
+  static const String sessionExpiredMessage = '重新登录后可继续加载内容。';
+  static const String contentForbiddenTitle = '暂时不能查看这些内容';
+  static const String contentForbiddenMessage = '当前账号没有查看这些内容的权限。';
+  static const String contentMissingTitle = '内容不存在或已删除';
+  static const String contentMissingMessage = '这条内容现在无法查看。';
+  static const String feedVersionMismatchTitle = '当前版本无法加载推荐内容';
+  static const String feedVersionMismatchMessage = '应用与内容服务版本不一致。';
+  static const String contentRequestInvalidTitle = '内容请求无法处理';
+  static const String contentRequestInvalidMessage = '当前版本发出的加载请求不符合服务要求。';
+  static const String contentConflictTitle = '内容已更新';
+  static const String contentConflictMessage = '列表状态已经变化，请刷新后继续。';
+  static const String refresh = '刷新';
+  static const String contentRateLimitedTitle = '加载请求过于频繁';
+  static const String contentRateLimitedMessage = '请稍后重新加载。';
+  static String contentRateLimitedMessageFor(int seconds) =>
+      seconds > 0 ? '请在 $seconds 秒后重新加载。' : contentRateLimitedMessage;
+  static const String contentServiceFailedTitle = '内容服务处理失败';
+  static const String contentServiceFailedMessage = '服务未能完成本次加载。';
+  static const String contentServiceUnavailableTitle = '内容服务暂时不可用';
+  static const String contentServiceUnavailableMessage = '服务当前无法处理加载请求。';
+  static const String contentServiceTimeoutTitle = '内容服务响应超时';
+  static const String contentServiceTimeoutMessage = '上游服务在时限内没有完成请求。';
+  static const String invalidContentResponseTitle = '内容暂时无法显示';
+  static const String invalidContentResponseMessage = '收到的内容格式异常，应用无法展示。';
+  static const String applicationLoadFailedTitle = '应用未能完成加载';
+  static const String applicationLoadFailedMessage = '应用处理内容时发生错误。';
+  static const String searchUnavailableTitle = recoveryReloadLaterTitle;
+  static const String searchUnavailableMessage = recoveryReloadLaterMessage;
   static const String searchEmptyResult = '没有找到相关结果';
   static const String searchWaitSlow = '搜索时间稍长，请稍候';
-  static const String searchPartialResult = '部分结果暂时没有加载出来';
+  static const String searchPartialResult = recoveryReloadLaterTitle;
   static const String searchCloudSuggestUnavailable = '网络联想暂时不可用，已继续展示本地结果。';
   static const String searchLocalContactsUnavailable = '本地联系人暂时不可搜索。';
   static const String searchLocalMessagesUnavailable = '本地聊天记录暂时不可搜索。';

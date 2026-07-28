@@ -14,7 +14,6 @@ from unittest import mock
 
 from quwoquan_ops.cli import legal_static
 from quwoquan_ops.cli.lib.dev_up import (
-    ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV,
     app_target_for_env,
     deployment_render_root,
     env_cache_target_root,
@@ -29,7 +28,10 @@ from quwoquan_ops.cli.lib.output_paths import (
     certificate_export_dir,
     legal_static_deployment_package_dir,
 )
-from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
+from quwoquan_ops.cli.lib.environment_topology import (
+    get_target,
+    load_environment_topology,
+)
 from quwoquan_ops.cli.lib.local_media_origin import LocalMediaOriginHandler
 from quwoquan_ops.cli.lib.mock_public_plane import MockPublicPlaneHandler
 from quwoquan_ops.cli.stackctl import _health_checks_for_target, _seeded_media_surface_profile_command
@@ -183,15 +185,15 @@ class DevUpTest(unittest.TestCase):
         self.assertEqual(app_target_for_env("gamma"), "gamma-local")
         self.assertEqual(
             overrides["gatewayBaseUrl"],
-            "https://gamma-api.quwoquan-env.test:19000",
+            "https://api.gamma.quwoquan.com:19000",
         )
         self.assertEqual(
             overrides["legalBaseUrl"],
-            "https://gamma-api.quwoquan-env.test:19000/legal",
+            "https://api.gamma.quwoquan.com:19000/legal",
         )
         self.assertEqual(
             overrides["mediaImageBaseUrl"],
-            "https://gamma-image.quwoquan-env.test:19100",
+            "https://cdn.gamma.quwoquan.com:19100",
         )
 
     def test_prod_sim_maps_to_prod_runtime_env(self) -> None:
@@ -380,25 +382,19 @@ class DevUpTest(unittest.TestCase):
                 argv = command["argv"]
                 self.assertEqual(command["name"], "seeded-media-surface")
                 self.assertIn("quwoquan_ops/gate/verify_alpha_media_fixture_surface.py", argv)
-                self.assertIn("--avatar-base-url", argv)
-                self.assertIn(f"https://{env_name}-avatar.quwoquan-env.test", " ".join(argv))
-                self.assertIn("--media-base-url", argv)
-                self.assertIn(f"https://{env_name}-image.quwoquan-env.test", " ".join(argv))
-                self.assertIn("--video-base-url", argv)
-                self.assertIn(f"https://{env_name}-video.quwoquan-env.test", " ".join(argv))
+                self.assertIn("--env", argv)
+                self.assertIn(env_name, argv)
+                self.assertIn("--target", argv)
+                self.assertNotIn("--avatar-base-url", argv)
+                self.assertNotIn("--media-base-url", argv)
+                self.assertNotIn("--video-base-url", argv)
 
-    def test_alpha_local_checks_current_app_group_avatar_contract(self) -> None:
+    def test_alpha_local_content_release_has_no_fixture_authorities(self) -> None:
         script = (
-            ROOT / "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh"
+            ROOT / "quwoquan_ops/cli/alpha/content_release_runtime.py"
         ).read_text(encoding="utf-8")
-        self.assertIn(
-            "/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png",
-            script,
-        )
-        self.assertIn(
-            "/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
-            script,
-        )
+        self.assertNotIn("test_fixtures", script)
+        self.assertNotIn("mock.png", script)
 
     def test_beta_manual_uses_range_aware_media_origin(self) -> None:
         script = (ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh").read_text(
@@ -408,7 +404,7 @@ class DevUpTest(unittest.TestCase):
         self.assertIn("beta_manual_wait_http_range_ok", script)
         self.assertNotIn("python3 -m http.server", script)
 
-    def test_android_local_debug_ca_is_required_for_supported_launchers(self) -> None:
+    def test_android_launchers_use_system_public_ca_only(self) -> None:
         build_gradle = (ROOT / "quwoquan_app/android/app/build.gradle.kts").read_text(
             encoding="utf-8"
         )
@@ -416,23 +412,30 @@ class DevUpTest(unittest.TestCase):
         beta_manual = (
             ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh"
         ).read_text(encoding="utf-8")
-        self.assertEqual(
-            ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV,
-            "QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED",
-        )
-        self.assertIn(ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV, build_gradle)
-        self.assertIn("export QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED=1", alpha_run)
-        self.assertIn("export QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED=1", beta_manual)
+        combined = build_gradle + alpha_run + beta_manual
+        self.assertNotIn("QWQ_ANDROID_LOCAL_ENV_CA", combined)
+        self.assertNotIn("local_env_debug_root", combined)
 
     def test_plain_android_flutter_run_is_env_package_backed(self) -> None:
         build_gradle = (ROOT / "quwoquan_app/android/app/build.gradle.kts").read_text(
             encoding="utf-8"
         )
+        instance_launcher = (
+            ROOT / "quwoquan_app/scripts/device/start_app_instance.sh"
+        ).read_text(encoding="utf-8")
+        launcher_handoff = (
+            ROOT / "quwoquan_app/scripts/device/build_launcher_handoff.py"
+        ).read_text(encoding="utf-8")
         alpha_script = (
-            ROOT / "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh"
+            ROOT / "quwoquan_ops/cli/alpha/content_release_runtime.py"
         ).read_text(encoding="utf-8")
         self.assertIn("tasks.withType<FlutterTask>()", build_gradle)
-        self.assertIn('loadRuntimePackageDartDefines("alpha")', build_gradle)
+        self.assertIn("verifyAndroidLocalLauncherContract", build_gradle)
+        self.assertIn("requireCompleteRuntimeDartDefines", build_gradle)
+        self.assertIn(
+            'runtimeEnvironment in setOf("alpha", "beta", "gamma", "prod")',
+            build_gradle,
+        )
         self.assertIn(
             '"CLOUD_GATEWAY_BASE_URL"',
             build_gradle,
@@ -445,27 +448,27 @@ class DevUpTest(unittest.TestCase):
             '"MEDIA_IMAGE_CDN_BASE_URL"',
             build_gradle,
         )
-        self.assertIn("rewriteAlphaLocalTransport", build_gradle)
-        self.assertIn("prepareAndroidLocalAlphaStack", build_gradle)
-        self.assertIn(
-            'environment("QWQ_ALPHA_LOCAL_PUBLIC_HOST_SETUP", "skip")',
-            build_gradle,
-        )
-        self.assertIn("prepareAndroidLocalAdbReverse", build_gradle)
+        self.assertNotIn("rewriteAlphaLocalTransport", build_gradle)
+        self.assertNotIn("prepareAndroidLocalAlphaStack", build_gradle)
+        self.assertNotIn("prepareAndroidLocalAdbReverse", build_gradle)
+        self.assertNotIn('loadRuntimePackageDartDefines("alpha")', build_gradle)
         self.assertIn("android.adbExecutable", build_gradle)
         self.assertIn('"reverse",', build_gradle)
-        self.assertIn("quwoquan_ops/cli/lib/tls_reverse_proxy.py", alpha_script)
-        self.assertIn("ensure_public_hosts_mapping", alpha_script)
-        self.assertIn("security add-trusted-cert", alpha_script)
-        self.assertIn("macos_login_keychain_trust_is_current", alpha_script)
-        self.assertIn("QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST", alpha_script)
-        self.assertIn("install-ios-simulator-ca", alpha_script)
-        self.assertIn("--simulator-udid", alpha_script)
-        self.assertNotIn("simctl keychain booted add-root-cert", alpha_script)
-        self.assertIn("IP.2 = 10.0.2.2", alpha_script)
+        self.assertIn("QWQ_CONSUMER_LEASE_ACQUIRED", build_gradle)
+        self.assertIn("QWQ_ANDROID_LOCAL_PORTS", build_gradle)
+        self.assertIn("build_launcher_handoff.py", instance_launcher)
+        self.assertNotIn("runners/alpha", launcher_handoff)
+        self.assertIn("lib/main_prod.dart", launcher_handoff)
+        self.assertIn("prod-sim", launcher_handoff)
+        self.assertNotIn("QWQ_ANDROID_LOCAL_ENV_CA", instance_launcher)
+        self.assertIn("runtimeConfigDigest", instance_launcher)
+        self.assertIn("dartDefinesDigest", instance_launcher)
+        self.assertIn("androidReverseReceiptDigest", instance_launcher)
+        self.assertIn("certificate_paths(TARGET)", alpha_script)
+        self.assertIn("/etc/caddy/tls/fullchain.pem", alpha_script)
+        self.assertNotIn("tls internal", alpha_script)
         self.assertNotIn("--resolve", alpha_script)
         self.assertNotIn("curl -k", alpha_script)
-        self.assertNotIn("docker.io/library/caddy", alpha_script)
 
     def test_start_app_instance_accepts_legal_base_url_override(self) -> None:
         script = (
@@ -474,7 +477,7 @@ class DevUpTest(unittest.TestCase):
         self.assertIn("--legal-base-url", script)
         self.assertIn("APP_LEGAL_BASE_URL", script)
 
-    def test_app_env_defines_derive_legal_base_from_gateway_override(self) -> None:
+    def test_app_env_defines_reject_noncanonical_gateway_override(self) -> None:
         script = ROOT / "quwoquan_app/scripts/env/print_app_env_dart_defines.py"
         result = subprocess.run(
             [
@@ -492,14 +495,10 @@ class DevUpTest(unittest.TestCase):
             capture_output=True,
             check=False,
         )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        defines = json.loads(result.stdout)
-        self.assertEqual(
-            defines["APP_LEGAL_BASE_URL"],
-            "https://localhost:17000/legal",
-        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must equal canonical topology projection", result.stderr)
 
-    def test_prod_app_env_defines_keep_canonical_legal_base(self) -> None:
+    def test_prod_app_env_defines_reject_noncanonical_gateway_override(self) -> None:
         script = ROOT / "quwoquan_app/scripts/env/print_app_env_dart_defines.py"
         result = subprocess.run(
             [
@@ -517,57 +516,58 @@ class DevUpTest(unittest.TestCase):
             capture_output=True,
             check=False,
         )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        defines = json.loads(result.stdout)
-        self.assertEqual(
-            defines["APP_LEGAL_BASE_URL"],
-            "https://quwoquan.com/legal",
-        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must equal canonical topology projection", result.stderr)
 
-    def test_plain_ios_flutter_run_prepares_alpha_https_stack(self) -> None:
+    def test_plain_ios_flutter_run_uses_public_ca_without_trust_injection(self) -> None:
         project = (
             ROOT / "quwoquan_app/ios/Runner.xcodeproj/project.pbxproj"
         ).read_text(encoding="utf-8")
-        prepare_script = (
-            ROOT / "quwoquan_app/scripts/ios/prepare_alpha_local_https.sh"
+        prepare_defines = (
+            ROOT / "quwoquan_app/scripts/ios/prepare_dart_defines.sh"
         ).read_text(encoding="utf-8")
-        self.assertIn("Prepare Alpha HTTPS Local Plane", project)
-        self.assertIn("../scripts/ios/prepare_alpha_local_https.sh", project)
-        self.assertIn("QWQ_IOS_LOCAL_AUTO_PREPARE", prepare_script)
-        self.assertIn("APP_RUNTIME_ENV=", prepare_script)
-        self.assertIn("start_alpha_mock_stack.sh\" up", prepare_script)
-        self.assertIn("QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST=skip", prepare_script)
+        self.assertNotIn("Prepare Alpha HTTPS Local Plane", project)
+        self.assertNotIn("Bundle Local HTTPS Trust Root", project)
+        self.assertFalse(
+            (ROOT / "quwoquan_app/scripts/ios/prepare_alpha_local_https.sh").exists()
+        )
+        self.assertIn("build_launcher_handoff.py", prepare_defines)
+        self.assertIn("--target alpha-local", prepare_defines)
+        self.assertIn("--launch-mode canonical_launcher", prepare_defines)
+        self.assertIn('${CONFIGURATION:-}" == "Debug"', prepare_defines)
+        self.assertIn("export FLUTTER_TARGET=", prepare_defines)
+        self.assertIn("lib/main_prod.dart", prepare_defines)
 
-    def test_local_device_builds_package_gateway_and_object_storage_trust(self) -> None:
-        ios_bundle = (
-            ROOT
-            / "quwoquan_app"
-            / "scripts"
-            / "ios"
-            / "prepare_local_https_trust_bundle.sh"
-        ).read_text(encoding="utf-8")
+    def test_local_device_builds_do_not_package_private_trust_roots(self) -> None:
         android_build = (
             ROOT / "quwoquan_app" / "android" / "app" / "build.gradle.kts"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("materialize_local_target_trust_bundle", ios_bundle)
-        self.assertIn("alphaLocalObjectStorageCaCert", android_build)
-        self.assertIn("alphaLocalAppTrustBundle", android_build)
-        self.assertIn("materialize-app-trust-bundle", android_build)
+        self.assertFalse(
+            (
+                ROOT
+                / "quwoquan_app"
+                / "scripts"
+                / "ios"
+                / "prepare_local_https_trust_bundle.sh"
+            ).exists()
+        )
+        self.assertNotIn("local_env_debug_root", android_build)
+        self.assertNotIn("materialize-app-trust-bundle", android_build)
 
     def test_android_local_network_security_forbids_cleartext(self) -> None:
-        debug_config = (
-            ROOT
-            / "quwoquan_app/android/app/src/debug/res/xml/beta_debug_network_security_config.xml"
-        ).read_text(encoding="utf-8")
-        profile_config = (
-            ROOT
-            / "quwoquan_app/android/app/src/profile/res/xml/beta_debug_network_security_config.xml"
-        ).read_text(encoding="utf-8")
-        self.assertIn('cleartextTrafficPermitted="false"', debug_config)
-        self.assertIn('cleartextTrafficPermitted="false"', profile_config)
-        self.assertNotIn('cleartextTrafficPermitted="true"', debug_config)
-        self.assertNotIn('cleartextTrafficPermitted="true"', profile_config)
+        self.assertFalse(
+            (
+                ROOT
+                / "quwoquan_app/android/app/src/debug/res/xml/beta_debug_network_security_config.xml"
+            ).exists()
+        )
+        self.assertFalse(
+            (
+                ROOT
+                / "quwoquan_app/android/app/src/profile/res/xml/beta_debug_network_security_config.xml"
+            ).exists()
+        )
         debug_manifest = (
             ROOT / "quwoquan_app/android/app/src/debug/AndroidManifest.xml"
         ).read_text(encoding="utf-8")
@@ -581,28 +581,23 @@ class DevUpTest(unittest.TestCase):
             debug_manifest + profile_manifest,
         )
 
-    def test_android_dart_http_client_trusts_packaged_local_ca(self) -> None:
+    def test_android_dart_http_client_has_no_private_ca_bridge(self) -> None:
         app_bootstrap = (ROOT / "quwoquan_app/lib/app_bootstrap.dart").read_text(
             encoding="utf-8"
         )
-        local_https_trust = (
-            ROOT / "quwoquan_app/lib/core/platform/local_dev_https_trust_io.dart"
-        ).read_text(encoding="utf-8")
         main_activity = (
             ROOT
             / "quwoquan_app/android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java"
         ).read_text(encoding="utf-8")
-        self.assertIn("LocalDevHttpsTrust.installForCurrentRuntime()", app_bootstrap)
-        self.assertIn("_installLocalDevHttpsTrustBeforeMediaClients()", app_bootstrap)
-        self.assertIn("authNetworkPrerequisites: kReleaseMode", app_bootstrap)
-        self.assertNotIn("_installLocalDevHttpsTrustAfterFirstFrame", app_bootstrap)
-        self.assertIn(
-            "SecurityContext.defaultContext.setTrustedCertificatesBytes",
-            local_https_trust,
+        self.assertNotIn("LocalDevHttpsTrust", app_bootstrap)
+        self.assertFalse(
+            (
+                ROOT
+                / "quwoquan_app/lib/core/platform/local_dev_https_trust_io.dart"
+            ).exists()
         )
-        self.assertNotIn("badCertificateCallback", local_https_trust)
-        self.assertIn("localEnvDebugRootCertificate", main_activity)
-        self.assertIn("local_env_debug_root", main_activity)
+        self.assertNotIn("localEnvDebugRootCertificate", main_activity)
+        self.assertNotIn("local_env_debug_root", main_activity)
 
     def test_image_cache_managers_use_default_security_context(self) -> None:
         image_cache_controller = (
@@ -622,17 +617,6 @@ class DevUpTest(unittest.TestCase):
             trusted_http_file_service,
         )
 
-    def test_alpha_local_clears_repo_owned_stale_reserved_port_listeners(self) -> None:
-        alpha_script = (
-            ROOT / "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh"
-        ).read_text(encoding="utf-8")
-
-        self.assertIn("stop_alpha_reserved_listeners", alpha_script)
-        self.assertIn("stop_repo_listener_on_port", alpha_script)
-        self.assertIn('lsof -nP -tiTCP:"$port" -sTCP:LISTEN', alpha_script)
-        self.assertIn("quwoquan_ops/cli/lib/mock_public_plane.py", alpha_script)
-        self.assertIn("quwoquan_ops/cli/lib/tls_reverse_proxy.py", alpha_script)
-
     def test_gamma_local_mirror_keeps_deployment_material_out_of_output(self) -> None:
         gamma_script = (
             ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
@@ -649,9 +633,10 @@ class DevUpTest(unittest.TestCase):
             gamma_script,
         )
         self.assertIn(
-            '/data/caddy/pki/authorities/local/root.crt',
+            'public_domain_tls.py" paths',
             gamma_script,
         )
+        self.assertNotIn("tls internal", gamma_script)
         self.assertIn(
             'LOCAL_GAMMA_CONFIG_ROOT="${LOCAL_GAMMA_DEPLOY_RENDER_ROOT}/config-root"',
             gamma_script,

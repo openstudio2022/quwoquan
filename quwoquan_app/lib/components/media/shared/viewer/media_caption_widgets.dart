@@ -141,7 +141,7 @@ class MediaCaptionBlock extends StatelessWidget {
                         children: [
                           TextSpan(text: caption, style: captionStyle),
                           TextSpan(
-                            text: UITextConstants.collapse,
+                            text: CommunityText.collapse,
                             style: captionStyle.copyWith(
                               color: AppColors.primaryColor,
                               fontWeight: FontWeight.w600,
@@ -164,7 +164,7 @@ class MediaCaptionBlock extends StatelessWidget {
                         style: captionStyle,
                       ),
                       TextSpan(
-                        text: UITextConstants.fullText,
+                        text: CommunityText.fullText,
                         style: captionStyle.copyWith(
                           color: AppColors.primaryColor,
                           fontWeight: FontWeight.w600,
@@ -187,7 +187,7 @@ class MediaCaptionBlock extends StatelessWidget {
       Offset(maxWidth, textPainter.height),
     );
     final truncatedLength = (position.offset - 4).clamp(0, caption.length);
-    return '${caption.substring(0, truncatedLength)}${UITextConstants.ellipsis}';
+    return '${caption.substring(0, truncatedLength)}${CommunityText.ellipsis}';
   }
 }
 

@@ -55,7 +55,7 @@ class ContentTimeLabel {
   static String cardLabel({required DateTime createdAt, DateTime? updatedAt}) {
     final base = relative(createdAt);
     if (_isUpdated(createdAt, updatedAt)) {
-      return '$base · ${UITextConstants.contentEditedSuffix}';
+      return '$base · ${ProfileText.contentEditedSuffix}';
     }
     return base;
   }
@@ -63,9 +63,9 @@ class ContentTimeLabel {
   /// 文章阅读器/详情时间行：「创作于 X」；若发生实质更新，追加「· 更新于 Y」。
   static String readerLine({required DateTime createdAt, DateTime? updatedAt}) {
     final created =
-        '${UITextConstants.contentCreatedAtPrefix} ${absolute(createdAt)}';
+        '${ProfileText.contentCreatedAtPrefix} ${absolute(createdAt)}';
     if (updatedAt != null && _isUpdated(createdAt, updatedAt)) {
-      return '$created · ${UITextConstants.contentUpdatedAtPrefix} ${absolute(updatedAt)}';
+      return '$created · ${ProfileText.contentUpdatedAtPrefix} ${absolute(updatedAt)}';
     }
     return created;
   }

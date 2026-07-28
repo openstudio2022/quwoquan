@@ -15,10 +15,10 @@ void main() {
     ($) async {
       await launchProviderLogin($);
       await $(
-        find.text(UITextConstants.loginOneTapPrimary),
+        find.text(FoundationText.loginOneTapPrimary),
       ).waitUntilVisible(timeout: const Duration(seconds: 30));
       await acceptLoginAgreement($);
-      await $(find.text(UITextConstants.loginOneTapPrimary)).tap();
+      await $(find.text(FoundationText.loginOneTapPrimary)).tap();
       await waitForProviderLoginSuccess($);
     },
   );

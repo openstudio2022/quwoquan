@@ -12,8 +12,8 @@ extension _VideoEditorPageStateCover on _VideoEditorPageState {
         alignment: Alignment.center,
         child: Text(
           _framesLoading
-              ? UITextConstants.videoEditorPreviewFramesLoading
-              : UITextConstants.videoEditorNoPreviewFrames,
+              ? MediaText.videoEditorPreviewFramesLoading
+              : MediaText.videoEditorNoPreviewFrames,
           style: TextStyle(
             color: CupertinoColors.secondaryLabel.resolveFrom(context),
             fontSize: AppTypography.sm,
@@ -144,10 +144,10 @@ extension _VideoEditorPageStateCover on _VideoEditorPageState {
 
   Widget _buildCoverSection() {
     return _EditorSection(
-      title: UITextConstants.videoEditorCoverTimeline,
+      title: MediaText.videoEditorCoverTimeline,
       trailing: _framesLoading
-          ? UITextConstants.videoEditorGenerating
-          : '${_frames.length} ${UITextConstants.videoEditorFrameCountSuffix}',
+          ? MediaText.videoEditorGenerating
+          : '${_frames.length} ${MediaText.videoEditorFrameCountSuffix}',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -166,8 +166,8 @@ extension _VideoEditorPageStateCover on _VideoEditorPageState {
                 ? Center(
                     child: Text(
                       _framesLoading
-                          ? UITextConstants.videoEditorFramesLoading
-                          : UITextConstants.videoEditorNoFrames,
+                          ? MediaText.videoEditorFramesLoading
+                          : MediaText.videoEditorNoFrames,
                       style: TextStyle(
                         color: CupertinoColors.secondaryLabel.resolveFrom(
                           context,

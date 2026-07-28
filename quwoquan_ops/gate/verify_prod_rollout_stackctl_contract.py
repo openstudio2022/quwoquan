@@ -17,6 +17,8 @@ ACCESS_MANIFEST = ROOT / "quwoquan_ops" / "environments" / "prod" / "access-isol
 RELEASE_GENERATOR = (
     ROOT / "quwoquan_ops" / "cli" / "prod" / "generate_mainline_release_artifact.py"
 )
+DEPLOY_SCRIPT = ROOT / "quwoquan_ops" / "cli" / "prod" / "deploy_to_prod.sh"
+PROD_RENDERER = ROOT / "quwoquan_ops" / "cli" / "prod" / "render_prod_plane_stack.py"
 
 
 def main() -> int:
@@ -103,6 +105,27 @@ def main() -> int:
         if forbidden in pipeline_text:
             issues.append(
                 f"{SERVICE_PIPELINE.relative_to(ROOT)} still depends on Actions Artifact transport: {forbidden}"
+            )
+
+    deploy_script_text = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+    for token in (
+        "readyz/config-convergence",
+        "config ACK convergence",
+        "all governed service instances did not reach config ACK convergence",
+    ):
+        if token not in deploy_script_text:
+            issues.append(
+                f"{DEPLOY_SCRIPT.relative_to(ROOT)} missing config ACK convergence gate: {token}"
+            )
+    renderer_text = PROD_RENDERER.read_text(encoding="utf-8")
+    for token in (
+        "CONFIG_ACK_REQUIRED_INSTANCES",
+        "SERVICE_INSTANCE_ID",
+        "PLATFORM_OPS_BASE_URL",
+    ):
+        if token not in renderer_text:
+            issues.append(
+                f"{PROD_RENDERER.relative_to(ROOT)} missing config ACK render binding: {token}"
             )
 
     if issues:

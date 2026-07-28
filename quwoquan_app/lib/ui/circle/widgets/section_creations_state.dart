@@ -20,9 +20,9 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   );
 
   static const _sortLabels = {
-    CreationSortMode.latest: UITextConstants.circleSortLatest,
-    CreationSortMode.hot: UITextConstants.circleSortHot,
-    CreationSortMode.featured: UITextConstants.circleSortFeatured,
+    CreationSortMode.latest: CommunityText.circleSortLatest,
+    CreationSortMode.hot: CommunityText.circleSortHot,
+    CreationSortMode.featured: CommunityText.circleSortFeatured,
   };
 
   @override
@@ -301,17 +301,17 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   String _entryTypeLabel(CircleHubFeedPostEntry entry) {
     final identity = _entryIdentity(entry);
     if (identity == 'moment') {
-      return UITextConstants.creationFilterMoment;
+      return DiscoveryText.creationFilterMoment;
     }
     switch (_entryDisplayFormat(entry)) {
       case 'image':
-        return UITextConstants.workFormatFilterImage;
+        return DiscoveryText.workFormatFilterImage;
       case 'video':
-        return UITextConstants.workFormatFilterVideo;
+        return DiscoveryText.workFormatFilterVideo;
       case 'note':
-        return UITextConstants.creationSubText;
+        return ProfileText.creationSubText;
       default:
-        return UITextConstants.homepageContentTypeDefault;
+        return ObjectHomepageText.homepageContentTypeDefault;
     }
   }
 
@@ -501,8 +501,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   List<String> _presentationLabels(CircleHubFeedPostEntry entry) => [
-    if (entry.pinned) UITextConstants.circlePostPinnedBadge,
-    if (entry.featured) UITextConstants.circlePostFeaturedBadge,
+    if (entry.pinned) CommunityText.circlePostPinnedBadge,
+    if (entry.featured) CommunityText.circlePostFeaturedBadge,
   ];
 
   String _presentationEyebrow(
@@ -582,15 +582,15 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   Future<void> _showPostManagement(CircleHubFeedPostEntry entry) async {
     final action = await showAppActionSheet<_CirclePostManagementAction>(
       context,
-      title: UITextConstants.circlePostManagementTitle,
+      title: CommunityText.circlePostManagementTitle,
       sections: [
         AppActionSheetSection<_CirclePostManagementAction>(
           items: [
             AppActionSheetItem<_CirclePostManagementAction>(
               value: _CirclePostManagementAction.pin,
               label: entry.pinned
-                  ? UITextConstants.circlePostUnpinAction
-                  : UITextConstants.circlePostPinAction,
+                  ? CommunityText.circlePostUnpinAction
+                  : CommunityText.circlePostPinAction,
               icon: entry.pinned
                   ? CupertinoIcons.pin_slash
                   : CupertinoIcons.pin,
@@ -598,8 +598,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
             AppActionSheetItem<_CirclePostManagementAction>(
               value: _CirclePostManagementAction.feature,
               label: entry.featured
-                  ? UITextConstants.circlePostUnfeatureAction
-                  : UITextConstants.circlePostFeatureAction,
+                  ? CommunityText.circlePostUnfeatureAction
+                  : CommunityText.circlePostFeatureAction,
               icon: entry.featured
                   ? CupertinoIcons.star_slash
                   : CupertinoIcons.star,
@@ -610,7 +610,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
           items: [
             AppActionSheetItem<_CirclePostManagementAction>(
               value: _CirclePostManagementAction.remove,
-              label: UITextConstants.circlePostRemoveAction,
+              label: CommunityText.circlePostRemoveAction,
               icon: CupertinoIcons.delete,
               isDestructive: true,
             ),
@@ -625,17 +625,17 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       final confirmed = await showCupertinoDialog<bool>(
         context: context,
         builder: (dialogContext) => CupertinoAlertDialog(
-          title: const Text(UITextConstants.circlePostRemoveConfirmTitle),
-          content: const Text(UITextConstants.circlePostRemoveConfirmMessage),
+          title: const Text(CommunityText.circlePostRemoveConfirmTitle),
+          content: const Text(CommunityText.circlePostRemoveConfirmMessage),
           actions: [
             CupertinoDialogAction(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text(UITextConstants.cancel),
+              child: const Text(FoundationText.cancel),
             ),
             CupertinoDialogAction(
               isDestructiveAction: true,
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text(UITextConstants.circlePostRemoveAction),
+              child: const Text(CommunityText.circlePostRemoveAction),
             ),
           ],
         ),
@@ -655,7 +655,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
               enabled: !entry.pinned,
             ),
           );
-          return UITextConstants.circlePostPinUpdated;
+          return CommunityText.circlePostPinUpdated;
         }(),
         _CirclePostManagementAction.feature => () async {
           await writer.setFeatured(
@@ -665,7 +665,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
               enabled: !entry.featured,
             ),
           );
-          return UITextConstants.circlePostFeatureUpdated;
+          return CommunityText.circlePostFeatureUpdated;
         }(),
         _CirclePostManagementAction.remove => () async {
           await writer.removePost(
@@ -674,7 +674,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
               placementId: entry.placementId,
             ),
           );
-          return UITextConstants.circlePostRemoved;
+          return CommunityText.circlePostRemoved;
         }(),
       };
       final resolvedMessage = await message;

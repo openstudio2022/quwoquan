@@ -170,7 +170,7 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
     );
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
-      title: UITextConstants.myReportsTitle,
+      title: ContentText.myReportsTitle,
       onBack: () {
         if (context.canPop()) {
           context.pop();
@@ -191,7 +191,7 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
 
   Widget _buildAuthenticatedBody(bool isDark) {
     if (_loading && _items.isEmpty) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     if (_rawError case final error? when _items.isEmpty) {
       return AppPageErrorState(
@@ -237,10 +237,10 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
             padding: EdgeInsets.only(top: AppSpacing.interGroupMd),
             child: Center(
               child: _loadingMore
-                  ? const CupertinoActivityIndicator()
+                  ? AppRequestFeedback.inline()
                   : CupertinoButton(
                       onPressed: () => _load(reset: false),
-                      child: const Text(UITextConstants.loadMore),
+                      child: const Text(ContentText.loadMore),
                     ),
             ),
           ),
@@ -262,7 +262,7 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
             ),
             SizedBox(height: AppSpacing.interGroupMd),
             Text(
-              UITextConstants.myReportsLoginTitle,
+              ContentText.myReportsLoginTitle,
               style: TextStyle(
                 color: AppColors.iosLabel(context),
                 fontSize: AppTypography.iosTitle3,
@@ -271,7 +271,7 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
             ),
             SizedBox(height: AppSpacing.intraGroupSm),
             Text(
-              UITextConstants.myReportsLoginSubtitle,
+              ContentText.myReportsLoginSubtitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.iosSecondaryLabel(context),
@@ -281,7 +281,7 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
             SizedBox(height: AppSpacing.interGroupLg),
             CupertinoButton.filled(
               onPressed: _requestLogin,
-              child: const Text(UITextConstants.profileLoginNow),
+              child: const Text(FoundationText.profileLoginNow),
             ),
           ],
         ),
@@ -372,20 +372,20 @@ class _MyReportRow extends StatelessWidget {
 
   static String _targetLabel(ContentReportTargetType type) {
     return switch (type) {
-      ContentReportTargetType.post => UITextConstants.reportTargetPost,
-      ContentReportTargetType.comment => UITextConstants.reportTargetComment,
-      ContentReportTargetType.user => UITextConstants.reportTargetUser,
-      ContentReportTargetType.circle => UITextConstants.reportTargetCircle,
-      ContentReportTargetType.message => UITextConstants.reportTargetMessage,
+      ContentReportTargetType.post => ContentText.reportTargetPost,
+      ContentReportTargetType.comment => ContentText.reportTargetComment,
+      ContentReportTargetType.user => ContentText.reportTargetUser,
+      ContentReportTargetType.circle => ContentText.reportTargetCircle,
+      ContentReportTargetType.message => ContentText.reportTargetMessage,
     };
   }
 
   static String _statusLabel(ContentReportStatus status) {
     return switch (status) {
-      ContentReportStatus.pending => UITextConstants.reportStatusPending,
-      ContentReportStatus.reviewing => UITextConstants.reportStatusReviewing,
-      ContentReportStatus.resolved => UITextConstants.reportStatusResolved,
-      ContentReportStatus.dismissed => UITextConstants.reportStatusDismissed,
+      ContentReportStatus.pending => ContentText.reportStatusPending,
+      ContentReportStatus.reviewing => ContentText.reportStatusReviewing,
+      ContentReportStatus.resolved => ContentText.reportStatusResolved,
+      ContentReportStatus.dismissed => ContentText.reportStatusDismissed,
     };
   }
 
@@ -417,7 +417,7 @@ class _MyReportsEmptyState extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.interGroupMd),
             Text(
-              UITextConstants.myReportsEmptyTitle,
+              ContentText.myReportsEmptyTitle,
               style: TextStyle(
                 color: AppColors.iosLabel(context),
                 fontSize: AppTypography.iosTitle3,
@@ -426,7 +426,7 @@ class _MyReportsEmptyState extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.intraGroupSm),
             Text(
-              UITextConstants.myReportsEmptySubtitle,
+              ContentText.myReportsEmptySubtitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.iosSecondaryLabel(context),

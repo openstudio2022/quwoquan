@@ -5,7 +5,7 @@ BUILD_OUTPUT_DIR := $(QWQ_OUTPUT_ROOT)/env/repo/local/service-build/cache/$(notd
 SERVICE_PACKAGE := ./services/integration-service/...
 COMMAND_PACKAGE := ./services/integration-service/cmd/...
 TEST_PACKAGE := ./services/integration-service/tests/...
-CONTRACT_VIEW := $(SERVICE_ROOT)/../.qwq_output/env/repo/local/service-contract-view/cache
+CONTRACT_VIEW := $(SERVICE_ROOT)/../.qwq_output/env/repo/local/service-contract-view/cache/integration-service
 
 .PHONY: build test verify-codegen gate
 
@@ -19,7 +19,7 @@ test:
 		if [ -n "$$pkgs" ]; then go test $$pkgs -count=1; fi
 
 verify-codegen:
-	$(MAKE) -C $(SERVICE_ROOT) service-contract-view
+	$(MAKE) -C $(SERVICE_ROOT) service-contract-view CONTRACT_VIEW="$(CONTRACT_VIEW)"
 	cd $(SERVICE_ROOT) && go run ./tools/codegen_integration_service --metadata-dir "$(CONTRACT_VIEW)" --output-dir services/integration-service/generated --check
 	cd $(SERVICE_ROOT) && PYTHONDONTWRITEBYTECODE=1 python3 ../quwoquan_ops/cli/lib/external_provider_governance.py --quiet --go-bindings --check
 

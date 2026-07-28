@@ -188,7 +188,7 @@ class _ChatMentionPickerState extends State<ChatMentionPicker> {
 
   Widget _buildResults(BuildContext context) {
     if (_isLoading && _members.isEmpty) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     if (_error case final error?) {
       return AppSectionErrorCard(

@@ -23,6 +23,7 @@ api_routes:
   - platform
   - appVersion
   - sourceOperation
+  - bindingTicket
   response_fields:
   - maskedPhone
   - expiresInSeconds

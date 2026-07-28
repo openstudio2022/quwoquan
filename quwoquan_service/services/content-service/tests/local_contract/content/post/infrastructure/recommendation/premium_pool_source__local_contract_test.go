@@ -76,8 +76,8 @@ func TestPremiumPoolSourceGatesToPremiumStream(t *testing.T) {
 		Surface:  "home",
 		Limit:    10,
 	})
-	if err != nil {
-		t.Fatalf("home recall err=%v", err)
+	if !rtrec.IsRecallSkipped(err) {
+		t.Fatalf("home recall must be not-applicable, err=%v", err)
 	}
 	if len(home) != 0 || reader.calls != 0 {
 		t.Fatalf("home recall must be gated off, items=%d calls=%d", len(home), reader.calls)
@@ -113,8 +113,8 @@ func TestGatePremiumStreamSourceBlocksGenericSource(t *testing.T) {
 		Surface:  "premium_stream",
 		Limit:    10,
 	})
-	if err != nil {
-		t.Fatalf("premium recall err=%v", err)
+	if !rtrec.IsRecallSkipped(err) {
+		t.Fatalf("generic premium recall must be not-applicable, err=%v", err)
 	}
 	if len(premium) != 0 || generic.calls != 0 {
 		t.Fatalf("generic source must be blocked for premium_stream, items=%d calls=%d", len(premium), generic.calls)

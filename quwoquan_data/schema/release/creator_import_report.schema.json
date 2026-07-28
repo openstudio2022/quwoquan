@@ -3,7 +3,7 @@
   "$id": "quwoquan_data/schema/release/creator_import_report.schema.json",
   "title": "Creator import report",
   "type": "object",
-  "required": ["schema", "status", "environment", "releaseId", "sourceOwner", "mode", "counts", "authorIds", "generatedAt"],
+  "required": ["schema", "status", "environment", "releaseId", "sourceOwner", "mode", "projectionDatabase", "counts", "authorIds", "verifiedCreatorIds", "generatedAt"],
   "additionalProperties": false,
   "properties": {
     "schema": {"const": "quwoquan.user_creator_import_report"},
@@ -12,6 +12,7 @@
     "releaseId": {"type": "string", "minLength": 1},
     "sourceOwner": {"const": "qwq_data"},
     "mode": {"enum": ["upsert", "sync"]},
+    "projectionDatabase": {"const": "quwoquan_user"},
     "counts": {
       "type": "object",
       "required": ["creatorsLoaded", "usersUpserted", "creatorsUpserted", "usersRemoved", "creatorsRemoved"],
@@ -25,6 +26,7 @@
       }
     },
     "authorIds": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "verifiedCreatorIds": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
     "generatedAt": {"type": "string", "minLength": 1}
   }
 }

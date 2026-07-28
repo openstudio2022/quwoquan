@@ -33,11 +33,11 @@ class MediaDeliveryManifestParityTest(unittest.TestCase):
         argv = command["argv"]
         self.assertEqual(
             argv[argv.index("--media-image-base-url") + 1],
-            "https://gamma-image.quwoquan-env.test:19100",
+            "https://cdn.gamma.quwoquan.com:19100",
         )
         self.assertEqual(
             argv[argv.index("--media-upload-base-url") + 1],
-            "https://gamma-upload.quwoquan-env.test:19130",
+            "https://upload.gamma.quwoquan.com:19130",
         )
         self.assertIn("--media-avatar-base-url", argv)
         self.assertIn("--media-video-base-url", argv)

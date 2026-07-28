@@ -44,7 +44,7 @@ void main() {
       );
       expect(pageVisible, isTrue, reason: '职业与兴趣页必须可达');
       expect(
-        find.text(UITextConstants.careerInterestOccupationSection).evaluate(),
+        find.text(ProfileText.careerInterestOccupationSection).evaluate(),
         isNotEmpty,
         reason: 'ProfileEditSnapshot 与标签目录加载后必须进入正常内容态',
       );

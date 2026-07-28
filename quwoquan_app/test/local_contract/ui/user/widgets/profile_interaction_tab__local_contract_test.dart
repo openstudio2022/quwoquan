@@ -25,7 +25,6 @@ import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/harness/profile_shell_scroll_utils.dart';
-import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/cloud_services/test_content_comment_facet.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
@@ -530,7 +529,7 @@ void main() {
         of: find.byKey(
           const ValueKey<String>('profile-interaction-secondary-tabs'),
         ),
-        matching: find.text(UITextConstants.interactionSubComments),
+        matching: find.text(ProfileText.interactionSubComments),
       ),
       findsOneWidget,
     );
@@ -539,7 +538,7 @@ void main() {
         of: find.byKey(
           const ValueKey<String>('profile-interaction-secondary-tabs'),
         ),
-        matching: find.text(UITextConstants.interactionSubLikes),
+        matching: find.text(ProfileText.interactionSubLikes),
       ),
       findsOneWidget,
     );
@@ -548,7 +547,7 @@ void main() {
         of: find.byKey(
           const ValueKey<String>('profile-interaction-secondary-tabs'),
         ),
-        matching: find.text(UITextConstants.interactionSubVisitors),
+        matching: find.text(ProfileText.interactionSubVisitors),
       ),
       findsNothing,
     );
@@ -594,7 +593,7 @@ void main() {
     await tester.tap(
       find
           .ancestor(
-            of: find.text(UITextConstants.interactionSubComments),
+            of: find.text(ProfileText.interactionSubComments),
             matching: find.byType(CupertinoButton),
           )
           .first,
@@ -684,7 +683,7 @@ void main() {
 
     expect(find.text('未知预览文本'), findsOneWidget);
     expect(
-      find.text(UITextConstants.profileInteractionOriginalUnavailable),
+      find.text(ProfileText.profileInteractionOriginalUnavailable),
       findsOneWidget,
     );
   });
@@ -724,10 +723,10 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.profileInteractionPreviewLoadFailed),
+      find.text(ProfileText.profileInteractionPreviewLoadFailed),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.retry), findsNothing);
+    expect(find.text(FoundationText.retry), findsNothing);
     expect(
       find.byKey(
         const ValueKey<String>('profile-interaction-preview-retry-icon'),
@@ -859,7 +858,7 @@ void main() {
     expect(find.text('图片记录主句'), findsOneWidget);
     expect(find.text('视频记录主句'), findsOneWidget);
     expect(
-      find.text(UITextConstants.profileInteractionPreviewLoadFailed),
+      find.text(ProfileText.profileInteractionPreviewLoadFailed),
       findsWidgets,
     );
     expect(
@@ -879,7 +878,7 @@ void main() {
     expect(find.text('引用评论：写得真好'), findsOneWidget);
     expect(find.text('你说：这组颜色像旧电影'), findsOneWidget);
     expect(
-      find.text(UITextConstants.profileInteractionOriginalUnavailable),
+      find.text(ProfileText.profileInteractionOriginalUnavailable),
       findsOneWidget,
     );
   });
@@ -1168,7 +1167,7 @@ void main() {
     final likeKey = const ValueKey<String>('profile-interaction-like-cmt');
     expect(find.byKey(likeKey), findsOneWidget);
     expect(
-      find.text(UITextConstants.profileInteractionLikeComment),
+      find.text(ProfileText.profileInteractionLikeComment),
       findsOneWidget,
     );
 
@@ -1182,7 +1181,7 @@ void main() {
       ContentCommentReactionValue.like,
     );
     expect(
-      find.text(UITextConstants.profileInteractionCommentLiked),
+      find.text(ProfileText.profileInteractionCommentLiked),
       findsOneWidget,
     );
     expect(
@@ -1276,7 +1275,7 @@ void main() {
     expect(chat.lastSentType, 'text');
     expect(
       chat.lastSentContent,
-      UITextConstants.profileInteractionThanksLikeMessage,
+      ProfileText.profileInteractionThanksLikeMessage,
     );
     expect(
       chat.lastSentConversationId,
@@ -1313,13 +1312,13 @@ void main() {
 
     final thankKey = const ValueKey<String>('profile-interaction-thank-like');
     expect(find.byKey(thankKey), findsOneWidget);
-    expect(find.text(UITextConstants.profileInteractionThank), findsOneWidget);
+    expect(find.text(ProfileText.profileInteractionThank), findsOneWidget);
 
     await tester.tap(find.byKey(thankKey));
     await _pumpFrames(tester);
 
     expect(
-      find.text(UITextConstants.profileInteractionThanked),
+      find.text(ProfileText.profileInteractionThanked),
       findsOneWidget,
     );
     expect(

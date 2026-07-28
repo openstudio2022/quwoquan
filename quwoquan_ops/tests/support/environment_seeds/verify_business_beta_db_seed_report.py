@@ -87,8 +87,10 @@ def validate_app_beta_runs(runs: Any, failures: list[str]) -> None:
         if not isinstance(run, dict):
             failures.append(f"appBetaRuns[{idx}] must be object")
             continue
-        if run.get("dataSource") != "remote":
-            failures.append(f"appBetaRuns[{idx}].dataSource must be remote")
+        if run.get("composition") != "production_remote":
+            failures.append(
+                f"appBetaRuns[{idx}].composition must be production_remote"
+            )
         if not run.get("gatewayBaseUrl"):
             failures.append(f"appBetaRuns[{idx}].gatewayBaseUrl is required")
         if not run.get("httpEvidence"):

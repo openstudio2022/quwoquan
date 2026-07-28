@@ -89,7 +89,6 @@ class ExecutionFixtureBuilder:
                 "count": len(normalized),
                 "topic": None,
                 "sourceProviders": [],
-                "homepageExecutionId": None,
             },
             selection_policy=SelectionPolicy.FROZEN,
             target_set_ref=TARGET_SET_REF,

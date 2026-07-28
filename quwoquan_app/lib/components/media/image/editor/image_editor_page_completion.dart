@@ -17,13 +17,13 @@ extension _ImageEditorPageCompletion on _ImageEditorPageState {
     }
     final discard = await showAppActionSheet<bool>(
       context,
-      title: UITextConstants.imageEditorDiscardTitle,
-      message: UITextConstants.imageEditorDiscardMessage,
+      title: MediaText.imageEditorDiscardTitle,
+      message: MediaText.imageEditorDiscardMessage,
       sections: [
         AppActionSheetSection<bool>(
           items: [
             AppActionSheetItem<bool>(
-              label: UITextConstants.imageEditorDiscardConfirm,
+              label: MediaText.imageEditorDiscardConfirm,
               value: true,
               isDestructive: true,
             ),
@@ -152,7 +152,7 @@ extension _ImageEditorPageCompletion on _ImageEditorPageState {
                 child: Row(
                   children: [
                     Text(
-                      UITextConstants.imageEditorHistory,
+                      MediaText.imageEditorHistory,
                       style: TextStyle(
                         color: fg,
                         fontSize: AppTypography.lg,
@@ -190,7 +190,7 @@ extension _ImageEditorPageCompletion on _ImageEditorPageState {
                           _revertToBeforeStep(index);
                         },
                         child: Text(
-                          UITextConstants.imageEditorHistoryRevert,
+                          MediaText.imageEditorHistoryRevert,
                           style: TextStyle(
                             color: fgSecondary,
                             fontSize: AppTypography.sm,

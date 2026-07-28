@@ -61,6 +61,15 @@ func (h *ChatHandler) Routes() http.Handler {
 	mux.HandleFunc("PUT /chat/conversations/{conversationId}/admins", h.handleUpdateGroupAdmins)
 	mux.HandleFunc("DELETE /chat/conversations/{conversationId}", h.handleDissolveConversation)
 	RegisterGeneratedRoutes(mux, h)
+	return mux
+}
+
+// InternalRoutes exposes only the service-to-service conversation boundary.
+// It is mounted separately from public ContractGraph routes so the generated
+// public-operation guard cannot accidentally treat it as an unregistered API.
+// Its handlers verify a delegated user-service credential themselves.
+func (h *ChatHandler) InternalRoutes() http.Handler {
+	mux := http.NewServeMux()
 	h.registerInternalRoutes(mux)
 	return mux
 }
@@ -110,7 +119,7 @@ func (h *ChatHandler) handlePullUserSync(w http.ResponseWriter, r *http.Request)
 // ── Conversation ─────────────────────────────────────────────────────────────
 
 func (h *ChatHandler) handleListConversations(w http.ResponseWriter, r *http.Request) {
-	userId := resolveUserID(r)
+	userId := resolvePersonaID(r)
 	cursor := r.URL.Query().Get("cursor")
 	limit := queryInt(r, "limit", 20)
 
@@ -174,7 +183,7 @@ func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Re
 
 	conv, err := h.conversationService.CreateConversation(r.Context(), application.CreateConversationRequest{
 		Type: body.Type, Title: body.Title, MaxGroupSize: body.MaxGroupSize,
-		CreatorId: resolveUserID(r), InitialMemberIds: body.InitialMemberIds,
+		CreatorId: resolvePersonaID(r), InitialMemberIds: body.InitialMemberIds,
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -204,7 +213,7 @@ func (h *ChatHandler) handleUpdateConversationTitle(w http.ResponseWriter, r *ht
 	}
 	conv, err := h.conversationService.UpdateConversationTitle(r.Context(), application.UpdateConversationTitleRequest{
 		ConversationId: convId,
-		OperatorId:     resolveUserID(r),
+		OperatorId:     resolvePersonaID(r),
 		Title:          body.Title,
 	})
 	if err != nil {
@@ -368,7 +377,7 @@ func (h *ChatHandler) handleListMembers(w http.ResponseWriter, r *http.Request) 
 	sort := application.NormalizeMemberListSort(r.URL.Query().Get("sort"))
 	members, err := h.membershipUseCases.List(r.Context(), application.ListMembersRequest{
 		ConversationId: convId,
-		ViewerId:       resolveUserID(r),
+		ViewerId:       resolvePersonaID(r),
 		Cursor:         cursor,
 		Limit:          limit + 1,
 		Role:           role,
@@ -384,7 +393,7 @@ func (h *ChatHandler) handleListMembers(w http.ResponseWriter, r *http.Request) 
 		members = members[:limit]
 	}
 	items := make([]map[string]any, 0, len(members))
-	currentUserID := resolveUserID(r)
+	currentUserID := resolvePersonaID(r)
 	for _, member := range members {
 		items = append(items, conversationMemberToWire(member, currentUserID))
 	}
@@ -418,7 +427,7 @@ func (h *ChatHandler) handleAddMembers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := h.membershipUseCases.Add(r.Context(), application.AddMembersRequest{
-		ConversationId: convId, UserIds: body.UserIds, InvitedBy: resolveUserID(r),
+		ConversationId: convId, UserIds: body.UserIds, InvitedBy: resolvePersonaID(r),
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -436,7 +445,7 @@ func (h *ChatHandler) handleRemoveMember(w http.ResponseWriter, r *http.Request)
 	err := h.membershipUseCases.Remove(r.Context(), application.RemoveMemberRequest{
 		ConversationId: convId,
 		UserId:         userId,
-		OperatorId:     resolveUserID(r),
+		OperatorId:     resolvePersonaID(r),
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -450,7 +459,7 @@ func (h *ChatHandler) handleLeaveConversation(w http.ResponseWriter, r *http.Req
 
 	err := h.membershipUseCases.Leave(r.Context(), application.LeaveConversationRequest{
 		ConversationId: convId,
-		UserId:         resolveUserID(r),
+		UserId:         resolvePersonaID(r),
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -467,7 +476,7 @@ func (h *ChatHandler) handleInviteAssistant(w http.ResponseWriter, r *http.Reque
 	_ = readJSON(r, &body)
 
 	err := h.membershipUseCases.InviteAssistant(r.Context(), application.InviteAssistantRequest{
-		ConversationId: convId, SkillId: body.SkillId, InvitedBy: resolveUserID(r),
+		ConversationId: convId, SkillId: body.SkillId, InvitedBy: resolvePersonaID(r),
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -481,7 +490,7 @@ func (h *ChatHandler) handleRemoveAssistant(w http.ResponseWriter, r *http.Reque
 
 	err := h.membershipUseCases.RemoveAssistant(r.Context(), application.RemoveAssistantRequest{
 		ConversationId: convId,
-		RemovedBy:      resolveUserID(r),
+		RemovedBy:      resolvePersonaID(r),
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -502,7 +511,7 @@ func (h *ChatHandler) handleUpdateConversationSettings(w http.ResponseWriter, r 
 	}
 
 	err := h.userStateUseCases.UpdateSettings(r.Context(), application.UpdateSettingsRequest{
-		UserId: resolveUserID(r), ConversationId: convId, Muted: body.Muted, Pinned: body.Pinned,
+		UserId: resolvePersonaID(r), ConversationId: convId, Muted: body.Muted, Pinned: body.Pinned,
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -522,7 +531,7 @@ func (h *ChatHandler) handleTransferOwnership(w http.ResponseWriter, r *http.Req
 	}
 	err := h.membershipUseCases.TransferOwnership(r.Context(), application.TransferOwnershipRequest{
 		ConversationId: convId,
-		OperatorId:     resolveUserID(r),
+		OperatorId:     resolvePersonaID(r),
 		NewOwnerId:     body.NewOwnerId,
 	})
 	if err != nil {
@@ -543,7 +552,7 @@ func (h *ChatHandler) handleUpdateGroupAdmins(w http.ResponseWriter, r *http.Req
 	}
 	err := h.membershipUseCases.UpdateAdmins(r.Context(), application.UpdateGroupAdminsRequest{
 		ConversationId: convId,
-		OperatorId:     resolveUserID(r),
+		OperatorId:     resolvePersonaID(r),
 		AdminIds:       body.AdminIds,
 	})
 	if err != nil {
@@ -557,7 +566,7 @@ func (h *ChatHandler) handleDissolveConversation(w http.ResponseWriter, r *http.
 	convId := extractPathParam(r.URL.Path, "/chat/conversations/{conversationId}", "conversationId")
 	err := h.conversationService.DissolveConversation(r.Context(), application.DissolveConversationRequest{
 		ConversationId: convId,
-		OperatorId:     resolveUserID(r),
+		OperatorId:     resolvePersonaID(r),
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -577,7 +586,7 @@ func (h *ChatHandler) handleUpdateAnnouncement(w http.ResponseWriter, r *http.Re
 	}
 	conv, err := h.conversationService.UpdateAnnouncement(r.Context(), application.UpdateAnnouncementRequest{
 		ConversationId: convId,
-		OperatorId:     resolveUserID(r),
+		OperatorId:     resolvePersonaID(r),
 		Announcement:   body.Announcement,
 	})
 	if err != nil {
@@ -600,7 +609,7 @@ func (h *ChatHandler) handleUpdateGroupGovernanceSettings(w http.ResponseWriter,
 		r.Context(),
 		application.UpdateGroupGovernanceSettingsRequest{
 			ConversationId:          convId,
-			OperatorId:              resolveUserID(r),
+			OperatorId:              resolvePersonaID(r),
 			NameEditableByAdminOnly: body.NameEditableByAdminOnly,
 		},
 	)
@@ -612,7 +621,7 @@ func (h *ChatHandler) handleUpdateGroupGovernanceSettings(w http.ResponseWriter,
 }
 
 func (h *ChatHandler) handleListConversationTimestamps(w http.ResponseWriter, r *http.Request) {
-	userId := resolveUserID(r)
+	userId := resolvePersonaID(r)
 	items, err := h.inboxService.ListInbox(r.Context(), application.ListInboxRequest{
 		UserId: userId,
 		Limit:  conversationTimestampPageLimit,
@@ -638,7 +647,7 @@ func (h *ChatHandler) handleListConversationTimestamps(w http.ResponseWriter, r 
 }
 
 func (h *ChatHandler) handleBatchGetConversations(w http.ResponseWriter, r *http.Request) {
-	userId := resolveUserID(r)
+	userId := resolvePersonaID(r)
 	var body struct {
 		Ids []string `json:"ids"`
 	}
@@ -686,7 +695,7 @@ const (
 // ── Inbox ────────────────────────────────────────────────────────────────────
 
 func (h *ChatHandler) handleListInbox(w http.ResponseWriter, r *http.Request) {
-	userId := resolveUserID(r)
+	userId := resolvePersonaID(r)
 	cursor := r.URL.Query().Get("cursor")
 	limit := queryInt(r, "limit", 50)
 
@@ -713,7 +722,7 @@ func (h *ChatHandler) handleListInbox(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ChatHandler) handleListMessageHome(w http.ResponseWriter, r *http.Request) {
-	userId := resolveUserID(r)
+	userId := resolvePersonaID(r)
 	cursor := r.URL.Query().Get("cursor")
 	limit := queryInt(r, "limit", 50)
 	filter := normalizeMessageHomeFilter(r.URL.Query().Get("filter"))
@@ -755,7 +764,7 @@ func (h *ChatHandler) handleListContacts(w http.ResponseWriter, r *http.Request)
 
 	page, err := h.memberService.ListContacts(
 		r.Context(),
-		resolveUserID(r),
+		resolvePersonaID(r),
 		limit,
 		cursor,
 	)
@@ -782,7 +791,7 @@ func (h *ChatHandler) handleListContactHome(w http.ResponseWriter, r *http.Reque
 	cursor := r.URL.Query().Get("cursor")
 	limit := queryInt(r, "limit", 50)
 	filter := normalizeContactHomeFilter(r.URL.Query().Get("filter"))
-	userID := resolveUserID(r)
+	userID := resolvePersonaID(r)
 
 	rows := make([]map[string]any, 0, limit)
 	if filter == "all" || filter == "mutual" {
@@ -855,7 +864,7 @@ func (h *ChatHandler) handleGetGroupHome(w http.ResponseWriter, r *http.Request)
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "不是群聊会话", "conversation is not a group"))
 		return
 	}
-	writeJSON(w, http.StatusOK, h.groupHomeToWire(r.Context(), *conv, resolveUserID(r)))
+	writeJSON(w, http.StatusOK, h.groupHomeToWire(r.Context(), *conv, resolvePersonaID(r)))
 }
 
 func (h *ChatHandler) handleListGroupCandidates(w http.ResponseWriter, r *http.Request) {
@@ -863,7 +872,7 @@ func (h *ChatHandler) handleListGroupCandidates(w http.ResponseWriter, r *http.R
 	conversationID := strings.TrimSpace(r.URL.Query().Get("conversationId"))
 	candidates, err := h.memberService.ListGroupCandidates(
 		r.Context(),
-		resolveUserID(r),
+		resolvePersonaID(r),
 		conversationID,
 		limit,
 	)

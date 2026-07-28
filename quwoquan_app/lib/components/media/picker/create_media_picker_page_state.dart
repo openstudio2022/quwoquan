@@ -122,13 +122,13 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     return normalized == 'videos' ||
         normalized == 'video' ||
         normalized == 'all videos' ||
-        normalized == UITextConstants.mediaPickerVideoTitle;
+        normalized == MediaText.mediaPickerVideoTitle;
   }
 
   bool _isCameraAlbum(AssetPathEntity album) {
     final normalized = album.name.trim().toLowerCase();
     return normalized == 'camera' ||
-        normalized == UITextConstants.mediaPickerAlbumCamera ||
+        normalized == MediaText.mediaPickerAlbumCamera ||
         normalized == 'camera roll';
   }
 
@@ -144,24 +144,24 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     // 避免出现「最近项目 / Recents」等不一致命名。
     if (album.isAll) {
       if (widget.entryMode == MediaPickerEntryMode.mixed) {
-        return UITextConstants.mediaPickerMixedTitle;
+        return MediaText.mediaPickerMixedTitle;
       }
-      return UITextConstants.mediaPickerAlbumAllPhotos;
+      return MediaText.mediaPickerAlbumAllPhotos;
     }
     final name = album.name.trim();
     final normalized = name.toLowerCase();
     if (normalized == 'camera' || normalized == 'camera roll') {
-      return UITextConstants.mediaPickerAlbumCamera;
+      return MediaText.mediaPickerAlbumCamera;
     }
     if (normalized == 'recents' ||
         normalized == 'recent' ||
         normalized == 'all photos') {
-      return UITextConstants.mediaPickerAlbumRecents;
+      return MediaText.mediaPickerAlbumRecents;
     }
     if (normalized == 'screenshots') {
-      return UITextConstants.mediaPickerCategoryFullscreen;
+      return MediaText.mediaPickerCategoryFullscreen;
     }
-    return name.isEmpty ? UITextConstants.mediaPickerAlbumAll : name;
+    return name.isEmpty ? MediaText.mediaPickerAlbumAll : name;
   }
 
   RequestType _requestTypeByEntryMode() {
@@ -234,14 +234,14 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     }
     if (_selectionReachedLimit()) {
       if (!mounted) return;
-      AppToast.show(context, UITextConstants.mediaPickerOverLimit);
+      AppToast.show(context, MediaText.mediaPickerOverLimit);
       return;
     }
     final item = await widget.mediaPickerService.assetToMediaItem(entity);
     if (item == null || !mounted) return;
     if (widget.entryMode == MediaPickerEntryMode.video && !item.isVideo) return;
     if (widget.entryMode == MediaPickerEntryMode.image && item.isVideo) {
-      AppToast.show(context, UITextConstants.mediaPickerImageOnly);
+      AppToast.show(context, MediaText.mediaPickerImageOnly);
       return;
     }
     if (!_canAcceptSelection(item)) {
@@ -256,11 +256,11 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   Future<void> _openCamera() async {
     if (widget.entryMode == MediaPickerEntryMode.mixed &&
         _selectedTypeLock == CreateMediaType.video) {
-      AppToast.show(context, UITextConstants.mediaPickerMixedVideoLocked);
+      AppToast.show(context, MediaText.mediaPickerMixedVideoLocked);
       return;
     }
     if (_selectionReachedLimit()) {
-      AppToast.show(context, UITextConstants.mediaPickerOverLimit);
+      AppToast.show(context, MediaText.mediaPickerOverLimit);
       return;
     }
     final result = await Navigator.of(context).push<CameraCaptureResult>(
@@ -273,7 +273,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     );
     if (!mounted || result == null) return;
     if (_selectionReachedLimit()) {
-      AppToast.show(context, UITextConstants.mediaPickerOverLimit);
+      AppToast.show(context, MediaText.mediaPickerOverLimit);
       return;
     }
     final item = widget.mediaPickerService.fileToMediaItem(
@@ -389,18 +389,18 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       case MediaPickerSelectionBlockReason.none:
         return true;
       case MediaPickerSelectionBlockReason.overLimit:
-        AppToast.show(context, UITextConstants.mediaPickerOverLimit);
+        AppToast.show(context, MediaText.mediaPickerOverLimit);
         return false;
       case MediaPickerSelectionBlockReason.imageOnly:
-        AppToast.show(context, UITextConstants.mediaPickerImageOnly);
+        AppToast.show(context, MediaText.mediaPickerImageOnly);
         return false;
       case MediaPickerSelectionBlockReason.videoOnly:
         return false;
       case MediaPickerSelectionBlockReason.imageLocked:
-        AppToast.show(context, UITextConstants.mediaPickerMixedImageLocked);
+        AppToast.show(context, MediaText.mediaPickerMixedImageLocked);
         return false;
       case MediaPickerSelectionBlockReason.videoLocked:
-        AppToast.show(context, UITextConstants.mediaPickerMixedVideoLocked);
+        AppToast.show(context, MediaText.mediaPickerMixedVideoLocked);
         return false;
     }
   }
@@ -413,7 +413,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     final picked = await showAppTopAnchoredDropdown<AssetPathEntity>(
       context: context,
       anchorTop: _albumDropdownAnchorTop(),
-      barrierLabel: UITextConstants.cancel,
+      barrierLabel: FoundationText.cancel,
       builder: (dropdownContext) => _buildForcedDarkChrome(
         baseContext: dropdownContext,
         background: background,
@@ -639,7 +639,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     }
     final current = _selectedItems[selectedIndex];
     if (!current.isImage) {
-      AppToast.show(context, UITextConstants.mediaPickerImageOnly);
+      AppToast.show(context, MediaText.mediaPickerImageOnly);
       return;
     }
     final imageSelectedIndexes = <int>[
@@ -865,7 +865,6 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                 semantic: AppPermissionCoordinator.instance.permissionSemantic(
                   AppPermissionKind.photos,
                   openSettings: true,
-                  includeRetry: true,
                 ),
                 onAction: (action) async {
                   switch (action.type) {
@@ -890,6 +889,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                       }
                       return;
                     case UiErrorActionType.login:
+                    case UiErrorActionType.openUpdate:
                       return;
                   }
                 },

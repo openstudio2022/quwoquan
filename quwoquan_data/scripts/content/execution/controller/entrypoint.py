@@ -24,6 +24,7 @@ from core.runtime_policy import active_runtime_policy
 class ControllerRequest:
     execution_id: str
     resume: bool = True
+    until: ExecutionStage | None = None
     recover_stage: ExecutionStage | None = None
     recovery_reason: str | None = None
     baseline_packet: Path | None = None
@@ -62,7 +63,7 @@ def run_controlled_execution(request: ControllerRequest) -> None:
     managed_model = author_model.model_id
     preflight_args = argparse.Namespace(
         agent_provider=agent_provider,
-        until=None,
+        until=request.until.value if request.until else None,
         runtime=policy.cursor_runtime.value,
         agent_runner=request.agent_runner,
         force_clean_workspace_agent_state=request.force_clean_workspace_agent_state,
@@ -107,7 +108,7 @@ def run_controlled_execution(request: ControllerRequest) -> None:
     ctx = ExecutionContext(
         execution_id=execution_id, entity_ids=entity_ids,
         spec=spec, baseline_packet=baseline_packet, baseline_packet_path=baseline_packet_path,
-        until=None,
+        until=request.until,
         managed=managed,
         runtime=policy.cursor_runtime,
         max_workers=min(policy.author_workers, policy.cursor_bridge_instances),

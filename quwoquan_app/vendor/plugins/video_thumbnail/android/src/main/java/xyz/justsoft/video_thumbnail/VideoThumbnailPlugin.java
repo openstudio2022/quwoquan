@@ -58,7 +58,13 @@ public class VideoThumbnailPlugin implements FlutterPlugin, MethodCallHandler {
         final Map<String, Object> args = call.arguments();
 
         final String video = (String) args.get("video");
-        final HashMap<String, String> headers = (HashMap<String, String>) args.get("headers");
+        final Map<String, String> headers;
+        try {
+            headers = readHeaders(args.get("headers"));
+        } catch (IllegalArgumentException error) {
+            result.error("invalid_headers", error.getMessage(), null);
+            return;
+        }
         final int format = (int) args.get("format");
         final int maxh = (int) args.get("maxh");
         final int maxw = (int) args.get("maxw");
@@ -100,8 +106,33 @@ public class VideoThumbnailPlugin implements FlutterPlugin, MethodCallHandler {
             case 1:
                 return Bitmap.CompressFormat.PNG;
             case 2:
-                return Bitmap.CompressFormat.WEBP;
+                if (android.os.Build.VERSION.SDK_INT >= 30) {
+                    return Bitmap.CompressFormat.WEBP_LOSSY;
+                }
+                return legacyWebpFormat();
         }
+    }
+
+    @SuppressWarnings("deprecation") // Bitmap.CompressFormat.WEBP is required below API 30.
+    private static Bitmap.CompressFormat legacyWebpFormat() {
+        return Bitmap.CompressFormat.WEBP;
+    }
+
+    private static Map<String, String> readHeaders(Object rawHeaders) {
+        final Map<String, String> headers = new HashMap<>();
+        if (rawHeaders == null) {
+            return headers;
+        }
+        if (!(rawHeaders instanceof Map<?, ?>)) {
+            throw new IllegalArgumentException("headers must be a string map");
+        }
+        for (Map.Entry<?, ?> entry : ((Map<?, ?>) rawHeaders).entrySet()) {
+            if (!(entry.getKey() instanceof String) || !(entry.getValue() instanceof String)) {
+                throw new IllegalArgumentException("headers keys and values must be strings");
+            }
+            headers.put((String) entry.getKey(), (String) entry.getValue());
+        }
+        return headers;
     }
 
     private static String formatExt(int format) {
@@ -116,7 +147,7 @@ public class VideoThumbnailPlugin implements FlutterPlugin, MethodCallHandler {
         }
     }
 
-    private byte[] buildThumbnailData(final String vidPath, final HashMap<String, String> headers, int format, int maxh,
+    private byte[] buildThumbnailData(final String vidPath, final Map<String, String> headers, int format, int maxh,
             int maxw, int timeMs, int quality) {
         // Log.d(TAG, String.format("buildThumbnailData( format:%d, maxh:%d, maxw:%d,
         // timeMs:%d, quality:%d )", format, maxh, maxw, timeMs, quality));
@@ -132,7 +163,7 @@ public class VideoThumbnailPlugin implements FlutterPlugin, MethodCallHandler {
         return stream.toByteArray();
     }
 
-    private String buildThumbnailFile(final String vidPath, final HashMap<String, String> headers, String path,
+    private String buildThumbnailFile(final String vidPath, final Map<String, String> headers, String path,
             int format, int maxh, int maxw, int timeMs,
             int quality) {
         // Log.d(TAG, String.format("buildThumbnailFile( format:%d, maxh:%d, maxw:%d,
@@ -206,7 +237,7 @@ public class VideoThumbnailPlugin implements FlutterPlugin, MethodCallHandler {
      * @param targetH the max height of the thumbnail
      * @param targetW the max width of the thumbnail
      */
-    public Bitmap createVideoThumbnail(final String video, final HashMap<String, String> headers, int targetH,
+    public Bitmap createVideoThumbnail(final String video, final Map<String, String> headers, int targetH,
             int targetW, int timeMs) {
         Bitmap bitmap = null;
         MediaMetadataRetriever retriever = new MediaMetadataRetriever();

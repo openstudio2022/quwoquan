@@ -44,21 +44,21 @@ void main() {
       ),
     );
 
-    expect(find.text(UITextConstants.publishTasksTitle), findsOneWidget);
+    expect(find.text(CreationText.publishTasksTitle), findsOneWidget);
     expect(
-      find.text(UITextConstants.publishTaskPendingReviewStatus),
+      find.text(CreationText.publishTaskPendingReviewStatus),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.publishTaskRejectedStatus),
+      find.text(CreationText.publishTaskRejectedStatus),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.publishTaskPreparingMediaStatus),
+      find.text(CreationText.publishTaskPreparingMediaStatus),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.publishTaskPreparingMediaDescription),
+      find.text(CreationText.publishTaskPreparingMediaDescription),
       findsOneWidget,
     );
 
@@ -108,11 +108,11 @@ void main() {
     );
 
     expect(
-      find.text(UITextConstants.publishTaskCancellingMediaStatus),
+      find.text(CreationText.publishTaskCancellingMediaStatus),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.publishTaskCancellingMediaDescription),
+      find.text(CreationText.publishTaskCancellingMediaDescription),
       findsOneWidget,
     );
     expect(

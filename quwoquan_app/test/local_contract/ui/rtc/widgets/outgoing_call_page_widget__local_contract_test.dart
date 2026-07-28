@@ -57,14 +57,14 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text(UITextConstants.callOutgoingCalling), findsOneWidget);
+      expect(find.text(CallText.callOutgoingCalling), findsOneWidget);
       expect(
-        find.text(UITextConstants.callDebugAutoConnectInFiveSeconds),
+        find.text(CallText.callDebugAutoConnectInFiveSeconds),
         findsNothing,
       );
-      expect(find.text(UITextConstants.callDebugManualAnswer), findsNothing);
-      expect(find.text(UITextConstants.callDebugTimeout), findsNothing);
-      expect(find.text(UITextConstants.cancel), findsOneWidget);
+      expect(find.text(CallText.callDebugManualAnswer), findsNothing);
+      expect(find.text(CallText.callDebugTimeout), findsNothing);
+      expect(find.text(FoundationText.cancel), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(seconds: 2));
@@ -85,7 +85,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text(UITextConstants.user), findsOneWidget);
+      expect(find.text(FoundationText.user), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());

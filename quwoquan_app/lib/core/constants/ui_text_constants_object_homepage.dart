@@ -1,6 +1,6 @@
 part of 'ui_text_constants.dart';
 
-abstract final class _UITextObjectHomepage {
+abstract final class ObjectHomepageText {
   static const String profileStatementFallbackSubtitle = '新的交集正在生成';
   static const String objectIntersectionCtaFollowAuthor = '关注作者';
   static const String objectIntersectionCtaJoinCircle = '加入圈子';

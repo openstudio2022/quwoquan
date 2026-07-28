@@ -363,9 +363,9 @@ void main() {
 
       await tester.longPress(find.byType(GestureDetector).first);
       await tester.pumpAndSettle();
-      expect(find.text(UITextConstants.callHangupConfirmTitle), findsOneWidget);
+      expect(find.text(CallText.callHangupConfirmTitle), findsOneWidget);
 
-      await tester.tap(find.text(UITextConstants.callHangup));
+      await tester.tap(find.text(CallText.callHangup));
       await tester.pumpAndSettle();
       expect(hangupCount, 1);
     });

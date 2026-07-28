@@ -36,7 +36,7 @@ class _SearchHistoryToolbar extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            UITextConstants.searchHistoryTitle,
+            SearchText.searchHistoryTitle,
             style: TextStyle(
               fontSize: _SearchTokens.toolbarSize,
               fontWeight: _SearchTokens.toolbarWeight,
@@ -51,7 +51,7 @@ class _SearchHistoryToolbar extends StatelessWidget {
             minimumSize: Size.zero,
             onPressed: onClearAll,
             child: Text(
-              UITextConstants.searchHistoryDeleteAll,
+              SearchText.searchHistoryDeleteAll,
               style: TextStyle(
                 fontSize: _SearchTokens.toolbarSize,
                 fontWeight: _SearchTokens.toolbarActionWeight,
@@ -66,7 +66,7 @@ class _SearchHistoryToolbar extends StatelessWidget {
             minimumSize: Size.zero,
             onPressed: onDone,
             child: Text(
-              UITextConstants.searchHistoryDone,
+              SearchText.searchHistoryDone,
               style: TextStyle(
                 fontSize: _SearchTokens.toolbarSize,
                 fontWeight: _SearchTokens.toolbarActionWeight,
@@ -85,8 +85,8 @@ class _SearchHistoryToolbar extends StatelessWidget {
               children: [
                 Text(
                   expanded
-                      ? UITextConstants.searchHistoryCollapse
-                      : UITextConstants.searchHistoryExpand,
+                      ? SearchText.searchHistoryCollapse
+                      : SearchText.searchHistoryExpand,
                   style: TextStyle(
                     fontSize: _SearchTokens.toolbarSize,
                     fontWeight: _SearchTokens.toolbarWeight,

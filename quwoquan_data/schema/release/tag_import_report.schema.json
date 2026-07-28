@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/tag_import_report.schema.json",
+  "title": "Tag taxonomy release import report",
+  "type": "object",
+  "required": [
+    "schema",
+    "status",
+    "environment",
+    "releaseId",
+    "sourceOwner",
+    "canonicalDigest",
+    "releaseKind",
+    "previousReleaseId",
+    "nodeCount",
+    "tagRefs",
+    "generatedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan.tag_import_report"},
+    "status": {"enum": ["dry-run", "active"]},
+    "environment": {"type": "string", "minLength": 1},
+    "releaseId": {"type": "string", "minLength": 1},
+    "sourceOwner": {"const": "qwq_data"},
+    "canonicalDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "releaseKind": {"enum": ["content", "empty_baseline"]},
+    "previousReleaseId": {"type": "string"},
+    "nodeCount": {"type": "integer", "minimum": 0},
+    "tagRefs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "generatedAt": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"releaseKind": {"const": "content"}}
+      },
+      "then": {
+        "properties": {
+          "nodeCount": {"minimum": 1},
+          "tagRefs": {"minItems": 1}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"releaseKind": {"const": "empty_baseline"}}
+      },
+      "then": {
+        "properties": {
+          "nodeCount": {"const": 0},
+          "tagRefs": {"maxItems": 0}
+        }
+      }
+    }
+  ]
+}

@@ -67,7 +67,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
   Widget build(BuildContext context) {
     return IosSelectionPageScaffold(
       pageKey: TestKeys.homepagePickerPage,
-      title: UITextConstants.attachHomepageTitle,
+      title: CreationText.attachHomepageTitle,
       onBack: () => Navigator.of(context).pop(),
       backgroundColor: AppColors.iosPageBackground(context),
       body: Column(
@@ -84,7 +84,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
               key: TestKeys.homepagePickerSearchField,
               controller: _controller,
               focusNode: _focusNode,
-              placeholder: UITextConstants.attachHomepageSearchHint,
+              placeholder: CreationText.attachHomepageSearchHint,
               onChanged: (value) {
                 setState(() {
                   _query = value.trim();
@@ -112,7 +112,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
         selected != null && _results.any((item) => item.id == selected.id);
     if (_isLoading && _results.isEmpty) {
       return _buildStatusSection(
-        text: UITextConstants.loading,
+        text: FoundationText.loading,
         fgSecondary: fgSecondary,
         loading: true,
       );
@@ -139,10 +139,10 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
         return _buildSelectedAndMessageSection(
           selected: selected,
           semantic: UiErrorSemantic(
-            category: UiErrorCategory.sectionLoad,
+            category: UiErrorCategory.validation,
             scope: UiErrorScope.section,
-            title: UITextConstants.attachHomepageTitle,
-            message: UITextConstants.attachHomepageEmpty,
+            title: CreationText.attachHomepageTitle,
+            message: CreationText.attachHomepageEmpty,
           ),
           showSuggestAction: true,
         );
@@ -155,7 +155,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
       children: <Widget>[
         if (selected != null && !selectedVisibleInResults) ...<Widget>[
           const IosSelectionSectionHeader(
-            title: UITextConstants.attachHomepageCurrentSection,
+            title: CreationText.attachHomepageCurrentSection,
             padding: EdgeInsets.fromLTRB(
               AppSpacing.containerMd,
               AppSpacing.intraGroupXs,
@@ -167,7 +167,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
           const SizedBox(height: AppSpacing.interGroupSm),
         ],
         const IosSelectionSectionHeader(
-          title: UITextConstants.attachHomepageResultsSection,
+          title: CreationText.attachHomepageResultsSection,
           padding: EdgeInsets.fromLTRB(
             AppSpacing.containerMd,
             AppSpacing.intraGroupXs,
@@ -190,7 +190,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
             onPressed: _openSuggestPage,
             child: Text(
               _query.isEmpty
-                  ? UITextConstants.attachHomepageSuggest
+                  ? CreationText.attachHomepageSuggest
                   : UITextConstants.attachHomepageSuggestWithQuery(_query),
               style: TextStyle(
                 color: AppColors.iosAccent(context),
@@ -273,7 +273,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
       padding: EdgeInsets.only(bottom: AppSpacing.interGroupLg),
       children: <Widget>[
         const IosSelectionSectionHeader(
-          title: UITextConstants.attachHomepageCurrentSection,
+          title: CreationText.attachHomepageCurrentSection,
           padding: EdgeInsets.fromLTRB(
             AppSpacing.containerMd,
             AppSpacing.intraGroupXs,
@@ -303,7 +303,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
                   padding: EdgeInsets.zero,
                   minimumSize: Size.zero,
                   onPressed: _openSuggestPage,
-                  child: Text(UITextConstants.attachHomepageSuggest),
+                  child: Text(CreationText.attachHomepageSuggest),
                 ),
               ],
             ],
@@ -460,7 +460,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                if (loading) const CupertinoActivityIndicator(),
+                if (loading) AppRequestFeedback.inline(),
                 if (loading) SizedBox(height: AppSpacing.intraGroupSm),
                 Text(
                   text,
@@ -490,7 +490,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 Text(
-                  UITextConstants.attachHomepageEmpty,
+                  CreationText.attachHomepageEmpty,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: AppTypography.iosBody,
@@ -504,7 +504,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
                   padding: EdgeInsets.zero,
                   minimumSize: Size.zero,
                   onPressed: _openSuggestPage,
-                  child: Text(UITextConstants.attachHomepageSuggest),
+                  child: Text(CreationText.attachHomepageSuggest),
                 ),
               ],
             ),
@@ -527,7 +527,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
     final ratingSummary = rating == null || summary.ratingCount <= 0
         ? ''
         : '${rating.toStringAsFixed(1)} · '
-            '${UITextConstants.homepageRatingCount(summary.ratingCount)}';
+              '${UITextConstants.homepageRatingCount(summary.ratingCount)}';
     return <String>[
       typeLabel,
       if (detail.isNotEmpty) detail,
@@ -542,7 +542,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
       ),
     );
     if (submitted == true && mounted) {
-      AppToast.show(context, UITextConstants.addHomepageSubmitted);
+      AppToast.show(context, CreationText.addHomepageSubmitted);
       _scheduleRefresh(immediate: true);
     }
   }

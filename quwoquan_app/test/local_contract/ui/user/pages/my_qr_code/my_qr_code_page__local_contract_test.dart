@@ -8,14 +8,14 @@ import 'package:quwoquan_app/ui/user/pages/my_qr_code_page.dart';
 import '../../../../../support/fakes/contact_profile_queries.dart';
 
 const _qrCard = ProfileQrCardData(
-  publicProfileUrl: 'https://app.quwoquan.com/u/current',
-  qrPayload: 'https://app.quwoquan.com/u/current?qr=fixture',
+  publicProfileUrl: 'https://quwoquan.com/u/current',
+  qrPayload: 'https://quwoquan.com/u/current?qr=fixture',
   qrTokenId: 'fixture-qr',
   styleVersion: 'v1',
   avatarUrl: '',
   displayName: '当前用户',
   region: '杭州',
-  shareText: 'https://app.quwoquan.com/u/current?qr=fixture',
+  shareText: 'https://quwoquan.com/u/current?qr=fixture',
 );
 
 void main() {
@@ -32,12 +32,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.editProfileQrCardTitle), findsOneWidget);
+    expect(find.text(ProfileText.editProfileQrCardTitle), findsOneWidget);
     expect(find.text(_qrCard.displayName), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text(UITextConstants.editProfileQrScanAction),
+      find.text(ProfileText.editProfileQrScanAction),
       200,
     );
-    expect(find.text(UITextConstants.editProfileQrScanAction), findsOneWidget);
+    expect(find.text(ProfileText.editProfileQrScanAction), findsOneWidget);
   });
 }

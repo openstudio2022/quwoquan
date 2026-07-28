@@ -23,6 +23,8 @@ relationships:
   - subAccountId
   target_object: user.Persona
 local_identity_reasons:
+  avatarAssetId: immutable release MediaAsset authority reference; validated against media_manifest.json
+    and never used as a CreatorRuntimeProfile aggregate identity
   preferredBlueprintIds: stable catalog or release key; resolved through its typed catalog reader and
     never used as an aggregate Store identity
   releaseId: stable catalog or release key; resolved through its typed catalog reader and never used as

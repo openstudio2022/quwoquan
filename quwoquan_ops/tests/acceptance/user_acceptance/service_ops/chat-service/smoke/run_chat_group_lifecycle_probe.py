@@ -303,10 +303,27 @@ def _wait_for_inbox(
             client.request("GET", "/chat/inbox?limit=100", operation_id="ListInbox"),
             "ListInbox",
         )
-        if any(str(item.get("conversationId") or "") == conversation_id for item in rows):
+        if any(
+            _inbox_item_conversation_id(item) == conversation_id for item in rows
+        ):
             return
         time.sleep(1.0)
     raise ProbeFailure("projection_timeout", "created conversation did not reach Inbox")
+
+
+def _inbox_item_conversation_id(item: dict[str, Any]) -> str:
+    direct_id = str(item.get("conversationId") or "").strip()
+    if direct_id:
+        return direct_id
+    item_id = str(item.get("id") or "").strip()
+    if item_id:
+        return item_id
+    conversation = item.get("conversation")
+    if isinstance(conversation, dict):
+        return str(
+            conversation.get("conversationId") or conversation.get("id") or ""
+        ).strip()
+    return ""
 
 
 def _write_report(path: Path, report: dict[str, Any]) -> None:
@@ -527,8 +544,19 @@ def main() -> int:
                 )
                 report["journeyEvidence"]["cleanup"] = "passed"
                 report["steps"].append({"name": "cleanup", "status": "passed"})
+            except ProbeFailure as exc:
+                report["journeyEvidence"]["cleanup"] = "failed"
+                report["journeyEvidence"]["cleanupFailureCategory"] = exc.category
+                report["status"] = "failed"
+                report["failureCategory"] = "cleanup_failed"
+                report["blockingReason"] = (
+                    "created probe conversation could not be dissolved: "
+                    + exc.category
+                )
+                return_code = 1
             except Exception:  # noqa: BLE001
                 report["journeyEvidence"]["cleanup"] = "failed"
+                report["journeyEvidence"]["cleanupFailureCategory"] = "unexpected_error"
                 report["status"] = "failed"
                 report["failureCategory"] = "cleanup_failed"
                 report["blockingReason"] = "created probe conversation could not be dissolved"

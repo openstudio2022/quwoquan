@@ -132,17 +132,17 @@ class _CircleShellState extends ConsumerState<CircleShell> {
       if (members > 0)
         ObjectStatItem(
           value: formatCompactActionCount(members),
-          label: UITextConstants.circleMembers,
+          label: CommunityText.circleMembers,
         ),
       if (posts > 0)
         ObjectStatItem(
           value: formatCompactActionCount(posts),
-          label: UITextConstants.objectTabRecord,
+          label: ObjectHomepageText.objectTabRecord,
         ),
       if (discussions > 0)
         ObjectStatItem(
           value: formatCompactActionCount(discussions),
-          label: UITextConstants.objectTabDiscussion,
+          label: ObjectHomepageText.objectTabDiscussion,
         ),
     ];
   }
@@ -178,10 +178,10 @@ class _CircleShellState extends ConsumerState<CircleShell> {
       await AppActionErrorFeedback.show(
         context,
         semantic: UiErrorSemantic(
-          category: UiErrorCategory.sectionLoad,
+          category: UiErrorCategory.submit,
           scope: UiErrorScope.global,
-          title: UITextConstants.circleInfoUnavailableTitle,
-          message: UITextConstants.contentLoadSoftFailed,
+          title: ObjectHomepageText.circleInfoUnavailableTitle,
+          message: FoundationText.contentLoadSoftFailed,
         ),
       );
       return;
@@ -236,19 +236,19 @@ class _CircleShellState extends ConsumerState<CircleShell> {
           items: <AppActionSheetItem<_CircleMoreAction>>[
             const AppActionSheetItem<_CircleMoreAction>(
               value: _CircleMoreAction.edit,
-              label: UITextConstants.editCircle,
+              label: CommunityText.editCircle,
               icon: CupertinoIcons.pencil,
             ),
             const AppActionSheetItem<_CircleMoreAction>(
               value: _CircleMoreAction.manage,
-              label: UITextConstants.manageCenter,
+              label: CommunityText.manageCenter,
               icon: CupertinoIcons.slider_horizontal_3,
             ),
             // 审批入口仅 approval 圈子展示（open 圈子无 pending 队列语义）。
             if (state.circleData?.joinPolicy == 'approval')
               const AppActionSheetItem<_CircleMoreAction>(
                 value: _CircleMoreAction.approval,
-                label: UITextConstants.circleApprovalTitle,
+                label: CommunityText.circleApprovalTitle,
                 icon: CupertinoIcons.person_crop_circle_badge_checkmark,
               ),
           ],
@@ -261,12 +261,12 @@ class _CircleShellState extends ConsumerState<CircleShell> {
           items: <AppActionSheetItem<_CircleMoreAction>>[
             AppActionSheetItem<_CircleMoreAction>(
               value: _CircleMoreAction.voiceCall,
-              label: UITextConstants.callGroupVoice,
+              label: CallText.callGroupVoice,
               icon: CupertinoIcons.phone,
             ),
             AppActionSheetItem<_CircleMoreAction>(
               value: _CircleMoreAction.videoCall,
-              label: UITextConstants.callGroupVideo,
+              label: CallText.callGroupVideo,
               icon: CupertinoIcons.video_camera,
             ),
           ],
@@ -278,12 +278,12 @@ class _CircleShellState extends ConsumerState<CircleShell> {
         items: <AppActionSheetItem<_CircleMoreAction>>[
           AppActionSheetItem<_CircleMoreAction>(
             value: _CircleMoreAction.submitPost,
-            label: UITextConstants.circleSubmitPost,
+            label: ContactText.circleSubmitPost,
             icon: CupertinoIcons.add_circled,
           ),
           AppActionSheetItem<_CircleMoreAction>(
             value: _CircleMoreAction.invite,
-            label: UITextConstants.circleInviteMembers,
+            label: CommunityText.circleInviteMembers,
             icon: CupertinoIcons.person_badge_plus,
           ),
         ],
@@ -292,12 +292,12 @@ class _CircleShellState extends ConsumerState<CircleShell> {
         items: <AppActionSheetItem<_CircleMoreAction>>[
           AppActionSheetItem<_CircleMoreAction>(
             value: _CircleMoreAction.share,
-            label: UITextConstants.share,
+            label: FoundationText.share,
             icon: CupertinoIcons.share,
           ),
           AppActionSheetItem<_CircleMoreAction>(
             value: _CircleMoreAction.copyLink,
-            label: UITextConstants.copyLink,
+            label: FoundationText.copyLink,
             icon: CupertinoIcons.link,
           ),
         ],
@@ -306,7 +306,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
         items: <AppActionSheetItem<_CircleMoreAction>>[
           AppActionSheetItem<_CircleMoreAction>(
             value: _CircleMoreAction.report,
-            label: UITextConstants.report,
+            label: ContentText.report,
             icon: CupertinoIcons.flag,
             isDestructive: true,
           ),
@@ -450,7 +450,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
           },
         );
         if (context.mounted) {
-          AppToast.show(context, UITextConstants.commentReportSubmitted);
+          AppToast.show(context, ContentText.commentReportSubmitted);
         }
       } catch (error) {
         await journeyTracker.trackAction(
@@ -520,18 +520,27 @@ class _CircleShellState extends ConsumerState<CircleShell> {
           ),
         ),
         body: AppPageErrorState(
-          semantic: runtimeErrorSemantic(
-            context,
-            error: state.loadError!,
-            category: UiErrorCategory.pageLoad,
-            scope: UiErrorScope.page,
-            appearanceMode: widget.sourceAppearanceMode,
-            sourceRouteId: AppRoutePaths.circleDetailPathTemplate,
+          semantic: ensureRetryUiErrorSemantic(
+            runtimeErrorSemantic(
+              context,
+              error: state.loadError!,
+              category: UiErrorCategory.pageLoad,
+              scope: UiErrorScope.page,
+              appearanceMode: widget.sourceAppearanceMode,
+              sourceRouteId: AppRoutePaths.circleDetailPathTemplate,
+            ),
           ),
           onAction: (action) async {
             if (action.type == UiErrorActionType.retry ||
                 action.type == UiErrorActionType.resubmit) {
               await circleCtrl.loadCircle();
+            } else if (action.type == UiErrorActionType.dismiss) {
+              final onBack = widget.onBack;
+              if (onBack != null) {
+                onBack();
+              } else {
+                await Navigator.of(context).maybePop();
+              }
             }
           },
         ),

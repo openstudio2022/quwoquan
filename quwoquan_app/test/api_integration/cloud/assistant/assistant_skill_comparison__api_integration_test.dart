@@ -9,7 +9,6 @@ import 'package:integration_test/integration_test.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import '../../../support/cloud_services/assistant_facet_overrides.dart';
 import '../../../support/fixtures/assistant/assistant_eval_scenario_fixtures.dart';
@@ -52,7 +51,6 @@ void main() {
       final container = ProviderScope.containerOf(
         tester.element(find.byType(PersonalAssistantConversationPage)),
       );
-      final mode = container.read(appDataSourceModeProvider);
 
       for (final scenario in scenarios) {
         final started = DateTime.now();
@@ -123,7 +121,9 @@ void main() {
 
         _printEvalResult(<String, dynamic>{
           'env': runtimeEnv,
-          'repositoryMode': mode.name,
+          'composition': runtimeEnv == 'alpha'
+              ? 'alpha_fixture_override'
+              : 'production_remote',
           'scenarioId': scenario.id,
           'skillId': scenario.skillId,
           'domainId': scenario.domainId,

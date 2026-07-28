@@ -33,8 +33,8 @@ func TestGateFollowFeedSourceBlocksNonAuthorSource(t *testing.T) {
 		Surface:  "home",
 		Limit:    10,
 	})
-	if err != nil {
-		t.Fatalf("follow recall err=%v", err)
+	if !rtrec.IsRecallSkipped(err) {
+		t.Fatalf("blocked follow source must be not-applicable, err=%v", err)
 	}
 	if len(followItems) != 0 || generic.calls != 0 {
 		t.Fatalf("generic source must be blocked for follow feed, items=%d calls=%d", len(followItems), generic.calls)
@@ -97,8 +97,8 @@ func TestGateFollowFeedSourceComposesWithPremiumGate(t *testing.T) {
 		Surface:  "premium_stream",
 		Limit:    10,
 	})
-	if err != nil {
-		t.Fatalf("premium recall err=%v", err)
+	if !rtrec.IsRecallSkipped(err) {
+		t.Fatalf("author premium source must be not-applicable, err=%v", err)
 	}
 	if len(premiumItems) != 0 {
 		t.Fatalf("author recall must stay blocked on premium stream, got %+v", premiumItems)

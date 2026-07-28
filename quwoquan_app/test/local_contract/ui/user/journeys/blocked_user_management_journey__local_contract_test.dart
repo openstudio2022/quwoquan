@@ -8,7 +8,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/pages/blocked_users_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 class _AuthenticatedSessionController extends AuthSessionController {
   @override
@@ -46,14 +46,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('ps_target'), findsOneWidget);
-    expect(find.text(UITextConstants.blockedUsersUnblock), findsOneWidget);
+    expect(find.text(ContentText.blockedUsersUnblock), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.blockedUsersUnblock));
+    await tester.tap(find.text(ContentText.blockedUsersUnblock));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.blockedUsersUnblock).last);
+    await tester.tap(find.text(ContentText.blockedUsersUnblock).last);
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.blockedUsersEmptyTitle), findsOneWidget);
+    expect(find.text(ContentText.blockedUsersEmptyTitle), findsOneWidget);
     final slice = await facet.listBlockedUsers(const ListBlockedUsersQuery());
     expect(slice.items, isEmpty);
     await tester.pump(const Duration(seconds: 4));

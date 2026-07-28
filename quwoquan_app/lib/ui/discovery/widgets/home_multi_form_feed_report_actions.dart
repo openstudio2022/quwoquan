@@ -144,7 +144,7 @@ extension _HomeMultiFormFeedReportActions on HomeMultiFormFeed {
         context,
         ref,
         post.id,
-        toast: UITextConstants.reportSubmittedViewProgress,
+        toast: ContentText.reportSubmittedViewProgress,
       );
     } catch (error) {
       await journeyTracker.trackAction(

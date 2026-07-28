@@ -47,8 +47,8 @@ void main() {
           versionCalls += 1;
           return http.Response(
             '{"latestVersion":"1.8.2","latestBuild":"${versionCalls == 1 ? '18201' : '18100'}",'
-            '"updateUrl":"https://quwoquan.com/download/android",'
-            '"recoveryUrl":"https://quwoquan.com/recovery"}',
+            '"updateUrl":"https://cdn.quwoquan.com/downloads/android/latest.json",'
+            '"recoveryUrl":"https://quwoquan.com/"}',
             200,
           );
         }),

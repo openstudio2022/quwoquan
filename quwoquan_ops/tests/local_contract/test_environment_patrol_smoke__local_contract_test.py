@@ -29,14 +29,13 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "env_name": "local-gamma",
             "runtime_env": "gamma",
             "api_contract_env": "gamma",
-            "data_source": "remote",
-            "gateway_base_url": "https://gamma-api.quwoquan-env.test:19000",
-            "product_ops_base_url": "https://gamma-product-ops.quwoquan-env.test:19010",
-            "media_avatar_base_url": "https://gamma-avatar.quwoquan-env.test:19100",
-            "media_image_base_url": "https://gamma-image.quwoquan-env.test:19100",
-            "media_video_base_url": "https://gamma-video.quwoquan-env.test:19100",
-            "media_upload_base_url": "https://gamma-upload.quwoquan-env.test:19130",
-            "rtc_media_connection_url": "wss://gamma-rtc.quwoquan-env.test:19000",
+            "gateway_base_url": "https://api.gamma.quwoquan.com:19000",
+            "product_ops_base_url": "https://ops.gamma.quwoquan.com:19010",
+            "media_avatar_base_url": "https://cdn.gamma.quwoquan.com:19100",
+            "media_image_base_url": "https://cdn.gamma.quwoquan.com:19100",
+            "media_video_base_url": "https://cdn.gamma.quwoquan.com:19100",
+            "media_upload_base_url": "https://upload.gamma.quwoquan.com:19130",
+            "rtc_media_connection_url": "wss://rtc.gamma.quwoquan.com:19000",
             "video_playback_canary_work_id": "fixture_video_001",
             "patrol_install_id": "",
             "account_closure_disposable_ack": False,
@@ -154,7 +153,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "VIDEO_PLAYBACK_CANARY_PUBLIC_SLICE_KEY",
         )
 
-    def test_contract_fixture_bundle_keeps_125s_video_coverage(self) -> None:
+    def test_remote_patrol_keeps_125s_video_contract_without_app_bundle(self) -> None:
         scenarios = ROOT / (
             "quwoquan_service/services/content-service/tests/support/"
             "contract_fixtures/scenarios/content_scenarios.json"
@@ -173,66 +172,52 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertEqual(canary.get("mediaAssetId"), "media-canary-seek-125s")
         self.assertIn("media-canary-seek-125s", str(canary.get("videoUrl", "")))
 
-        bundle = ROOT / (
-            "quwoquan_app/packages/quwoquan_cloud_mock/lib/src/generated/"
-            "alpha_fixture_bundle.g.dart"
-        )
-        bundle_text = bundle.read_text(encoding="utf-8")
-        self.assertIn("media-canary-seek-125s", bundle_text)
-        self.assertIn("125000", bundle_text)
-
         profile = ROOT / "quwoquan_data/reference/media_canary/video_playback.yaml"
         self.assertTrue(profile.is_file(), "mediaCanary.profileRef must resolve")
         profile_text = profile.read_text(encoding="utf-8")
         self.assertIn("media-canary-seek-125s", profile_text)
         self.assertIn("media-canary-hour-boundary-3595s", profile_text)
 
-        builder = ROOT / "quwoquan_app/scripts/env/build_alpha_fixture_bundle.py"
-        with tempfile.TemporaryDirectory() as temporary_dir:
-            output = Path(temporary_dir) / "alpha_fixture_bundle.g.dart"
-            result = subprocess.run(
-                [sys.executable, str(builder), "--output", str(output)],
-                cwd=ROOT,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertTrue(output.exists())
-
         patrol_main = (
             ROOT / "quwoquan_app/test/user_acceptance/patrol/patrol_test_main.dart"
         ).read_text(encoding="utf-8")
         self.assertNotIn("runQuwoquanApp(", patrol_main)
+        harness = (
+            ROOT
+            / "quwoquan_app/test/support/patrol/patrol_environment_harness.dart"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("buildAlphaCloudOverrides", harness)
+        self.assertNotIn("providerScopeOverrides", harness)
+        self.assertIn("launchPatrolAppOnce($)", harness)
 
-    def test_effective_base_urls_rewrite_local_ios_simulator(self) -> None:
+    def test_effective_base_urls_keep_canonical_public_hosts_for_local_ios(self) -> None:
         args = self._args()
         device = {"targetPlatform": "ios", "emulator": True}
 
         actual = smoke._effective_base_urls_for_device(args, device)
 
-        self.assertEqual(actual["gatewayBaseUrl"], "https://gamma-api.localhost:19000")
-        self.assertEqual(actual["productOpsBaseUrl"], "https://gamma-product-ops.localhost:19010")
-        self.assertEqual(actual["mediaAvatarBaseUrl"], "https://gamma-avatar.localhost:19100")
-        self.assertEqual(actual["mediaImageBaseUrl"], "https://gamma-image.localhost:19100")
-        self.assertEqual(actual["mediaVideoBaseUrl"], "https://gamma-video.localhost:19100")
-        self.assertEqual(actual["mediaUploadBaseUrl"], "https://gamma-upload.localhost:19130")
+        self.assertEqual(actual["gatewayBaseUrl"], "https://api.gamma.quwoquan.com:19000")
+        self.assertEqual(actual["productOpsBaseUrl"], "https://ops.gamma.quwoquan.com:19010")
+        self.assertEqual(actual["mediaAvatarBaseUrl"], "https://cdn.gamma.quwoquan.com:19100")
+        self.assertEqual(actual["mediaImageBaseUrl"], "https://cdn.gamma.quwoquan.com:19100")
+        self.assertEqual(actual["mediaVideoBaseUrl"], "https://cdn.gamma.quwoquan.com:19100")
+        self.assertEqual(actual["mediaUploadBaseUrl"], "https://upload.gamma.quwoquan.com:19130")
         self.assertNotIn("mediaBaseUrl", actual)
 
-    def test_effective_base_urls_use_exact_localhost_for_android_native_player(self) -> None:
+    def test_effective_base_urls_keep_public_tls_hostname_for_android(self) -> None:
         args = self._args()
         device = {"targetPlatform": "android-arm64", "emulator": True}
 
         actual = smoke._effective_base_urls_for_device(args, device)
 
-        self.assertEqual(actual["gatewayBaseUrl"], "https://localhost:19000")
-        self.assertEqual(actual["productOpsBaseUrl"], "https://localhost:19010")
-        self.assertEqual(actual["mediaAvatarBaseUrl"], "https://localhost:19100")
-        self.assertEqual(actual["mediaImageBaseUrl"], "https://localhost:19100")
-        self.assertEqual(actual["mediaVideoBaseUrl"], "https://localhost:19100")
-        self.assertEqual(actual["mediaUploadBaseUrl"], "https://localhost:19130")
+        self.assertEqual(actual["gatewayBaseUrl"], "https://api.gamma.quwoquan.com:19000")
+        self.assertEqual(actual["productOpsBaseUrl"], "https://ops.gamma.quwoquan.com:19010")
+        self.assertEqual(actual["mediaAvatarBaseUrl"], "https://cdn.gamma.quwoquan.com:19100")
+        self.assertEqual(actual["mediaImageBaseUrl"], "https://cdn.gamma.quwoquan.com:19100")
+        self.assertEqual(actual["mediaVideoBaseUrl"], "https://cdn.gamma.quwoquan.com:19100")
+        self.assertEqual(actual["mediaUploadBaseUrl"], "https://upload.gamma.quwoquan.com:19130")
 
-    def test_ios_build_preserves_only_authorized_local_transport_authority(self) -> None:
+    def test_ios_build_restores_canonical_public_transport_authority(self) -> None:
         def resolved_gateway(supplied_gateway: str) -> str:
             entries = {
                 "APP_RUNTIME_ENV": "gamma",
@@ -246,6 +231,11 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 **os.environ,
                 "DART_DEFINES": encoded,
                 "PYTHONDONTWRITEBYTECODE": "1",
+                "QWQ_APP_RUNTIME_ENV": "gamma",
+                "QWQ_LAUNCH_TARGET": "gamma-local",
+                "QWQ_DART_DEFINES_DIGEST": "sha256:" + ("0" * 64),
+                "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": "sha256:" + ("1" * 64),
+                "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": "sha256:" + ("2" * 64),
             }
             result = subprocess.run(
                 [
@@ -281,11 +271,11 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
 
         self.assertEqual(
             resolved_gateway("https://gamma-api.localhost:19000"),
-            "https://gamma-api.localhost:19000",
+            "https://api.gamma.quwoquan.com:19000",
         )
         self.assertEqual(
             resolved_gateway("https://untrusted.localhost:19000"),
-            "https://gamma-api.quwoquan-env.test:19000",
+            "https://api.gamma.quwoquan.com:19000",
         )
 
     def test_effective_base_urls_keep_public_for_hosted_target(self) -> None:
@@ -347,6 +337,10 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "--dart-define=REQUIRE_NATIVE_VIDEO_PLAYBACK_SIGNALS=true",
             command,
         )
+        self.assertIn(
+            "--dart-define=APP_LEGAL_BASE_URL=https://api.gamma.quwoquan.com:19000/legal",
+            command,
+        )
         self.assertNotIn("--dart-define-from-file=", command)
 
     def test_beta_public_video_canary_allows_anonymous_read_only_session(self) -> None:
@@ -354,13 +348,12 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             env_name="beta-local",
             runtime_env="beta",
             api_contract_env="beta",
-            data_source="remote",
-            gateway_base_url="https://beta-api.quwoquan-env.test:18000",
-            product_ops_base_url="https://beta-product-ops.quwoquan-env.test:18010",
-            media_avatar_base_url="https://beta-avatar.quwoquan-env.test:18100",
-            media_image_base_url="https://beta-image.quwoquan-env.test:18100",
-            media_video_base_url="https://beta-video.quwoquan-env.test:18100",
-            media_upload_base_url="https://beta-upload.quwoquan-env.test:18100",
+            gateway_base_url="https://api.beta.quwoquan.com:18000",
+            product_ops_base_url="https://ops.beta.quwoquan.com:18010",
+            media_avatar_base_url="https://cdn.beta.quwoquan.com:18100",
+            media_image_base_url="https://cdn.beta.quwoquan.com:18100",
+            media_video_base_url="https://cdn.beta.quwoquan.com:18100",
+            media_upload_base_url="https://upload.beta.quwoquan.com:18100",
             test_auth_token="",
             test_refresh_token="",
             current_owner_id="",
@@ -415,7 +408,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "",
         )
 
-    def test_patrol_command_includes_localhost_and_current_user(self) -> None:
+    def test_patrol_command_includes_canonical_public_hosts_and_current_user(self) -> None:
         args = self._args()
         device = {
             "id": "sim-1",
@@ -432,14 +425,14 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         )
         joined = "\n".join(command)
 
-        self.assertIn("--dart-define=CLOUD_GATEWAY_BASE_URL=https://gamma-api.localhost:19000", joined)
-        self.assertIn("--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=https://gamma-product-ops.localhost:19010", joined)
-        self.assertIn("--dart-define=MEDIA_AVATAR_CDN_BASE_URL=https://gamma-avatar.localhost:19100", joined)
-        self.assertIn("--dart-define=MEDIA_IMAGE_CDN_BASE_URL=https://gamma-image.localhost:19100", joined)
-        self.assertIn("--dart-define=MEDIA_VIDEO_CDN_BASE_URL=https://gamma-video.localhost:19100", joined)
-        self.assertIn("--dart-define=MEDIA_UPLOAD_BASE_URL=https://gamma-upload.localhost:19130", joined)
+        self.assertIn("--dart-define=CLOUD_GATEWAY_BASE_URL=https://api.gamma.quwoquan.com:19000", joined)
+        self.assertIn("--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=https://ops.gamma.quwoquan.com:19010", joined)
+        self.assertIn("--dart-define=MEDIA_AVATAR_CDN_BASE_URL=https://cdn.gamma.quwoquan.com:19100", joined)
+        self.assertIn("--dart-define=MEDIA_IMAGE_CDN_BASE_URL=https://cdn.gamma.quwoquan.com:19100", joined)
+        self.assertIn("--dart-define=MEDIA_VIDEO_CDN_BASE_URL=https://cdn.gamma.quwoquan.com:19100", joined)
+        self.assertIn("--dart-define=MEDIA_UPLOAD_BASE_URL=https://upload.gamma.quwoquan.com:19130", joined)
         self.assertIn(
-            "--dart-define=RTC_MEDIA_CONNECTION_URL=wss://gamma-rtc.localhost:19000",
+            "--dart-define=RTC_MEDIA_CONNECTION_URL=wss://rtc.gamma.quwoquan.com:19000",
             joined,
         )
         self.assertIn(
@@ -735,6 +728,46 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertNotIn("local-gamma-token", smoke._redact_command(command))
         self.assertNotIn("local-gamma-refresh", smoke._redact_command(command))
 
+    def test_core_readback_requires_and_forwards_one_release_envelope(self) -> None:
+        release_values = {
+            destination: f"value-{index}"
+            for index, (destination, _define_name) in enumerate(
+                smoke.RELEASE_APP_UAT_DEFINES,
+                start=1,
+            )
+        }
+        args = self._args(
+            target=smoke.CORE_READBACK_TARGET,
+            **release_values,
+        )
+        device = {
+            "id": "android-1",
+            "targetPlatform": "android-arm64",
+            "emulator": True,
+        }
+
+        command = smoke.patrol_command(
+            device,
+            args,
+            "patrol",
+            dart_define_file=Path("/tmp/patrol-secrets.json"),
+        )
+
+        for destination, define_name in smoke.RELEASE_APP_UAT_DEFINES:
+            self.assertIn(
+                f"--dart-define={define_name}={release_values[destination]}",
+                command,
+            )
+
+        missing = self._args(target=smoke.CORE_READBACK_TARGET)
+        with self.assertRaisesRegex(ValueError, "immutable release envelope"):
+            smoke.patrol_command(
+                device,
+                missing,
+                "patrol",
+                dart_define_file=Path("/tmp/patrol-secrets.json"),
+            )
+
     @mock.patch.object(smoke, "resolve_android_debug_bridge", return_value="/sdk/adb")
     @mock.patch.object(smoke.subprocess, "run")
     def test_explicit_android_device_discovery_uses_adb_without_flutter_lock(
@@ -782,9 +815,48 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
 
         self.assertEqual(inventory, [{**device, "isSupported": True}])
         self.assertEqual(env[flutter_proxy.REAL_FLUTTER_ENV], "/sdk/flutter")
+        self.assertEqual(env["QWQ_APP_RUNTIME_ENV"], "gamma")
+        self.assertEqual(env["QWQ_RUN_DEVICE_ID"], "emulator-5554")
+        self.assertEqual(env["ANDROID_SERIAL"], "emulator-5554")
         self.assertIn(
             str(smoke.ANDROID_DEVICE_PROXY),
             env[smoke.PATROL_FLUTTER_COMMAND_ENV],
+        )
+
+    @mock.patch.object(smoke, "acquire_consumer_lease")
+    def test_android_patrol_acquires_consumer_lease_for_reversed_ports(
+        self,
+        acquire_consumer_lease: mock.Mock,
+    ) -> None:
+        args = self._args()
+        command_env: dict[str, str] = {}
+
+        lease = smoke._acquire_android_patrol_consumer_lease(
+            args,
+            {
+                "id": "emulator-5554",
+                "targetPlatform": "android-arm64",
+                "emulator": True,
+            },
+            {
+                "status": "installed",
+                "mappings": [
+                    {"devicePort": 19000, "hostPort": 19000},
+                    {"devicePort": 19100, "hostPort": 19100},
+                ],
+            },
+            command_env,
+        )
+
+        self.assertEqual(lease[0:2], ("gamma-local", "emulator-5554"))
+        self.assertEqual(command_env["QWQ_CONSUMER_LEASE_ACQUIRED"], "1")
+        self.assertEqual(command_env["QWQ_ANDROID_LOCAL_PORTS"], "19000,19100")
+        acquire_consumer_lease.assert_called_once_with(
+            target="gamma-local",
+            device="emulator-5554",
+            consumer=lease[2],
+            package_name="com.quwoquan.quwoquan_app",
+            ports=[19000, 19100],
         )
 
     def test_flutter_proxy_returns_only_validated_android_inventory(self) -> None:
@@ -1091,8 +1163,8 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
 
     def test_remote_session_missing_actor_is_gate_blocked(self) -> None:
         args = self._args(
-            env_name="beta-local",
-            runtime_env="beta",
+            env_name="prod-hosted",
+            runtime_env="prod",
             test_auth_token="remote-access",
             test_refresh_token="remote-refresh",
             current_owner_id="",
@@ -1162,13 +1234,11 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 mock.patch.object(smoke, "parse_args", return_value=args),
                 mock.patch.object(smoke, "dry_run_devices", return_value=[device]),
                 mock.patch.object(smoke, "ensure_patrol_ios_products_bridge") as bridge,
-                mock.patch.object(smoke, "_install_simulator_trust_roots") as install_ca,
                 mock.patch.object(smoke, "capture_device_screenshot") as screenshot,
             ):
                 self.assertEqual(smoke.main(), 0)
 
             bridge.assert_not_called()
-            install_ca.assert_not_called()
             screenshot.assert_not_called()
             report = json.loads((root / "report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["status"], "passed")
@@ -1193,23 +1263,24 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "env/gamma/runs/data-release/release/apply/homepage_verification_cases.json",
         )
 
-    def test_device_command_env_injects_android_ca_for_local_target(self) -> None:
+    def test_device_command_env_configures_android_toolchain_without_private_ca(
+        self,
+    ) -> None:
         args = self._args()
-        device = {"targetPlatform": "android-arm64", "emulator": True}
-        fake_cert = Path("/tmp/local-root.crt")
+        device = {
+            "id": "emulator-5554",
+            "targetPlatform": "android-arm64",
+            "emulator": True,
+        }
 
-        with (
-            mock.patch.object(smoke, "_local_debug_ca_path", return_value=fake_cert),
-            mock.patch.object(
-                smoke,
-                "resolve_android_debug_bridge",
-                return_value="/sdk/platform-tools/adb",
-            ),
+        with mock.patch.object(
+            smoke,
+            "resolve_android_debug_bridge",
+            return_value="/sdk/platform-tools/adb",
         ):
             env = smoke._device_command_env(args, device)
 
-        self.assertEqual(env[smoke.ANDROID_LOCAL_DEBUG_CA_ENV], str(fake_cert))
-        self.assertEqual(env[smoke.ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV], "1")
+        self.assertEqual(env["ANDROID_SERIAL"], "emulator-5554")
         self.assertEqual(
             env["PATH"].split(os.pathsep)[0],
             "/sdk/platform-tools",
@@ -1223,10 +1294,8 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "emulator": True,
         }
 
-        with mock.patch.object(smoke, "_local_debug_ca_path", return_value=Path("/tmp/local-root.crt")):
-            env = smoke._device_command_env(args, device)
+        env = smoke._device_command_env(args, device)
 
-        self.assertEqual(env.get(smoke.ANDROID_LOCAL_DEBUG_CA_ENV, ""), os.environ.get(smoke.ANDROID_LOCAL_DEBUG_CA_ENV, ""))
         self.assertEqual(env["QWQ_IOS_SIMULATOR_UDID"], "selected-ios-simulator")
 
     def test_device_command_env_blocks_local_ios_simulator_without_id(self) -> None:
@@ -1310,38 +1379,35 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             all(command[3] == "reverse" for command in calls),
         )
 
-    def test_simulator_trust_install_targets_selected_device_not_booted_alias(
+    def test_patrol_tls_evidence_uses_system_public_ca_without_trust_install(
         self,
     ) -> None:
-        with mock.patch.object(
-            smoke,
-            "install_ios_simulator_root_ca",
-            return_value={
-                "status": "installed",
-                "target": "gamma-local",
-                "deviceId": "selected-simulator",
-                "certPath": "/tmp/root.crt",
-                "certPaths": ["/tmp/root.crt", "/tmp/object-storage-ca.crt"],
-            },
-        ) as install:
-            result = smoke._install_simulator_trust_roots(
-                "local-gamma",
-                "selected-simulator",
-            )
+        self.assertEqual(
+            smoke._local_tls_trust_evidence(dry_run=False),
+            {"status": "system-public-ca", "reason": "dns-01"},
+        )
+        self.assertEqual(
+            smoke._local_tls_trust_evidence(dry_run=True),
+            {"status": "skipped", "reason": "not-required"},
+        )
 
-        self.assertEqual(result["status"], "installed")
-        self.assertEqual(len(result["certPaths"]), 2)
-        install.assert_called_once_with("gamma-local", "selected-simulator")
-
-    def test_alpha_stack_has_no_best_effort_booted_simulator_install(self) -> None:
-        script = (
-            ROOT / "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh"
+    def test_alpha_uses_stackctl_content_release_entrypoint(self) -> None:
+        retired = ROOT / "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh"
+        stackctl_source = (
+            ROOT / "quwoquan_ops/cli/stackctl.py"
         ).read_text(encoding="utf-8")
 
-        self.assertNotIn("simctl keychain booted add-root-cert", script)
-        self.assertIn("--simulator-udid \"$simulator_udid\"", script)
+        self.assertFalse(retired.exists())
+        self.assertIn(
+            "quwoquan_ops/cli/alpha/start_alpha_content_release_stack.sh",
+            stackctl_source,
+        )
+        self.assertIn(
+            "alpha-local only provides the real content-release workload",
+            stackctl_source,
+        )
 
-    def test_local_app_launchers_delegate_ios_trust_to_shared_fail_closed_helper(self) -> None:
+    def test_local_launchers_and_tls_stacks_use_public_ca_helper(self) -> None:
         app_instance = (
             ROOT / "quwoquan_app/scripts/device/start_app_instance.sh"
         ).read_text(encoding="utf-8")
@@ -1351,14 +1417,20 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         dev_up = (
             ROOT / "quwoquan_ops/cli/lib/dev_up.py"
         ).read_text(encoding="utf-8")
+        public_tls = (
+            ROOT / "quwoquan_ops/cli/lib/public_domain_tls.py"
+        ).read_text(encoding="utf-8")
 
-        self.assertIn("install-ios-simulator-ca", app_instance)
-        self.assertIn("QWQ_IOS_SIMULATOR_UDID", app_instance)
-        self.assertNotIn("add-root-cert || true", app_instance)
-        self.assertIn("is-ios-simulator", beta_manual)
-        self.assertIn("QWQ_IOS_SIMULATOR_UDID", beta_manual)
+        self.assertIn("public_domain_tls.py\" verify", app_instance)
+        self.assertIn("--target \"$TARGET_NAME\"", app_instance)
+        self.assertIn("public_domain_tls.py\" paths", beta_manual)
+        self.assertIn("--target beta-local", beta_manual)
+        self.assertIn("fullchain.pem", public_tls)
+        self.assertIn("privkey.pem", public_tls)
         self.assertIn('command_env["QWQ_IOS_SIMULATOR_UDID"] = device_id', dev_up)
-        self.assertNotIn("install_ios_simulator_root_ca(target_name, device_id)", dev_up)
+        self.assertFalse(
+            (ROOT / "quwoquan_ops/cli/lib/local_target_tls.py").exists(),
+        )
 
     def test_beta_starts_backing_services_before_assistant(self) -> None:
         beta_manual = (
@@ -1426,9 +1498,9 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             '--event "chat-seed"',
             'CIRCLE_SERVICE_BASE_URL="$INTERNAL_GATEWAY_BASE_URL"',
             'CONTENT_SERVICE_BASE_URL="$INTERNAL_GATEWAY_BASE_URL"',
-            'https://localhost:${GATEWAY_PORT}',
-            'https://localhost:${PRODUCT_OPS_PORT}',
-            'https://localhost:${MEDIA_PORT}',
+            'https://${PUBLIC_API_HOST}:${GATEWAY_PORT}',
+            'https://${PUBLIC_PRODUCT_OPS_HOST}:${PRODUCT_OPS_PORT}',
+            'https://${PUBLIC_IMAGE_HOST}:${MEDIA_PORT}',
             '-p "${GATEWAY_PORT}:${GATEWAY_PORT}"',
             '-p "${PRODUCT_OPS_PORT}:${PRODUCT_OPS_PORT}"',
             '-p "${MEDIA_PORT}:${MEDIA_PORT}"',
@@ -1568,22 +1640,24 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertNotIn("elasticsearch:", content_dependencies)
         self.assertIn("elasticsearch:\n        condition: service_healthy", gamma_content_overlay)
 
-    def test_prod_sim_tls_exposes_exact_localhost_per_public_plane(self) -> None:
+    def test_prod_sim_tls_uses_canonical_hosts_and_public_certificate(self) -> None:
         prod_sim = (
             ROOT / "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh"
         ).read_text(encoding="utf-8")
 
         for token in (
-            'https://localhost:${API_EDGE_PORT}',
-            'https://localhost:${PRODUCT_OPS_PORT}',
-            'https://localhost:${MEDIA_EDGE_PORT}',
+            'public_domain_tls.py" paths',
+            'https://${PUBLIC_API_HOST}:${API_EDGE_PORT}',
+            'https://${PUBLIC_PRODUCT_OPS_HOST}:${PRODUCT_OPS_PORT}',
+            'https://${PUBLIC_MEDIA_HOSTS[0]}:${MEDIA_EDGE_PORT}',
+            "$QWQ_PUBLIC_TLS_CERT_FILE:/etc/caddy/tls/fullchain.pem:ro",
             '-p "${API_EDGE_PORT}:${API_EDGE_PORT}"',
             '-p "${PRODUCT_OPS_PORT}:${PRODUCT_OPS_PORT}"',
             '-p "${MEDIA_EDGE_PORT}:${MEDIA_EDGE_PORT}"',
         ):
             self.assertIn(token, prod_sim)
 
-    def test_local_gamma_tls_exposes_exact_localhost_per_public_plane(self) -> None:
+    def test_local_gamma_tls_uses_canonical_hosts_and_public_certificate(self) -> None:
         caddyfile = (
             ROOT / "quwoquan_ops/environments/gamma/local/Caddyfile"
         ).read_text(encoding="utf-8")
@@ -1598,9 +1672,10 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         for token in (
-            "https://localhost:{$LOCAL_GAMMA_HTTP_PORT:",
-            "https://localhost:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:",
-            "https://localhost:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:",
+            "https://{$QWQ_PUBLIC_API_HOST}:{$LOCAL_GAMMA_HTTP_PORT:",
+            "https://{$QWQ_PUBLIC_OPS_HOST}:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:",
+            "https://{$QWQ_PUBLIC_CDN_HOST}:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:",
+            "tls {$QWQ_PUBLIC_TLS_CERT_FILE} {$QWQ_PUBLIC_TLS_KEY_FILE}",
         ):
             self.assertIn(token, caddyfile)
         self.assertNotIn("LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT", caddyfile)
@@ -1621,6 +1696,8 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         gamma_start = (
             ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
         ).read_text(encoding="utf-8")
+        self.assertIn('public_domain_tls.py" paths', gamma_start)
+        self.assertIn("--target gamma-local", gamma_start)
         self.assertIn(
             'CONTENT_EMBEDDING_ENDPOINT: "${QWQ_COMPOSE_EMBEDDING_ENDPOINT:-}"',
             compose,
@@ -1938,13 +2015,13 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         target = {
             "env": "gamma",
             "publicBases": {
-                "api": "https://gamma-api.quwoquan-env.test:19000",
-                "productOps": "https://gamma-product-ops.quwoquan-env.test:19010",
-                "rtc": "wss://gamma-rtc.quwoquan-env.test:19000",
-                "mediaAvatar": "https://gamma-avatar.quwoquan-env.test:19100",
-                "mediaImage": "https://gamma-image.quwoquan-env.test:19100",
-                "mediaVideo": "https://gamma-video.quwoquan-env.test:19100",
-                "mediaUpload": "https://gamma-upload.quwoquan-env.test:19130",
+                "api": "https://api.gamma.quwoquan.com:19000",
+                "productOps": "https://ops.gamma.quwoquan.com:19010",
+                "rtc": "wss://rtc.gamma.quwoquan.com:19000",
+                "mediaAvatar": "https://cdn.gamma.quwoquan.com:19100",
+                "mediaImage": "https://cdn.gamma.quwoquan.com:19100",
+                "mediaVideo": "https://cdn.gamma.quwoquan.com:19100",
+                "mediaUpload": "https://upload.gamma.quwoquan.com:19130",
             },
             "playbackCanary": {
                 "workIdEnv": "GAMMA_CANARY_WORK_ID",
@@ -1956,7 +2033,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             mock.patch.object(
                 stackctl,
                 "get_environment",
-                return_value={"artifactPolicy": {"app": {"dataSource": "remote"}}},
+                return_value={},
             ),
             mock.patch.object(stackctl, "_resolve_test_auth_token", return_value=""),
             mock.patch.dict(
@@ -1980,19 +2057,19 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         argv = command["argv"]
         self.assertNotIn("--test-auth-token", argv)
         self.assertNotIn("local-gamma-local-token", "\n".join(argv))
-        self.assertEqual(argv[argv.index("--data-source") + 1], "remote")
+        self.assertNotIn("--data-source", argv)
         self.assertEqual(argv[argv.index("--env-name") + 1], "local-gamma")
         self.assertEqual(
             argv[argv.index("--media-upload-base-url") + 1],
-            "https://gamma-upload.quwoquan-env.test:19130",
+            "https://upload.gamma.quwoquan.com:19130",
         )
         self.assertEqual(
             argv[argv.index("--media-image-base-url") + 1],
-            "https://gamma-image.quwoquan-env.test:19100",
+            "https://cdn.gamma.quwoquan.com:19100",
         )
         self.assertEqual(
             argv[argv.index("--rtc-media-connection-url") + 1],
-            "wss://gamma-rtc.quwoquan-env.test:19000",
+            "wss://rtc.gamma.quwoquan.com:19000",
         )
         self.assertEqual(
             argv[argv.index("--video-playback-canary-work-id") + 1],
@@ -2041,13 +2118,13 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         target = {
             "env": "gamma",
             "publicBases": {
-                "api": "https://gamma-api.quwoquan-env.test:19000",
-                "productOps": "https://gamma-product-ops.quwoquan-env.test:19010",
-                "rtc": "wss://gamma-rtc.quwoquan-env.test:19000",
-                "mediaAvatar": "https://gamma-avatar.quwoquan-env.test:19100",
-                "mediaImage": "https://gamma-image.quwoquan-env.test:19100",
-                "mediaVideo": "https://gamma-video.quwoquan-env.test:19100",
-                "mediaUpload": "https://gamma-upload.quwoquan-env.test:19130",
+                "api": "https://api.gamma.quwoquan.com:19000",
+                "productOps": "https://ops.gamma.quwoquan.com:19010",
+                "rtc": "wss://rtc.gamma.quwoquan.com:19000",
+                "mediaAvatar": "https://cdn.gamma.quwoquan.com:19100",
+                "mediaImage": "https://cdn.gamma.quwoquan.com:19100",
+                "mediaVideo": "https://cdn.gamma.quwoquan.com:19100",
+                "mediaUpload": "https://upload.gamma.quwoquan.com:19130",
             },
         }
         with (
@@ -2056,7 +2133,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             mock.patch.object(
                 stackctl,
                 "get_environment",
-                return_value={"artifactPolicy": {"app": {"dataSource": "remote"}}},
+                return_value={},
             ),
         ):
             command = stackctl._content_release_uat_command(
@@ -2159,13 +2236,13 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         target = {
             "env": "beta",
             "publicBases": {
-                "api": "https://beta-api.quwoquan-env.test:18000",
-                "productOps": "https://beta-product-ops.quwoquan-env.test:18010",
-                "rtc": "wss://beta-rtc.quwoquan-env.test:18000",
-                "mediaAvatar": "https://beta-avatar.quwoquan-env.test:18100",
-                "mediaImage": "https://beta-image.quwoquan-env.test:18100",
-                "mediaVideo": "https://beta-video.quwoquan-env.test:18100",
-                "mediaUpload": "https://beta-upload.quwoquan-env.test:18100",
+                "api": "https://api.beta.quwoquan.com:18000",
+                "productOps": "https://ops.beta.quwoquan.com:18010",
+                "rtc": "wss://rtc.beta.quwoquan.com:18000",
+                "mediaAvatar": "https://cdn.beta.quwoquan.com:18100",
+                "mediaImage": "https://cdn.beta.quwoquan.com:18100",
+                "mediaVideo": "https://cdn.beta.quwoquan.com:18100",
+                "mediaUpload": "https://upload.beta.quwoquan.com:18100",
             },
         }
         with (
@@ -2174,7 +2251,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             mock.patch.object(
                 stackctl,
                 "get_environment",
-                return_value={"artifactPolicy": {"app": {"dataSource": "remote"}}},
+                return_value={},
             ),
             mock.patch.object(stackctl, "_resolve_test_auth_token", return_value="secret-access"),
             mock.patch.dict(

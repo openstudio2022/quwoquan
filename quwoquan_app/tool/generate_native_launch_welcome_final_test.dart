@@ -43,38 +43,19 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      MediaQuery(
-        data: const MediaQueryData(
-          size: logicalSize,
-          // 不烘焙假 SafeArea：与 Flutter WelcomeStaticFrame 分数对齐同构。
-          padding: EdgeInsets.zero,
-          devicePixelRatio: 1,
-        ),
-        child: CupertinoApp(
-          theme: const CupertinoThemeData(
-            textTheme: CupertinoTextThemeData(
-              textStyle: TextStyle(
-                fontFamily: AppTypography.welcomeBrandFontFamily,
-                decoration: TextDecoration.none,
-              ),
-            ),
-          ),
-          home: RepaintBoundary(
-            key: boundaryKey,
-            child: _WelcomeFinalFrameExport(
-              backgroundKey: backgroundBoundaryKey,
-              brandKey: brandBoundaryKey,
-              footerKey: footerBoundaryKey,
-            ),
-          ),
-        ),
+      _buildWelcomeFinalFrameExport(
+        logicalSize: logicalSize,
+        boundaryKey: boundaryKey,
+        backgroundBoundaryKey: backgroundBoundaryKey,
+        brandBoundaryKey: brandBoundaryKey,
+        footerBoundaryKey: footerBoundaryKey,
       ),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
 
-    expect(find.text(UITextConstants.welcomeMainSlogan), findsOneWidget);
-    expect(find.text(UITextConstants.welcomeTitle), findsOneWidget);
+    expect(find.text(FoundationText.welcomeMainSlogan), findsOneWidget);
+    expect(find.text(FoundationText.welcomeTitle), findsOneWidget);
     expect(find.byType(WelcomeBrandCluster), findsOneWidget);
     expect(find.byType(WelcomeBrandFooter), findsOneWidget);
 
@@ -207,7 +188,109 @@ void main() {
         height: 96,
       );
     });
+
+    // Android 的 layer-list 不能像 Flutter 一样用布局约束重新计算品牌簇。
+    // 因此为常见手机宽度导出同一 WelcomeStaticFrame 的限定符资源；未知宽度
+    // 由 Android 的资源选择回退到最接近的同源档，而不是拉伸 393dp 栅格。
+    for (final bucket in _androidResponsiveBuckets) {
+      await tester.binding.setSurfaceSize(bucket.logicalSize);
+      await tester.pumpWidget(
+        _buildWelcomeFinalFrameExport(
+          logicalSize: bucket.logicalSize,
+          boundaryKey: boundaryKey,
+          backgroundBoundaryKey: backgroundBoundaryKey,
+          brandBoundaryKey: brandBoundaryKey,
+          footerBoundaryKey: footerBoundaryKey,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      await tester.runAsync(() async {
+        final scratch = await Directory.systemTemp.createTemp(
+          'qwq-native-launch-${bucket.width}dp-',
+        );
+        try {
+          final clusterMaster = scratch.path + '/cluster.png';
+          final footerMaster = scratch.path + '/footer.png';
+          await _writeBoundary(
+            brandBoundaryKey.currentContext!.findRenderObject()!
+                as RenderRepaintBoundary,
+            clusterMaster,
+          );
+          await _writeBoundary(
+            footerBoundaryKey.currentContext!.findRenderObject()!
+                as RenderRepaintBoundary,
+            footerMaster,
+          );
+          await _writeAndroidResponsiveBucketResources(
+            bucket: bucket,
+            clusterMaster: clusterMaster,
+            footerMaster: footerMaster,
+          );
+        } finally {
+          await scratch.delete(recursive: true);
+        }
+      });
+    }
   });
+}
+
+class _AndroidResponsiveBucket {
+  const _AndroidResponsiveBucket({
+    required this.width,
+    required this.height,
+  });
+
+  final int width;
+  final int height;
+
+  Size get logicalSize => Size(width.toDouble(), height.toDouble());
+
+  int get footerHeight => WelcomeBrandFooter.resolveStripHeight(
+    viewportHeight: height.toDouble(),
+    bottomInset: 0,
+  ).round();
+}
+
+const _androidResponsiveBuckets = <_AndroidResponsiveBucket>[
+  _AndroidResponsiveBucket(width: 360, height: 800),
+  _AndroidResponsiveBucket(width: 393, height: 852),
+  _AndroidResponsiveBucket(width: 430, height: 932),
+];
+
+Widget _buildWelcomeFinalFrameExport({
+  required Size logicalSize,
+  required GlobalKey boundaryKey,
+  required GlobalKey backgroundBoundaryKey,
+  required GlobalKey brandBoundaryKey,
+  required GlobalKey footerBoundaryKey,
+}) {
+  return MediaQuery(
+    data: MediaQueryData(
+      size: logicalSize,
+      // 不烘焙假 SafeArea：与 Flutter WelcomeStaticFrame 分数对齐同构。
+      padding: EdgeInsets.zero,
+      devicePixelRatio: 1,
+    ),
+    child: CupertinoApp(
+      theme: const CupertinoThemeData(
+        textTheme: CupertinoTextThemeData(
+          textStyle: TextStyle(
+            fontFamily: AppTypography.welcomeBrandFontFamily,
+            decoration: TextDecoration.none,
+          ),
+        ),
+      ),
+      home: RepaintBoundary(
+        key: boundaryKey,
+        child: _WelcomeFinalFrameExport(
+          backgroundKey: backgroundBoundaryKey,
+          brandKey: brandBoundaryKey,
+          footerKey: footerBoundaryKey,
+        ),
+      ),
+    ),
+  );
 }
 
 class _WelcomeFinalFrameExport extends StatelessWidget {
@@ -310,6 +393,80 @@ Future<void> _writeAndroidLaunchResources() async {
     'android/app/src/main/res/values/colors.xml',
   ).writeAsString(colors, flush: true);
 }
+
+Future<void> _writeAndroidResponsiveBucketResources({
+  required _AndroidResponsiveBucket bucket,
+  required String clusterMaster,
+  required String footerMaster,
+}) async {
+  final resourceQualifier = 'sw${bucket.width}dp';
+  final clusterHeight = 500;
+  final launchBackground = _androidLaunchBackgroundXml(
+    width: bucket.width,
+    clusterHeight: clusterHeight,
+    footerHeight: bucket.footerHeight,
+  );
+  for (final directory in <String>[
+    'drawable-$resourceQualifier',
+    'drawable-$resourceQualifier-v21',
+    'drawable-$resourceQualifier-night',
+    'drawable-$resourceQualifier-night-v21',
+  ]) {
+    await File('android/app/src/main/res/$directory/launch_background.xml')
+        .create(recursive: true)
+        .then((file) => file.writeAsString(launchBackground, flush: true));
+  }
+  final imageDirectory =
+      'android/app/src/main/res/drawable-$resourceQualifier-nodpi';
+  await _centerCrop(
+    clusterMaster,
+    '$imageDirectory/launch_brand_cluster.png',
+    width: bucket.width * 3,
+    height: clusterHeight * 3,
+  );
+  await _resize(
+    footerMaster,
+    '$imageDirectory/launch_brand_footer.png',
+    width: bucket.width * 3,
+    height: bucket.footerHeight * 3,
+  );
+}
+
+String _androidLaunchBackgroundXml({
+  required int width,
+  required int clusterHeight,
+  required int footerHeight,
+}) =>
+    '''<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated by generate_native_launch_welcome_final_test.dart. DO NOT EDIT. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:centerColor="${_hexRgb(AppColors.welcomeBackground)}"
+                android:endColor="${_hexRgb(AppColors.welcomeGradientEnd)}"
+                android:startColor="${_hexRgb(AppColors.welcomeGradientStart)}" />
+        </shape>
+    </item>
+    <item
+        android:width="${width}dp"
+        android:height="${clusterHeight}dp"
+        android:gravity="center">
+        <bitmap
+            android:gravity="fill"
+            android:src="@drawable/launch_brand_cluster" />
+    </item>
+    <item
+        android:width="${width}dp"
+        android:height="${footerHeight}dp"
+        android:gravity="bottom|center_horizontal">
+        <bitmap
+            android:gravity="fill"
+            android:src="@drawable/launch_brand_footer" />
+    </item>
+</layer-list>
+''';
 
 String _hexRgb(ui.Color color) {
   final value = color.toARGB32() & 0x00FFFFFF;

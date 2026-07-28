@@ -33,7 +33,7 @@ class ObjectImpactPreviewCard extends ConsumerWidget {
     required this.target,
     required this.referralSource,
     required this.title,
-    this.enumerableHint = UITextConstants.impactEnumerableHintEntity,
+    this.enumerableHint = ObjectHomepageText.impactEnumerableHintEntity,
     this.maxItems = 3,
     this.topDivider = true,
     this.cardKey,
@@ -78,7 +78,7 @@ class ObjectImpactPreviewCard extends ConsumerWidget {
       title: item.primaryText.trim(),
       message: message,
       sections: const <AppActionSheetSection<void>>[],
-      cancelLabel: UITextConstants.confirm,
+      cancelLabel: FoundationText.confirm,
     );
   }
 

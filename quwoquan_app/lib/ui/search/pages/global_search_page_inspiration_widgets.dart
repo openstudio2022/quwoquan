@@ -17,10 +17,10 @@ class _SearchHomeTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final tabs = <_SearchHomeTab, String>{
-      _SearchHomeTab.guess: UITextConstants.searchHomeGuessTitle,
-      _SearchHomeTab.circles: UITextConstants.searchHomeDiscoverCirclesTitle,
+      _SearchHomeTab.guess: SearchText.searchHomeGuessTitle,
+      _SearchHomeTab.circles: SearchText.searchHomeDiscoverCirclesTitle,
       _SearchHomeTab.locations:
-          UITextConstants.searchHomeDiscoverLocationsTitle,
+          SearchText.searchHomeDiscoverLocationsTitle,
     };
     return Row(
       children: [
@@ -124,7 +124,7 @@ class _GuessKeywordSection extends StatelessWidget {
       children: [
         if (showHeader) ...[
           const _SearchSectionHeader(
-            title: UITextConstants.searchHomeGuessTitle,
+            title: SearchText.searchHomeGuessTitle,
           ),
           SizedBox(height: _SearchTokens.headerContentGap),
         ],
@@ -252,8 +252,8 @@ class _DiscoverEntityListTile extends StatelessWidget {
         ? AppSpacing.avatarUserMd
         : AppSpacing.avatarUserLg;
     final categoryLabel = imageStyle == _DiscoverEntityImageStyle.avatar
-        ? UITextConstants.searchCategoryCircle
-        : UITextConstants.searchCategoryLocation;
+        ? SearchText.searchCategoryCircle
+        : SearchText.searchCategoryLocation;
     return CupertinoButton(
       padding: EdgeInsets.zero,
       minimumSize: const Size(

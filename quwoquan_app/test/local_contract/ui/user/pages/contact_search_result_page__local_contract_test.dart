@@ -32,7 +32,7 @@ void main() {
     );
 
     expect(find.text('Alice'), findsOneWidget);
-    expect(find.text(UITextConstants.addContact), findsOneWidget);
+    expect(find.text(ContactText.addContact), findsOneWidget);
   });
 
   testWidgets('联系人搜索失败展示结构化页面错误而非空结果', (tester) async {
@@ -41,8 +41,8 @@ void main() {
       ContactProfileQueryFake(searchError: StateError('search unavailable')),
     );
 
-    expect(find.text(UITextConstants.pageLoadFailedTitle), findsOneWidget);
-    expect(find.text(UITextConstants.addContactSearchNoResult), findsNothing);
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+    expect(find.text(ContactText.addContactSearchNoResult), findsNothing);
   });
 }
 

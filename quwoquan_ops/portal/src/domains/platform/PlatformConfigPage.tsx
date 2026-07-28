@@ -147,12 +147,12 @@ export function PlatformConfigPage() {
           description="比较发布包 desired hash 与实例 ACK effective hash。"
         />
         <KpiCard
-          label="有效配置快照"
-          value="1"
+          label="已加载快照文件"
+          value={selectedService && snapshot ? String(snapshot.files.length) : '—'}
           icon={<span className="badge badge--neutral">retention</span>}
-          trendLabel="每个 service package 唯一"
+          trendLabel={selectedService ? `target=${selectedService}` : '选择目标后读取'}
           trendTone="positive"
-          description="config version 由 package 内 config.yaml 的 sha256 派生。"
+          description="直接读取该目标的 release-package 文件清单；未选择目标时不合成数值。"
         />
       </div>
 
@@ -295,6 +295,7 @@ export function PlatformConfigPage() {
                 <th>服务</th>
                 <th>状态</th>
                 <th>source</th>
+                <th>候选摘要</th>
                 <th>错误</th>
               </tr>
             </thead>
@@ -305,6 +306,7 @@ export function PlatformConfigPage() {
                   <td>{item.service}</td>
                   <td>{item.inSync ? 'in-sync' : 'drift'}</td>
                   <td>{item.source ?? 'n/a'}</td>
+                  <td>{item.releaseManifestDigest?.slice(0, 16) ?? 'n/a'}</td>
                   <td>{item.lastError ?? 'n/a'}</td>
                 </tr>
               ))}

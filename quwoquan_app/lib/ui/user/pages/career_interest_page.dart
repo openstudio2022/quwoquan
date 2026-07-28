@@ -263,22 +263,22 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
       context: context,
       builder: (dialogContext) {
         return CupertinoAlertDialog(
-          title: const Text(UITextConstants.careerInterestUnsavedTitle),
-          content: const Text(UITextConstants.careerInterestUnsavedMessage),
+          title: const Text(ProfileText.careerInterestUnsavedTitle),
+          content: const Text(ProfileText.careerInterestUnsavedMessage),
           actions: <Widget>[
             CupertinoDialogAction(
               isDefaultAction: true,
               onPressed: () => Navigator.of(dialogContext).pop('save'),
-              child: const Text(UITextConstants.editProfileSaveAction),
+              child: const Text(ProfileText.editProfileSaveAction),
             ),
             CupertinoDialogAction(
               onPressed: () => Navigator.of(dialogContext).pop('keep'),
-              child: const Text(UITextConstants.careerInterestKeepEditing),
+              child: const Text(ProfileText.careerInterestKeepEditing),
             ),
             CupertinoDialogAction(
               isDestructiveAction: true,
               onPressed: () => Navigator.of(dialogContext).pop('discard'),
-              child: const Text(UITextConstants.careerInterestDiscard),
+              child: const Text(ProfileText.careerInterestDiscard),
             ),
           ],
         );
@@ -299,7 +299,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
       return;
     }
     if (!_isDirty) {
-      AppToast.show(context, UITextConstants.careerInterestSaved);
+      AppToast.show(context, ProfileText.careerInterestSaved);
       return;
     }
     setState(() => _saving = true);
@@ -318,7 +318,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
         // 结构化校验失败：走 TAG.USER.invalid_tag_ref 语义（对齐对象级 errors.yaml），
         // 不抛裸 StateError（军规 R18）。
         throw CloudErrorMapper.invalidResponse(
-          message: UITextConstants.careerInterestInvalidTagToast,
+          message: ProfileText.careerInterestInvalidTagToast,
           requestPath: 'career-interest/validate',
           functionModule: 'career_interest_page',
         );
@@ -335,7 +335,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
       if (!mounted) {
         return;
       }
-      AppToast.show(context, UITextConstants.careerInterestSaved);
+      AppToast.show(context, ProfileText.careerInterestSaved);
       setState(() {
         _initialOccupationRef = _occupationTagRef;
         _initialInterestRefs = List<String>.from(_interestTagRefs);
@@ -397,7 +397,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
     }
     if (_interestTagRefs.length >=
         UserProfileUIConfig.careerInterestCatalog.maxInterestCount) {
-      AppToast.show(context, UITextConstants.careerInterestMaxToast);
+      AppToast.show(context, ProfileText.careerInterestMaxToast);
       return;
     }
     setState(() {
@@ -457,7 +457,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
             onPressed: () => unawaited(_handleBack()),
           ),
           middle: Text(
-            UITextConstants.careerInterestTitle,
+            ProfileText.careerInterestTitle,
             style: TextStyle(
               color: AppColors.iosLabel(context),
               fontSize: AppTypography.iosNavTitle,
@@ -474,8 +474,8 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
             onPressed: _saving ? null : () => unawaited(_save()),
             child: Text(
               _saving
-                  ? UITextConstants.careerInterestSaving
-                  : UITextConstants.editProfileSaveAction,
+                  ? ProfileText.careerInterestSaving
+                  : ProfileText.editProfileSaveAction,
               style: TextStyle(
                 color: _saving
                     ? AppColors.iosTertiaryLabel(context)
@@ -493,7 +493,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
 
   Widget _buildBody(BuildContext context) {
     if (_loading) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     if (_loadError != null) {
       return AppPageErrorState(
@@ -532,7 +532,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
             sliver: SliverList.list(
               children: <Widget>[
                 _SectionTitle(
-                  title: UITextConstants.careerInterestOccupationSection,
+                  title: ProfileText.careerInterestOccupationSection,
                 ),
                 const SizedBox(height: AppSpacing.containerSm),
                 _OccupationRow(
@@ -541,13 +541,11 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
                   onTap: _pickOccupation,
                 ),
                 const SizedBox(height: AppSpacing.containerXl),
-                _SectionTitle(
-                  title: UITextConstants.careerInterestMyTagsSection,
-                ),
+                _SectionTitle(title: ProfileText.careerInterestMyTagsSection),
                 const SizedBox(height: AppSpacing.containerSm),
                 _buildMyTags(context),
                 const SizedBox(height: AppSpacing.containerXl),
-                _SectionTitle(title: UITextConstants.careerInterestAllSection),
+                _SectionTitle(title: ProfileText.careerInterestAllSection),
                 const SizedBox(height: AppSpacing.containerMd),
                 _buildCategoryTabs(context),
                 const SizedBox(height: AppSpacing.containerLg),
@@ -570,7 +568,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
             vertical: AppSpacing.containerXs,
           ),
           child: Text(
-            UITextConstants.careerInterestMyTagsEmptyHint,
+            ProfileText.careerInterestMyTagsEmptyHint,
             style: TextStyle(
               color: AppColors.iosTertiaryLabel(context),
               fontSize: AppTypography.iosSubheadline,
@@ -683,7 +681,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.containerXl),
         child: Center(
           child: Text(
-            UITextConstants.careerInterestEmptyCategory,
+            ProfileText.careerInterestEmptyCategory,
             style: TextStyle(
               color: AppColors.iosSecondaryLabel(context),
               fontSize: AppTypography.iosSubheadline,
@@ -721,7 +719,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
 
   String get _occupationDisplay {
     if (_occupationTagRef.trim().isEmpty) {
-      return UITextConstants.careerInterestSelectOccupation;
+      return ProfileText.careerInterestSelectOccupation;
     }
     final option = _tagByRef[_occupationTagRef];
     if (option == null) {

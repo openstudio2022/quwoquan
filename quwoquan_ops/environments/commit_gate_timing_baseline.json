@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "capturedAt": "2026-07-27",
+  "method": "structural_plus_observed_wall_times",
+  "notes": "优化前基线：跨域 pre-commit 走 make gate，Flutter local_contract concurrency=1 且双跑。数值来自多次会话实测墙钟与门禁结构推算，非单次干净机精确采样。",
+  "profiles": {
+    "app_only_pre_commit": {
+      "path": "gate_repo.sh --scope app",
+      "observedWallSeconds": {
+        "p50": 1800,
+        "p95": 2400,
+        "hardObserved": 2700
+      },
+      "phasesSeconds": {
+        "static_verifies": 240,
+        "flutter_local_contract_serial": 1500,
+        "pa_core": 180
+      }
+    },
+    "service_only_pre_commit": {
+      "path": "gate_repo.sh --scope service",
+      "observedWallSeconds": {
+        "p50": 420,
+        "p95": 720,
+        "hardObserved": 900
+      },
+      "phasesSeconds": {
+        "static_verifies": 180,
+        "service_make_gate_go_tests": 300
+      }
+    },
+    "cross_area_pre_commit": {
+      "path": "make gate → test-local-contract + gate_repo --scope all",
+      "observedWallSeconds": {
+        "p50": 2100,
+        "p95": 2700,
+        "hardObserved": 3600
+      },
+      "phasesSeconds": {
+        "makefile_static": 300,
+        "test_local_contract_flutter_first_pass": 1500,
+        "test_local_contract_go_pytest": 360,
+        "gate_repo_static_repeat": 240,
+        "gate_repo_flutter_second_pass": 1500,
+        "portal_or_data_optional": 180
+      },
+      "amplifiers": [
+        "flutter_local_contract_double_run",
+        "flutter_concurrency_forced_1",
+        "pre_commit_scope_all_on_cross_area"
+      ]
+    }
+  },
+  "targetAfterOptimization": {
+    "local_commit_gate": {
+      "p50Seconds": 480,
+      "p95Seconds": 600,
+      "hardFailSeconds": 900
+    },
+    "ci_delivery_gate_app_wall": {
+      "targetSeconds": 360,
+      "sharding": "4_parallel_shards_plus_serial"
+    }
+  }
+}

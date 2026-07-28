@@ -17,6 +17,12 @@ APP_DIR = Path(__file__).resolve().parents[2]
 ROOT = APP_DIR.parent
 ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
 PLATFORMS = ("android", "ios", "web")
+TARGETS = {
+    "alpha": "alpha-local",
+    "beta": "beta-local",
+    "gamma": "gamma-local",
+    "prod": "prod-hosted",
+}
 ARTIFACTS = {
     "android": APP_DIR / "build/app/outputs/flutter-apk/app-debug.apk",
     "ios": APP_DIR / "build/ios/iphonesimulator/Runner.app/Runner",
@@ -24,15 +30,15 @@ ARTIFACTS = {
 }
 
 
-def _defines(environment: str) -> dict[str, str]:
+def _handoff(environment: str) -> dict[str, Any]:
     result = subprocess.run(
         [
             "python3",
-            "scripts/env/print_app_env_dart_defines.py",
+            "scripts/device/build_launcher_handoff.py",
             "--env",
             environment,
-            "--format",
-            "json",
+            "--target",
+            TARGETS[environment],
             "--launch-mode",
             "matrix_build",
         ],
@@ -52,7 +58,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _build_command(platform: str, defines: dict[str, str]) -> list[str]:
+def _build_command(platform: str, handoff: dict[str, Any]) -> list[str]:
     command = ["flutter", "build"]
     if platform == "android":
         command.extend(["apk", "--debug"])
@@ -60,8 +66,10 @@ def _build_command(platform: str, defines: dict[str, str]) -> list[str]:
         command.extend(["ios", "--simulator", "--debug"])
     else:
         command.extend(["web", "--debug"])
+    command.extend(["--target", str(handoff["entrypoint"])])
     command.extend(
-        f"--dart-define={key}={value}" for key, value in defines.items()
+        f"--dart-define={key}={value}"
+        for key, value in dict(handoff["dartDefines"]).items()
     )
     return command
 
@@ -79,8 +87,6 @@ def main() -> int:
     args = parser.parse_args()
 
     platforms = tuple(dict.fromkeys(args.platform or PLATFORMS))
-    if "ios" in platforms and not args.ios_simulator_id:
-        raise ValueError("--ios-simulator-id is required for the iOS matrix")
 
     stamp = time.strftime("%Y%m%dT%H%M%S")
     output_root = (
@@ -93,12 +99,29 @@ def main() -> int:
     builds: list[dict[str, Any]] = []
 
     for environment in ENVIRONMENTS:
-        defines = _defines(environment)
+        handoff = _handoff(environment)
         for platform in platforms:
-            command = _build_command(platform, defines)
+            command = _build_command(platform, handoff)
             process_env = dict(os.environ)
             process_env["QWQ_APP_RUNTIME_ENV"] = environment
-            if platform == "ios":
+            process_env["QWQ_LAUNCH_TARGET"] = str(handoff["target"])
+            process_env["QWQ_APP_BUILD_CONTEXT"] = "package-only"
+            process_env["QWQ_DART_DEFINES_DIGEST"] = str(
+                handoff["dartDefinesDigest"]
+            )
+            process_env["QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST"] = str(
+                handoff["runtimeConfigDigest"]
+            )
+            process_env["QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST"] = str(
+                handoff["effectiveLaunchManifestDigest"]
+            )
+            process_env["QWQ_APP_RECOVERY_BASE_URL"] = str(
+                handoff["recoveryBaseUrl"]
+            )
+            process_env["QWQ_APP_PUBLIC_WEB_URL"] = str(
+                handoff["publicWebBaseUrl"]
+            )
+            if platform == "ios" and args.ios_simulator_id:
                 process_env["QWQ_IOS_SIMULATOR_UDID"] = args.ios_simulator_id
             started = time.monotonic()
             result = subprocess.run(
@@ -112,7 +135,12 @@ def main() -> int:
             builds.append(
                 {
                     "runtimeEnv": environment,
+                    "runtimeTarget": handoff["target"],
                     "platform": platform,
+                    "entrypoint": handoff["entrypoint"],
+                    "dartDefinesDigest": handoff["dartDefinesDigest"],
+                    "runtimeConfigDigest": handoff["runtimeConfigDigest"],
+                    "buildContext": "package-only",
                     "exitCode": result.returncode,
                     "elapsedMs": round((time.monotonic() - started) * 1000),
                     "artifact": str(artifact),

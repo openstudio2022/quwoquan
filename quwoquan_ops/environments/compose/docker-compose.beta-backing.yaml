@@ -68,11 +68,6 @@ services:
 
   object-storage:
     image: "${BETA_MINIO_IMAGE:-minio/minio:RELEASE.2025-04-22T22-12-26Z}"
-    networks:
-      default:
-        aliases:
-          - beta-upload.quwoquan-env.test
-          - beta-upload.localhost
     environment:
       MINIO_ROOT_USER: "${BETA_OBJECT_STORAGE_ACCESS_KEY_ID:?BETA_OBJECT_STORAGE_ACCESS_KEY_ID is required}"
       MINIO_ROOT_PASSWORD: "${BETA_OBJECT_STORAGE_ACCESS_KEY_SECRET:?BETA_OBJECT_STORAGE_ACCESS_KEY_SECRET is required}"
@@ -111,7 +106,7 @@ services:
         install -d -m 0700 /root/.mc/certs/CAs
         cp /etc/qwq-object-storage/ca.crt /root/.mc/certs/CAs/qwq-beta-object-storage.crt
         for attempt in $(seq 1 60); do
-          if mc alias set qwq "https://beta-upload.quwoquan-env.test:${BETA_OBJECT_STORAGE_EDGE_PORT}" "$BETA_OBJECT_STORAGE_ACCESS_KEY_ID" "$BETA_OBJECT_STORAGE_ACCESS_KEY_SECRET"; then
+          if mc alias set qwq "https://object-storage:9000" "$BETA_OBJECT_STORAGE_ACCESS_KEY_ID" "$BETA_OBJECT_STORAGE_ACCESS_KEY_SECRET"; then
             mc mb --ignore-existing "qwq/${BETA_OBJECT_STORAGE_BUCKET}"
             mc ilm rule import "qwq/${BETA_OBJECT_STORAGE_BUCKET}" < /etc/qwq-object-storage/lifecycle.json
             exit 0

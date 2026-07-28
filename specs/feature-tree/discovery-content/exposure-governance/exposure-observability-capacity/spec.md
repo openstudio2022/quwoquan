@@ -37,6 +37,8 @@
 ### REQ-002 告警阈值与 SLO objective 对齐；无 emitter 的告警必须标注 emitter 前置，不假装已修复
 
 - 告警阈值与 SLO objective 对齐；无 emitter 的告警必须标注 emitter 前置，不假装已修复。
+- feed 终态使用 `recommendation_feed_terminal_total{request_class,outcome,failure_stage}`；三项 label 均为闭集，禁止写入 user/content/request/source 自由值。
+- `request_class=initial_recommend` 的成功空结果必须为零；canonical failure 按 bounded `failure_stage` 告警。`following` 健康空与 `continuation` 自然结束只计 `outcome=empty`，不伪造为 failure。
 
 ## 4. 契约引用
 
@@ -52,6 +54,7 @@
 - WHEN 参与者执行“曝光可观测性容量”对应的公开行为。
 - THEN 通过父能力公开契约交付“曝光可观测性容量”的可观察结果。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
+- AND feed 终态 metric 能分辨 initial recommend、following、continuation、browse 以及 success/degraded/empty/failure，且不存在高基数 label。
 
 ## 6. 依赖
 

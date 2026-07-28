@@ -121,16 +121,10 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
       }
       setState(() {
         _loading = false;
-        _pageErrorSemantic = UiErrorSemantic(
+        _pageErrorSemantic = AppUserRecoveryContract.semanticFor(
+          group: AppUserRecoveryGroup.reloadLater,
           category: UiErrorCategory.pageLoad,
           scope: UiErrorScope.page,
-          title: UITextConstants.videoEditorPreviewUnavailableTitle,
-          message: UITextConstants.videoEditorPreviewUnavailableMessage,
-          primaryAction: const UiErrorAction(
-            type: UiErrorActionType.retry,
-            label: UITextConstants.tryAgain,
-          ),
-          dismissible: false,
         );
       });
     }
@@ -174,16 +168,10 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
       }
       setState(() {
         _framesLoading = false;
-        _sectionErrorSemantic = UiErrorSemantic(
+        _sectionErrorSemantic = AppUserRecoveryContract.semanticFor(
+          group: AppUserRecoveryGroup.reloadLater,
           category: UiErrorCategory.sectionLoad,
           scope: UiErrorScope.section,
-          title: UITextConstants.videoEditorFramesUnavailableTitle,
-          message: UITextConstants.contentLoadSoftFailed,
-          primaryAction: const UiErrorAction(
-            type: UiErrorActionType.retry,
-            label: UITextConstants.tryAgain,
-          ),
-          dismissible: true,
         );
       });
     }
@@ -375,12 +363,12 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
       final semantic = UiErrorSemantic(
         category: resolved.category,
         scope: resolved.scope,
-        title: UITextConstants.videoEditorExportFailedTitle,
+        title: MediaText.videoEditorExportFailedTitle,
         message: resolved.message,
         secondaryMessage: resolved.secondaryMessage,
         primaryAction: const UiErrorAction(
           type: UiErrorActionType.retry,
-          label: UITextConstants.tryAgain,
+          label: ContentText.tryAgain,
         ),
         secondaryAction: resolved.secondaryAction,
         dismissible: resolved.dismissible,
@@ -609,10 +597,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                     ),
                     if (_muted) ...<Widget>[
                       SizedBox(width: AppSpacing.intraGroupXs),
-                      _buildHeaderBadge(
-                        context,
-                        UITextConstants.videoEditorMuted,
-                      ),
+                      _buildHeaderBadge(context, MediaText.videoEditorMuted),
                     ],
                   ],
                 ),
@@ -625,7 +610,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                   alignment: Alignment.centerLeft,
                   child: _buildHeaderBadge(
                     context,
-                    '${UITextConstants.videoEditorCoverPrefix} ${_formatMs(_coverTimeMs.round())}',
+                    '${MediaText.videoEditorCoverPrefix} ${_formatMs(_coverTimeMs.round())}',
                   ),
                 ),
               ),
@@ -641,7 +626,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
       children: <Widget>[
         Expanded(
           child: _EditorToggleChip(
-            label: UITextConstants.videoEditorCoverTool,
+            label: MediaText.videoEditorCoverTool,
             icon: CupertinoIcons.photo,
             selected: false,
             onPressed: () => _handleCoverChanged(_coverTimeMs),
@@ -650,7 +635,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
         SizedBox(width: AppSpacing.intraGroupSm),
         Expanded(
           child: _EditorToggleChip(
-            label: UITextConstants.videoEditorCropTool,
+            label: MediaText.videoEditorCropTool,
             icon: CupertinoIcons.crop,
             selected: false,
             onPressed: () =>
@@ -660,7 +645,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
         SizedBox(width: AppSpacing.intraGroupSm),
         Expanded(
           child: _EditorToggleChip(
-            label: UITextConstants.videoEditorMuteTool,
+            label: MediaText.videoEditorMuteTool,
             icon: _muted
                 ? CupertinoIcons.speaker_slash_fill
                 : CupertinoIcons.speaker_slash,
@@ -671,7 +656,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
         SizedBox(width: AppSpacing.intraGroupSm),
         Expanded(
           child: _EditorToggleChip(
-            label: UITextConstants.videoEditorVolumeTool,
+            label: MediaText.videoEditorVolumeTool,
             icon: CupertinoIcons.speaker_2,
             selected: !_muted,
             onPressed: () => _toggleMuted(false),
@@ -683,13 +668,13 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
 
   Widget _buildPreviewTimelineSection() {
     return _EditorSection(
-      title: UITextConstants.videoEditorPreviewTimeline,
+      title: MediaText.videoEditorPreviewTimeline,
       trailing: _formatMs(_previewTimeMs.round()),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
-            UITextConstants.videoEditorPreviewTimelineHint,
+            MediaText.videoEditorPreviewTimelineHint,
             style: TextStyle(
               color: CupertinoColors.secondaryLabel.resolveFrom(context),
               fontSize: AppTypography.sm,
@@ -719,7 +704,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
               ),
               const Spacer(),
               Text(
-                '${UITextConstants.videoEditorCurrentTimePrefix} ${_formatMs(_previewTimeMs.round())}',
+                '${MediaText.videoEditorCurrentTimePrefix} ${_formatMs(_previewTimeMs.round())}',
                 style: TextStyle(
                   color: AppColors.iosAccentLight,
                   fontSize: AppTypography.sm,
@@ -744,9 +729,9 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
   Widget _buildTrimSection() {
     final maxValue = math.max(_durationMs.toDouble(), 1000.0).toDouble();
     return _EditorSection(
-      title: UITextConstants.videoEditorTrimSegment,
+      title: MediaText.videoEditorTrimSegment,
       trailing:
-          '${_formatMs((_trimEndMs - _trimStartMs).round())} ${UITextConstants.videoEditorDurationSuffix}',
+          '${_formatMs((_trimEndMs - _trimStartMs).round())} ${MediaText.videoEditorDurationSuffix}',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -764,7 +749,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
           Row(
             children: <Widget>[
               Text(
-                '${UITextConstants.videoEditorStartPrefix} ${_formatMs(_trimStartMs.round())}',
+                '${MediaText.videoEditorStartPrefix} ${_formatMs(_trimStartMs.round())}',
                 style: TextStyle(
                   color: CupertinoColors.secondaryLabel.resolveFrom(context),
                   fontSize: AppTypography.sm,
@@ -772,7 +757,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
               ),
               const Spacer(),
               Text(
-                '${UITextConstants.videoEditorEndPrefix} ${_formatMs(_trimEndMs.round())}',
+                '${MediaText.videoEditorEndPrefix} ${_formatMs(_trimEndMs.round())}',
                 style: TextStyle(
                   color: CupertinoColors.secondaryLabel.resolveFrom(context),
                   fontSize: AppTypography.sm,
@@ -805,7 +790,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
         navigationBar: AppNavigationBar(
           backgroundColor: background,
           middle: Text(
-            UITextConstants.videoEditorTitle,
+            MediaText.videoEditorTitle,
             style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
           ),
           leading: AppNavigationBarIconButton(
@@ -826,7 +811,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                   },
                 )
               : _loading
-              ? const Center(child: CupertinoActivityIndicator())
+              ? AppRequestFeedback.section()
               : ListView(
                   padding: EdgeInsets.fromLTRB(
                     AppSpacing.containerMd,
@@ -858,7 +843,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                     ],
                     SizedBox(height: AppSpacing.interGroupMd),
                     MediaCreationBottomButton(
-                      label: UITextConstants.mediaPickerNextStep,
+                      label: MediaText.mediaPickerNextStep,
                       variant:
                           MediaCreationBottomButtonVariant.fullWidthNeutral,
                       isLoading: _saving,

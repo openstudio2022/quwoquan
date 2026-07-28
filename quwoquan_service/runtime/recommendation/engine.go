@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -28,6 +29,8 @@ const (
 	FeedHomepage  FeedType = "homepage"
 	FeedSearch    FeedType = "search"
 )
+
+var ErrInvalidFeedCursor = errors.New("invalid or expired recommendation feed cursor")
 
 const (
 	FeedSortRecommend = "recommend"
@@ -92,6 +95,9 @@ type FeedResponse struct {
 	ReasonVersion  string `json:"reasonVersion,omitempty"`
 	// Attribution 仅在 DeferDeliveryAccounting 模式下回传（RecordDelivery 输入）。
 	Attribution DeliveryAttribution `json:"-"`
+	// TerminalOutcome / FailureStage 仅在服务内用于 feed 终态观测，不进入 wire。
+	TerminalOutcome FeedTerminalOutcome `json:"-"`
+	FailureStage    FailureStage        `json:"-"`
 }
 
 // FeedItem represents a single item in the feed.
@@ -326,6 +332,11 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		req.Limit = 20
 	}
 	req.Sort = normalizeSort(req.Sort)
+	initialRecommend := req.FeedType == FeedDiscovery &&
+		req.Sort == FeedSortRecommend &&
+		strings.TrimSpace(req.Cursor) == ""
+	terminalOutcome := FeedTerminalSuccess
+	terminalStage := FailureStageNone
 
 	// feedRequestId 服务端权威化：首刷无 id 时由 engine 生成 frq_ ULID；
 	// 分页/继续加载时客户端回显原 id，这里直接复用以保持同一 feed 会话归因连续。
@@ -338,11 +349,13 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	sessionID := strings.TrimSpace(req.SessionID)
 	rawCursor := strings.TrimSpace(req.Cursor)
 	if req.Sort == FeedSortRecommend && rawCursor != "" {
-		if state, ok := decodeFeedCursor(rawCursor, pipelineStart); ok {
-			pagingOffset = state.Offset
-			if sessionID == "" {
-				sessionID = state.SessionID
-			}
+		state, ok := decodeFeedCursor(rawCursor, pipelineStart)
+		if !ok {
+			return nil, ErrInvalidFeedCursor
+		}
+		pagingOffset = state.Offset
+		if sessionID == "" {
+			sessionID = state.SessionID
 		}
 		// recommend 模式下的 cursor 为 opaque token，不下传给 recall 层。
 		req.Cursor = ""
@@ -363,7 +376,8 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	// Stage 2: Parallel recall from all sources
 	recallStart := time.Now()
 	recallBuf := acquireCandidates()
-	e.parallelRecallInto(ctx, req, session, recallBuf)
+	defer releaseCandidates(recallBuf)
+	recallStats := e.parallelRecallInto(ctx, req, session, recallBuf)
 	allCandidates := *recallBuf
 	// Stable order for cursor pagination: same candidate set yields same order across requests.
 	sort.Slice(allCandidates, func(i, j int) bool {
@@ -373,6 +387,29 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	// 截断单源候选占比，防单源霸屏；boost 在打分后应用（applyRecallSourceBoost）。
 	allCandidates = applySourceQuota(allCandidates, e.policyStore.Current().RecallFusion, req.Limit*3)
 	recallLatency := time.Since(recallStart)
+	if len(allCandidates) == 0 {
+		switch {
+		case recallStats.failed > 0 && recallStats.succeeded == 0:
+			return nil, NewFeedFailure(
+				FailureStageRecallAllFailed,
+				fmt.Errorf("all %d applicable recall sources failed", recallStats.failed),
+			)
+		case recallStats.failed > 0:
+			return nil, NewFeedFailure(
+				FailureStageRecallPartialFailedEmpty,
+				fmt.Errorf("%d recall sources failed and healthy sources returned no candidates", recallStats.failed),
+			)
+		case initialRecommend:
+			return nil, NewFeedFailure(
+				FailureStageRecallEmptyOutput,
+				fmt.Errorf("healthy recall completed without candidates"),
+			)
+		}
+	}
+	if recallStats.failed > 0 && len(allCandidates) > 0 {
+		terminalOutcome = FeedTerminalDegraded
+		terminalStage = FailureStageRecallPartialFailed
+	}
 
 	// Stage 3: Pre-rank (lightweight filter before expensive scoring)
 	windowLimit := req.Limit*5 + pagingOffset + req.Limit
@@ -386,6 +423,7 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	hiddenAuthors := toSet(session.HiddenAuthorIDs)
 	hiddenTypes := toSet(session.HiddenContentTypes)
 	filteredBuf := acquireCandidates()
+	defer releaseCandidates(filteredBuf)
 	seen := make(map[string]bool, len(preranked))
 	for _, c := range preranked {
 		if exposedSet[c.ContentID] ||
@@ -399,6 +437,7 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		*filteredBuf = append(*filteredBuf, c)
 	}
 	filtered := *filteredBuf
+	eligibleBeforeLongTermExposure := append([]ContentCandidate(nil), filtered...)
 	if e.exposureFilter != nil {
 		exposureFiltered, filterErr := e.exposureFilter.FilterCandidates(ctx, req.UserID, filtered, pipelineStart)
 		if filterErr != nil {
@@ -410,7 +449,36 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 			}
 		} else {
 			filtered = exposureFiltered
+			if initialRecommend &&
+				len(filtered) == 0 &&
+				len(eligibleBeforeLongTermExposure) > 0 {
+				relaxedFilter, ok := e.exposureFilter.(RelaxedExposureFilter)
+				if ok {
+					relaxed, relaxedErr := relaxedFilter.FilterCandidatesRelaxedExposure(
+						ctx,
+						req.UserID,
+						eligibleBeforeLongTermExposure,
+						pipelineStart,
+					)
+					if relaxedErr != nil {
+						RecordRedisDegraded("exposure_relaxed_filter")
+						if e.logger != nil {
+							e.logger.Warn("rec.exposure_relaxed_filter.error", slog.String("err", relaxedErr.Error()))
+						}
+					} else if len(relaxed) > 0 {
+						filtered = relaxed
+						terminalOutcome = FeedTerminalDegraded
+						terminalStage = FailureStageExposureExhausted
+					}
+				}
+			}
 		}
+	}
+	if initialRecommend && len(filtered) == 0 {
+		return nil, NewFeedFailure(
+			FailureStageExposureExhausted,
+			fmt.Errorf("no eligible candidates remain after hard-negative and exposure filters"),
+		)
 	}
 
 	// Stage 5: Feature assembly (user features from feature store, with timeout)
@@ -505,9 +573,18 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	var scoreErr error
 	if cascade, ok := activeScorer.(*CascadeScorer); ok {
 		var usedFallback bool
-		scored, usedFallback, scoreErr = cascade.ScoreBatchWithPath(ctx, scoringFeatures, filtered)
+		var fallbackStage FailureStage
+		scored, usedFallback, fallbackStage, scoreErr = cascade.ScoreBatchWithFailureStage(
+			ctx,
+			scoringFeatures,
+			filtered,
+		)
 		if usedFallback {
 			actualScorerPath = "rule_fallback"
+			if terminalOutcome == FeedTerminalSuccess {
+				terminalOutcome = FeedTerminalDegraded
+				terminalStage = fallbackStage
+			}
 		}
 	} else {
 		scored, scoreErr = activeScorer.ScoreBatch(ctx, scoringFeatures, filtered)
@@ -516,7 +593,17 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		if e.logger != nil {
 			e.logger.Error("rec.score.error", slog.String("err", scoreErr.Error()))
 		}
-		scored = make([]ScoredCandidate, 0)
+		stage := FailureStageOf(scoreErr)
+		if stage == FailureStageNone {
+			stage = FailureStageScorerUnavailable
+		}
+		return nil, NewFeedFailure(stage, scoreErr)
+	}
+	if len(filtered) > 0 && len(scored) == 0 {
+		return nil, NewFeedFailure(
+			FailureStageScorerEmptyOutput,
+			fmt.Errorf("scorer returned no output for %d candidates", len(filtered)),
+		)
 	}
 	modelReleaseID := ""
 	if actualScorerPath == "model" {
@@ -575,10 +662,6 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		return scored[i].Candidate.ContentID < scored[j].Candidate.ContentID
 	})
 
-	// Release intermediate pooled buffers after scoring
-	releaseCandidates(recallBuf)
-	releaseCandidates(filteredBuf)
-
 	// Stage 6.5: Operational interventions (pin/demote/block). Config truth source
 	// is the hot-reloadable policy; empty/disabled is a zero-cost no-op. Applied
 	// before rerank so pins lead and demoted/blocked items respect diversity caps.
@@ -632,6 +715,16 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		end = len(allItems)
 	}
 	items := allItems[start:end]
+	if initialRecommend && len(items) == 0 {
+		return nil, NewFeedFailure(
+			FailureStageExposureExhausted,
+			fmt.Errorf("recommendation pipeline produced no deliverable initial-page items"),
+		)
+	}
+	if len(items) == 0 {
+		terminalOutcome = FeedTerminalEmpty
+		terminalStage = FailureStageNone
+	}
 
 	var nextCursor string
 	if req.Sort == FeedSortRecommend && end < len(allItems) {
@@ -647,11 +740,13 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	}
 
 	resp := &FeedResponse{
-		Items:          items,
-		NextCursor:     nextCursor,
-		FeedRequestID:  req.FeedRequestID,
-		RankingVersion: RankingVersion,
-		ReasonVersion:  ReasonVersion,
+		Items:           items,
+		NextCursor:      nextCursor,
+		FeedRequestID:   req.FeedRequestID,
+		RankingVersion:  RankingVersion,
+		ReasonVersion:   ReasonVersion,
+		TerminalOutcome: terminalOutcome,
+		FailureStage:    terminalStage,
 	}
 
 	// Observability: emit pipeline metrics
@@ -813,9 +908,21 @@ func encodeFeedCursor(state feedCursorState) string {
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
-// parallelRecallInto fans out to all sources concurrently with per-source timeout,
-// appending results into the provided pooled buffer.
-func (e *Engine) parallelRecallInto(ctx context.Context, req GetFeedRequest, session *SessionState, out *[]ContentCandidate) {
+type recallTerminalStats struct {
+	succeeded int
+	failed    int
+	skipped   int
+}
+
+// parallelRecallInto fans out to all sources concurrently with per-source timeout.
+// Skipped/not-applicable, succeeded-empty and failed are distinct terminal states;
+// candidates returned alongside an error are retained as degraded partial recall.
+func (e *Engine) parallelRecallInto(
+	ctx context.Context,
+	req GetFeedRequest,
+	session *SessionState,
+	out *[]ContentCandidate,
+) recallTerminalStats {
 	interestTags := topNTags(session.TagWeights, 10)
 	recallReq := RecallRequest{
 		FeedType:       req.FeedType,
@@ -839,23 +946,9 @@ func (e *Engine) parallelRecallInto(ctx context.Context, req GetFeedRequest, ses
 		defer cancel()
 	}
 
-	if len(e.sources) <= 1 {
-		for _, src := range e.sources {
-			candidates, err := src.Recall(recallCtx, recallReq)
-			if err != nil {
-				RecordRecallSourceFailure(recallSourceLabel(src))
-				if e.logger != nil {
-					e.logger.Warn("rec.recall.source_error", slog.String("err", err.Error()))
-				}
-				continue
-			}
-			*out = append(*out, candidates...)
-		}
-		return
-	}
-
 	type result struct {
 		candidates []ContentCandidate
+		err        error
 	}
 	results := make([]result, len(e.sources))
 	var wg sync.WaitGroup
@@ -863,22 +956,37 @@ func (e *Engine) parallelRecallInto(ctx context.Context, req GetFeedRequest, ses
 		wg.Add(1)
 		go func(idx int, s CandidateSource) {
 			defer wg.Done()
-			candidates, err := s.Recall(recallCtx, recallReq)
-			if err != nil {
-				RecordRecallSourceFailure(recallSourceLabel(s))
-				if e.logger != nil {
-					e.logger.Warn("rec.recall.source_error", slog.String("err", err.Error()))
-				}
+			if s == nil {
+				results[idx] = result{err: SkipRecall("nil source")}
 				return
 			}
-			results[idx] = result{candidates: candidates}
+			candidates, err := s.Recall(recallCtx, recallReq)
+			results[idx] = result{candidates: candidates, err: err}
 		}(i, src)
 	}
 	wg.Wait()
 
-	for _, r := range results {
+	stats := recallTerminalStats{}
+	for i, r := range results {
 		*out = append(*out, r.candidates...)
+		switch {
+		case IsRecallSkipped(r.err):
+			stats.skipped++
+		case r.err != nil:
+			stats.failed++
+			RecordRecallSourceFailure(recallSourceLabel(e.sources[i]))
+			if e.logger != nil {
+				e.logger.Warn(
+					"rec.recall.source_error",
+					slog.String("source", recallSourceLabel(e.sources[i])),
+					slog.String("err", r.err.Error()),
+				)
+			}
+		default:
+			stats.succeeded++
+		}
 	}
+	return stats
 }
 
 // recallSourceLabel 从源类型派生低基数指标标签（去包路径与指针前缀）。

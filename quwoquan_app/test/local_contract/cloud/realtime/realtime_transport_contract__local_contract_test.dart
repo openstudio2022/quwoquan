@@ -13,15 +13,15 @@ import 'package:quwoquan_app/cloud/services/realtime/transport/longpoll_transpor
 
 void main() {
   group('Realtime transport contract', () {
-    test('fromGateway derives websocket url from generated metadata', () {
-      final config = RealtimeConfig.fromGateway(
+    test('fromRuntime combines topology authority with generated path', () {
+      final config = RealtimeConfig.fromRuntime(
         gatewayBaseUrl: 'https://gateway.example',
+        realtimeBaseUrl: 'wss://realtime.example',
       );
 
-      expect(config.wsUrl, endsWith(RealtimeApiMetadata.webSocketUpgradePath));
       expect(
-        config.wsUrl.startsWith('ws://') || config.wsUrl.startsWith('wss://'),
-        isTrue,
+        config.wsUrl,
+        'wss://realtime.example${RealtimeApiMetadata.webSocketUpgradePath}',
       );
     });
 

@@ -33,7 +33,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
-      title: UITextConstants.settings,
+      title: SettingsText.settings,
       onBack: () {
         if (context.canPop()) {
           context.pop();
@@ -55,13 +55,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               SettingsInsetGroupedSection(
                 isDark: isDark,
                 density: SettingsInsetSectionDensity.compact,
-                header: UITextConstants.settingsAccountSection,
+                header: SettingsText.settingsAccountSection,
                 child: Column(
                   children: <Widget>[
                     SettingsInsetNavigationRow(
                       isDark: isDark,
                       leadingIcon: CupertinoIcons.person_crop_circle,
-                      label: UITextConstants.profileEditLabel,
+                      label: ProfileText.profileEditLabel,
                       onTap: () {
                         _trackSettingsClick(
                           ref,
@@ -79,7 +79,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     SettingsInsetNavigationRow(
                       isDark: isDark,
                       leadingIcon: CupertinoIcons.person_2,
-                      label: UITextConstants.profilePersonasLabel,
+                      label: ProfileText.profilePersonasLabel,
                       onTap: () {
                         _trackSettingsClick(
                           ref,
@@ -98,7 +98,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       SettingsInsetNavigationRow(
                         isDark: isDark,
                         leadingIcon: CupertinoIcons.lock_shield_fill,
-                        label: UITextConstants.settingsAccountSecurity,
+                        label: SettingsText.settingsAccountSecurity,
                         onTap: () {
                           _trackSettingsClick(
                             ref,
@@ -116,13 +116,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               SettingsInsetGroupedSection(
                 isDark: isDark,
                 density: SettingsInsetSectionDensity.compact,
-                header: UITextConstants.settingsPrivacySection,
+                header: SettingsText.settingsPrivacySection,
                 child: Column(
                   children: <Widget>[
                     SettingsInsetNavigationRow(
                       isDark: isDark,
                       leadingIcon: CupertinoIcons.lock_shield,
-                      label: UITextConstants.settingsPermissionManagement,
+                      label: SettingsText.settingsPermissionManagement,
                       onTap: () {
                         _trackSettingsClick(
                           ref,
@@ -141,7 +141,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       SettingsInsetNavigationRow(
                         isDark: isDark,
                         leadingIcon: CupertinoIcons.hand_raised_fill,
-                        label: UITextConstants.settingsPrivacyPreferences,
+                        label: SettingsText.settingsPrivacyPreferences,
                         onTap: () {
                           _trackSettingsClick(
                             ref,
@@ -160,7 +160,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         isDark: isDark,
                         leadingIcon:
                             CupertinoIcons.person_crop_circle_badge_xmark,
-                        label: UITextConstants.settingsBlockedUsers,
+                        label: ContentText.settingsBlockedUsers,
                         onTap: () {
                           _trackSettingsClick(
                             ref,
@@ -178,7 +178,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       SettingsInsetNavigationRow(
                         isDark: isDark,
                         leadingIcon: CupertinoIcons.text_badge_minus,
-                        label: UITextConstants.settingsBlockedKeywords,
+                        label: ContentText.settingsBlockedKeywords,
                         onTap: () {
                           _trackSettingsClick(
                             ref,
@@ -196,7 +196,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       SettingsInsetNavigationRow(
                         isDark: isDark,
                         leadingIcon: CupertinoIcons.flag,
-                        label: UITextConstants.myReportsSettingsTitle,
+                        label: ContentText.myReportsSettingsTitle,
                         onTap: () {
                           _trackSettingsClick(
                             ref,
@@ -217,7 +217,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   child: SettingsInsetNavigationRow(
                     isDark: isDark,
                     leadingIcon: CupertinoIcons.bell,
-                    label: UITextConstants.settingsNotificationSection,
+                    label: SettingsText.settingsNotificationSection,
                     onTap: () {
                       _trackSettingsClick(
                         ref,
@@ -234,7 +234,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   child: SettingsInsetNavigationRow(
                     isDark: isDark,
                     leadingIcon: CupertinoIcons.phone,
-                    label: UITextConstants.settingsCallSection,
+                    label: SettingsText.settingsCallSection,
                     onTap: () {
                       _trackSettingsClick(
                         ref,
@@ -250,13 +250,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               SettingsInsetGroupedSection(
                 isDark: isDark,
                 density: SettingsInsetSectionDensity.compact,
-                header: UITextConstants.settingsAppearanceSection,
+                header: SettingsText.settingsAppearanceSection,
                 child: Column(
                   children: <Widget>[
                     SettingsInsetNavigationRow(
                       isDark: isDark,
                       leadingIcon: CupertinoIcons.moon,
-                      label: UITextConstants.settingsDarkMode,
+                      label: SettingsText.settingsDarkMode,
                       trailingText: _darkModeSummary(snapshot, appearanceState),
                       onTap: () {
                         _trackSettingsClick(
@@ -271,7 +271,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       SettingsInsetFormSectionDivider(isDark: isDark),
                       SettingsInsetCenteredActionRow(
                         isDark: isDark,
-                        label: UITextConstants.tryAgain,
+                        label: ContentText.tryAgain,
                         onTap: () => unawaited(
                           ref
                               .read(
@@ -288,11 +288,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               SettingsInsetGroupedSection(
                 isDark: isDark,
                 density: SettingsInsetSectionDensity.compact,
-                header: UITextConstants.settingsAboutSection,
+                header: SettingsText.settingsAboutSection,
                 child: SettingsInsetNavigationRow(
                   isDark: isDark,
                   leadingIcon: CupertinoIcons.info,
-                  label: UITextConstants.settingsAboutQuwoquan,
+                  label: SettingsText.settingsAboutQuwoquan,
                   onTap: () {
                     _trackSettingsClick(
                       ref,
@@ -312,7 +312,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     if (authSession.isAuthenticated) ...<Widget>[
                       SettingsInsetCenteredActionRow(
                         isDark: isDark,
-                        label: UITextConstants.switchAccount,
+                        label: FoundationText.switchAccount,
                         onTap: () => _handleLogout(
                           context,
                           ref,
@@ -323,14 +323,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       SettingsInsetFormSectionDivider(isDark: isDark),
                       SettingsInsetCenteredActionRow(
                         isDark: isDark,
-                        label: UITextConstants.logout,
+                        label: FoundationText.logout,
                         isDestructive: true,
                         onTap: () => _confirmLogout(context, ref),
                       ),
                     ] else
                       SettingsInsetCenteredActionRow(
                         isDark: isDark,
-                        label: UITextConstants.profileLoginNow,
+                        label: FoundationText.profileLoginNow,
                         onTap: () => openLoginPage(
                           context,
                           reasonName: AuthPromptReason.actionRequired.name,
@@ -359,10 +359,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     AppearanceSettingsState state,
   ) {
     if (state.isLoading && !state.hasLoaded) {
-      return UITextConstants.loading;
+      return FoundationText.loading;
     }
     if (state.lastError != null && !state.hasPendingSync) {
-      return UITextConstants.loadFailed;
+      return FoundationText.loadFailed;
     }
     final base = settingsDarkModeLabel(snapshot.themeMode);
     return state.hasPendingSync
@@ -402,21 +402,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final choice = await showAppCupertinoDialog<_LogoutChoice>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text(UITextConstants.logoutDialogTitle),
-        content: const Text(UITextConstants.logoutDialogMessage),
+        title: const Text(FoundationText.logoutDialogTitle),
+        content: const Text(FoundationText.logoutDialogMessage),
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text(UITextConstants.logoutDialogCancel),
+            child: const Text(FoundationText.logoutDialogCancel),
           ),
           CupertinoDialogAction(
             onPressed: () => Navigator.of(ctx).pop(_LogoutChoice.soft),
-            child: const Text(UITextConstants.logoutDialogSoftAction),
+            child: const Text(FoundationText.logoutDialogSoftAction),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(ctx).pop(_LogoutChoice.hard),
-            child: const Text(UITextConstants.logoutDialogHardAction),
+            child: const Text(FoundationText.logoutDialogHardAction),
           ),
         ],
       ),
@@ -499,8 +499,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     AppToast.show(
       context,
       clearLocalCredential
-          ? UITextConstants.loginHardLogoutToast
-          : UITextConstants.loginSoftLogoutToast.replaceFirst(
+          ? FoundationText.loginHardLogoutToast
+          : FoundationText.loginSoftLogoutToast.replaceFirst(
               '{days}',
               '$days',
             ),

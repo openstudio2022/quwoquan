@@ -52,7 +52,7 @@ type config struct {
 		IOS          struct {
 			LatestVersion string `yaml:"latest_version"`
 			LatestBuild   string `yaml:"latest_build"`
-			AppStoreURL   string `yaml:"app_store_url"`
+			PWAURL        string `yaml:"pwa_url"`
 		} `yaml:"ios"`
 		Android struct {
 			LatestVersion               string   `yaml:"latest_version"`
@@ -63,6 +63,7 @@ type config struct {
 			APKSHA256                   string   `yaml:"apk_sha256"`
 			APKSizeBytes                int64    `yaml:"apk_size_bytes"`
 			APKSigningCertificateSHA256 string   `yaml:"apk_signing_certificate_sha256"`
+			MinAndroidVersion           string   `yaml:"min_android_version"`
 		} `yaml:"android"`
 	} `yaml:"app_release"`
 	AccountSecurityAuthority struct {
@@ -150,8 +151,8 @@ func applyEnvOverrides(cfg *config) {
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_IOS_LATEST_BUILD")); v != "" {
 		cfg.AppRelease.IOS.LatestBuild = v
 	}
-	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_IOS_APP_STORE_URL")); v != "" {
-		cfg.AppRelease.IOS.AppStoreURL = v
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_IOS_PWA_URL")); v != "" {
+		cfg.AppRelease.IOS.PWAURL = v
 	}
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_LATEST_VERSION")); v != "" {
 		cfg.AppRelease.Android.LatestVersion = v
@@ -178,6 +179,9 @@ func applyEnvOverrides(cfg *config) {
 	}
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_APK_SIGNING_CERTIFICATE_SHA256")); v != "" {
 		cfg.AppRelease.Android.APKSigningCertificateSHA256 = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_MIN_ANDROID_VERSION")); v != "" {
+		cfg.AppRelease.Android.MinAndroidVersion = v
 	}
 	if v := strings.TrimSpace(os.Getenv("MONGODB_URI")); v != "" {
 		cfg.MongoDB.URI = v

@@ -26,10 +26,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
-    expect(find.text('视频预览暂不可用'), findsOneWidget);
-    expect(find.text(UITextConstants.back), findsNothing);
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+    expect(find.text(ContentText.back), findsNothing);
     expect(find.byIcon(CupertinoIcons.chevron_left), findsOneWidget);
-    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+    expect(find.text(SearchText.reload), findsOneWidget);
   });
 }
 

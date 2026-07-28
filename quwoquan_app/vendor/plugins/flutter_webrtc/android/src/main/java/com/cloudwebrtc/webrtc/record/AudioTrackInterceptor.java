@@ -1,6 +1,7 @@
 package com.cloudwebrtc.webrtc.record;
 
 import android.annotation.TargetApi;
+import android.media.AudioAttributes;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
@@ -24,12 +25,18 @@ public final class AudioTrackInterceptor extends AudioTrack {
     public AudioTrackInterceptor(@NonNull AudioTrack originalTrack, @NonNull SamplesReadyCallback callback) {
         // That just random params, we don't care about object that will be created
         super(
-            AudioManager.STREAM_VOICE_CALL,
-            44200,
-            AudioFormat.CHANNEL_OUT_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
+            new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build(),
+            new AudioFormat.Builder()
+                .setSampleRate(44200)
+                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                .build(),
             128,
-            AudioTrack.MODE_STREAM
+            AudioTrack.MODE_STREAM,
+            AudioManager.AUDIO_SESSION_ID_GENERATE
         );
         this.originalTrack = originalTrack;
         this.callback = callback;

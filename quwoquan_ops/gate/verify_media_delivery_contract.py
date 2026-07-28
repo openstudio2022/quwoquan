@@ -55,7 +55,7 @@ FORBIDDEN_TOKENS = (
     "_archivedSeed",
 )
 FIXTURE_MEDIA_FIELD_FORBIDDEN = (
-    "quwoquan-env.test",
+    ".test",
     "118.31.239.122",
     ":17100",
     ":18100",
@@ -107,14 +107,6 @@ SCAN_ROOTS = (
 )
 SKIP_PATHS = {
     Path(__file__).resolve(),
-    ROOT
-    / "quwoquan_app"
-    / "packages"
-    / "quwoquan_cloud_mock"
-    / "lib"
-    / "src"
-    / "generated"
-    / "alpha_fixture_bundle.g.dart",
     ROOT
     / "quwoquan_app"
     / "test"
@@ -315,9 +307,7 @@ def _validate_dart_media_literals(
 
 
 def _fixture_media_scan_paths() -> list[Path]:
-    # Alpha fixture 已物理迁到 metadata → quwoquan_cloud_mock 生成 bundle；
-    # production lib 中的旧 content_mock_data.dart 已退役，不能把已删除文件
-    # 继续当作门禁输入或迫使 Mock 回流生产源码树。
+    # Contract 场景直接保留在 metadata；App 不再生成或编译 fixture bundle。
     return sorted(METADATA_ROOT.glob("**/test_fixtures/**/*.json"))
 
 
@@ -688,96 +678,47 @@ def _validate_avatar_media_patrol_contract(issues: list[str]) -> None:
             issues.append(f"头像媒体 Patrol target 缺少必需断言: {token}")
 
 
-def _validate_local_simulator_tls_preflight(issues: list[str]) -> None:
-    """本地 iOS Simulator 的根证书失败必须在播放器启动前阻断。"""
+def _validate_public_ca_tls_boundary(issues: list[str]) -> None:
+    """所有 App 可见 HTTPS 必须依赖系统公共 CA，不得注入私有信任根。"""
 
-    alpha_stack_path = ROOT / "quwoquan_ops" / "cli" / "alpha" / "start_alpha_mock_stack.sh"
-    alpha_prepare_path = (
-        ROOT / "quwoquan_app" / "scripts" / "ios" / "prepare_alpha_local_https.sh"
-    )
-    app_instance_path = (
-        ROOT / "quwoquan_app" / "scripts" / "device" / "start_app_instance.sh"
-    )
-    patrol_path = (
-        ROOT / "quwoquan_ops" / "cli" / "smoke" / "run_environment_patrol_smoke.py"
-    )
-    local_tls_path = ROOT / "quwoquan_ops" / "cli" / "lib" / "local_target_tls.py"
-    ios_trust_bundle_path = (
+    forbidden_files = (
+        ROOT / "quwoquan_ops" / "cli" / "lib" / "local_target_tls.py",
+        ROOT / "quwoquan_app" / "scripts" / "ios" / "prepare_alpha_local_https.sh",
         ROOT
         / "quwoquan_app"
         / "scripts"
         / "ios"
-        / "prepare_local_https_trust_bundle.sh"
+        / "prepare_local_https_trust_bundle.sh",
+        ROOT / "quwoquan_app" / "lib" / "core" / "platform" / "local_dev_https_trust.dart",
     )
-    android_build_path = ROOT / "quwoquan_app" / "android" / "app" / "build.gradle.kts"
-    alpha_stack = alpha_stack_path.read_text(encoding="utf-8")
-    alpha_prepare = alpha_prepare_path.read_text(encoding="utf-8")
-    app_instance = app_instance_path.read_text(encoding="utf-8")
-    patrol = patrol_path.read_text(encoding="utf-8")
-    local_tls = local_tls_path.read_text(encoding="utf-8")
-    ios_trust_bundle = ios_trust_bundle_path.read_text(encoding="utf-8")
-    android_build = android_build_path.read_text(encoding="utf-8")
+    for path in forbidden_files:
+        if path.exists():
+            issues.append(f"私有 CA/本地信任注入入口必须删除: {path.relative_to(ROOT)}")
 
-    for target_name in ("alpha-local", "beta-local", "gamma-local", "prod-sim"):
-        if target_name not in patrol:
-            issues.append(f"Patrol TLS preflight 缺少本地 target: {target_name}")
-    if "best_effort_failed" in patrol:
-        issues.append("Patrol TLS preflight 不得将 Simulator CA 安装失败降级为 best_effort")
-    if '"--verbose"' not in patrol:
-        issues.append("Patrol 环境 UAT 必须保留 verbose 原始日志以定位真实构建/运行失败")
-    for token in (
-        "_enrich_ios_simulator_runtime_versions",
-        '"runtimeVersion"',
-        '"simctl", "list", "--json"',
-    ):
-        if token not in patrol:
-            issues.append(f"Patrol iOS 目标必须使用 simctl 精确 runtime 版本: {token}")
-    for token in (
-        "install_ios_simulator_root_ca",
-        "LocalTargetTlsError",
-        "preflightFailed",
-    ):
-        if token not in patrol:
-            issues.append(f"Patrol TLS preflight 缺少 fail-closed 证据: {token}")
-
-    for token in (
-        "QWQ_IOS_SIMULATOR_CA_REQUIRED",
-        "GATE_BLOCK: iOS Simulator root-CA installation requires an explicit UDID",
+    scan_paths = (
+        ROOT / "quwoquan_app" / "lib",
+        ROOT / "quwoquan_app" / "android",
+        ROOT / "quwoquan_app" / "ios",
+        ROOT / "quwoquan_app" / "scripts",
+        ROOT / "quwoquan_ops" / "cli",
+    )
+    forbidden_tokens = (
+        "QWQ_ANDROID_LOCAL_ENV_CA",
+        "local_env_debug_root",
         "install-ios-simulator-ca",
-    ):
-        if token not in alpha_stack:
-            issues.append(f"alpha stack 缺少 Simulator CA fail-fast 合同: {token}")
-    for token in (
-        "QWQ_IOS_SIMULATOR_CA_REQUIRED=1",
-        "TARGET_DEVICE_IDENTIFIER",
-        "GATE_BLOCK: Simulator CA trust needs",
-    ):
-        if token not in alpha_prepare:
-            issues.append(f"alpha iOS prepare 缺少 Simulator UDID 阻断: {token}")
-    for token in (
-        "is-ios-simulator",
-        "install-ios-simulator-ca",
-        "QWQ_IOS_SIMULATOR_UDID",
-    ):
-        if token not in app_instance:
-            issues.append(f"共享 App launcher 缺少 Simulator CA preflight: {token}")
-    for token in (
-        'Path("object-storage") / "ca.crt"',
-        "resolve_local_target_trust_roots",
-        "materialize_local_target_trust_bundle",
-        '"certPaths"',
-    ):
-        if token not in local_tls:
-            issues.append(f"本地 TLS 单一边界缺少多根证书合同: {token}")
-    if "materialize_local_target_trust_bundle" not in ios_trust_bundle:
-        issues.append("iOS Dart trust bundle 必须同时装配网关与对象存储 CA")
-    for token in (
-        "alphaLocalObjectStorageCaCert",
-        "alphaLocalAppTrustBundle",
         "materialize-app-trust-bundle",
-    ):
-        if token not in android_build:
-            issues.append(f"Android Dart trust bundle 缺少多根证书合同: {token}")
+        "badCertificateCallback",
+    )
+    for scan_root in scan_paths:
+        for path in scan_root.rglob("*"):
+            if not path.is_file() or path.suffix not in TEXT_SUFFIXES:
+                continue
+            source = path.read_text(encoding="utf-8", errors="ignore")
+            for token in forbidden_tokens:
+                if token in source:
+                    issues.append(
+                        f"{path.relative_to(ROOT)} 禁止私有 CA/证书绕过符号: {token}"
+                    )
 
 
 def main() -> int:
@@ -791,7 +732,7 @@ def main() -> int:
     _validate_runtime_config_authority_parity(issues)
     _validate_video_playback_patrol_contract(issues)
     _validate_avatar_media_patrol_contract(issues)
-    _validate_local_simulator_tls_preflight(issues)
+    _validate_public_ca_tls_boundary(issues)
     if issues:
         print("[verify_media_delivery_contract] FAIL")
         for issue in issues:

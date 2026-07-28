@@ -11,7 +11,7 @@ from core.runtime_policy import active_runtime_policy
 from content.source.research import network_breaker
 
 
-_USER_AGENT = "quwoquan-data/1.0 (+https://github.com/quwoquan; contact: data-ops@quwoquan.example)"
+USER_AGENT = "quwoquan-data/1.0 (+https://github.com/quwoquan; contact: data-ops@quwoquan.example)"
 _HTTP_METADATA_MARKER = b"\n__QWQ_HTTP_META__"
 _HTTP_METADATA_FORMAT = "\n__QWQ_HTTP_META__%{http_code}\t%{url_effective}"
 
@@ -39,7 +39,7 @@ def fetch_http(url: str, *, timeout: int) -> HttpFetchResult:
             "-sS",
             "-L",
             "-A",
-            _USER_AGENT,
+            USER_AGENT,
             "--retry",
             str(max(1, int(policy.curl_retries))),
             "--retry-delay",
@@ -109,7 +109,7 @@ def post_form_json(
         "-L",
         "-f",
         "-A",
-        _USER_AGENT,
+        USER_AGENT,
         "--retry",
         "0",
         "--retry-delay",

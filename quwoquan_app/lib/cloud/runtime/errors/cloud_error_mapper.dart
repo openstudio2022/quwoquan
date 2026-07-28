@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/domain_error_code.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_transport_failure.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -99,10 +100,15 @@ class CloudErrorMapper {
     );
   }
 
-  static CloudException fromException(Object error, {String? requestPath}) {
+  static CloudException fromException(
+    Object error, {
+    String? requestPath,
+    CloudTransportFailure? transportFailure,
+  }) {
     final runtimeFailure = runtimeFailureFromException(
       error,
       requestPath: requestPath,
+      transportFailure: transportFailure,
     );
     return CloudException(
       type: _cloudTypeFromFailure(runtimeFailure),
@@ -147,6 +153,7 @@ class CloudErrorMapper {
   static RuntimeFailure runtimeFailureFromException(
     Object error, {
     String? requestPath,
+    CloudTransportFailure? transportFailure,
   }) {
     if (error is CloudException) {
       final failure = error.runtimeFailure;
@@ -189,9 +196,12 @@ class CloudErrorMapper {
         ),
       );
     }
+    if (transportFailure != null) {
+      return _transportFailure(transportFailure, requestPath: requestPath);
+    }
     if (error is http.ClientException) {
       return _localFailure(
-        code: RuntimeFailureCodes.appNetworkOffline,
+        code: RuntimeFailureCodes.appNetworkConnectionFailed,
         origin: RuntimeFailureOrigin.environment,
         kind: RuntimeFailureKind.network,
         nature: RuntimeFailureNature.transient,
@@ -240,6 +250,42 @@ class CloudErrorMapper {
           key: 'errorType',
           value: error.runtimeType.toString(),
         ),
+      ],
+    );
+  }
+
+  static RuntimeFailure _transportFailure(
+    CloudTransportFailure failure, {
+    String? requestPath,
+  }) {
+    final code = switch (failure.reason) {
+      CloudTransportFailureReason.secureConnection =>
+        RuntimeFailureCodes.appNetworkSecureConnectionFailed,
+      CloudTransportFailureReason.connectionRefused =>
+        RuntimeFailureCodes.appNetworkConnectionRefused,
+      CloudTransportFailureReason.nameResolution =>
+        RuntimeFailureCodes.appNetworkNameResolutionFailed,
+      CloudTransportFailureReason.offline =>
+        RuntimeFailureCodes.appNetworkOffline,
+      CloudTransportFailureReason.connectionFailed =>
+        RuntimeFailureCodes.appNetworkConnectionFailed,
+    };
+    return _localFailure(
+      code: code,
+      origin: code == RuntimeFailureCodes.appNetworkConnectionRefused
+          ? RuntimeFailureOrigin.remoteDependency
+          : RuntimeFailureOrigin.environment,
+      kind: RuntimeFailureKind.network,
+      nature: failure.reason == CloudTransportFailureReason.secureConnection
+          ? RuntimeFailureNature.permanent
+          : RuntimeFailureNature.transient,
+      requestPath: requestPath,
+      attributes: <RuntimeContextAttribute>[
+        if (failure.platformErrorCode != null)
+          RuntimeContextAttribute(
+            key: 'platformErrorCode',
+            value: '${failure.platformErrorCode}',
+          ),
       ],
     );
   }
@@ -469,7 +515,12 @@ RuntimeFailureKind _kindFromStatus(int statusCode) {
   if (statusCode == 401) return RuntimeFailureKind.auth;
   if (statusCode == 403) return RuntimeFailureKind.permission;
   if (statusCode == 404) return RuntimeFailureKind.notFound;
+  if (statusCode == 400 || statusCode == 409 || statusCode == 422) {
+    return RuntimeFailureKind.validation;
+  }
   if (statusCode == 429) return RuntimeFailureKind.rateLimited;
+  if (statusCode == 504) return RuntimeFailureKind.timeout;
+  if (statusCode == 500) return RuntimeFailureKind.internal;
   if (statusCode >= 500) return RuntimeFailureKind.unavailable;
   return RuntimeFailureKind.internal;
 }
@@ -479,6 +530,7 @@ RuntimeFailureNature _natureFromStatus(int statusCode) {
     return RuntimeFailureNature.requiresUserAction;
   }
   if (statusCode == 429) return RuntimeFailureNature.transient;
+  if (statusCode == 409) return RuntimeFailureNature.transient;
   if (statusCode >= 500) return RuntimeFailureNature.transient;
   return RuntimeFailureNature.permanent;
 }

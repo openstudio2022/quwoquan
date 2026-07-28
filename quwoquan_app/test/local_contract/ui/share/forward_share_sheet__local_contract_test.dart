@@ -124,13 +124,13 @@ void main() {
     expect(find.text(ChatText.forwardActionAppContacts), findsOneWidget);
     expect(find.text(ChatText.forwardActionWechatFriend), findsOneWidget);
     expect(find.text(ChatText.forwardActionWechatMoments), findsOneWidget);
-    expect(find.text(UITextConstants.editProfileQrSaveAction), findsNothing);
-    expect(find.text(UITextConstants.editProfileQrScanAction), findsNothing);
+    expect(find.text(ProfileText.editProfileQrSaveAction), findsNothing);
+    expect(find.text(ProfileText.editProfileQrScanAction), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('forward-share-close-button')),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.cancel), findsNothing);
+    expect(find.text(FoundationText.cancel), findsNothing);
   });
 
   testWidgets('最近聊天失败使用分区错误且重试后恢复列表', (tester) async {
@@ -150,14 +150,11 @@ void main() {
 
     await tester.tap(find.text('open-error'));
     await tester.pumpAndSettle();
-    expect(
-      find.text(UITextConstants.sectionLoadFailedTitleDefault),
-      findsOneWidget,
-    );
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
     expect(find.text(ChatText.forwardActionAppContacts), findsOneWidget);
 
     repository.failListConversations = false;
-    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.tap(find.text(SearchText.reload));
     await tester.pumpAndSettle();
     expect(find.byType(ForwardRecentRecipientItem), findsNWidgets(10));
   });

@@ -9,8 +9,24 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	rtrec "quwoquan_service/runtime/recommendation"
+	rtredis "quwoquan_service/runtime/redis"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
+
+// buildRecommendationSignalRuntime keeps the read cache and buffered write
+// path on one HotPath so their subject-closure policy cannot drift.
+func buildRecommendationSignalRuntime(
+	router *rtredis.Router,
+	subjectClosureGuard rtrec.SubjectClosureGuard,
+	logger *slog.Logger,
+) (*rtrec.SessionCache, *rtrec.BufferedHotPath) {
+	hotPath := rtrec.NewHotPath(
+		rtredis.NewRecAdapter(router.Scene("rec")),
+		rtrec.WithSubjectClosureGuard(subjectClosureGuard),
+	)
+	return rtrec.NewSessionCache(hotPath, 2*time.Second, 10000),
+		rtrec.NewBufferedHotPath(hotPath, rtrec.WithBufferLogger(logger))
+}
 
 // composeRecommendationModelScorer 校验商用环境的模型依赖并装配生产 scorer。
 func composeRecommendationModelScorer(

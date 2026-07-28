@@ -119,7 +119,7 @@ void main() {
         find.byKey(const ValueKey('chat_announcement_publish_button')),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text(UITextConstants.cancel));
+      await tester.tap(find.text(FoundationText.cancel));
       await tester.pumpAndSettle();
 
       expect(repo.published, isEmpty);

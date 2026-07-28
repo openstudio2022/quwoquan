@@ -1,0 +1,240 @@
+#!/usr/bin/env python3
+"""Static gate for dual-platform truly-usable baseline contracts.
+
+Host T3 / HTTP 200 alone is never enough. This gate proves the required
+launcher, error anti-leak, app-core-readback Patrol journey, and device-matrix
+wiring stay on the unique mainline before any “stable baseline” claim.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[3]
+APP = ROOT / "quwoquan_app"
+OPS = ROOT / "quwoquan_ops"
+WORKFLOWS = ROOT / ".github" / "workflows"
+
+ERROR_STATE = APP / "lib/core/widgets/error_states/app_error_states.dart"
+ANDROID_GRADLE = APP / "android/app/build.gradle.kts"
+IOS_WRAPPER = APP / "scripts/ios/xcode_backend_build.sh"
+RUN_SH = APP / "run.sh"
+CORE_READBACK_PATROL = (
+    APP
+    / "test/user_acceptance/patrol/environment"
+    / "app_core_readback__user_acceptance_test.dart"
+)
+CORE_READBACK_SUPPORT = (
+    APP / "test/support/patrol/patrol_core_readback_support.dart"
+)
+SMOKE = OPS / "cli/smoke/run_environment_patrol_smoke.py"
+VALIDATION = OPS / "environments/gamma/validation_suites.json"
+DEVICE_MATRIX = WORKFLOWS / "app-env-device-matrix-self-hosted.yml"
+GAMMA_T3 = APP / "scripts/gamma/run_local_gamma_t3.py"
+
+def fail(failures: list[str], message: str) -> None:
+    failures.append(message)
+
+
+def main() -> int:
+    failures: list[str] = []
+
+    for path in (
+        ERROR_STATE,
+        ANDROID_GRADLE,
+        IOS_WRAPPER,
+        RUN_SH,
+        CORE_READBACK_PATROL,
+        CORE_READBACK_SUPPORT,
+        SMOKE,
+        VALIDATION,
+        DEVICE_MATRIX,
+        GAMMA_T3,
+    ):
+        if not path.is_file():
+            fail(failures, f"missing required baseline artifact: {path.relative_to(ROOT)}")
+
+    if failures:
+        _emit(failures)
+        return 1
+
+    error_text = ERROR_STATE.read_text(encoding="utf-8")
+    for token in (
+        "UiErrorVisualKind",
+        "app-page-error-diagnostics",
+        "app-page-error-illustration",
+    ):
+        if token in error_text:
+            fail(
+                failures,
+                f"{ERROR_STATE.relative_to(ROOT)}: forbidden user-visible error surface token {token}",
+            )
+    page_body = ""
+    match = re.search(
+        r"class _ErrorEmptyPageBody[\s\S]*?(?=class _ErrorSoftCardBody|\Z)",
+        error_text,
+    )
+    if match is None:
+        fail(
+            failures,
+            f"{ERROR_STATE.relative_to(ROOT)}: missing _ErrorEmptyPageBody page contract",
+        )
+    else:
+        page_body = match.group(0)
+        if "Icon(" in page_body or "CupertinoIcons." in page_body:
+            fail(
+                failures,
+                f"{ERROR_STATE.relative_to(ROOT)}: page error body must not show icons",
+            )
+        if re.search(
+            r"Text\([^\)]*(sourceOperationId|sourceCode|requestId|traceId|sourceRouteId)",
+            page_body,
+        ):
+            fail(
+                failures,
+                f"{ERROR_STATE.relative_to(ROOT)}: technical fields must not be rendered as Text",
+            )
+        if "liveRegion: true" not in page_body:
+            fail(
+                failures,
+                f"{ERROR_STATE.relative_to(ROOT)}: page error state must expose accessibility live region",
+            )
+
+    gradle = ANDROID_GRADLE.read_text(encoding="utf-8")
+    if "verifyAndroidLocalLauncherContract" not in gradle:
+        fail(
+            failures,
+            f"{ANDROID_GRADLE.relative_to(ROOT)}: missing verifyAndroidLocalLauncherContract",
+        )
+    if "startLocalStackIfNeeded" in gradle or "autoStartStack" in gradle:
+        fail(
+            failures,
+            f"{ANDROID_GRADLE.relative_to(ROOT)}: must not auto-start local stack",
+        )
+    if "ProcessBuilder" in gradle and "reverse" in gradle and "verifyAndroidLocalLauncherContract" not in gradle:
+        fail(
+            failures,
+            f"{ANDROID_GRADLE.relative_to(ROOT)}: Gradle must not establish adb reverse itself",
+        )
+
+    wrapper = IOS_WRAPPER.read_text(encoding="utf-8")
+    if "prepare_dart_defines.sh" not in wrapper:
+        fail(failures, f"{IOS_WRAPPER.relative_to(ROOT)}: must invoke prepare_dart_defines.sh")
+    if "set -euo pipefail" not in wrapper and "set -e" not in wrapper:
+        fail(failures, f"{IOS_WRAPPER.relative_to(ROOT)}: must propagate non-zero exit codes")
+
+    run_sh = RUN_SH.read_text(encoding="utf-8")
+    for required in (
+        "ANDROID_SERIAL",
+        "enable_android_adb_reverse",
+        "QWQ_APP_RUNTIME_ENV=alpha",
+        "scope media",
+    ):
+        if required not in run_sh:
+            fail(failures, f"{RUN_SH.relative_to(ROOT)}: missing launcher requirement {required}")
+
+    patrol = CORE_READBACK_PATROL.read_text(encoding="utf-8")
+    for needle in (
+        "environment_app_core_readback",
+        "provisionPatrolCoreChatConversation",
+        "home-feed-card-0",
+        "video-player-ready",
+        "chat-inbox-row-",
+        "AppRoutePaths.profile",
+        "startupRecoveryTitle",
+    ):
+        if needle not in patrol:
+            fail(
+                failures,
+                f"{CORE_READBACK_PATROL.relative_to(ROOT)}: missing journey assertion {needle}",
+            )
+
+    support = CORE_READBACK_SUPPORT.read_text(encoding="utf-8")
+    for needle in (
+        "createConversation",
+        "sendMessage",
+        "ChatSendMessageCommand",
+        "messageHomeRowsStateProvider",
+    ):
+        if needle not in support:
+            fail(
+                failures,
+                f"{CORE_READBACK_SUPPORT.relative_to(ROOT)}: missing Remote provision step {needle}",
+            )
+
+    smoke = SMOKE.read_text(encoding="utf-8")
+    if "app_core_readback__user_acceptance_test.dart" not in smoke:
+        fail(
+            failures,
+            f"{SMOKE.relative_to(ROOT)}: must declare CORE_READBACK_TARGET",
+        )
+    if '"local-gamma"' not in smoke or "gamma_local_anonymous_runtime" not in smoke:
+        fail(
+            failures,
+            f"{SMOKE.relative_to(ROOT)}: runtime anonymous session must support local-gamma",
+        )
+
+    suites = json.loads(VALIDATION.read_text(encoding="utf-8"))
+    pr_light = suites["profiles"]["pr_light"]["deviceMatrix"]
+    matrix_kinds = set(pr_light.get("matrixKinds") or [])
+    if "app-core-readback" not in matrix_kinds and "environment-smoke" not in matrix_kinds:
+        fail(
+            failures,
+            f"{VALIDATION.relative_to(ROOT)}: pr_light must require app-core-readback or environment-smoke",
+        )
+
+    workflow = DEVICE_MATRIX.read_text(encoding="utf-8")
+    if "app-core-readback" not in workflow:
+        fail(
+            failures,
+            f"{DEVICE_MATRIX.relative_to(ROOT)}: must wire app-core-readback matrix kind",
+        )
+    if 'smoke_env_alias="gamma-local"' in workflow:
+        fail(
+            failures,
+            f"{DEVICE_MATRIX.relative_to(ROOT)}: gamma Patrol must use local-gamma session alias",
+        )
+
+    t3 = GAMMA_T3.read_text(encoding="utf-8")
+    for required in (
+        'parser.add_argument("--release-id", required=True)',
+        'parser.add_argument("--import-run-id", required=True)',
+        '"mutationPolicy": "read_only"',
+        '"ship"',
+        '"verify"',
+    ):
+        if required not in t3:
+            fail(
+                failures,
+                f"{GAMMA_T3.relative_to(ROOT)}: missing release-bound read-only contract {required}",
+            )
+    for forbidden in ("seed_content", "seed_entity", "seed-only", "media.quwoquan.invalid"):
+        if forbidden in t3:
+            fail(
+                failures,
+                f"{GAMMA_T3.relative_to(ROOT)}: forbidden environment mutation token {forbidden}",
+            )
+
+    _emit(failures)
+    return 1 if failures else 0
+
+
+def _emit(failures: list[str]) -> None:
+    if failures:
+        print("[verify_dual_platform_usability_baseline] FAIL")
+        for item in failures:
+            print(f"- {item}")
+        return
+    print("[verify_dual_platform_usability_baseline] OK")
+    print(
+        "Stable baseline still requires dual-platform router shell + four-core "
+        "user journeys; host T3 alone is insufficient."
+    )
+
+
+if __name__ == "__main__":
+    sys.exit(main())

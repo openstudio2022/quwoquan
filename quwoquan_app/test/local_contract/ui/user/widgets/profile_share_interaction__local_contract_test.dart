@@ -84,14 +84,14 @@ void main() {
         .setInteractionSubTab(InteractionSubTab.shares);
     await tester.pump();
 
-    expect(find.text(UITextConstants.interactionSubAll), findsNothing);
-    expect(find.text(UITextConstants.interactionSubShares), findsOneWidget);
+    expect(find.text(ProfileText.interactionSubAll), findsNothing);
+    expect(find.text(ProfileText.interactionSubShares), findsOneWidget);
     expect(
-      find.text(UITextConstants.profileInteractionDirectionReceived),
+      find.text(ProfileText.profileInteractionDirectionReceived),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.profileInteractionDirectionSent),
+      find.text(ProfileText.profileInteractionDirectionSent),
       findsOneWidget,
     );
     final switchFinder = find.byKey(
@@ -125,12 +125,12 @@ void main() {
     await tester.pump();
 
     expect(
-      find.text(UITextConstants.profileShareReceivedRecordAction),
+      find.text(ProfileText.profileShareReceivedRecordAction),
       findsOneWidget,
     );
     expect(
       find.text(
-        '${UITextConstants.profileShareInitiatedRecordPrefix} 纸上旅行${UITextConstants.profileShareInitiatedRecordSuffix}',
+        '${ProfileText.profileShareInitiatedRecordPrefix} 纸上旅行${ProfileText.profileShareInitiatedRecordSuffix}',
       ),
       findsOneWidget,
     );
@@ -157,7 +157,7 @@ void main() {
       ),
     );
     expect(
-      find.text(UITextConstants.profileShareReceivedEmptyTitle),
+      find.text(ProfileText.profileShareReceivedEmptyTitle),
       findsOneWidget,
     );
 
@@ -172,19 +172,19 @@ void main() {
       ),
     );
     expect(
-      find.text(UITextConstants.profileShareInitiatedEmptyTitle),
+      find.text(ProfileText.profileShareInitiatedEmptyTitle),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.profileInteractionEmpty), findsNothing);
+    expect(find.text(ProfileText.profileInteractionEmpty), findsNothing);
   });
 
   testWidgets('四种目标失效状态均降级为明确文本', (tester) async {
     const cases = <ShareTargetAvailability, String>{
-      ShareTargetAvailability.deleted: UITextConstants.profileShareDeleted,
-      ShareTargetAvailability.private: UITextConstants.profileSharePrivate,
-      ShareTargetAvailability.reviewing: UITextConstants.profileShareReviewing,
+      ShareTargetAvailability.deleted: ProfileText.profileShareDeleted,
+      ShareTargetAvailability.private: ProfileText.profileSharePrivate,
+      ShareTargetAvailability.reviewing: ProfileText.profileShareReviewing,
       ShareTargetAvailability.authorDeactivated:
-          UITextConstants.profileShareAuthorDeactivated,
+          ProfileText.profileShareAuthorDeactivated,
     };
     await tester.pumpWidget(
       CupertinoApp(

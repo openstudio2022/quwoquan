@@ -310,7 +310,7 @@ void _expectTimelineSemantics({String? value, String? valueSuffix}) {
   final semantics = find.byWidgetPredicate(
     (widget) =>
         widget is Semantics &&
-        widget.properties.label == UITextConstants.videoPlaybackProgressLabel &&
+        widget.properties.label == MediaText.videoPlaybackProgressLabel &&
         widget.properties.onIncrease != null &&
         widget.properties.onDecrease != null &&
         (value == null || widget.properties.value == value) &&

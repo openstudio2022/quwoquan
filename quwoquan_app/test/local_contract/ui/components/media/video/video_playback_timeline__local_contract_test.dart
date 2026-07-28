@@ -110,7 +110,7 @@ void main() {
         (widget) =>
             widget is Semantics &&
             widget.properties.label ==
-                UITextConstants.videoPlaybackProgressLabel &&
+                MediaText.videoPlaybackProgressLabel &&
             widget.properties.onIncrease != null &&
             widget.properties.onDecrease != null,
       ),
@@ -200,7 +200,7 @@ void main() {
         (widget) =>
             widget is Semantics &&
             widget.properties.label ==
-                UITextConstants.videoPlaybackProgressLabel &&
+                MediaText.videoPlaybackProgressLabel &&
             widget.properties.value == '0:00 / 2:05',
       ),
       findsOneWidget,
@@ -285,7 +285,7 @@ void main() {
         (widget) =>
             widget is Semantics &&
             widget.properties.label ==
-                UITextConstants.videoPlaybackProgressLabel &&
+                MediaText.videoPlaybackProgressLabel &&
             widget.properties.value == '0:00 / 2:05',
       ),
       findsOneWidget,

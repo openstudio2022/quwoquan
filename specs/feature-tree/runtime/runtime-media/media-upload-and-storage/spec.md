@@ -55,9 +55,9 @@
 ### REQ-004 upload ticket 默认有效期 15 分钟，可配；其公开 authority 必须等于当前设备 target
 
 - upload ticket 默认有效期 15 分钟，可配；其公开 authority 必须等于当前设备 target。
-- 本地设备 target 收到 canonical `*.quwoquan-env.test` 已签名 ticket 时，只能在
-  platform 防腐层把 TCP peer 投影到 target loopback；URL authority、Host、TLS SNI
-  与签名输入必须保持不变。
+- 本地设备 target 收到 canonical `upload.<env>.quwoquan.com` 已签名 ticket 时，
+  URL authority、Host、TLS SNI 与签名输入必须保持不变；Android 只允许通过
+  `adb reverse` 转发 target 端口，禁止 host 改写或私有 CA 绕过。
 
 ## 4. 契约引用
 
@@ -88,7 +88,7 @@
 - AND 发布请求与文章 manifest 不含 localPath、objectKey、presignUrl 或 cdnUrl；
   这些字段不得作为端云发布 authority。
 - AND 本地 Simulator 对 canonical 已签名上传 URL 保留原始 authority 与 SNI，
-  仅通过 target loopback 建立连接并完成真实 PUT。
+  通过公共 CA 校验证书并完成真实 PUT。
 
 ## 6. 依赖
 

@@ -1,6 +1,7 @@
 package com.cloudwebrtc.webrtc.utils;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 public class ConstraintsArray {
@@ -11,8 +12,8 @@ public class ConstraintsArray {
         this.mArray = new ArrayList<>();
     }
 
-    public ConstraintsArray(ArrayList<Object> array){
-     this.mArray = array;
+    public ConstraintsArray(List<?> array){
+     this.mArray = new ArrayList<>(array);
     }
 
     public int size(){
@@ -44,11 +45,19 @@ public class ConstraintsArray {
     }
 
     public ConstraintsArray getArray(int index){
-        return new ConstraintsArray((ArrayList<Object>)mArray.get(index));
+        Object value = mArray.get(index);
+        if (!(value instanceof List<?>)) {
+            throw new IllegalArgumentException("Value at " + index + " is not an array");
+        }
+        return new ConstraintsArray((List<?>) value);
     }
 
     public ConstraintsMap getMap(int index){
-        return new ConstraintsMap((Map<String, Object>) mArray.get(index));
+        Object value = mArray.get(index);
+        if (!(value instanceof Map<?, ?>)) {
+            throw new IllegalArgumentException("Value at " + index + " is not a map");
+        }
+        return new ConstraintsMap((Map<?, ?>) value);
     }
 
     public ObjectType getType(int index) {

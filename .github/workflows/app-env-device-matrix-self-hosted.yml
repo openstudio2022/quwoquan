@@ -45,7 +45,7 @@ on:
         required: false
         default: ''
       matrix_kind:
-        description: assistant / chat-avatar / environment-smoke / media-publication / user-profile / account-closure / JSON 数组（留空则按 profile 决定）
+        description: assistant / chat-avatar / environment-smoke / app-core-readback / media-publication / user-profile / account-closure / JSON 数组（留空则按 profile 决定）
         required: false
         default: ''
       account_closure_disposable_ack:
@@ -98,7 +98,7 @@ on:
         type: string
         default: ''
       matrix_kind:
-        description: 'assistant / chat-avatar / environment-smoke / media-publication / user-profile / account-closure / JSON array (overrides profile default)'
+        description: 'assistant / chat-avatar / environment-smoke / app-core-readback / media-publication / user-profile / account-closure / JSON array (overrides profile default)'
         required: false
         type: string
         default: ''
@@ -476,6 +476,47 @@ jobs:
       - name: 安装 Flutter 依赖
         working-directory: ${{ github.workspace }}/repo/quwoquan_app
         run: flutter pub get
+      - name: 构建四环境 Android package-only 启动矩阵
+        working-directory: ${{ github.workspace }}/repo/quwoquan_app
+        run: |
+          python3 scripts/device/build_startup_environment_matrix.py \
+            --platform android \
+            --output-root "$QWQ_OUTPUT_ROOT/ci/startup-environment-android-build-matrix"
+      - name: 上传四环境 Android package-only 启动报告
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: startup-environment-android-build-matrix-${{ github.run_id }}
+          path: ${{ env.QWQ_OUTPUT_ROOT }}/ci/startup-environment-android-build-matrix/**/report.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: 从真实 Launcher 执行 Android 原生启动 Gate instrumentation
+        if: ${{ needs.discover_devices.outputs.has_android == 'true' }}
+        working-directory: ${{ github.workspace }}/repo/quwoquan_app
+        run: |
+          set -euo pipefail
+          ANDROID_DEVICE_ID="$(python3 - <<'PY'
+          import json
+          import subprocess
+
+          result = subprocess.run(
+              ["flutter", "devices", "--machine"],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
+          devices = json.loads(result.stdout[result.stdout.find("["):result.stdout.rfind("]") + 1])
+          android = [
+              str(device.get("id") or "")
+              for device in devices
+              if str(device.get("targetPlatform") or "").lower().startswith("android")
+          ]
+          if not android or not android[0]:
+              raise SystemExit("GATE_BLOCK: discovered Android device disappeared")
+          print(android[0])
+          PY
+          )"
+          bash scripts/device/verify_android_native_startup_gate.sh "$ANDROID_DEVICE_ID"
       - name: 预热 sqlite3 macOS native asset
         working-directory: ${{ github.workspace }}/repo/quwoquan_app
         run: |
@@ -690,7 +731,6 @@ jobs:
                             --env-name prod-hosted \
                             --runtime-env prod \
                             --api-contract-env prod \
-                            --data-source remote \
                             --target "${closure_target}" \
                             --patrol-install-id "${closure_install_id}" \
                             --account-closure-disposable-ack \
@@ -717,37 +757,41 @@ jobs:
                     --environment "${env_name}" \
                     --platform "${platform}"
                   matrix_exit_code=$?
-                elif [ "${matrix_kind}" = "environment-smoke" ]; then
+                elif [ "${matrix_kind}" = "environment-smoke" ] || [ "${matrix_kind}" = "app-core-readback" ]; then
                   smoke_supported=1
                   case "${env_name}" in
                     beta)
                       smoke_target_name="beta-local"
                       smoke_env_alias="local-beta"
                       smoke_runtime_env="beta"
-                      smoke_data_source="remote"
                       ;;
                     gamma)
                       smoke_target_name="gamma-local"
-                      smoke_env_alias="gamma-local"
+                      smoke_env_alias="local-gamma"
                       smoke_runtime_env="gamma"
-                      smoke_data_source="remote"
                       ;;
                     prod-sim)
                       smoke_target_name="prod-sim"
-                      smoke_env_alias="prod-sim"
+                      smoke_env_alias="local-prod-sim"
                       smoke_runtime_env="prod"
-                      smoke_data_source="remote"
                       ;;
                     *)
-                      echo "::error::environment-smoke does not support env=${env_name}"
+                      echo "::error::${matrix_kind} does not support env=${env_name}; Alpha uses quwoquan_app/run.sh natural entry"
                       smoke_supported=0
                       ;;
                   esac
                   if [ "${smoke_supported}" = "1" ]; then
                     if [ -z "${VIDEO_PLAYBACK_CANARY_WORK_ID:-}" ]; then
-                      echo "::error::VIDEO_PLAYBACK_CANARY_WORK_ID is required for environment-smoke"
+                      echo "::error::VIDEO_PLAYBACK_CANARY_WORK_ID is required for ${matrix_kind}"
                       matrix_exit_code=2
                     else
+                      if [ "${matrix_kind}" = "app-core-readback" ]; then
+                        smoke_target="test/user_acceptance/patrol/environment/app_core_readback__user_acceptance_test.dart"
+                        smoke_report_name="app-core-readback"
+                      else
+                        smoke_target="test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart"
+                        smoke_report_name="environment-smoke"
+                      fi
                       IFS=$'\t' read -r \
                         smoke_gateway_base_url \
                         smoke_product_ops_base_url \
@@ -760,7 +804,7 @@ jobs:
                         --env-name "${smoke_env_alias}" \
                         --runtime-env "${smoke_runtime_env}" \
                         --api-contract-env "${smoke_runtime_env}" \
-                        --data-source "${smoke_data_source}" \
+                        --target "${smoke_target}" \
                         --gateway-base-url "${smoke_gateway_base_url}" \
                         --product-ops-base-url "${smoke_product_ops_base_url}" \
                         --media-avatar-base-url "${smoke_media_avatar_base_url}" \
@@ -770,7 +814,7 @@ jobs:
                         --rtc-media-connection-url "${smoke_rtc_base_url}" \
                         --video-playback-canary-work-id "${VIDEO_PLAYBACK_CANARY_WORK_ID}" \
                         --platform "${platform}" \
-                        --report "$QWQ_OUTPUT_ROOT/env/${env_name}/runs/device-matrix/environment-smoke-${platform}.json"
+                        --report "$QWQ_OUTPUT_ROOT/env/${env_name}/runs/device-matrix/${smoke_report_name}-${platform}.json"
                       matrix_exit_code=$?
                     fi
                   else

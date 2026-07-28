@@ -13,12 +13,15 @@ from content.homepage.homepage import (
 from content.homepage.homepage_introduction import _normalize_homepage_manifest_assets
 from content.homepage.homepage_prompt import _homepage_base_source_issues
 from content.homepage.homepage_release import (
-    MIN_PAGE_CHARS,
     _CONDITION_CATALOGS_ROOT,
     _GEO_TAG_REF_PREFIX,
     _REQUIRED_ENTITY_FIELDS,
 )
-from content.homepage.quality_policy import homepage_source_fidelity_limit
+from content.homepage.quality_policy import (
+    homepage_body_char_minimum,
+    homepage_section_char_minimum,
+    homepage_source_fidelity_limit,
+)
 from content.homepage.homepage_review import _entity_review_paths
 from content.homepage.homepage_validation import (
     _asset_closure_issues,
@@ -86,10 +89,19 @@ def validate_entity_page(
         from content.homepage.commercial_gate import final_page_hard_issues
 
         chars = _page_char_count(page)
-        if chars < MIN_PAGE_CHARS:
-            issues.append(f"{label}: page.md 去空白 {chars} 字 < {MIN_PAGE_CHARS}")
+        minimum_body_chars = homepage_body_char_minimum(execution_id)
+        if chars < minimum_body_chars:
+            issues.append(f"{label}: page.md 去空白 {chars} 字 < {minimum_body_chars}")
         page_text = page.read_text(encoding="utf-8")
-        issues.extend(final_page_hard_issues(page_text, entity_name=name, label=label))
+        issues.extend(
+            final_page_hard_issues(
+                page_text,
+                minimum_body_chars=minimum_body_chars,
+                minimum_section_chars=homepage_section_char_minimum(execution_id),
+                entity_name=name,
+                label=label,
+            )
+        )
         issues.extend(_homepage_authenticity_issues(execution_id, domain, etype, name, page, label))
     if not manifest.is_file():
         issues.append(f"{label}: manifest.json 缺失")

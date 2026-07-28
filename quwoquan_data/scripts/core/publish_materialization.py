@@ -57,7 +57,11 @@ def _candidate_batches(execution_id: str) -> list[str]:
     return iter_execution_ids(execution_id)
 
 
-def _collect_task_publish_inputs(execution_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], int]:
+def _collect_task_publish_inputs(
+    execution_id: str,
+    *,
+    qualified_post_refs: set[str] | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], int]:
     """聚合任务级 publish 输入，不决定落盘位置。"""
     entity_rows: list[dict[str, Any]] = []
     tag_counts: Counter[str] = Counter()
@@ -92,6 +96,12 @@ def _collect_task_publish_inputs(execution_id: str) -> tuple[list[dict[str, Any]
                 except Exception:  # noqa: BLE001
                     continue
                 rel = manifest.parent.relative_to(posts_root).as_posix()
+                publish_ref = f"posts/{rel}"
+                if (
+                    qualified_post_refs is not None
+                    and publish_ref not in qualified_post_refs
+                ):
+                    continue
                 post_count += 1
                 tag_refs = [str(t) for t in (data.get("tagRefs") or []) if str(t)]
                 geo_tag = str(data.get("geoTagRef") or "").strip()
@@ -124,9 +134,16 @@ def _collect_task_publish_inputs(execution_id: str) -> tuple[list[dict[str, Any]
     return entity_rows, tag_rows, graph_rows, post_count
 
 
-def collect_task_publish_inputs(execution_id: str) -> dict[str, Any]:
+def collect_task_publish_inputs(
+    execution_id: str,
+    *,
+    qualified_post_refs: set[str] | None = None,
+) -> dict[str, Any]:
     """收集 release/publish 组装所需的任务级输入（不写 runtime 镜像目录）。"""
-    entity_rows, tag_rows, graph_rows, post_count = _collect_task_publish_inputs(execution_id)
+    entity_rows, tag_rows, graph_rows, post_count = _collect_task_publish_inputs(
+        execution_id,
+        qualified_post_refs=qualified_post_refs,
+    )
     return {
         "entityRows": entity_rows,
         "tagRows": tag_rows,
@@ -138,13 +155,20 @@ def collect_task_publish_inputs(execution_id: str) -> dict[str, Any]:
     }
 
 
-def materialize_task_publish_inputs(execution_id: str) -> dict[str, int]:
+def materialize_task_publish_inputs(
+    execution_id: str,
+    *,
+    qualified_post_refs: set[str] | None = None,
+) -> dict[str, int]:
     """把 task 级 publish 门所需索引输入物化出来。
 
     注意：entity_pages / graph/relations.ndjson 不再长驻 runtime task 目录。
     release 如仍需兼容产物，由 assemble 阶段即时派生。
     """
-    entity_rows, tag_rows, graph_rows, post_count = _collect_task_publish_inputs(execution_id)
+    entity_rows, tag_rows, graph_rows, post_count = _collect_task_publish_inputs(
+        execution_id,
+        qualified_post_refs=qualified_post_refs,
+    )
     write_ndjson(execution_entities(execution_id), entity_rows)
     write_ndjson(execution_tags(execution_id), tag_rows)
 

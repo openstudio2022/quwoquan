@@ -6,7 +6,7 @@
 统一 payload 形态：
   homepage/article: {"sources": [{"source_id","platform","url","body?","imageUrls?"}]}
   image: {"collections": [{"sourceCollectionId", "creator", "images": [...]}]}
-  video: {"assets": [{"url", "license", "authorizationProof", ...}]}
+  video: {"videos": [{"assetUrl", "sourcePostUrl", ...}], "assets": [...]}
 """
 from __future__ import annotations
 
@@ -101,11 +101,35 @@ def _plan_has_payload(path: Path) -> bool:
     if not isinstance(data, dict):
         return False
     payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
-    for key in ("imageUrls", "collections", "assets"):
+    for key in ("imageUrls", "collections", "videos", "assets"):
         raw = data.get(key) or payload.get(key) or []
         if isinstance(raw, list) and raw:
             return True
     return False
+
+
+def curated_sourced_videos_for_entity(
+    execution_id: str,
+    entity_id: str,
+    entity_type: str = "",
+) -> list[dict[str, Any]]:
+    """Read typed real-video candidates from the video lane plan."""
+    files = _source_plan_files(
+        execution_id,
+        entity_id,
+        entity_type,
+        lanes=("video",),
+    )
+    candidates: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for _lane, path in files:
+        for raw in _extract_collections(read_json(path), "videos"):
+            asset_url = str(raw.get("assetUrl") or "").strip()
+            if not asset_url or asset_url in seen:
+                continue
+            seen.add(asset_url)
+            candidates.append(raw)
+    return candidates
 
 
 def curated_sources_for_entity(

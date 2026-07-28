@@ -332,11 +332,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(UITextConstants.sectionLoadFailedTitleDefault),
-      findsOneWidget,
-    );
-    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+    expect(find.text(SearchText.reload), findsOneWidget);
+
+    await tester.tap(find.text(SearchText.reload));
+    await tester.pumpAndSettle();
+
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsNothing);
+    expect(find.text(AssistantText.assistantMemoryEmpty), findsOneWidget);
   });
 
   testWidgets('管理页遗忘偏好后可撤销恢复', (tester) async {
@@ -406,20 +409,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(AssistantText.assistantConsentLoadFailedTitle),
-      findsOneWidget,
-    );
-    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+    expect(find.text(SearchText.reload), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.tap(find.text(SearchText.reload));
     await tester.pumpAndSettle();
 
     expect(consentFacet.listCallCount, 2);
-    expect(
-      find.text(AssistantText.assistantConsentLoadFailedTitle),
-      findsNothing,
-    );
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsNothing);
     expect(
       find.text(AssistantText.assistantContentAccessNotGranted),
       findsOneWidget,

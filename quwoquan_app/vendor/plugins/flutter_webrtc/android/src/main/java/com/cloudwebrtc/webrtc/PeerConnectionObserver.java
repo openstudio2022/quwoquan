@@ -249,24 +249,29 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
                   v_map.putBoolean(key, (Boolean)v);
               } else if(v instanceof BigInteger){
                   v_map.putLong(key, ((BigInteger)v).longValue());
-              }  else if(v instanceof LinkedHashMap) {
+              }  else if(v instanceof Map<?, ?>) {
                     ConstraintsMap m = new ConstraintsMap();
-                    for(Map.Entry<String, Object> entry : ((LinkedHashMap<String, Object>)v).entrySet()) {
+                    for(Map.Entry<?, ?> entry : ((Map<?, ?>)v).entrySet()) {
+                        if (!(entry.getKey() instanceof String)) {
+                            Log.d(TAG, "getStats() ignored non-string nested key");
+                            continue;
+                        }
+                        String entryKey = (String) entry.getKey();
                         Object value = entry.getValue();
                         if(value instanceof String) {
-                            m.putString(entry.getKey(), (String)value);
+                            m.putString(entryKey, (String)value);
                         } else if(value instanceof Integer) {
-                            m.putInt(entry.getKey(), (Integer)value);
+                            m.putInt(entryKey, (Integer)value);
                         } else if(value instanceof Long) {
-                            m.putLong(entry.getKey(), (Long)value);
+                            m.putLong(entryKey, (Long)value);
                         } else if(value instanceof Double) {
-                            m.putDouble(entry.getKey(), (Double)value);
+                            m.putDouble(entryKey, (Double)value);
                         } else if(value instanceof Boolean) {
-                            m.putBoolean(entry.getKey(), (Boolean)value);
+                            m.putBoolean(entryKey, (Boolean)value);
                         } else if(value instanceof BigInteger) {
-                            m.putLong(entry.getKey(), ((BigInteger)value).longValue());
+                            m.putLong(entryKey, ((BigInteger)value).longValue());
                         } else {
-                            Log.d(TAG, "getStats() unknown type: " + value.getClass().getName() + " for [" + entry.getKey() + "] value: " + value);
+                            Log.d(TAG, "getStats() unknown type: " + value.getClass().getName() + " for [" + entryKey + "] value: " + value);
                         }
                     }
                     v_map.putMap(key, m.toMap());
@@ -748,8 +753,8 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
   }
 
   private RtpTransceiver.RtpTransceiverInit mapToRtpTransceiverInit(Map<String, Object> parameters) {
-    List<String> streamIds = (List) parameters.get("streamIds");
-    List<Map<String, Object>> encodingsParams = (List<Map<String, Object>>) parameters.get("sendEncodings");
+    List<String> streamIds = toStringList(parameters.get("streamIds"), "streamIds");
+    List<Map<String, Object>> encodingsParams = toMapList(parameters.get("sendEncodings"), "sendEncodings");
     String direction = (String) parameters.get("direction");
     List<RtpParameters.Encoding> sendEncodings = new ArrayList<>();
     RtpTransceiver.RtpTransceiverInit init = null;
@@ -776,7 +781,7 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
 
   private RtpParameters updateRtpParameters(RtpParameters parameters, Map<String, Object> newParameters) {
     // new
-    final List<Map<String, Object>> encodings = (List<Map<String, Object>>) newParameters.get("encodings");
+    final List<Map<String, Object>> encodings = toMapList(newParameters.get("encodings"), "encodings");
     // current
     final List<RtpParameters.Encoding> nativeEncodings = parameters.encodings;
 
@@ -834,6 +839,40 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
     }
 
     return parameters;
+  }
+
+  private static List<String> toStringList(Object value, String fieldName) {
+    if (value == null) {
+      return null;
+    }
+    if (!(value instanceof List<?>)) {
+      throw new IllegalArgumentException(fieldName + " must be a list");
+    }
+    List<String> result = new ArrayList<>();
+    for (Object item : (List<?>) value) {
+      if (!(item instanceof String)) {
+        throw new IllegalArgumentException(fieldName + " must contain only strings");
+      }
+      result.add((String) item);
+    }
+    return result;
+  }
+
+  private static List<Map<String, Object>> toMapList(Object value, String fieldName) {
+    if (value == null) {
+      return null;
+    }
+    if (!(value instanceof List<?>)) {
+      throw new IllegalArgumentException(fieldName + " must be a list");
+    }
+    List<Map<String, Object>> result = new ArrayList<>();
+    for (Object item : (List<?>) value) {
+      if (!(item instanceof Map<?, ?>)) {
+        throw new IllegalArgumentException(fieldName + " must contain only maps");
+      }
+      result.add(new ConstraintsMap((Map<?, ?>) item).toMap());
+    }
+    return result;
   }
 
   private Map<String, Object> rtpParametersToMap(RtpParameters rtpParameters) {

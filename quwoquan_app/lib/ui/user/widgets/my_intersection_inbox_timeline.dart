@@ -19,31 +19,12 @@ UiErrorSemantic resolveIntersectionDetailErrorSemantic(
   required Object error,
   required String title,
 }) {
-  final resolved = runtimeErrorSemantic(
+  final _ = title;
+  return runtimeErrorSemantic(
     context,
     error: error,
     category: UiErrorCategory.pageLoad,
     scope: UiErrorScope.page,
-  );
-  return UiErrorSemantic(
-    category: resolved.category,
-    scope: resolved.scope,
-    title: title,
-    message: resolved.message,
-    secondaryMessage: resolved.secondaryMessage,
-    primaryAction:
-        resolved.primaryAction ??
-        const UiErrorAction(
-          type: UiErrorActionType.retry,
-          label: UITextConstants.tryAgain,
-        ),
-    secondaryAction: resolved.secondaryAction,
-    dismissible: resolved.dismissible,
-    sourceCode: resolved.sourceCode,
-    failureKind: resolved.failureKind,
-    recoveryAction: resolved.recoveryAction,
-    presentation: resolved.presentation,
-    tone: resolved.tone,
   );
 }
 

@@ -85,7 +85,7 @@ class ImageEditorBottomBar extends StatelessWidget {
                 child: SizedBox(
                   width: double.infinity,
                   child: MediaCreationBottomButton(
-                    label: UITextConstants.mediaPickerNextStep,
+                    label: MediaText.mediaPickerNextStep,
                     variant: MediaCreationBottomButtonVariant.fullWidthNeutral,
                     height: nextButtonHeight,
                     onPressed: onNextStep,

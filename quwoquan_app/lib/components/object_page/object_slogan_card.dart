@@ -42,7 +42,7 @@ class _ObjectSloganCardState extends State<ObjectSloganCard> {
       return const SizedBox.shrink();
     }
     final text = isPrompt
-        ? (widget.emptyPrompt ?? UITextConstants.profileEmptyBioPrompt)
+        ? (widget.emptyPrompt ?? ProfileText.profileEmptyBioPrompt)
         : rawText;
     final surfaceStart = widget.isDark
         ? AppColors.profileSloganSurfaceStartDark

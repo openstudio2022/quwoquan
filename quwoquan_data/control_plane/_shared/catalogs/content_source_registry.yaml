@@ -220,6 +220,7 @@ lanePolicies:
       attributionRequired: true
       audioRightsEvidenceRequired: true
     commercialAdmissionMatrix:
+      - { sourceId: wikimedia_commons_video, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
       - { sourceId: youtube, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
       - { sourceId: vimeo, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
       - { sourceId: bilibili, sourceKind: tourism_video_site, publicationAdmissions: [commercial_release] }
@@ -651,6 +652,15 @@ common:
       rateLimit: conservative
       promptFacts: [史密森尼开放获取图像, 逐图记录开放许可、机构署名和文件落地页]
   video:
+    - sourceId: wikimedia_commons_video
+      platform: Wikimedia Commons
+      sourceClass: open_license_media
+      lanes: [video]
+      defaultRole: publish_candidate
+      fetchMode: api
+      rightsPolicy: open_license_required
+      rateLimit: conservative
+      promptFacts: [开放许可原始视频, 逐条冻结文件页、作者、许可、媒体探针、音频与无水印证据]
     - sourceId: youtube
       platform: YouTube
       sourceClass: video_platform

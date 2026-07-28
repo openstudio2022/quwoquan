@@ -21,7 +21,7 @@
 - 用户可见错误提示必须来自 codegen 错误枚举、`toDisplayMessage(context.l10n)`、`UITextConstants` 或 l10n；禁止在 UI/Provider 中 switch 硬编码错误码字符串或中文提示。
 - `CloudException` 必须由 runtime mapper 生成并暴露 `runtimeFailure`；UI 状态只消费 `RuntimeFailure`、`runtimeErrorDisplayMessage` 和 `RuntimeRecoveryPolicy`，不得展示 raw exception/debugMessage。
 - 新页面或页面行为变化，要同步核对页面横向质量矩阵、metadata-driven UI 清单与相关测试。
-- App 端必须按 `alpha/beta/gamma/prod` 数据源语义开发：alpha 走 contract-seeded Mock，beta/gamma/prod 走 Remote，生产包无 Mock/Remote 切换入口。
+- App 端在 `alpha/beta/gamma/prod` 全部使用同一个 production Remote composition；环境只提供 runtime package/endpoints，App 可见第一方业务数据只来自环境已激活的 canonical immutable release。任何 runner、UAT support 或启动脚本均不得注入 Mock/fixture，也不得保留 Mock/Remote 切换入口。
 - 新页面、入口、详情、搜索、创作、消息或推荐相关改动，必须补曝光、停留、异常、关键点击、`referralSource`/`feedRequestId`/trace 传递；内容消费页还要补消费深度和互动反馈。
 - 用户反馈、点赞/评论/收藏/分享/关注、搜索点击、内容停留等行为必须能回流到推荐和运营分析，不得只停留在 UI 状态。
 - 当前阶段未上线：发现不合理 UI/Repository/Provider/路由实现时直接替换为正确模式，不为旧错误保留兼容分支、fallback 或 allowlist。
@@ -40,14 +40,14 @@
 
 - 用户说“页面、登录、搜索、创作、消息、错误提示、恢复按钮、推荐曝光、行为反馈”时，默认加载本文件。
 - 若同时涉及服务错误码、Remote API、数据导入、推荐反馈或环境发布，必须按根 `AGENTS.md` 的 Pre-work Reflection 启用跨域 E2E 模式。
-- App 不得单独完成端云链路：`api_integration` Remote 行为必须能回到 `local_contract` Mock/Widget/Provider 断言。
+- App 不得单独完成端云链路：`api_integration` Remote 行为必须能回到 `local_contract` generated-client/object-level typed double/Widget/Provider 断言。
 
 ## Review 与测试要求
 
 - 每次改动都要按产品、架构、代码评审、质量、测试、用户、运维、运营八角色自检。
 - `local_contract` 覆盖 metadata/codegen/静态规则、provider/widget/Mock 行为；`api_integration` 覆盖 Remote/API/真实存储或集成环境；`user_acceptance` 覆盖用户旅程、权限、弱网、性能或发布前 UAT。
-- Remote 行为的 `api_integration` 断言必须在 `local_contract` Mock/Widget/Provider 测试中有对应断言；Mock 不是替代集成测试，而是集成行为的本地分解。
-- 错误码链路的 `local_contract` 必须覆盖 mapper、Provider 状态、UI 文案、恢复按钮和 Mock 错误响应；`api_integration` 必须覆盖 RemoteRepository 对服务错误响应的映射。
+- Remote 行为的 `api_integration` 断言必须在 `local_contract` generated-client/object-level typed double/Widget/Provider 测试中有对应断言；测试 double 不能进入任何环境 App，也不能替代集成测试。
+- 错误码链路的 `local_contract` 必须覆盖 mapper、Provider 状态、UI 文案、恢复按钮和 typed 错误响应；`api_integration` 必须覆盖 RemoteRepository 对服务错误响应的映射。
 - 新增页面必须同步检查页面矩阵、P1-P8、metadata-driven UI 清单、Mock 隔离、设计系统语义 token 和登录无死循环。
 
 ## 推荐验证

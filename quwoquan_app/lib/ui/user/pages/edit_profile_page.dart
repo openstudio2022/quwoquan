@@ -198,7 +198,7 @@ class _TextEditPageState extends State<_TextEditPage> {
               ? () => Navigator.of(context).pop(_controller.text.trim())
               : null,
           child: Text(
-            UITextConstants.editProfileSaveAction,
+            ProfileText.editProfileSaveAction,
             style: TextStyle(
               fontSize: AppTypography.iosBody,
               fontWeight: AppTypography.medium,
@@ -284,14 +284,14 @@ class _BirthdayEditPageState extends State<_BirthdayEditPage> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         middle: Text(
-          UITextConstants.editProfileBirthdayTitle,
+          ProfileText.editProfileBirthdayTitle,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: _save,
           child: Text(
-            UITextConstants.editProfileSaveAction,
+            ProfileText.editProfileSaveAction,
             style: TextStyle(
               fontSize: AppTypography.iosBody,
               fontWeight: AppTypography.medium,
@@ -325,7 +325,7 @@ class _BirthdayEditPageState extends State<_BirthdayEditPage> {
           CupertinoTextField(
             controller: _controller,
             keyboardType: TextInputType.datetime,
-            placeholder: UITextConstants.editProfileBirthdayInputPlaceholder,
+            placeholder: ProfileText.editProfileBirthdayInputPlaceholder,
             padding: EdgeInsets.all(AppSpacing.containerMd),
             decoration: BoxDecoration(
               color: AppColors.iosSystemBackground(context),
@@ -351,7 +351,7 @@ class _BirthdayEditPageState extends State<_BirthdayEditPage> {
     if (parsed == null ||
         parsed.isBefore(DateTime(1900)) ||
         parsed.isAfter(DateTime(today.year, today.month, today.day))) {
-      setState(() => _error = UITextConstants.editProfileBirthdayInvalid);
+      setState(() => _error = ProfileText.editProfileBirthdayInvalid);
       return;
     }
     Navigator.of(context).pop(_formatBirthday(parsed));
@@ -428,7 +428,7 @@ class _RegionPickerPageState extends ConsumerState<_RegionPickerPage> {
           },
         ),
         middle: Text(
-          UITextConstants.editProfileRegionTitle,
+          ProfileText.editProfileRegionTitle,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
       ),
@@ -438,7 +438,7 @@ class _RegionPickerPageState extends ConsumerState<_RegionPickerPage> {
 
   Widget _buildBody(BuildContext context) {
     if (_loading) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     if (_error != null) {
       return Center(
@@ -449,14 +449,14 @@ class _RegionPickerPageState extends ConsumerState<_RegionPickerPage> {
               province: _province,
             ),
           ),
-          child: const Text(UITextConstants.tryAgain),
+          child: const Text(ContentText.tryAgain),
         ),
       );
     }
     if (_items.isEmpty) {
       return Center(
         child: Text(
-          UITextConstants.profileEmptyRegionOptions,
+          ProfileText.profileEmptyRegionOptions,
           style: TextStyle(
             fontSize: AppTypography.iosBody,
             color: AppColors.iosSecondaryLabel(context),
@@ -513,7 +513,7 @@ class _RegionPickerPageState extends ConsumerState<_RegionPickerPage> {
 
   String _selectedProvinceText(TagChild option) {
     final selected = widget.selectedTagRef.startsWith('${option.tagRef}/');
-    return selected ? UITextConstants.editProfileSelectedRegion : '';
+    return selected ? ProfileText.editProfileSelectedRegion : '';
   }
 
   String _tagDisplayLabel(TagChild option) {
@@ -549,7 +549,7 @@ class _ProfileQrCardPage extends ConsumerWidget {
           onPressed: () => Navigator.of(context).pop(),
         ),
         middle: Text(
-          UITextConstants.editProfileQrCardTitle,
+          ProfileText.editProfileQrCardTitle,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
       ),
@@ -559,7 +559,7 @@ class _ProfileQrCardPage extends ConsumerWidget {
             .getProfileQrCard(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
-            return const Center(child: CupertinoActivityIndicator());
+            return AppRequestFeedback.section();
           }
           return _QrCardBody(card: snapshot.data!);
         },
@@ -631,16 +631,16 @@ _EditProfileDisplayValue _valueOrSystemFallback(
 
 String _genderLabel(String value) {
   return switch (_normalizeGender(value)) {
-    'male' => UITextConstants.editProfileGenderMale,
-    'female' => UITextConstants.editProfileGenderFemale,
-    _ => UITextConstants.editProfileGenderUnsetValue,
+    'male' => ProfileText.editProfileGenderMale,
+    'female' => ProfileText.editProfileGenderFemale,
+    _ => ProfileText.editProfileGenderUnsetValue,
   };
 }
 
 _EditProfileDisplayValue _regionDisplay(String value) {
   if (value.trim().isEmpty) {
     return const _EditProfileDisplayValue(
-      UITextConstants.editProfileSelectCtaValue,
+      ProfileText.editProfileSelectCtaValue,
       tone: _EditProfileValueTone.prompt,
     );
   }
@@ -658,7 +658,7 @@ _EditProfileDisplayValue _phoneDisplay(
       !credential.isBound ||
       credential.displayLabel.isEmpty) {
     return const _EditProfileDisplayValue(
-      UITextConstants.editProfileBindCtaValue,
+      ProfileText.editProfileBindCtaValue,
       tone: _EditProfileValueTone.prompt,
     );
   }
@@ -675,7 +675,7 @@ _EditProfileDisplayValue _tagsSummary(
   ].where((label) => label.isNotEmpty).toList(growable: false);
   if (labels.isEmpty) {
     return const _EditProfileDisplayValue(
-      UITextConstants.editProfileSelectCtaValue,
+      ProfileText.editProfileSelectCtaValue,
       tone: _EditProfileValueTone.prompt,
     );
   }

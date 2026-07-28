@@ -30,9 +30,9 @@ void main() {
       await patrolGoTo($, AppRoutePaths.profile);
 
       await $(
-        find.text(UITextConstants.profileTabInteraction),
+        find.text(ProfileText.profileTabInteraction),
       ).waitUntilVisible(timeout: const Duration(seconds: 20));
-      await $(find.text(UITextConstants.profileTabInteraction)).tap();
+      await $(find.text(ProfileText.profileTabInteraction)).tap();
 
       final converged = await _waitForInteractionProjection($);
       expect(
@@ -47,10 +47,10 @@ void main() {
 
 Future<bool> _waitForInteractionProjection(PatrolIntegrationTester $) async {
   final expected = <Finder>[
-    find.text(UITextConstants.profileInteractionEmptyLikes),
-    find.text(UITextConstants.profileInteractionEmptyComments),
-    find.text(UITextConstants.profileInteractionEmptyShares),
-    find.text(UITextConstants.profileInteractionDirectionReceived),
+    find.text(ProfileText.profileInteractionEmptyLikes),
+    find.text(ProfileText.profileInteractionEmptyComments),
+    find.text(ProfileText.profileInteractionEmptyShares),
+    find.text(ProfileText.profileInteractionDirectionReceived),
   ];
   final deadline = DateTime.now().add(const Duration(seconds: 20));
   while (DateTime.now().isBefore(deadline)) {

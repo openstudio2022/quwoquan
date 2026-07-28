@@ -5,17 +5,15 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"quwoquan_service/runtime/controlplane"
 )
 
 type platformProjectionSummaryResponse struct {
-	ApprovalCount   int      `json:"approvalCount"`
-	AuditCount      int      `json:"auditCount"`
-	ActiveAlerts    int      `json:"activeAlerts"`
-	ReleaseServices []string `json:"releaseServices"`
+	ApprovalCount int `json:"approvalCount"`
+	AuditCount    int `json:"auditCount"`
+	ActiveAlerts  int `json:"activeAlerts"`
 }
 
 type platformTriageSummaryResponse struct {
@@ -27,16 +25,6 @@ type platformTriageSummaryResponse struct {
 	BacklogCandidates  []controlplane.BacklogCandidate    `json:"backlogCandidates"`
 	RuntimeReady       bool                               `json:"runtimeReady"`
 	Source             string                             `json:"source"`
-}
-
-type releaseStateFile struct {
-	Service    string
-	FromImage  string
-	ToImage    string
-	FromConfig string
-	ToConfig   string
-	Step       int
-	UpdatedAt  string
 }
 
 // grayRoutingPolicyFile 是灰度 IaC 的只读 wire model。全局 dimensions 已退场；
@@ -79,10 +67,9 @@ func (s *platformService) buildProjectionSummary() (platformProjectionSummaryRes
 		return platformProjectionSummaryResponse{}, err
 	}
 	return platformProjectionSummaryResponse{
-		ApprovalCount:   len(approvals),
-		AuditCount:      len(audits),
-		ActiveAlerts:    activeAlerts,
-		ReleaseServices: []string{"prod-stack"},
+		ApprovalCount: len(approvals),
+		AuditCount:    len(audits),
+		ActiveAlerts:  activeAlerts,
 	}, nil
 }
 
@@ -239,122 +226,65 @@ func (s *platformService) handleGetGrayRoutingPolicy(w http.ResponseWriter, r *h
 	writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "gray routing policy not found")
 }
 
-func (s *platformService) handleListReleases(w http.ResponseWriter, service string) {
-	base := filepath.Join(s.repoRoot, "quwoquan_service", "services")
-	items := make([]map[string]any, 0)
-	services := []string{}
-	if strings.TrimSpace(service) != "" {
-		services = append(services, strings.TrimSpace(service))
-	} else {
-		entries, _ := os.ReadDir(base)
-		for _, entry := range entries {
-			if entry.IsDir() {
-				services = append(services, entry.Name())
-			}
-		}
+func (s *platformService) handleListReleases(w http.ResponseWriter, r *http.Request, _ string) {
+	reports, err := s.store.ListDocuments("config_instance_reports")
+	if err != nil {
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
+		return
 	}
-	sort.Strings(services)
-	for _, svc := range services {
-		pattern := filepath.Join(
-			s.repoRoot, ".qwq_output", "env", "prod", "releases", "config", svc, "*.yaml",
-		)
-		files, _ := filepath.Glob(pattern)
-		sort.Strings(files)
-		releaseState := parseReleaseStateFile(readReleaseState(s.repoRoot, "prod-stack"))
-		for index, file := range files {
-			releaseID := strings.TrimSuffix(filepath.Base(file), ".yaml")
-			fromConfig := ""
-			if releaseState.FromConfig != "" {
-				fromConfig = releaseState.FromConfig
-			} else if index > 0 {
-				fromConfig = strings.TrimSuffix(filepath.Base(files[index-1]), ".yaml")
-			}
-			items = append(items, map[string]any{
-				"releaseId":     releaseID,
-				"service":       svc,
-				"configPath":    file,
-				"grayStages":    []int{5, 25, 50, 100},
-				"releaseState":  releaseLifecycleState(releaseState.Step, ""),
-				"stageState":    releaseStageState(releaseState.Step, ""),
-				"fromConfig":    fromConfig,
-				"toConfig":      releaseID,
-				"currentStage":  releaseState.Step,
-				"updatedAt":     releaseState.UpdatedAt,
-				"workflowRef":   releaseWorkflowRef(svc),
-				"rollbackToken": releaseRollbackToken(svc, releaseID),
-			})
+	if !isCanonicalSHA256(s.releaseManifestDigest) {
+		writeJSON(w, http.StatusOK, map[string]any{"items": []map[string]any{}})
+		return
+	}
+
+	type serviceCandidate struct {
+		configVersion string
+		updatedAt     string
+		inSync        bool
+	}
+	services := map[string]serviceCandidate{}
+	for _, report := range reports {
+		if stringifyDocumentValue(report["releaseManifestDigest"]) != s.releaseManifestDigest {
+			continue
 		}
+		service := strings.TrimSpace(stringifyDocumentValue(report["service"]))
+		if service == "" {
+			continue
+		}
+		candidate, alreadyReported := services[service]
+		if alreadyReported {
+			candidate.inSync = candidate.inSync && documentBool(report["inSync"])
+		} else {
+			candidate.inSync = documentBool(report["inSync"])
+		}
+		if candidate.configVersion == "" {
+			candidate.configVersion = strings.TrimSpace(stringifyDocumentValue(report["configVersion"]))
+		}
+		if updatedAt := strings.TrimSpace(stringifyDocumentValue(report["updatedAt"])); updatedAt > candidate.updatedAt {
+			candidate.updatedAt = updatedAt
+		}
+		services[service] = candidate
+	}
+
+	serviceNames := make([]string, 0, len(services))
+	for service := range services {
+		serviceNames = append(serviceNames, service)
+	}
+	sort.Strings(serviceNames)
+	items := make([]map[string]any, 0, len(serviceNames))
+	for _, service := range serviceNames {
+		candidate := services[service]
+		releaseState := "drift"
+		if candidate.inSync {
+			releaseState = "in_sync"
+		}
+		items = append(items, map[string]any{
+			"releaseId":     s.releaseManifestDigest,
+			"service":       service,
+			"configVersion": candidate.configVersion,
+			"releaseState":  releaseState,
+			"updatedAt":     candidate.updatedAt,
+		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
-}
-
-func parseReleaseStateFile(raw string) releaseStateFile {
-	out := releaseStateFile{}
-	for _, line := range strings.Split(raw, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-		switch key {
-		case "service":
-			out.Service = value
-		case "from_image":
-			out.FromImage = value
-		case "to_image":
-			out.ToImage = value
-		case "from_config":
-			out.FromConfig = value
-		case "to_config":
-			out.ToConfig = value
-		case "step":
-			parsed, _ := strconv.Atoi(value)
-			out.Step = parsed
-		case "updated_at":
-			out.UpdatedAt = value
-		}
-	}
-	return out
-}
-
-func releaseLifecycleState(step int, stageState string) string {
-	switch stageState {
-	case "paused":
-		return "paused"
-	case "rolled_back":
-		return "rolled_back"
-	case "rollback_failed":
-		return "failed"
-	}
-	switch {
-	case step >= 100:
-		return "completed"
-	case step > 0:
-		return "rolling_out"
-	default:
-		return "ready"
-	}
-}
-
-func releaseStageState(step int, stageState string) string {
-	if strings.TrimSpace(stageState) != "" {
-		return stageState
-	}
-	if step <= 0 {
-		return "pending"
-	}
-	return "rolling_" + itoa(step)
-}
-
-func releaseWorkflowRef(service string) string {
-	return "config_release_workflow_" + sanitizeBacklogSegment(service)
-}
-
-func releaseRollbackToken(service, releaseID string) string {
-	return "rbk-" + sanitizeBacklogSegment(service) + "-" + sanitizeBacklogSegment(releaseID)
 }

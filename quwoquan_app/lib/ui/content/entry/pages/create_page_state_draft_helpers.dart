@@ -102,7 +102,7 @@ extension _CreatePageStateDraftHelpers on _CreatePageState {
         },
       );
       if (!silent && mounted) {
-        AppToast.show(context, UITextConstants.saveDraft);
+        AppToast.show(context, CreationText.saveDraft);
       }
     } catch (error) {
       _draftSessionController.markFailed();

@@ -420,6 +420,7 @@ func rebuildTestHandler(ctx context.Context) error {
 		application.WithProfileTagValidator(
 			application.PathProfileTagValidator{},
 		),
+		application.WithProfilePublicBaseURL("https://quwoquan.com"),
 	)
 	searchService := application.NewSearchService(profileStore, personaStore)
 	relationshipService := relationshipapp.NewPersonaRelationshipService(
@@ -538,6 +539,9 @@ func rebuildTestHandler(ctx context.Context) error {
 		personaCommandStore,
 		profileStore,
 		profileCache,
+		application.WithCreatorRuntimeProfiles(
+			persistence.NewCreatorRuntimeProfileReader(mongoDB),
+		),
 	)
 	contactDiscoveryService := contactapp.NewContactDiscoveryService(contactDiscoveryStore, userEventPublisher)
 	var interestReader application.InterestProfileReader

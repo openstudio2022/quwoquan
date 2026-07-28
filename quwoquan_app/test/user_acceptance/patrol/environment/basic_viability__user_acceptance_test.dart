@@ -1,6 +1,6 @@
 /// user_acceptance Patrol: 环境页面基本可用性 smoke。
 ///
-/// 固定覆盖部署后最容易断的五个入口：首页、我的、他人主页、记录列表、视频流。
+/// 固定覆盖部署后最容易断的核心入口：首页、视频书、消息、我的与关联详情。
 library;
 
 import 'package:flutter/widgets.dart';
@@ -9,6 +9,9 @@ import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
+
+import '../../../support/patrol/patrol_core_readback_support.dart';
+import '../../../support/patrol/patrol_environment_harness.dart';
 
 const _otherUserId = 'fixture_user_friend';
 // 仅 Patrol/UAT 读取由环境 runner 注入的播放 canary；产品代码不感知环境。
@@ -39,7 +42,12 @@ void main() {
     skip: !kRunPatrolT4,
     config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 12)),
     ($) async {
-      await launchPatrolAppOnce($);
+      await launchEnvironmentPatrolApp($);
+      expect(
+        find.text(FoundationText.startupRecoveryTitle),
+        findsNothing,
+        reason: 'recovery page is not a successful dual-platform baseline',
+      );
       expect(
         _videoWorkId.trim(),
         isNotEmpty,
@@ -47,7 +55,10 @@ void main() {
             'environment Patrol requires an injected video playback canary work id',
       );
 
+      final provision = await provisionPatrolCoreChatConversation($);
       await _expectHomeFeed($);
+      await _goTo($, AppRoutePaths.chat);
+      await _expectChatInbox($, provision);
       await _goTo($, AppRoutePaths.profile);
       await _expectProfileShell($, label: 'my profile');
       await _goTo($, AppRoutePaths.userProfile(username: _otherUserId));
@@ -75,6 +86,23 @@ Future<void> _expectHomeFeed(PatrolIntegrationTester $) async {
   );
 }
 
+Future<void> _expectChatInbox(
+  PatrolIntegrationTester $,
+  PatrolCoreChatProvision provision,
+) async {
+  final visible = await _waitForAnyFinder($, <Finder>[
+    find.byKey(
+      ValueKey<String>('chat-inbox-row-${provision.conversationId}'),
+    ),
+    find.textContaining(provision.messageText),
+  ]);
+  expect(
+    visible,
+    isTrue,
+    reason: 'message inbox must render the provisioned conversation',
+  );
+}
+
 Future<void> _expectProfileShell(
   PatrolIntegrationTester $, {
   required String label,
@@ -96,9 +124,9 @@ Future<void> _expectProfileShell(
 
 Future<void> _expectFootprintListShell(PatrolIntegrationTester $) async {
   final visible = await _waitForAnyFinder($, <Finder>[
-    find.text(UITextConstants.myFootprintTitle),
-    find.text(UITextConstants.myFootprintPrivacyHint),
-    find.text(UITextConstants.myFootprintEmpty),
+    find.text(FoundationText.myFootprintTitle),
+    find.text(FoundationText.myFootprintPrivacyHint),
+    find.text(FoundationText.myFootprintEmpty),
   ]);
   expect(visible, isTrue, reason: 'footprint list shell should render');
 }

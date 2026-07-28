@@ -39,6 +39,7 @@ def _write_execution(root: Path, *, capped: bool) -> None:
     write_json(
         source / "meta.json",
         {
+            "entityName": "测试实体乙",
             "imagePlacements": placements,
             "assetFunnel": {
                 "candidateCount": 5,
@@ -199,3 +200,67 @@ def test_homepage_media_completeness_requires_an_outcome_for_every_downloaded_im
 
     assert report["passed"] is False
     assert "DATA.MEDIA.ENUMERATION_INCOMPLETE" in {row["code"] for row in report["issues"]}
+
+
+def _write_discarded_candidate(root: Path) -> None:
+    """过采候选池里未产出主页的对象：有来源图片，但没有 manifest 与发布处置。"""
+    source = root / "sources" / "测试实体丙__wikipedia__fixture"
+    write_json(
+        source / "meta.json",
+        {
+            "entityName": "测试实体丙",
+            "imagePlacements": [
+                {
+                    "fileName": "bingxi.jpg",
+                    "caption": "测试实体丙",
+                    "sourceOrder": 0,
+                    "placementType": "infoboxLead",
+                }
+            ],
+            "assetFunnel": {
+                "candidateCount": 1,
+                "keptCount": 1,
+                "droppedCount": 0,
+                "quotaMode": "complete_source_page",
+                "drops": [],
+            },
+        },
+    )
+    write_json(
+        source / "assets" / "index.json",
+        {"assets": [{"sourceAssetId": "001_001", "fileName": "bingxi.jpg"}]},
+    )
+
+
+def test_discarded_candidate_media_gap_does_not_block_the_batch(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """过采丢弃对象缺发布处置属于预期事实，不得阻断已达标对象的准出。"""
+    root = tmp_path / "execution"
+    _write_execution(root, capped=False)
+    _write_discarded_candidate(root)
+    monkeypatch.setattr(gate.paths, "execution_root", lambda _execution: root)
+
+    unscoped = gate.homepage_media_completeness_report("execution")
+    assert unscoped["passed"] is False, "整包审计口径下丢弃对象的缺口必须可见"
+
+    scoped = gate.homepage_media_completeness_report(
+        "execution", publishable_names={"测试实体乙"}
+    )
+    assert scoped["passed"] is True
+    assert scoped["checkedSourceCount"] == 1
+    assert scoped["issues"] == []
+
+
+def test_publishable_object_media_gap_still_blocks(tmp_path: Path, monkeypatch) -> None:
+    root = tmp_path / "execution"
+    _write_execution(root, capped=False)
+    _write_discarded_candidate(root)
+    monkeypatch.setattr(gate.paths, "execution_root", lambda _execution: root)
+
+    scoped = gate.homepage_media_completeness_report(
+        "execution", publishable_names={"测试实体乙", "测试实体丙"}
+    )
+
+    assert scoped["passed"] is False
+    assert any(row["ref"].startswith("测试实体丙") for row in scoped["issues"])

@@ -51,16 +51,16 @@ extension on _ProfileStatsTab {
   };
 
   String get label => switch (this) {
-    _ProfileStatsTab.fans => UITextConstants.circleFans,
-    _ProfileStatsTab.following => UITextConstants.follow,
+    _ProfileStatsTab.fans => CommunityText.circleFans,
+    _ProfileStatsTab.following => FoundationText.follow,
     _ProfileStatsTab.circles => ChatText.contactsTabCircles,
   };
 
   String get searchHint => switch (this) {
-    _ProfileStatsTab.fans => UITextConstants.searchFansHint,
+    _ProfileStatsTab.fans => CommunityText.searchFansHint,
     _ProfileStatsTab.following =>
-      UITextConstants.profileStatsSearchFollowingHint,
-    _ProfileStatsTab.circles => UITextConstants.searchCircleHint,
+      ProfileText.profileStatsSearchFollowingHint,
+    _ProfileStatsTab.circles => ContactText.searchCircleHint,
   };
 
   String get analyticsPageName => 'profile_stats_$routeValue';
@@ -817,16 +817,16 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         AppActionSheetSection<String>(
           items: <AppActionSheetItem<String>>[
             AppActionSheetItem<String>(
-              label: UITextConstants.profileStatsUnfollow,
+              label: ProfileText.profileStatsUnfollow,
               value: 'unfollow',
               isDestructive: true,
             ),
             AppActionSheetItem<String>(
-              label: UITextConstants.profileDirectMessage,
+              label: ProfileText.profileDirectMessage,
               value: 'message',
               description: canMessage
                   ? null
-                  : UITextConstants.profileStatsMessageUnavailable,
+                  : ProfileText.profileStatsMessageUnavailable,
               enabled: canMessage,
             ),
           ],

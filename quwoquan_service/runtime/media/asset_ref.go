@@ -1,12 +1,14 @@
 package runtimemedia
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"mime"
 	"net/url"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // AssetKind identifies the logical media asset type exposed to services/apps.
@@ -81,7 +83,13 @@ func BuildPublicMediaURL(cdnBaseURL, publicSliceKey string, version int64) strin
 	if base == "" || key == "" {
 		return ""
 	}
-	deliveryURI := fmt.Sprintf("%s/%s", base, key)
+	parsedBase, _ := url.Parse(base)
+	basePath := strings.Trim(parsedBase.Path, "/")
+	relativeKey := key
+	if basePath != "" && strings.HasPrefix(key, basePath+"/") {
+		relativeKey = strings.TrimPrefix(key, basePath+"/")
+	}
+	deliveryURI := fmt.Sprintf("%s/%s", base, relativeKey)
 	if version > 0 {
 		deliveryURI = fmt.Sprintf("%s?v=%d", deliveryURI, version)
 	}
@@ -134,7 +142,7 @@ func BuildContentMediaPublicSliceKey(
 	contentType string,
 ) string {
 	root := contentMediaPublicRoot(mediaType)
-	cleanAssetID := cleanSliceIdentity(assetID, "")
+	cleanAssetID := cleanContentAssetIdentity(assetID)
 	if root == "" || cleanAssetID == "" {
 		return ""
 	}
@@ -152,6 +160,8 @@ func BuildContentMediaPublicSliceKey(
 
 func contentMediaPublicRoot(mediaType string) string {
 	switch strings.ToLower(strings.TrimSpace(mediaType)) {
+	case "avatar":
+		return "avatar"
 	case "image":
 		return "image"
 	case "video":
@@ -161,6 +171,23 @@ func contentMediaPublicRoot(mediaType string) string {
 	default:
 		return ""
 	}
+}
+
+func cleanContentAssetIdentity(raw string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" || strings.ContainsAny(value, `/\`) {
+		return ""
+	}
+	for _, character := range value {
+		if unicode.IsSpace(character) || unicode.IsControl(character) {
+			return ""
+		}
+	}
+	if canonicalSliceSegment.MatchString(value) {
+		return value
+	}
+	sum := sha256.Sum256([]byte(value))
+	return fmt.Sprintf("unicode-%x", sum[:16])
 }
 
 func contentMediaPublicExtension(contentType string) string {

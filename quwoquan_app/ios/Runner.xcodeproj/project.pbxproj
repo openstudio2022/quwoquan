@@ -251,8 +251,6 @@
 			buildConfigurationList = 97C147051CF9000F007C117D /* Build configuration list for PBXNativeTarget "Runner" */;
 			buildPhases = (
 				4FC536F46AC933AA5A668518 /* [CP] Check Pods Manifest.lock */,
-				A7B8C9D0E1F2030405060708 /* Prepare Alpha HTTPS Local Plane */,
-				D8E101B50000000000000001 /* Bundle Local HTTPS Trust Root */,
 				9740EEB61CF901F6004384FC /* Run Script */,
 				97C146EA1CF9000F007C117D /* Sources */,
 				97C146EB1CF9000F007C117D /* Frameworks */,
@@ -511,37 +509,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "eval \"$(bash \"${SRCROOT}/../scripts/ios/prepare_dart_defines.sh\")\"\nFLUTTER_ROOT=\"${FLUTTER_ROOT:-$(grep -E '^FLUTTER_ROOT=' \"${SRCROOT}/Flutter/Generated.xcconfig\" | cut -d= -f2-)}\"\n/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
-		};
-		A7B8C9D0E1F2030405060708 /* Prepare Alpha HTTPS Local Plane */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "Prepare Alpha HTTPS Local Plane";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "bash \"${SRCROOT}/../scripts/ios/prepare_alpha_local_https.sh\"\n";
-		};
-		D8E101B50000000000000001 /* Bundle Local HTTPS Trust Root */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "Bundle Local HTTPS Trust Root";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "bash \"${SRCROOT}/../scripts/ios/prepare_local_https_trust_bundle.sh\"\n";
+			shellScript = "/bin/bash \"${SRCROOT}/../scripts/ios/xcode_backend_build.sh\"";
 		};
 		9C5E4EABB9E68540CE2CFB2C /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -573,7 +541,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "eval \"$(bash \"${SRCROOT}/../scripts/ios/prepare_dart_defines.sh\")\"\nFLUTTER_ROOT=\"${FLUTTER_ROOT:-$(grep -E '^FLUTTER_ROOT=' \"${SRCROOT}/Flutter/Generated.xcconfig\" | cut -d= -f2-)}\"\n/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
+			shellScript = "/bin/bash \"${SRCROOT}/../scripts/ios/xcode_backend_build.sh\"";
 		};
 		A1B2C3D4E5F60718293A0010 /* xcode_backend embed_and_thin */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -913,6 +881,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.quwoquanApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) QWQ_STARTUP_GATE_TEST_CONTROL";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;

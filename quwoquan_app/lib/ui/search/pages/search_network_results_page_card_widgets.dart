@@ -534,7 +534,7 @@ class _LocationPlaceTopResultCard extends StatelessWidget {
                   Text(
                     place.address?.trim().isNotEmpty == true
                         ? place.address!
-                        : UITextConstants.searchCategoryLocation,
+                        : SearchText.searchCategoryLocation,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -600,7 +600,7 @@ class _RelatedSearchCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              UITextConstants.searchRelatedTitle,
+              SearchText.searchRelatedTitle,
               style: TextStyle(
                 fontSize: _SearchResultTokens.cardTitleSize,
                 fontWeight: _SearchResultTokens.sectionTitleWeight,
@@ -636,7 +636,7 @@ class _RelatedSearchCard extends StatelessWidget {
               ),
             if (card.terms.isEmpty)
               Text(
-                UITextConstants.searchRelatedEmpty,
+                SearchText.searchRelatedEmpty,
                 style: TextStyle(
                   fontSize: _SearchResultTokens.captionSize,
                   color: fgSecondary,

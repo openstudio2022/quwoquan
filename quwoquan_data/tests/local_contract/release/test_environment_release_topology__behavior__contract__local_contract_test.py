@@ -39,6 +39,7 @@ def test_alpha_release_target_is_local_import() -> None:
 def test_prod_target_reports_only_missing_secret_key_names(monkeypatch) -> None:
     env_keys = (
         "QWQ_PROD_DATA_RELEASE_MONGO_URI",
+        "QWQ_PROD_DATA_RELEASE_USER_POSTGRES_DSN",
         "QWQ_PROD_DATA_RELEASE_MEDIA_ROOT",
     )
     for key in env_keys:
@@ -49,4 +50,5 @@ def test_prod_target_reports_only_missing_secret_key_names(monkeypatch) -> None:
     assert target.mode is EnvironmentReleaseMode.HOSTED_IMPORT
     assert target.missing_requirements == env_keys
     assert target.mongo_uri == ""
+    assert target.user_postgres_dsn == ""
     assert target.media_sync_root is None

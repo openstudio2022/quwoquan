@@ -394,6 +394,7 @@ def _render_image_task_prompt(pack: Mapping[str, Any]) -> str:
         "image_curation",
         system_vars={"title_max_chars": title_max, "caption_max_chars": caption_max},
         task_vars={
+            "execution_id": pack.get("executionId"),
             "title": pack.get("title"),
             "ref": pack.get("ref"),
             "carrier": pack.get("carrier"),

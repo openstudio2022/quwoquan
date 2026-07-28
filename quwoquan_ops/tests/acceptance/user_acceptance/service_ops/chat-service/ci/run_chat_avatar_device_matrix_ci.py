@@ -114,36 +114,6 @@ def main() -> int:
     )
     for device_id in device_ids:
         command.extend(["--device-id", device_id])
-    if env_name == "gamma":
-        base_url = os.environ.get("GAMMA_BASE_URL", "").strip()
-    elif env_name == "prod":
-        base_url = os.environ.get("PROD_GATEWAY_BASE_URL", "").strip()
-    else:
-        base_url = os.environ.get("CHAT_AVATAR_GATEWAY_BASE_URL", "").strip()
-    if base_url:
-        command.extend(["--gateway-base-url", base_url])
-    media_url = os.environ.get(
-        "PROD_MEDIA_BASE_URL" if env_name == "prod" else "MEDIA_AVATAR_CDN_BASE_URL",
-        "",
-    ).strip()
-    if media_url:
-        command.extend(["--media-base-url", media_url])
-    if env_name == "beta" and not base_url:
-        default_beta_gateway = os.environ.get(
-            "BETA_LOCAL_GATEWAY_BASE_URL",
-            "https://beta-api.quwoquan-env.test:18000",
-        ).strip()
-        command.extend(["--gateway-base-url", default_beta_gateway])
-        if not media_url:
-            command.extend(
-                [
-                    "--media-base-url",
-                    os.environ.get(
-                        "BETA_LOCAL_MEDIA_BASE_URL",
-                        "https://beta-avatar.quwoquan-env.test:18100",
-                    ).strip(),
-                ]
-            )
     token = os.environ.get(
         "PROD_TEST_AUTH_TOKEN" if env_name == "prod" else "GAMMA_TEST_AUTH_TOKEN",
         "",

@@ -28,7 +28,7 @@ configs:
   rollout: progressive
   sensitive: false
   default: ''
-- key: sys.product-ops-service.app_release.ios.app_store_url
+- key: sys.product-ops-service.app_release.ios.pwa_url
   type: string
   scope: workload
   reload: restart
@@ -85,6 +85,13 @@ configs:
   sensitive: false
   default: 0
 - key: sys.product-ops-service.app_release.android.apk_signing_certificate_sha256
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ''
+- key: sys.product-ops-service.app_release.android.min_android_version
   type: string
   scope: workload
   reload: restart

@@ -71,7 +71,7 @@ class _CommentThreadItem extends ConsumerWidget {
           children: [
             Semantics(
               button: true,
-              label: UITextConstants.goToUserProfile,
+              label: ContentText.goToUserProfile,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => _openCommentAuthorProfile(context, comment),
@@ -177,9 +177,9 @@ class _CommentThreadItem extends ConsumerWidget {
     // 交集关系标签：只渲染服务端事实投影（关注/互关），无事实不显示。
     final relationBadge = switch (comment.viewerRelation) {
       ContentCommentViewerRelation.friend =>
-        UITextConstants.commentRelationFriendBadge,
+        ContentText.commentRelationFriendBadge,
       ContentCommentViewerRelation.following =>
-        UITextConstants.commentRelationFollowingBadge,
+        ContentText.commentRelationFollowingBadge,
       ContentCommentViewerRelation.none => null,
     };
     final hasBadges =
@@ -216,22 +216,16 @@ class _CommentThreadItem extends ConsumerWidget {
             runSpacing: AppSpacing.xs,
             children: [
               if (comment.isPinned)
-                _Badge(
-                  label: UITextConstants.commentPinnedBadge,
-                  isDark: isDark,
-                ),
+                _Badge(label: ContentText.commentPinnedBadge, isDark: isDark),
               if (relationBadge != null)
                 _Badge(label: relationBadge, isDark: isDark),
               if (comment.authorLiked)
                 _Badge(
-                  label: UITextConstants.commentAuthorLikedBadge,
+                  label: ContentText.commentAuthorLikedBadge,
                   isDark: isDark,
                 ),
               if (comment.isAuthor)
-                _Badge(
-                  label: UITextConstants.commentAuthorBadge,
-                  isDark: isDark,
-                ),
+                _Badge(label: ContentText.commentAuthorBadge, isDark: isDark),
             ],
           ),
         ],
@@ -285,8 +279,8 @@ class _CommentThreadItem extends ConsumerWidget {
       AppToast.show(
         context,
         willPin
-            ? UITextConstants.commentPinnedToast
-            : UITextConstants.commentUnpinnedToast,
+            ? ContentText.commentPinnedToast
+            : ContentText.commentUnpinnedToast,
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -355,7 +349,7 @@ class _CommentThreadItem extends ConsumerWidget {
     if (loadingReplies) {
       return Padding(
         padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
-        child: const CupertinoActivityIndicator(),
+        child: AppRequestFeedback.inline(),
       );
     }
     if (!repliesExpanded) {

@@ -1,5 +1,6 @@
 ARG GO_BASE_IMAGE
 ARG ALPINE_BASE_IMAGE
+ARG ALPINE_PACKAGE_REPOSITORY=https://mirrors.aliyun.com/alpine
 ARG GO_BUILD_FLAGS=-p=1
 
 FROM ${GO_BASE_IMAGE} AS builder
@@ -19,7 +20,14 @@ RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     go build ${GO_BUILD_FLAGS} -o /user-service ./services/user-service/cmd/api/
 
 FROM ${ALPINE_BASE_IMAGE}
+ARG ALPINE_PACKAGE_REPOSITORY
 RUN if command -v apk >/dev/null 2>&1; then \
+      test -n "${ALPINE_PACKAGE_REPOSITORY}" \
+      && alpine_branch="$(. /etc/os-release && printf '%s' "${VERSION_ID%.*}")" \
+      && printf '%s/%s/main\n%s/%s/community\n' \
+        "${ALPINE_PACKAGE_REPOSITORY}" "v${alpine_branch}" \
+        "${ALPINE_PACKAGE_REPOSITORY}" "v${alpine_branch}" > /etc/apk/repositories \
+      && \
       apk add --no-cache ca-certificates tzdata; \
     else \
       if [ -f /etc/apt/sources.list.d/debian.sources ]; then \

@@ -33,11 +33,12 @@ def main() -> int:
         "filter-catalog",
         "deploy",
         "roll",
+        "matrix",
     )
     if help_result.returncode != 0 or any(command not in help_result.stdout for command in required_commands):
         issues.append(
             "stackctl --help must list package, content-readiness, data-execution-fleet, "
-            "filter-catalog, roll and deploy commands"
+            "filter-catalog, roll, deploy and matrix commands"
         )
 
     readiness_help = run(["python3", str(STACKCTL), "content-readiness", "--help"])
@@ -68,9 +69,23 @@ def main() -> int:
         verify_help.returncode != 0
         or "--kind" not in verify_help.stdout
         or "--profile" not in verify_help.stdout
+        or "--reuse-package" not in verify_help.stdout
         or "--" + "tier" in verify_help.stdout
     ):
-        issues.append("stackctl verify --help must expose --kind/--profile and forbid --tier")
+        issues.append(
+            "stackctl verify --help must expose --kind/--profile/--reuse-package and forbid --tier"
+        )
+
+    matrix_help = run(["python3", str(STACKCTL), "matrix", "--help"])
+    if (
+        matrix_help.returncode != 0
+        or "--profile" not in matrix_help.stdout
+        or "local-env-gate" not in matrix_help.stdout
+        or "--cache-mode" not in matrix_help.stdout
+    ):
+        issues.append(
+            "stackctl matrix --help must expose --profile local-env-gate and --cache-mode"
+        )
 
     health_help = run(["python3", str(STACKCTL), "health", "--help"])
     if health_help.returncode != 0 or "--scope" not in health_help.stdout:

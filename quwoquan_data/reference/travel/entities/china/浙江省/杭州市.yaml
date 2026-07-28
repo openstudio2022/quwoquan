@@ -392,6 +392,7 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临安区
     aliases:
     - 大明山风景区
+    - 大明山（浙江省）
     selectionPriority: 2
   - name: 浙西大峡谷
     canonicalName: 浙西大峡谷

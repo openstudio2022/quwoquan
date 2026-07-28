@@ -47,7 +47,7 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                 repo_root=ROOT,
                 target_name="gamma-local",
                 environment="gamma",
-                api_base_url="https://gamma-api.quwoquan-env.test:19000",
+                api_base_url="https://api.gamma.quwoquan.com:19000",
                 action="stage-and-activate",
                 rollback_release_id="",
                 token_env="QWQ_FILTER_CATALOG_PUBLISH_TOKEN",
@@ -55,7 +55,7 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
             )
 
         open_session.assert_called_once_with(
-            "https://gamma-api.quwoquan-env.test:19000",
+            "https://api.gamma.quwoquan.com:19000",
             environment="gamma",
             target_name="gamma-local",
             subject="filter-catalog-gamma-publisher",
@@ -101,7 +101,7 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                     repo_root=ROOT,
                     target_name="beta-local",
                     environment="beta",
-                    api_base_url="https://beta-api.quwoquan-env.test:18000",
+                    api_base_url="https://api.beta.quwoquan.com:18000",
                     action="stage-and-activate",
                     rollback_release_id="",
                     token_env="QWQ_FILTER_CATALOG_PUBLISH_TOKEN",
@@ -155,7 +155,7 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                 repo_root=ROOT,
                 target_name="beta-local",
                 environment="beta",
-                api_base_url="https://beta-api.quwoquan-env.test:18000",
+                api_base_url="https://api.beta.quwoquan.com:18000",
                 action="verify",
                 rollback_release_id="",
                 token_env="QWQ_FILTER_CATALOG_PUBLISH_TOKEN",

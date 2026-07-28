@@ -62,7 +62,7 @@ class EmbeddedMemberSearchPageShell extends StatelessWidget {
                     minimumSize: Size.zero,
                     onPressed: onCancel,
                     child: Text(
-                      UITextConstants.cancel,
+                      FoundationText.cancel,
                       style: TextStyle(
                         fontSize: AppTypography.iosCallout,
                         fontWeight: AppTypography.medium,

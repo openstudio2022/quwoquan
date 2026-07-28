@@ -239,7 +239,7 @@ class ObjectIntersectionSection extends ConsumerWidget {
   Widget _buildEmptyActionZone(BuildContext context) {
     final message = emptyText?.trim().isNotEmpty == true
         ? emptyText!.trim()
-        : UITextConstants.objectIntersectionsEmpty;
+        : ObjectHomepageText.objectIntersectionsEmpty;
     return Container(
       key:
           emptyKey ??

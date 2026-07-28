@@ -295,7 +295,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       primaryItems.add(
         const AppActionSheetItem<_HomepageMoreAction>(
           value: _HomepageMoreAction.share,
-          label: UITextConstants.homepageShareAction,
+          label: ObjectHomepageText.homepageShareAction,
           icon: CupertinoIcons.arrowshape_turn_up_right,
         ),
       );
@@ -304,7 +304,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       primaryItems.add(
         const AppActionSheetItem<_HomepageMoreAction>(
           value: _HomepageMoreAction.maintain,
-          label: UITextConstants.homepageMaintainAction,
+          label: ObjectHomepageText.homepageMaintainAction,
           icon: CupertinoIcons.pencil,
         ),
       );
@@ -312,7 +312,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       primaryItems.add(
         const AppActionSheetItem<_HomepageMoreAction>(
           value: _HomepageMoreAction.claim,
-          label: UITextConstants.homepageClaimAction,
+          label: ObjectHomepageText.homepageClaimAction,
           icon: CupertinoIcons.check_mark_circled,
         ),
       );
@@ -328,7 +328,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
           items: <AppActionSheetItem<_HomepageMoreAction>>[
             AppActionSheetItem<_HomepageMoreAction>(
               value: _HomepageMoreAction.report,
-              label: UITextConstants.homepageStatusReportAction,
+              label: ObjectHomepageText.homepageStatusReportAction,
               icon: CupertinoIcons.flag,
               isDestructive: true,
             ),
@@ -338,7 +338,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
     }
     final action = await showAppActionSheet<_HomepageMoreAction>(
       context,
-      title: _reference?.title ?? UITextConstants.objectHomepageDefaultTitle,
+      title: _reference?.title ?? ObjectHomepageText.objectHomepageDefaultTitle,
       sections: sections,
     );
     if (!context.mounted || action == null) {
@@ -368,11 +368,11 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
     if (_contentPreview.isEmpty && !isOpinionTab) {
       return _buildMessageCard(
         context,
-        title: UITextConstants.homepageContentSectionTitle,
+        title: ObjectHomepageText.homepageContentSectionTitle,
         child: _HomepageEmptyState(
           icon: CupertinoIcons.square_stack_3d_up,
-          title: UITextConstants.homepageContentEmptyTitle,
-          description: UITextConstants.homepageContentEmptyDescription,
+          title: ObjectHomepageText.homepageContentEmptyTitle,
+          description: ObjectHomepageText.homepageContentEmptyDescription,
         ),
       );
     }
@@ -411,8 +411,8 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
             ProfileIosSectionCard(
               child: _HomepageEmptyState(
                 icon: CupertinoIcons.square_stack_3d_up,
-                title: UITextConstants.homepageContentEmptyTitle,
-                description: UITextConstants.homepageContentEmptyDescription,
+                title: ObjectHomepageText.homepageContentEmptyTitle,
+                description: ObjectHomepageText.homepageContentEmptyDescription,
               ),
             )
           else
@@ -442,8 +442,8 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       return ProfileIosSectionCard(
         child: _HomepageEmptyState(
           icon: CupertinoIcons.star,
-          title: UITextConstants.homepageReviewEmptyTitle,
-          description: UITextConstants.homepageReviewEmptyDescription,
+          title: ObjectHomepageText.homepageReviewEmptyTitle,
+          description: ObjectHomepageText.homepageReviewEmptyDescription,
         ),
       );
     }
@@ -547,7 +547,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
   Widget _buildDiscussionTab(BuildContext context) {
     final objectName = (_reference?.title ?? '').trim();
     final sectionTitle = objectName.isEmpty
-        ? UITextConstants.homepageDiscussionSectionTitle
+        ? ObjectHomepageText.homepageDiscussionSectionTitle
         : UITextConstants.homepageDiscussionSectionTitleFor(objectName);
     if (_questionPreview.isEmpty) {
       return _buildMessageCard(
@@ -555,8 +555,8 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
         title: sectionTitle,
         child: _HomepageEmptyState(
           icon: CupertinoIcons.chat_bubble_2_fill,
-          title: UITextConstants.homepageDiscussionEmptyTitle,
-          description: UITextConstants.homepageDiscussionEmptyDescription,
+          title: ObjectHomepageText.homepageDiscussionEmptyTitle,
+          description: ObjectHomepageText.homepageDiscussionEmptyDescription,
         ),
       );
     }
@@ -571,7 +571,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
               (item) => _HomepagePreviewCell(
                 title: item.title,
                 subtitle: item.summary ?? '',
-                label: UITextConstants.objectTabDiscussion,
+                label: ObjectHomepageText.objectTabDiscussion,
                 icon: CupertinoIcons.chat_bubble_2,
               ),
             )
@@ -584,18 +584,18 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
     if (_relatedGroups.isEmpty) {
       return _buildMessageCard(
         context,
-        title: UITextConstants.homepageInterestCircleSectionTitle,
+        title: ObjectHomepageText.homepageInterestCircleSectionTitle,
         child: _HomepageEmptyState(
           icon: CupertinoIcons.person_3_fill,
-          title: UITextConstants.homepageInterestCircleEmptyTitle,
-          description: UITextConstants.homepageInterestCircleEmptyDescription,
+          title: ObjectHomepageText.homepageInterestCircleEmptyTitle,
+          description: ObjectHomepageText.homepageInterestCircleEmptyDescription,
         ),
       );
     }
 
     return _buildSectionBlock(
       context: context,
-      title: UITextConstants.homepageInterestCircleSectionTitle,
+      title: ObjectHomepageText.homepageInterestCircleSectionTitle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: _relatedGroups

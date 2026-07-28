@@ -31,7 +31,7 @@ void main() {
       await patrolGoTo($, AppRoutePaths.myReports);
 
       await $(
-        find.text(UITextConstants.myReportsTitle),
+        find.text(ContentText.myReportsTitle),
       ).waitUntilVisible(timeout: const Duration(seconds: 15));
 
       final converged = await _waitForRemoteLifecycleState($);
@@ -47,11 +47,11 @@ void main() {
 
 Future<bool> _waitForRemoteLifecycleState(PatrolIntegrationTester $) async {
   final expected = <Finder>[
-    find.text(UITextConstants.myReportsEmptyTitle),
-    find.text(UITextConstants.reportStatusPending),
-    find.text(UITextConstants.reportStatusReviewing),
-    find.text(UITextConstants.reportStatusResolved),
-    find.text(UITextConstants.reportStatusDismissed),
+    find.text(ContentText.myReportsEmptyTitle),
+    find.text(ContentText.reportStatusPending),
+    find.text(ContentText.reportStatusReviewing),
+    find.text(ContentText.reportStatusResolved),
+    find.text(ContentText.reportStatusDismissed),
   ];
   final deadline = DateTime.now().add(const Duration(seconds: 20));
   while (DateTime.now().isBefore(deadline)) {

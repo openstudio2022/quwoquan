@@ -1,16 +1,24 @@
 """Project one referenced creator profile into a canonical consumer object."""
+
 from __future__ import annotations
 
+import json
+import re
+import shutil
+from collections.abc import Mapping
 from pathlib import Path
 
 import yaml
-
-from core.io import write_json
-from core.paths import CONTROL_PLANE_CREATOR_POOL_ROOT
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _safe_id,
+    _safe_rel,
 )
+from core.io import write_json
+from core.media_asset_url import is_cas_media_object_key, sha256_file
+from core.paths import CONTROL_PLANE_CREATOR_POOL_ROOT, PUBLISH_ROOT
+
+_SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 def _creator_profile_path(creator_ref: str) -> Path:
@@ -21,14 +29,103 @@ def _creator_profile_path(creator_ref: str) -> Path:
         try:
             payload = yaml.safe_load(path.read_text(encoding="utf-8"))
         except (OSError, yaml.YAMLError) as exc:
-            raise ObjectTransactionError(f"creator profile unreadable: {path}: {exc}") from exc
-        if isinstance(payload, dict) and str(payload.get("creatorProfileId") or "") == creator_ref:
+            raise ObjectTransactionError(
+                f"creator profile unreadable: {path}: {exc}"
+            ) from exc
+        if (
+            isinstance(payload, dict)
+            and str(payload.get("creatorProfileId") or "") == creator_ref
+        ):
             matches.append(path)
     if len(matches) != 1:
         raise ObjectTransactionError(
             f"creator profile must resolve exactly once: {creator_ref}: found={len(matches)}"
         )
     return matches[0]
+
+
+def _avatar_asset_projection(
+    payload: Mapping[str, object],
+) -> tuple[dict[str, object], dict[str, object], Path] | None:
+    raw = payload.get("avatarAsset")
+    if raw is None:
+        return None
+    expected_fields = {
+        "assetId",
+        "kind",
+        "sha256",
+        "objectKey",
+        "bytes",
+        "mimeType",
+        "rightsSnapshotRef",
+    }
+    if not isinstance(raw, Mapping) or set(raw) != expected_fields:
+        raise ObjectTransactionError(
+            "creator avatarAsset must bind identity, private CAS, bytes, MIME and rights snapshot"
+        )
+    asset_id = str(raw.get("assetId") or "").strip()
+    kind = str(raw.get("kind") or "").strip()
+    sha256 = str(raw.get("sha256") or "").strip()
+    object_key = str(raw.get("objectKey") or "").strip()
+    byte_count = raw.get("bytes")
+    mime_type = str(raw.get("mimeType") or "").strip()
+    rights_ref = _safe_rel(
+        str(raw.get("rightsSnapshotRef") or ""),
+        label="avatarAsset.rightsSnapshotRef",
+    )
+    if (
+        not asset_id
+        or kind != "avatar"
+        or not _SHA256_RE.fullmatch(sha256)
+        or not is_cas_media_object_key(object_key)
+        or not isinstance(byte_count, int)
+        or isinstance(byte_count, bool)
+        or byte_count <= 0
+        or not mime_type.startswith("image/")
+    ):
+        raise ObjectTransactionError(
+            "creator avatarAsset requires traceable canonical image CAS metadata"
+        )
+    digest = sha256.removeprefix("sha256:")
+    if digest not in Path(object_key).name:
+        raise ObjectTransactionError(
+            "creator avatarAsset objectKey does not bind sha256"
+        )
+    physical = PUBLISH_ROOT / object_key
+    if (
+        not physical.is_file()
+        or physical.stat().st_size != byte_count
+        or sha256_file(physical) != sha256
+    ):
+        raise ObjectTransactionError(
+            "creator avatarAsset CAS bytes are missing or drifted"
+        )
+    rights_source = CONTROL_PLANE_CREATOR_POOL_ROOT / rights_ref
+    try:
+        rights = json.loads(rights_source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ObjectTransactionError(
+            f"creator avatarAsset rights snapshot unreadable: {rights_source}"
+        ) from exc
+    manifest_asset = (
+        rights.get("manifestAsset") if isinstance(rights, Mapping) else None
+    )
+    if (
+        not isinstance(manifest_asset, Mapping)
+        or str(manifest_asset.get("assetId") or "") != asset_id
+        or str(manifest_asset.get("sha256") or "") != sha256
+    ):
+        raise ObjectTransactionError(
+            "creator avatarAsset rights snapshot identity drift"
+        )
+    profile_ref = {"assetId": asset_id, "kind": kind, "sha256": sha256}
+    asset_ref = {
+        **profile_ref,
+        "objectKey": object_key,
+        "bytes": byte_count,
+        "mimeType": mime_type,
+    }
+    return profile_ref, asset_ref, rights_source
 
 
 def project_creator_object(creator_ref: str, target: Path) -> Path:
@@ -58,25 +155,33 @@ def project_creator_object(creator_ref: str, target: Path) -> Path:
             "entityRefs": [],
         },
     )
-    write_json(
-        target / "profile.json",
-        {
-            "schema": "quwoquan_data.creator_profile",
-            "creatorId": creator_ref,
-            "userId": str(payload.get("authorId") or ""),
-            "authorId": str(payload.get("authorId") or ""),
-            "subAccountId": str(payload.get("subAccountId") or payload.get("authorId") or ""),
-            "displayName": str(payload.get("displayName") or ""),
-            "userHandle": str(payload.get("userHandle") or ""),
-            "avatarObjectKey": str(payload.get("avatarObjectKey") or ""),
-            "headline": str(payload.get("headline") or ""),
-            "bio": str(payload.get("bio") or ""),
-            "creatorArchetype": str(payload.get("creatorArchetype") or ""),
-            "publicProfileTagRefs": tag_refs,
-            "disclosure": dict(payload.get("disclosure") or {}),
-        },
-    )
-    write_json(target / "assets.refs.json", {"assets": []})
+    profile: dict[str, object] = {
+        "schema": "quwoquan_data.creator_profile",
+        "creatorId": creator_ref,
+        "userId": str(payload.get("authorId") or ""),
+        "authorId": str(payload.get("authorId") or ""),
+        "subAccountId": str(
+            payload.get("subAccountId") or payload.get("authorId") or ""
+        ),
+        "displayName": str(payload.get("displayName") or ""),
+        "userHandle": str(payload.get("userHandle") or ""),
+        "headline": str(payload.get("headline") or ""),
+        "bio": str(payload.get("bio") or ""),
+        "creatorArchetype": str(payload.get("creatorArchetype") or ""),
+        "publicProfileTagRefs": tag_refs,
+        "disclosure": dict(payload.get("disclosure") or {}),
+    }
+    avatar_projection = _avatar_asset_projection(payload)
+    asset_refs: list[dict[str, object]] = []
+    if avatar_projection is not None:
+        avatar_asset, asset_ref, rights_source = avatar_projection
+        profile["avatarAsset"] = avatar_asset
+        asset_refs.append(asset_ref)
+        rights_root = target / "rights_snapshots"
+        rights_root.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(rights_source, rights_root / rights_source.name)
+    write_json(target / "profile.json", profile)
+    write_json(target / "assets.refs.json", {"assets": asset_refs})
     (target / "works.refs.ndjson").write_text("", encoding="utf-8")
     return target
 

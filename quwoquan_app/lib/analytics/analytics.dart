@@ -54,31 +54,7 @@ class AnalyticsService {
 
   Future<void> trackEvent(AnalyticsEvent event) async {
     if (!_enabled) return;
-    final trace = AppTraceContextStore.instance;
-    unawaited(
-      _appLogService.writeEvent(
-        logType: AppLogType.pageAccess,
-        level: AppLogLevel.info,
-        context: AppLogContext(
-          sessionId: trace.sessionId,
-          pageVisitId: trace.newPageVisitId(),
-          requestId: trace.newRequestId(),
-          target: 'analytics_facade',
-          action: event.eventName,
-        ),
-        payload: <String, Object?>{
-          'kind': 'analytics_event',
-          'eventType': event.eventType,
-          'eventName': event.eventName,
-          'properties': event.properties,
-        },
-        summaryPayload: <String, Object?>{
-          'kind': 'analytics_event',
-          'eventType': event.eventType,
-          'eventName': event.eventName,
-        },
-      ),
-    );
+    _writeLocalEvent(event);
     final reporter = _telemetryReporter;
     if (reporter == null) return;
     if (_localOnlyEventNames.contains(event.eventName)) return;
@@ -119,6 +95,80 @@ class AnalyticsService {
         pageName: pageName.isEmpty
             ? AppPageContextStore.instance.pageName
             : pageName,
+      ),
+    );
+  }
+
+  /// 已进入 metadata 目录的 command/query 终态。该入口保留 operation、页面、
+  /// cache fallback 与 canonical error/recovery 上下文，不经过动态 Map 投影。
+  Future<void> trackOperationResult({
+    required String operationId,
+    required String result,
+    required String surfaceId,
+    required bool hasCache,
+    String? failReasonCode,
+    String? recoveryAction,
+    String? requestId,
+    String? traceId,
+  }) async {
+    if (!_enabled) return;
+    final event = AnalyticsEvent(
+      eventType: 'operation_result',
+      eventName: operationId,
+      properties: <String, Object?>{
+        'result': result,
+        'surfaceId': surfaceId,
+        'hasCache': hasCache,
+        if ((failReasonCode ?? '').trim().isNotEmpty)
+          'failReasonCode': failReasonCode,
+        if ((recoveryAction ?? '').trim().isNotEmpty)
+          'recoveryAction': recoveryAction,
+        if ((requestId ?? '').trim().isNotEmpty) 'requestId': requestId,
+        if ((traceId ?? '').trim().isNotEmpty) 'traceId': traceId,
+      },
+    );
+    _writeLocalEvent(event);
+    final reporter = _telemetryReporter;
+    if (reporter == null) return;
+    await reporter.record(
+      AppTelemetryPayload.operationResult(
+        operationId: operationId,
+        result: result,
+        surfaceId: surfaceId,
+        hasCache: hasCache,
+        failReasonCode: failReasonCode,
+        recoveryAction: recoveryAction,
+        requestId: requestId,
+        traceId: traceId,
+      ),
+      pageName: AppPageContextStore.instance.pageName,
+    );
+  }
+
+  void _writeLocalEvent(AnalyticsEvent event) {
+    final trace = AppTraceContextStore.instance;
+    unawaited(
+      _appLogService.writeEvent(
+        logType: AppLogType.pageAccess,
+        level: AppLogLevel.info,
+        context: AppLogContext(
+          sessionId: trace.sessionId,
+          pageVisitId: trace.newPageVisitId(),
+          requestId: trace.newRequestId(),
+          target: 'analytics_facade',
+          action: event.eventName,
+        ),
+        payload: <String, Object?>{
+          'kind': 'analytics_event',
+          'eventType': event.eventType,
+          'eventName': event.eventName,
+          'properties': event.properties,
+        },
+        summaryPayload: <String, Object?>{
+          'kind': 'analytics_event',
+          'eventType': event.eventType,
+          'eventName': event.eventName,
+        },
       ),
     );
   }

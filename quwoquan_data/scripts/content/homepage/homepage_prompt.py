@@ -71,15 +71,12 @@ from content.homepage.homepage_assets import (
     select_homepage_assets,
     write_homepage_media_dispositions,
 )
-MIN_PAGE_CHARS = 350
 # 实体主页底稿下发上限：取消旧的 4000 截断（旧值会把维基百科页在中段截断，
 # Agent 看不到「技术变革 / 相关古迹」等后段章节，导致多级目录与章节缺失）。
 # 放宽到覆盖绝大多数百科页全文，仅兜底极端超长源避免 token 失控。
 from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 
 HOMEPAGE_BASE_DRAFT_MAX_CHARS = MEDIA_PROCESSING_POLICY.homepage_base_draft_max_chars
-# 计入 sectionOutline 的关键章节最小去空白正文字数（短于此视为占位/导语碎片）。
-HOMEPAGE_SECTION_MIN_CHARS = 120
 # 发布态 _entity.json 必填集（结构契约唯一定义 = schema/publish/entity.schema.json）。
 # geoTagRef 为区县级主归属行政区标签（裁决 7：单值主归属 + 可选 geoTagRefs 全量数组），
 # 自 discovery_seed/2 起为物化必填；geoTagRefs 仅跨省/跨市地点提供。
@@ -96,7 +93,12 @@ _GEO_TAG_REF_PREFIX = "Topic/地理/行政区/"
 _REPO_DATA_ROOT = Path(__file__).resolve().parents[2]
 _CONDITION_CATALOGS_ROOT = _REPO_DATA_ROOT / "control_plane" / "_shared" / "catalogs"
 _WIKI_FILE_INLINE_RE = re.compile(r"\[\[(?:File|文件):[^\]]+\]\]", re.IGNORECASE)
-def _homepage_section_outline(unit_dir: Path, meta: dict[str, Any]) -> list[dict[str, Any]]:
+def _homepage_section_outline(
+    unit_dir: Path,
+    meta: dict[str, Any],
+    *,
+    min_section_chars: int,
+) -> list[dict[str, Any]]:
     """从来源 `source.md`（保留 wiki `==/===`）解析关键章节，供 prompt 保留多级目录。
     优先复用下载阶段已写入 meta.sectionOutline（P1 联网解析）；缺省时离线从原文解析。
     `source.clean.md` 已把标题压成无标记纯文本会丢层级，故必须读 `source.md` 原文。
@@ -117,7 +119,7 @@ def _homepage_section_outline(unit_dir: Path, meta: dict[str, Any]) -> list[dict
     except OSError:
         return []
     nodes = outline_required_sections(
-        parse_section_outline(raw_text), min_body_chars=HOMEPAGE_SECTION_MIN_CHARS
+        parse_section_outline(raw_text), min_body_chars=min_section_chars
     )
     return outline_to_dicts(nodes)
 def _homepage_structured_base_text(base_text: str, outline_rows: list[dict[str, Any]]) -> str:
@@ -417,7 +419,10 @@ def _render_entity_page_prompt(payload: dict[str, Any]) -> str:
     base_text = str(base.get("markdown") or base.get("text") or "").strip()
     return render(
         "entity_homepage",
-        system_vars={"min_page_chars": MIN_PAGE_CHARS},
+        system_vars={
+            "min_page_chars": int(payload["minChars"]),
+            "min_section_chars": int(payload["minSectionChars"]),
+        },
         task_vars={
             "name": name,
             "base_source_line": _entity_base_source_line(base_ref, base_mode),

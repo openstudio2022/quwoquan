@@ -16,7 +16,7 @@ void main() {
       expect(actions, hasLength(1));
       expect(actions.single.action, CreateMediaPickerBottomAction.nextStep);
       expect(actions.single.label, '下一步(1)');
-      expect(actions.single.label, isNot(UITextConstants.mediaPickerEditImage));
+      expect(actions.single.label, isNot(MediaText.mediaPickerEditImage));
     });
 
     test('mixed 模式第一项锁定媒体类型：图片可多选，视频单选，图片视频不可混选', () {

@@ -16,9 +16,8 @@ from typing import Any, Callable
 
 from core.paths import CONTROL_PLANE_SHARED_ROOT, REPO_ROOT, recipe_path
 from core.runtime_policy import apply_runtime_policy, load_runtime_policy
-from core.control_types import TargetSelector
+from core.control_types import ExecutionStage, TargetSelector
 from content.execution import store
-from content.execution.homepage_binding import published_homepage_target_names
 from content.execution.request import RuntimeExecutionRequest, resolve_candidate_pool
 from governance.provider_policy import load_provider_policy
 from content.execution.workspace import (
@@ -32,10 +31,8 @@ from content.execution.workspace import (
 _CLI_PATH = Path(__file__).resolve().parents[2] / "cli.py"
 InvokeCli = Callable[[list[str]], int]
 SELECTION_QUOTA_FIELDS = (
-    "entityArticlesPerTarget",
-    "entityHomepagesPerTarget",
-    "imageWorksPerTarget",
-    "videoWorksPerTarget",
+    "entityArticlesPerTarget", "entityHomepagesPerTarget",
+    "imageWorksPerTarget", "videoWorksPerTarget",
 )
 
 
@@ -123,7 +120,6 @@ def _resolve_selection(
             "name": name,
             "title": name,
             "intentLabel": intent,
-            "homepageExecutionId": request.homepage_execution_id or "",
             "limit": request.count,
             "approvedQuota": request.quota,
         }
@@ -158,6 +154,7 @@ def _execute(
     recipe: dict[str, Any],
     execution_id: str,
     *,
+    until: str | None = None,
     recover_stage: str | None = None,
     recovery_reason: str | None = None,
 ) -> None:
@@ -167,6 +164,7 @@ def _execute(
         run_execution(
             execution_id,
             recipe,
+            until=until,
             recover_stage=recover_stage,
             recovery_reason=recovery_reason,
         )
@@ -303,9 +301,38 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         )
     except ValueError as exc:
         raise SystemExit(f"[task execute] GATE_BLOCK {exc}") from exc
-    # Every facade stage reads or writes the same immutable work package.
+    root_execution_id = str(
+        getattr(args, "campaign_root_execution_id", "") or ""
+    ).strip() or identity.execution_id
+    campaign_bound = bool(
+        str(getattr(args, "campaign_root_execution_id", "") or "").strip()
+    )
+    if stage == "submit-only":
+        from content.execution.campaign_submission import write_submission
+
+        try:
+            path = write_submission(
+                root_execution_id=root_execution_id,
+                execution_id=identity.execution_id,
+                request=runtime_request,
+                retry_of=str(getattr(args, "retry_of", "") or "").strip() or None,
+            )
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
+            raise SystemExit(f"[task execute] GATE_BLOCK campaign submission: {exc}") from exc
+        print(f"[task execute] SUBMITTED executionId={identity.execution_id} path={path}")
+        return
+    if campaign_bound and stage == "run":
+        from content.execution.campaign_receipt import (
+            require_campaign_quota_barrier,
+        )
+
+        try:
+            require_campaign_quota_barrier(root_execution_id)
+        except (OSError, TypeError, ValueError) as exc:
+            raise SystemExit(
+                f"[task execute] GATE_BLOCK campaign quota barrier: {exc}"
+            ) from exc
     # A task-output purge between plan-only and run destroys its frozen input,
-    # so conflict admission must happen before *any* stage materializes it.
     from content.execution.agent.agent_conflicts import (
         ManagedWorkspaceConflictError,
         assert_managed_workspace_available,
@@ -432,10 +459,32 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
     _execute(
         recipe,
         execution_id,
+        until=(
+            ExecutionStage.POST_REVIEW.value
+            if stage == "review-only"
+            else None
+        ),
         recover_stage=recover_stage,
         recovery_reason=recovery_reason,
     )
+    if stage == "review-only":
+        if campaign_bound:
+            from content.execution.campaign_receipt import write_review_receipt
+
+            write_review_receipt(
+                root_execution_id=root_execution_id,
+                execution_id=execution_id,
+            )
+        print(f"[task execute] REVIEW READY executionId={execution_id}")
+        return
     _readiness(recipe, execution_id, invoke)
+    if campaign_bound:
+        from content.execution.campaign_receipt import write_publish_receipt
+
+        write_publish_receipt(
+            root_execution_id=root_execution_id,
+            execution_id=execution_id,
+        )
     print(f"[task execute] DONE executionId={execution_id}")
 
 
@@ -444,6 +493,43 @@ def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
     from content.execution.identity import parse_execution_id
 
     identity = parse_execution_id(execution_id)
+    stage = str(getattr(args, "stage", "run") or "run")
+    if stage == "campaign-run":
+        root_execution_id = str(
+            getattr(args, "campaign_root_execution_id", "") or execution_id
+        ).strip()
+        if identity.content_type.value != "homepage":
+            raise SystemExit(
+                "[task execute] GATE_BLOCK campaign-run requires a homepage "
+                "root executionId"
+            )
+        if root_execution_id != execution_id:
+            raise SystemExit(
+                "[task execute] GATE_BLOCK campaign-run executionId must equal "
+                "--campaign-root-execution-id"
+            )
+        from content.execution.campaign_controller import run_campaign
+
+        try:
+            report_path = run_campaign(
+                root_execution_id,
+                submission_timeout_seconds=getattr(
+                    args, "submission_timeout_seconds", None
+                ),
+                lane_timeout_seconds=getattr(
+                    args, "campaign_lane_timeout_seconds", None
+                ),
+            )
+        except (
+            OSError,
+            RuntimeError,
+            TimeoutError,
+            ValueError,
+            subprocess.SubprocessError,
+        ) as exc:
+            raise SystemExit(f"[task execute] GATE_BLOCK campaign: {exc}") from exc
+        print(f"[task execute] CAMPAIGN DONE report={report_path}")
+        return
     region_ref = str(getattr(args, "region_ref", "") or "").strip().strip("/")
     if not region_ref:
         raise SystemExit("[task execute] GATE_BLOCK --region-ref is required")
@@ -469,25 +555,8 @@ def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         raise SystemExit(
             "[task execute] GATE_BLOCK homepage carrier requires --selector source-ready-priority"
         )
-    homepage_execution_id = str(getattr(args, "homepage_execution_id", "") or "").strip()
-    if identity.content_type.value != "homepage" and not homepage_execution_id:
-        raise SystemExit("[task execute] GATE_BLOCK post families require --homepage-execution-id")
     requested_target_names = tuple(getattr(args, "target_names", ()) or ())
-    if identity.content_type.value != "homepage" and requested_target_names:
-        raise SystemExit(
-            "[task execute] GATE_BLOCK post targets are derived from --homepage-execution-id; "
-            "--target is homepage-only"
-        )
-    target_names = (
-        requested_target_names
-        if identity.content_type.value == "homepage"
-        else published_homepage_target_names(
-            homepage_execution_id,
-            region_ref=region_ref,
-            count=count,
-            quota=quota,
-        )
-    )
+    target_names = requested_target_names
     target_names = _retry_target_names(
         str(getattr(args, "retry_of", "") or "").strip() or None,
         count=count,
@@ -499,10 +568,12 @@ def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             execution_id=execution_id,
             retry_of=getattr(args, "retry_of", None),
             stage=getattr(args, "stage", "run"),
+            campaign_root_execution_id=getattr(
+                args, "campaign_root_execution_id", None
+            ),
             recover_stage=getattr(args, "recover_stage", None),
             recovery_reason=getattr(args, "recovery_reason", None),
             family=getattr(args, "family", None),
-            homepage_execution_id=homepage_execution_id or None,
             region_ref=region_ref,
             selector=target_selector.value,
             target_names=target_names,
@@ -519,52 +590,8 @@ def handle_execute(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
 
 
 def register_recipe_parser(sub: argparse._SubParsersAction) -> None:
-    pg = sub.add_parser(
-        "execute",
-        help="按 family 与运行 request 执行内容工作包（选择→准入→执行→readiness）",
+    from content.execution.recipe_parser import (
+        register_recipe_parser as register_parser,
     )
-    pg.add_argument("--execution-id", required=True, help="唯一 executionId")
-    pg.add_argument("--retry-of", help="新 sequence 重试时指向原 executionId")
-    pg.add_argument(
-        "--homepage-execution-id",
-        help="文章、图片、视频必须绑定已 canonical 的主页 executionId",
-    )
-    pg.add_argument("--family", required=True, help="control_plane family recipe reference")
-    pg.add_argument("--region-ref", required=True, help="reference/<vertical>/entities 下的区域引用")
-    pg.add_argument(
-        "--selector",
-        required=True,
-        choices=tuple(item.value for item in TargetSelector),
-    )
-    pg.add_argument("--quota", required=True, type=int, help="准出配额（必须交付的达标对象数）")
-    pg.add_argument(
-        "--count",
-        type=int,
-        help="候选池上限；省略时按 runtime policy 的 oversampleFactor 由 --quota 推导",
-    )
-    pg.add_argument("--target", dest="target_names", action="append", default=[], help="仅在本次运行请求中限定候选实体；可重复，数量必须等于候选池大小")
-    pg.add_argument("--topic", help="文章、图片或视频的主题")
-    pg.add_argument(
-        "--source-provider",
-        dest="source_providers",
-        action="append",
-        default=[],
-        help="限制到已声明 provider，可重复",
-    )
-    pg.add_argument(
-        "--stage",
-        choices=["run", "plan-only", "readiness-only"],
-        default="run",
-    )
-    from content.execution.controller.dag import STAGE_NAMES
 
-    pg.add_argument(
-        "--recover-stage",
-        choices=STAGE_NAMES,
-        help="代码或基础设施修复后的受审计恢复起点；必须同时提供 --recovery-reason",
-    )
-    pg.add_argument(
-        "--recovery-reason",
-        help="受审计恢复原因；必须同时提供 --recover-stage",
-    )
-    pg.set_defaults(handler=handle_execute)
+    register_parser(sub, handler=handle_execute)

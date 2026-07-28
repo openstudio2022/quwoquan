@@ -2,14 +2,13 @@ package com.cloudwebrtc.webrtc;
 
 import android.Manifest;
 import android.app.Activity;
-import android.app.Fragment;
-import android.app.FragmentTransaction;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Point;
+import android.graphics.Rect;
 import android.hardware.camera2.CameraManager;
 import android.media.AudioDeviceInfo;
 import android.media.projection.MediaProjection;
@@ -22,16 +21,20 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
+import android.os.Parcelable;
 import android.os.ResultReceiver;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.util.Pair;
 import android.util.SparseArray;
-import android.view.Display;
 import android.view.WindowManager;
+import android.view.WindowMetrics;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentActivity;
+import androidx.fragment.app.FragmentTransaction;
 
 import com.cloudwebrtc.webrtc.audio.AudioSwitchManager;
 import com.cloudwebrtc.webrtc.audio.AudioUtils;
@@ -122,7 +125,7 @@ public class GetUserMediaImpl {
     public void screenRequestPermissions(ResultReceiver resultReceiver) {
         mediaProjectionData = null;
         final Activity activity = stateProvider.getActivity();
-        if (activity == null) {
+        if (!(activity instanceof FragmentActivity)) {
             // Activity went away, nothing we can do.
             return;
         }
@@ -135,8 +138,8 @@ public class GetUserMediaImpl {
         fragment.setArguments(args);
 
         FragmentTransaction transaction =
-                activity
-                        .getFragmentManager()
+                ((FragmentActivity) activity)
+                        .getSupportFragmentManager()
                         .beginTransaction()
                         .add(fragment, fragment.getClass().getName());
 
@@ -154,7 +157,8 @@ public class GetUserMediaImpl {
                     protected void onReceiveResult(int requestCode, Bundle resultData) {
                         int resultCode = resultData.getInt(GRANT_RESULTS);
                         if (resultCode == Activity.RESULT_OK) {
-                            mediaProjectionData = resultData.getParcelable(PROJECTION_DATA);
+                            mediaProjectionData =
+                                    getParcelable(resultData, PROJECTION_DATA, Intent.class);
                             result.success(true);
                         } else {
                             result.success(false);
@@ -173,12 +177,13 @@ public class GetUserMediaImpl {
             if (resultCode != Activity.RESULT_OK) {
                 Activity activity = this.getActivity();
                 Bundle args = getArguments();
-                resultReceiver = args.getParcelable(RESULT_RECEIVER);
+                resultReceiver = getParcelable(args, RESULT_RECEIVER, ResultReceiver.class);
                 requestCode = args.getInt(REQUEST_CODE);
                 requestStart(activity, requestCode);
             }
         }
 
+        @SuppressWarnings("deprecation") // AndroidX Fragment callback retained for WebRTC capture consent.
         public void requestStart(Activity activity, int requestCode) {
             if (android.os.Build.VERSION.SDK_INT < minAPILevel) {
                 Log.w(
@@ -195,6 +200,7 @@ public class GetUserMediaImpl {
         }
 
         @Override
+        @SuppressWarnings("deprecation") // Paired with requestStart until WebRTC adopts ActivityResult.
         public void onActivityResult(int requestCode, int resultCode, Intent data) {
             super.onActivityResult(requestCode, resultCode, data);
             resultCode = resultCode;
@@ -218,7 +224,7 @@ public class GetUserMediaImpl {
         private void finish() {
             Activity activity = getActivity();
             if (activity != null) {
-                activity.getFragmentManager().beginTransaction().remove(this).commitAllowingStateLoss();
+                getParentFragmentManager().beginTransaction().remove(this).commitAllowingStateLoss();
             }
         }
 
@@ -227,6 +233,19 @@ public class GetUserMediaImpl {
             super.onResume();
             checkSelfPermissions(/* requestPermissions */ true);
         }
+    }
+
+    private static <T extends Parcelable> T getParcelable(
+            Bundle bundle, String key, Class<T> type) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return bundle.getParcelable(key, type);
+        }
+        return getLegacyParcelable(bundle, key);
+    }
+
+    @SuppressWarnings("deprecation") // Typed Bundle API is available only on API 33+.
+    private static <T extends Parcelable> T getLegacyParcelable(Bundle bundle, String key) {
+        return bundle.getParcelable(key);
     }
 
     GetUserMediaImpl(StateProvider stateProvider, Context applicationContext) {
@@ -464,7 +483,8 @@ public class GetUserMediaImpl {
                 /* successCallback */ new Callback() {
                     @Override
                     public void invoke(Object... args) {
-                        List<String> grantedPermissions = (List<String>) args[0];
+                        List<String> grantedPermissions = toStringList(
+                                args.length == 0 ? null : args[0], "granted permissions");
 
                         getUserMedia(constraints, result, mediaStream, grantedPermissions);
                     }
@@ -488,7 +508,8 @@ public class GetUserMediaImpl {
                     new ResultReceiver(new Handler(Looper.getMainLooper())) {
                         @Override
                         protected void onReceiveResult(int requestCode, Bundle resultData) {
-                            Intent mediaProjectionData = resultData.getParcelable(PROJECTION_DATA);
+                            Intent mediaProjectionData = getParcelable(
+                                    resultData, PROJECTION_DATA, Intent.class);
                             int resultCode = resultData.getInt(GRANT_RESULTS);
 
                             if (resultCode != Activity.RESULT_OK) {
@@ -536,9 +557,7 @@ public class GetUserMediaImpl {
         WindowManager wm =
                 (WindowManager) applicationContext.getSystemService(Context.WINDOW_SERVICE);
 
-        Display display = wm.getDefaultDisplay();
-        Point size = new Point();
-        display.getRealSize(size);
+        Point size = getWindowSize(wm);
 
         VideoCapturerInfoEx info = new VideoCapturerInfoEx();
         info.width = size.x;
@@ -589,6 +608,36 @@ public class GetUserMediaImpl {
         successResult.putArray("audioTracks", audioTracks.toArrayList());
         successResult.putArray("videoTracks", videoTracks.toArrayList());
         result.success(successResult.toMap());
+    }
+
+    private static List<String> toStringList(Object value, String fieldName) {
+        if (!(value instanceof List<?>)) {
+            throw new IllegalArgumentException(fieldName + " must be a list");
+        }
+        List<String> result = new ArrayList<>();
+        for (Object item : (List<?>) value) {
+            if (!(item instanceof String)) {
+                throw new IllegalArgumentException(fieldName + " must contain only strings");
+            }
+            result.add((String) item);
+        }
+        return result;
+    }
+
+    private static Point getWindowSize(WindowManager windowManager) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowMetrics metrics = windowManager.getCurrentWindowMetrics();
+            Rect bounds = metrics.getBounds();
+            return new Point(bounds.width(), bounds.height());
+        }
+        return getLegacyWindowSize(windowManager);
+    }
+
+    @SuppressWarnings("deprecation") // WindowMetrics is available only on API 30+.
+    private static Point getLegacyWindowSize(WindowManager windowManager) {
+        Point size = new Point();
+        windowManager.getDefaultDisplay().getRealSize(size);
+        return size;
     }
 
     /**

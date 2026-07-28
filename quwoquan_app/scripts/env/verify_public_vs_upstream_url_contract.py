@@ -9,20 +9,31 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.environment_topology import ENVIRONMENTS, load_environment_topology
+from quwoquan_ops.cli.lib.environment_topology import (
+    ENVIRONMENTS,
+    host_allowlist,
+    load_environment_topology,
+)
 
 
 APP_RUNTIME_KEYS = {
     "gatewayBaseUrl": ("publicBases", "api"),
-    "legalBaseUrl": ("computed", "legalBaseUrl"),
+    "legalBaseUrl": ("publicBases", "legal"),
+    "publicWebBaseUrl": ("publicBases", "publicWeb"),
+    "appDownloadBaseUrl": ("publicBases", "appDownload"),
     "realtimeBaseUrl": ("publicBases", "realtime"),
     "mediaAvatarCdnBaseUrl": ("publicBases", "mediaAvatar"),
     "mediaImageCdnBaseUrl": ("publicBases", "mediaImage"),
     "mediaVideoCdnBaseUrl": ("publicBases", "mediaVideo"),
     "mediaUploadBaseUrl": ("publicBases", "mediaUpload"),
+    "rtcMediaConnectionUrl": ("publicBases", "rtc"),
 }
 DART_RUNTIME_DEFAULT_KEYS = (
     "gatewayBaseUrl",
+    "realtimeConnectionUrl",
+    "publicWebBaseUrl",
+    "appDownloadBaseUrl",
+    "legalBaseUrl",
     "mediaAvatarCdnBaseUrl",
     "mediaImageCdnBaseUrl",
     "mediaVideoCdnBaseUrl",
@@ -73,28 +84,17 @@ def main() -> int:
     for env_name in ENVIRONMENTS:
         env_cfg = manifest["environments"][env_name]
         env_public_bases[env_name] = dict(env_cfg["publicBases"])
-        env_allowed_host_tokens[env_name] = {
-            str(item).strip()
-            for item in env_cfg.get("hostAllowlist", [])
-            if str(item).strip()
-        }
+        env_allowed_host_tokens[env_name] = set(
+            host_allowlist(manifest, env_name)
+        )
 
         runtime_path = ROOT / "quwoquan_app" / "configs" / env_name / "app_runtime.yaml"
         runtime_values = parse_runtime_yaml(runtime_path)
-        for runtime_key, manifest_path in APP_RUNTIME_KEYS.items():
-            section_key, value_key = manifest_path
-            if section_key == "computed" and value_key == "legalBaseUrl":
-                expected = (
-                    "https://quwoquan.com/legal"
-                    if env_name == "prod"
-                    else str(env_cfg["publicBases"]["api"]).strip().rstrip("/") + "/legal"
-                )
-            else:
-                expected = str(env_cfg[section_key][value_key]).strip()
+        for runtime_key in APP_RUNTIME_KEYS:
             actual = str(runtime_values.get(runtime_key, "")).strip()
-            if actual != expected:
+            if actual:
                 issues.append(
-                    f"{runtime_path.relative_to(ROOT)}: {runtime_key} mismatch, expected {expected}, got {actual}"
+                    f"{runtime_path.relative_to(ROOT)}: {runtime_key} must be generated from topology"
                 )
 
     cloud_runtime_path = ROOT / "quwoquan_app" / "lib" / "cloud" / "runtime" / "cloud_runtime_config.dart"
@@ -125,13 +125,16 @@ def main() -> int:
                 )
 
         current_allowed_tokens = env_allowed_host_tokens.get(env_name, set())
+        referenced_hosts = set(
+            re.findall(r"(?:https?|wss?)://([A-Za-z0-9.-]+)", text)
+        )
         for other_env in ENVIRONMENTS:
             if other_env == env_name:
                 continue
             for token in env_allowed_host_tokens.get(other_env, set()):
                 if not token or token in current_allowed_tokens:
                     continue
-                if token in text:
+                if token in referenced_hosts:
                     issues.append(
                         f"{cfg.relative_to(ROOT)} references {other_env} host token {token}"
                     )

@@ -107,7 +107,7 @@ import urllib.request
 
 base_url, output_path = sys.argv[1:3]
 original_getaddrinfo = socket.getaddrinfo
-host = "gamma-api.quwoquan-env.test"
+host = "api.gamma.quwoquan.com"
 
 def resolve_local(value, *args, **kwargs):
     return original_getaddrinfo("127.0.0.1" if value == host else value, *args, **kwargs)

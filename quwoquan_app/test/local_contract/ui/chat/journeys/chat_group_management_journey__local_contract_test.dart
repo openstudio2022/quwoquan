@@ -407,7 +407,7 @@ void main() {
       await tester.tap(find.byType(CupertinoListTile).first);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.confirm));
+      await tester.tap(find.text(FoundationText.confirm));
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(tracking.transferCount, equals(1));
@@ -523,7 +523,7 @@ void main() {
 
       expect(find.byType(CupertinoAlertDialog), findsOneWidget);
       expect(find.text(ChatText.maxAdminsReached), findsOneWidget);
-      await tester.tap(find.text(UITextConstants.confirm));
+      await tester.tap(find.text(FoundationText.confirm));
       await tester.pumpAndSettle();
       expect(find.byType(CupertinoAlertDialog), findsNothing);
     });
@@ -543,7 +543,7 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       // 初始管理员已选中，完成按钮应可用
-      final doneBtn = find.textContaining(UITextConstants.done);
+      final doneBtn = find.textContaining(CommunityText.done);
       await tester.tap(doneBtn);
       await tester.pump(const Duration(milliseconds: 200));
 

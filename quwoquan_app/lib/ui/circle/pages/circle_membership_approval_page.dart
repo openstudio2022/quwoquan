@@ -171,8 +171,8 @@ class _CircleMembershipApprovalPageState
       AppToast.show(
         context,
         approved
-            ? UITextConstants.circleApprovalApproved
-            : UITextConstants.circleApprovalRejected,
+            ? CommunityText.circleApprovalApproved
+            : CommunityText.circleApprovalRejected,
       );
       unawaited(
         _journeyTracker?.trackAction(
@@ -215,7 +215,7 @@ class _CircleMembershipApprovalPageState
       navigationBar: AppNavigationBar(
         automaticallyImplyLeading: false,
         backgroundColor: bg,
-        middle: Text(UITextConstants.circleApprovalTitle),
+        middle: Text(CommunityText.circleApprovalTitle),
         leading: AppNavigationBarIconButton(
           key: const ValueKey<String>('circle-approval-back'),
           icon: CupertinoIcons.back,
@@ -228,12 +228,12 @@ class _CircleMembershipApprovalPageState
 
   Widget _buildBody(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     final semantic = _pageErrorSemantic;
     if (semantic != null) {
       return AppPageErrorState(
-        semantic: semantic,
+        semantic: ensureRetryUiErrorSemantic(semantic),
         onAction: (action) async {
           if (action.type == UiErrorActionType.retry ||
               action.type == UiErrorActionType.resubmit) {
@@ -262,7 +262,7 @@ class _CircleMembershipApprovalPageState
             itemBuilder: (context, index) {
               if (index >= _pendingItems.length) {
                 unawaited(_loadPending(reset: false));
-                return const Center(child: CupertinoActivityIndicator());
+                return AppRequestFeedback.section();
               }
               return _buildPendingRow(context, _pendingItems[index]);
             },
@@ -284,7 +284,7 @@ class _CircleMembershipApprovalPageState
           ),
           SizedBox(height: AppSpacing.sm),
           Text(
-            UITextConstants.circleApprovalEmpty,
+            CommunityText.circleApprovalEmpty,
             key: const ValueKey<String>('circle-approval-empty'),
             style: TextStyle(
               fontSize: AppTypography.base,
@@ -338,7 +338,7 @@ class _CircleMembershipApprovalPageState
             ),
           ),
           if (deciding)
-            const CupertinoActivityIndicator()
+            AppRequestFeedback.inline()
           else ...[
             CupertinoButton(
               key: ValueKey<String>('circle-approval-reject-${item.personaId}'),
@@ -349,7 +349,7 @@ class _CircleMembershipApprovalPageState
               ),
               onPressed: () => unawaited(_decide(item, approved: false)),
               child: Text(
-                UITextConstants.circleApprovalRejectAction,
+                CommunityText.circleApprovalRejectAction,
                 style: TextStyle(
                   fontSize: AppTypography.sm,
                   color: AppColors.error,
@@ -370,7 +370,7 @@ class _CircleMembershipApprovalPageState
               borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
               onPressed: () => unawaited(_decide(item, approved: true)),
               child: Text(
-                UITextConstants.circleApprovalApproveAction,
+                CommunityText.circleApprovalApproveAction,
                 style: TextStyle(
                   fontSize: AppTypography.sm,
                   color: AppColors.white,

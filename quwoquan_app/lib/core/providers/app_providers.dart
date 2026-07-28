@@ -122,7 +122,6 @@ import 'package:quwoquan_app/app/navigation/generated/app_pages.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/core/services/app_remote_config_store.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/services/hybrid_search_repository.dart';
 import 'package:quwoquan_app/core/services/location_place_read_query.dart';
 import 'package:quwoquan_app/core/services/remote_search_repository.dart';

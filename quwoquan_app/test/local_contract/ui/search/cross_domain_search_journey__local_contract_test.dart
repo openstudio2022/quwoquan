@@ -12,7 +12,6 @@ import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import '../../../support/cloud_services/chat_repository_mock.dart';
 import '../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
@@ -20,7 +19,7 @@ import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../support/cloud_services/repository_mock_reexports.dart';
 
 /// 跨域搜索 T4 旅程（SIT1）：
 /// suggest 本地两阶段、result 云侧固定 Tab、本地对象不进 result、最近搜索、
@@ -80,7 +79,6 @@ Widget _buildApp({
   final recentSearches = AlphaRecentSearchFacet();
   return ProviderScope(
     overrides: [
-      appDataSourceModeProvider.overrideWith(_MockModeNotifier.new),
       searchRepositoryProvider.overrideWithValue(searchRepository),
       searchHotQueryReaderProvider.overrideWithValue(AlphaHotQueryReader()),
       recentSearchQueryProvider.overrideWithValue(recentSearches),
@@ -111,7 +109,6 @@ Widget _buildResultsPage({
 }) {
   return ProviderScope(
     overrides: [
-      appDataSourceModeProvider.overrideWith(_MockModeNotifier.new),
       searchRepositoryProvider.overrideWithValue(searchRepository),
       searchFeedbackCommandWriterProvider.overrideWithValue(
         AlphaSearchFeedbackWriter(),
@@ -126,11 +123,6 @@ Widget _buildResultsPage({
       home: SearchNetworkResultsPage(launchContext: launchContext),
     ),
   );
-}
-
-final class _MockModeNotifier extends AppDataSourceModeNotifier {
-  @override
-  AppDataSourceMode build() => AppDataSourceMode.mock;
 }
 
 ContentBehaviorTracker _trackerOf(WidgetTester tester, Type pageType) {

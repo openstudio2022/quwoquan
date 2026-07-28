@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Android startup watchdog contract', () {
-    test('renderer 首帧会取消 native recovery watchdog', () {
+    test('renderer 首帧会取消性能 watchdog，恢复 gate 不进入 Flutter Activity', () {
       final activity = _readAppFile(
         'android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java',
       );
@@ -17,12 +17,15 @@ void main() {
       expect(confirmation, contains('cancelFlutterFirstFrameWatchdog();'));
       expect(
         confirmation,
-        contains('dismissNativeStartupRecoveryAfterFlutterFirstFrame();'),
+        isNot(
+          contains('dismissNativeStartupRecoveryAfterFlutterFirstFrame();'),
+        ),
       );
       expect(
         activity,
         isNot(contains('android_startup_safe_terminal_timeout')),
       );
+      expect(activity, isNot(contains('showNativeStartupRecovery')));
     });
 
     test('deadline 仅记录首帧性能超时，不把等待超时判为致命异常', () {
@@ -48,7 +51,7 @@ void main() {
         _section(
           activity,
           'private void recordNativeStartupDeadline',
-          'private void recordNativeStartupTerminal',
+          'private String startupAttemptLogSuffix',
         ),
         contains('if (!firstFrameMissing)'),
       );
@@ -78,28 +81,27 @@ void main() {
       expect(activity, isNot(contains('recreate();')));
     });
 
-    test('Dart deadline 在 native timing hydration 后不重新 arm', () {
+    test('native timing hydration 只向前收紧并重新 arm Flutter deadline', () {
       final runtime = _readAppFile('lib/app/app_startup_runtime.dart');
       final shell = _readAppFile('lib/quwoquan_app_shell.dart');
       final welcome = _readAppFile('lib/ui/welcome/pages/welcome_screen.dart');
 
       expect(runtime, contains('deadlineElapsedSinceProcessStart'));
-      expect(
-        runtime,
-        isNot(
-          contains(
-            '_deadlineOrigin = segments.deadlineOrigin?.trim().isNotEmpty',
-          ),
-        ),
-      );
+      expect(runtime, contains('nativeDeadline > deadlineBeforeHydration'));
       expect(shell, contains('_hydrateNativeTimingForTelemetry'));
-      expect(
-        shell,
-        isNot(contains('_reconcileStartupDeadlineAfterClockHydration')),
-      );
+      expect(shell, contains('_armStartupDeadline();'));
       expect(
         welcome,
         contains('AppStartupRuntime.instance.deadlineElapsedSinceProcessStart'),
+      );
+      expect(welcome, contains('_armDeadline();'));
+      expect(
+        _section(
+          shell,
+          'void _armStartupDeadline',
+          'Future<void> _hydrateNativeTimingForTelemetry',
+        ),
+        isNot(contains('forceSafeRecovery')),
       );
     });
   });

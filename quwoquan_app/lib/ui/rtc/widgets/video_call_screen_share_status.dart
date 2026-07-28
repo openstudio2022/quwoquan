@@ -54,7 +54,7 @@ class VideoCallScreenShareStatus extends StatelessWidget {
               ),
               SizedBox(width: AppSpacing.xs),
               Text(
-                UITextConstants.callScreenSharing,
+                CallText.callScreenSharing,
                 style: TextStyle(
                   color: foreground,
                   fontSize: AppTypography.sm,
@@ -73,7 +73,7 @@ class VideoCallScreenShareStatus extends StatelessWidget {
                     ),
                     child: Center(
                       child: Text(
-                        UITextConstants.callStopScreenSharing,
+                        CallText.callStopScreenSharing,
                         style: TextStyle(
                           color: AppColors.error,
                           fontSize: AppTypography.sm,

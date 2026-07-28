@@ -27,7 +27,7 @@ import 'package:quwoquan_app/core/services/remote_search_repository.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../support/cloud_services/repository_mock_reexports.dart';
 
 import '../../../support/cloud_services/chat_repository_mock.dart';
 import '../../../support/sqflite_ffi_test_support.dart';

@@ -19,10 +19,10 @@ void main() {
     await tester.pump();
 
     expect(
-      find.text(UITextConstants.addContactPhoneEntryTitle),
+      find.text(ContactText.addContactPhoneEntryTitle),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.phoneContactsUnavailable), findsOneWidget);
-    expect(find.text(UITextConstants.phoneContactsPermissionCta), findsNothing);
+    expect(find.text(ContactText.phoneContactsUnavailable), findsOneWidget);
+    expect(find.text(ContactText.phoneContactsPermissionCta), findsNothing);
   });
 }

@@ -7,7 +7,7 @@ void main() {
   group('QrPayloadParser', () {
     test('从标准名片 URL 提取 handle 与 token', () {
       final result = QrPayloadParser.parse(
-        'https://app.quwoquan.com/u/alice?qr=tok_123',
+        'https://quwoquan.com/u/alice?qr=tok_123',
       );
       expect(result, isNotNull);
       expect(result!.handle, 'alice');
@@ -17,7 +17,7 @@ void main() {
 
     test('缺少 qr token 时返回 null', () {
       expect(
-        QrPayloadParser.parse('https://app.quwoquan.com/u/alice'),
+        QrPayloadParser.parse('https://quwoquan.com/u/alice'),
         isNull,
       );
     });
@@ -29,7 +29,7 @@ void main() {
 
     test('无 u 段时回退到最后一个路径段作为 handle', () {
       final result = QrPayloadParser.parse(
-        'https://app.quwoquan.com/profile/bob?qr=tok_9',
+        'https://quwoquan.com/profile/bob?qr=tok_9',
       );
       expect(result, isNotNull);
       expect(result!.handle, 'bob');

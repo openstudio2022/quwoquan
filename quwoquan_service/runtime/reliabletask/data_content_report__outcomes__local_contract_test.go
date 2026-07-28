@@ -26,6 +26,7 @@ func TestDataContentFleetReportCarriesOneOutcomePerFrozenJob(t *testing.T) {
 				},
 			},
 		},
+		completedAt.Add(-2*time.Second),
 		completedAt.Add(-time.Second),
 		completedAt,
 		0,
@@ -88,6 +89,7 @@ func TestDataContentFleetReportPassesPublishQuotaWithoutFullBatchSuccess(t *test
 	report := BuildDataContentFleetReport(
 		dataQuotaPublishTasks(10, 8, completed),
 		started,
+		started,
 		completed,
 		0,
 		0,
@@ -117,6 +119,7 @@ func TestDataContentFleetReportBlocksPublishBatchBelowQuota(t *testing.T) {
 	report := BuildDataContentFleetReport(
 		dataQuotaPublishTasks(10, 5, completed),
 		started,
+		started,
 		completed,
 		0,
 		0,
@@ -140,10 +143,10 @@ func TestDataContentFleetReportGatesPublishQuotaOnDuplicateAndMissingObjects(t *
 	completed := time.Now().UTC()
 
 	duplicated := BuildDataContentFleetReport(
-		dataQuotaPublishTasks(10, 8, completed), started, completed, 1, 0, 7, 8,
+		dataQuotaPublishTasks(10, 8, completed), started, started, completed, 1, 0, 7, 8,
 	)
 	missing := BuildDataContentFleetReport(
-		dataQuotaPublishTasks(10, 8, completed), started, completed, 0, 1, 7, 8,
+		dataQuotaPublishTasks(10, 8, completed), started, started, completed, 0, 1, 7, 8,
 	)
 
 	if duplicated.Passed || missing.Passed {
@@ -179,8 +182,8 @@ func TestDataContentFleetReportAppliesQuotaToAuthorBatch(t *testing.T) {
 		return tasks
 	}
 
-	met := BuildDataContentFleetReport(authorTasks(10, 8), started, completed, 0, 0, 7, 8)
-	unmet := BuildDataContentFleetReport(authorTasks(10, 5), started, completed, 0, 0, 7, 5)
+	met := BuildDataContentFleetReport(authorTasks(10, 8), started, started, completed, 0, 0, 7, 8)
+	unmet := BuildDataContentFleetReport(authorTasks(10, 5), started, started, completed, 0, 0, 7, 5)
 
 	if !met.Passed {
 		t.Fatalf("author quota was met but the batch was blocked: %#v", met)
@@ -193,5 +196,35 @@ func TestDataContentFleetReportAppliesQuotaToAuthorBatch(t *testing.T) {
 			report.AcceptedContentThroughputStatus != "GATE_BLOCK_NO_COMMERCIAL_BATCH" {
 			t.Fatalf("author batch commercial status drift: %#v", report)
 		}
+	}
+}
+
+func TestDataContentFleetReportSeparatesEndToEndFromFleetWallClock(t *testing.T) {
+	executionCreatedAt := time.Date(2026, 7, 27, 0, 0, 0, 0, time.UTC)
+	fleetStartedAt := executionCreatedAt.Add(3 * time.Hour)
+	canonicalFinalizedAt := fleetStartedAt.Add(time.Hour)
+
+	report := BuildDataContentFleetReport(
+		dataQuotaPublishTasks(8, 8, canonicalFinalizedAt),
+		executionCreatedAt,
+		fleetStartedAt,
+		canonicalFinalizedAt,
+		0,
+		0,
+		8,
+		8,
+	)
+
+	if report.FleetWallClockMilliseconds != int64(time.Hour/time.Millisecond) ||
+		report.EndToEndWallClockMilliseconds != int64(4*time.Hour/time.Millisecond) {
+		t.Fatalf("wall-clock windows drift: %#v", report)
+	}
+	if report.FleetAcceptedThroughputPerHour != 8 ||
+		report.EndToEndAcceptedThroughputPerHour != 2 {
+		t.Fatalf("fleet/e2e throughput was not separated: %#v", report)
+	}
+	if report.CanonicalFinalizedAt == nil ||
+		*report.CanonicalFinalizedAt != canonicalFinalizedAt.Format(time.RFC3339Nano) {
+		t.Fatalf("canonical finalize timestamp drift: %#v", report)
 	}
 }

@@ -24,6 +24,7 @@ from content.source.handler_fetch import (  # noqa: E402
 from content.source.handler_fetch_contract import homepage_base_draft_admission  # noqa: E402
 from content.source.research.homepage_text_quality import homepage_text_quality_issue  # noqa: E402
 from content.source.source_inputs import _normalize_image_specs  # noqa: E402
+from governance.content_supply_policy import load_content_supply_policy  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -258,7 +259,10 @@ def test_homepage_fetch_uses_shared_base_draft_admission(monkeypatch):
         captured["meta"] = meta
         captured["text"] = text
         captured["kwargs"] = kwargs
-        return {"ready": True, "factCount": 4}
+        return {
+            "ready": True,
+            "factCount": load_content_supply_policy("travel").homepage_minimum_fact_count,
+        }
 
     monkeypatch.setattr(
         "content.homepage.homepage_text.homepage_base_draft_readiness",
@@ -274,6 +278,9 @@ def test_homepage_fetch_uses_shared_base_draft_admission(monkeypatch):
         source_text="莫氏庄园有足够的事实正文。",
         entity_id="平湖莫氏庄园",
         resolved_title="莫氏庄园",
+        minimum_body_chars=load_content_supply_policy("travel").homepage_minimum_body_chars,
+        minimum_fact_count=load_content_supply_policy("travel").homepage_minimum_fact_count,
+        minimum_fact_chars=load_content_supply_policy("travel").homepage_minimum_fact_chars,
     )
 
     assert admission.accepted is True
@@ -281,6 +288,46 @@ def test_homepage_fetch_uses_shared_base_draft_admission(monkeypatch):
     assert admission.issue_code is None
     assert captured["meta"]["resolvedTitle"] == "莫氏庄园"
     assert captured["kwargs"]["aliases"] == ("莫氏庄园",)
+
+
+def test_homepage_admission_ignores_generated_asset_binding_length():
+    source = {
+        "sourceKind": "wikipedia",
+        "platform": "维基百科",
+        "category": "encyclopedia",
+        "sourceRole": "primary",
+        "researchLane": "homepage",
+        "sourceTitle": "刘基庙",
+        "canonicalUrl": "https://zh.wikipedia.org/wiki/刘基庙",
+        "finalUrl": "https://zh.wikipedia.org/wiki/刘基庙",
+        "url": "https://zh.wikipedia.org/wiki/刘基庙",
+        "extractor": "wikipedia_api",
+        "policyRevision": "encyclopedia-primary",
+    }
+    prose = "刘基庙位于浙江省文成县，始建于明代，是全国重点文物保护单位。"
+    unbound = f"{prose}\n:::figure\n![](asset://source-inline-001)\n:::\n"
+    bound = f"{prose}\n:::figure\n![](asset://001_001)\n:::\n"
+
+    unbound_result = homepage_base_draft_admission(
+        source,
+        source_text=unbound,
+        entity_id="刘基庙",
+        resolved_title="刘基庙",
+        minimum_body_chars=35,
+        minimum_fact_count=1,
+        minimum_fact_chars=20,
+    )
+    bound_result = homepage_base_draft_admission(
+        source,
+        source_text=bound,
+        entity_id="刘基庙",
+        resolved_title="刘基庙",
+        minimum_body_chars=35,
+        minimum_fact_count=1,
+        minimum_fact_chars=20,
+    )
+
+    assert unbound_result == bound_result
 
 
 def test_source_fetch_exception_is_converted_to_typed_issue():

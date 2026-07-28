@@ -21,10 +21,10 @@ services:
       QWQ_PUSH_TOKEN_ENCRYPTION_KEY: "${QWQ_PUSH_TOKEN_ENCRYPTION_KEY:?QWQ_PUSH_TOKEN_ENCRYPTION_KEY is required}"
       POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
       MONGODB_URI: mongodb://mongodb:27017
-      MONGODB_DATABASE: quwoquan_user
       REDIS_ADDR: redis:6379
       CHAT_SERVICE_BASE_URL: http://chat-service:18081
       TAG_SERVICE_BASE_URL: http://tag-service:18092
+      PUBLIC_WEB_BASE_URL: "${QWQ_COMPOSE_PUBLIC_WEB_BASE_URL:?QWQ_COMPOSE_PUBLIC_WEB_BASE_URL is required}"
       SEARCH_ES_ENABLED: "${QWQ_COMPOSE_SEARCH_ES_ENABLED:-true}"
       SEARCH_ES_ENDPOINTS: "${QWQ_COMPOSE_SEARCH_ES_ENDPOINTS:-http://elasticsearch:9200}"
       # local-gamma 使用本地验收身份；外部 OAuth/号码认证不伪造凭据，

@@ -20,6 +20,7 @@ import (
 	platformredis "quwoquan_service/internal/platform/redis"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
+	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
@@ -113,6 +114,13 @@ func main() {
 
 	ctx := context.Background()
 	appEnv := getenvOrDefault("APP_ENV", "alpha")
+	controlplane.StartReleaseConfigAttestation(
+		serviceName,
+		appEnv,
+		strings.TrimSpace(os.Getenv("CONFIG_ROOT")),
+		strings.TrimSpace(os.Getenv("CONFIG_VERSION")),
+		strings.TrimSpace(os.Getenv("IMAGE_VERSION")),
+	)
 	configProvider := runtimeconfig.EnvRuntimeConfigProvider{}
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(configProvider)
 	if err != nil {

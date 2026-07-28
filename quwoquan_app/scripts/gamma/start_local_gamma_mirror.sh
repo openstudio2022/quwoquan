@@ -139,62 +139,43 @@ export_service_compose_environment() {
 }
 CONFIG_VERSION="${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
 IMAGE_VERSION="${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
-GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-https://gamma-api.quwoquan-env.test:${LOCAL_GAMMA_HTTP_PORT}}"
-PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-https://gamma-product-ops.quwoquan-env.test:${LOCAL_GAMMA_PRODUCT_OPS_PORT}}"
-MEDIA_AVATAR_BASE_URL="${LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL:-https://gamma-avatar.quwoquan-env.test:${LOCAL_GAMMA_MEDIA_EDGE_PORT}}"
-MEDIA_IMAGE_BASE_URL="${LOCAL_GAMMA_MEDIA_IMAGE_BASE_URL:-${LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-https://gamma-image.quwoquan-env.test:${LOCAL_GAMMA_MEDIA_EDGE_PORT}}}}"
-MEDIA_VIDEO_BASE_URL="${LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL:-https://gamma-video.quwoquan-env.test:${LOCAL_GAMMA_MEDIA_EDGE_PORT}}"
-MEDIA_UPLOAD_BASE_URL="${LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL:-}"
-if [[ -z "$MEDIA_UPLOAD_BASE_URL" ]]; then
-  echo "[local-gamma] GATE_BLOCK: LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL must provide the canonical media upload base URL" >&2
-  exit 2
-fi
-MEDIA_BASE_URL="$MEDIA_IMAGE_BASE_URL"
+eval "$(
+  PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import shlex
+from urllib.parse import urlsplit
+
+from quwoquan_ops.cli.lib.environment_topology import (
+    get_target,
+    load_environment_topology,
+)
+
+bases = get_target(load_environment_topology(), "gamma-local")["publicBases"]
+for name, role in (
+    ("GATEWAY_BASE_URL", "api"),
+    ("PRODUCT_OPS_BASE_URL", "productOps"),
+    ("MEDIA_AVATAR_BASE_URL", "mediaAvatar"),
+    ("MEDIA_IMAGE_BASE_URL", "mediaImage"),
+    ("MEDIA_VIDEO_BASE_URL", "mediaVideo"),
+    ("MEDIA_UPLOAD_BASE_URL", "mediaUpload"),
+):
+    print(f"{name}={shlex.quote(str(bases[role]))}")
+for name, role in (
+    ("QWQ_PUBLIC_API_HOST", "api"),
+    ("QWQ_PUBLIC_WEB_HOST", "publicWeb"),
+    ("QWQ_PUBLIC_RTC_HOST", "rtc"),
+    ("QWQ_PUBLIC_OPS_HOST", "productOps"),
+    ("QWQ_PUBLIC_CDN_HOST", "mediaImage"),
+):
+    print(f"{name}={shlex.quote(str(urlsplit(str(bases[role])).hostname))}")
+PY
+)"
 PUBLIC_HOSTS=(
-  gamma-api.quwoquan-env.test
-  gamma-product-ops.quwoquan-env.test
-  gamma-avatar.quwoquan-env.test
-  gamma-image.quwoquan-env.test
-  gamma-video.quwoquan-env.test
-  gamma-upload.quwoquan-env.test
+  "$QWQ_PUBLIC_API_HOST"
+  "$QWQ_PUBLIC_WEB_HOST"
+  "$QWQ_PUBLIC_OPS_HOST"
+  "$QWQ_PUBLIC_CDN_HOST"
 )
 LOCAL_GAMMA_TAGS_DIR="${LOCAL_GAMMA_TAGS_DIR:-$ROOT/quwoquan_data/control_plane/governance/taxonomy}"
-LOCAL_GAMMA_SEED_MANIFEST="$ROOT/quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json"
-resolve_gamma_seed_field() {
-  PYTHONDONTWRITEBYTECODE=1 python3 - "$ROOT" "$LOCAL_GAMMA_SEED_MANIFEST" "$1" "$2" <<'PY'
-import json
-import pathlib
-import sys
-
-root = pathlib.Path(sys.argv[1]).resolve()
-manifest_path = pathlib.Path(sys.argv[2]).resolve()
-domain = sys.argv[3]
-field = sys.argv[4]
-manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-matches = [
-    item
-    for item in manifest.get("seedRefs", [])
-    if str(item.get("domain") or "").strip() == domain
-]
-if len(matches) != 1:
-    raise SystemExit(f"{manifest_path} must declare exactly one {domain} seed")
-item = matches[0]
-if field == "fixturePath":
-    value = root / str(item.get(field) or "").strip()
-    if not value.is_file():
-        raise SystemExit(f"{domain} seed fixture does not exist: {value}")
-    print(value)
-elif field == "refs":
-    refs = [str(ref).strip() for ref in item.get(field, []) if str(ref).strip()]
-    if not refs:
-        raise SystemExit(f"{domain} seed must declare refs")
-    print(",".join(refs))
-else:
-    raise SystemExit(f"unsupported seed field: {field}")
-PY
-}
-LOCAL_GAMMA_TAG_OBJECTS_FILE="$(resolve_gamma_seed_field tag fixturePath)"
-LOCAL_GAMMA_TAG_SEED_REFS="$(resolve_gamma_seed_field tag refs)"
 LOCAL_GAMMA_TAG_DB="${LOCAL_GAMMA_TAG_DB:-quwoquan_tag}"
 # 2G onebox 在 gray/prod 切换窗口会短时双栈并存；显式压低 Mongo cache，避免数据面被 OOM kill。
 LOCAL_GAMMA_MONGO_CACHE_SIZE_GB="${LOCAL_GAMMA_MONGO_CACHE_SIZE_GB:-0.25}"
@@ -215,6 +196,12 @@ LOCAL_GAMMA_MEDIA_ROOT="${LOCAL_GAMMA_CACHE_ROOT}/media"
 LOCAL_GAMMA_CADDYFILE="$ROOT/quwoquan_ops/environments/gamma/local/Caddyfile"
 LOCAL_GAMMA_CADDY_DATA_VOLUME="${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}"
 LOCAL_GAMMA_CADDY_CONFIG_VOLUME="${LOCAL_GAMMA_CADDY_CONFIG_VOLUME:-local-gamma-caddy-config}"
+eval "$(
+  PYTHONDONTWRITEBYTECODE=1 python3 \
+    "$ROOT/quwoquan_ops/cli/lib/public_domain_tls.py" paths \
+    --target gamma-local \
+    --format shell
+)"
 LOCAL_GAMMA_MODEL_CACHE_ROOT="${LOCAL_GAMMA_CACHE_ROOT}/model"
 LOCAL_GAMMA_PORTAL_ROOT="${LOCAL_GAMMA_PORTAL_ROOT:-${QWQ_DEPLOY_WORK_ROOT}/gamma-local/build/ops-portal}"
 LOCAL_GAMMA_STACK_STATUS_REPORT="${LOCAL_GAMMA_PROCESS_ROOT}/stack_status.json"
@@ -228,7 +215,7 @@ case "$STAGE" in
     LOCAL_GAMMA_APP_ENV="${LOCAL_GAMMA_APP_ENV:-gamma}"
     CONFIG_SOURCE_ENV="${CONFIG_SOURCE_ENV:-gamma}"
     LOCAL_GAMMA_READY_INDEX_SUFFIX="${LOCAL_GAMMA_READY_INDEX_SUFFIX:-local-gamma}"
-    ENABLE_FIXTURE_SEEDS="${ENABLE_FIXTURE_SEEDS:-1}"
+    ENABLE_FIXTURE_SEEDS=0
     # gamma-local 保持生产 Remote composition 与完整第一方拓扑；
     # 所有外部 Provider 由服务 Binding 选择 Port 对等本地替身，并由 stackctl 统一材料化。
     ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}"
@@ -246,12 +233,83 @@ case "$STAGE" in
     exit 2
     ;;
 esac
-if [[ "${LOCAL_GAMMA_SKIP_FIXTURE_SEEDS:-0}" == "1" ]]; then
-  ENABLE_FIXTURE_SEEDS=0
+if [[ "${ENABLE_FIXTURE_SEEDS:-0}" != "0" ]]; then
+  echo "[local-gamma] GATE_BLOCK: environment-visible fixture seeding is retired; activate an immutable data release instead" >&2
+  exit 2
 fi
-if [[ "$WORKLOAD" == "content-release" ]]; then
-  ENABLE_FIXTURE_SEEDS=0
-fi
+# Warm path: reuse persisted mongo/ES when watermark digest still matches seed inputs.
+LOCAL_GAMMA_DATA_PLANE_WATERMARK="${LOCAL_GAMMA_DATA_PLANE_WATERMARK:-${LOCAL_GAMMA_CACHE_ROOT}/data-plane-watermark.json}"
+compute_local_gamma_data_plane_digest() {
+  PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$LOCAL_GAMMA_TAGS_DIR" <<'PY'
+import hashlib
+import sys
+from pathlib import Path
+
+tags_dir = Path(sys.argv[1])
+digest = hashlib.sha256()
+for path in sorted(tags_dir.rglob("*")):
+    if path.is_file():
+        digest.update(path.as_posix().encode())
+        digest.update(path.read_bytes())
+print(digest.hexdigest())
+PY
+}
+maybe_reuse_local_gamma_data_plane() {
+  if [[ "${LOCAL_GAMMA_REUSE_DATA_PLANE:-0}" != "1" ]]; then
+    return 0
+  fi
+  if [[ "$ENABLE_FIXTURE_SEEDS" != "1" ]]; then
+    return 0
+  fi
+  if [[ ! -f "$LOCAL_GAMMA_DATA_PLANE_WATERMARK" ]]; then
+    echo "[local-gamma] data-plane reuse requested but watermark missing; full seed will run"
+    return 0
+  fi
+  local current_digest
+  current_digest="$(compute_local_gamma_data_plane_digest)"
+  if PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$LOCAL_GAMMA_DATA_PLANE_WATERMARK" "$current_digest" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+raise SystemExit(0 if payload.get("status") == "ready" and payload.get("digest") == sys.argv[2] else 1)
+PY
+  then
+    ENABLE_FIXTURE_SEEDS=0
+    echo "[local-gamma] LOCAL_GAMMA_REUSE_DATA_PLANE hit watermark digest=${current_digest:0:12}…; skip fixture seed/ES backfill"
+  else
+    echo "[local-gamma] data-plane watermark stale or invalid; full seed will run"
+  fi
+}
+write_local_gamma_data_plane_watermark() {
+  local digest="$1"
+  mkdir -p "$(dirname "$LOCAL_GAMMA_DATA_PLANE_WATERMARK")"
+  PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$LOCAL_GAMMA_DATA_PLANE_WATERMARK" "$digest" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+path = Path(sys.argv[1])
+path.write_text(
+    json.dumps(
+        {
+            "schema": "local-gamma-data-plane-watermark",
+            "status": "ready",
+            "digest": sys.argv[2],
+            "writtenAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
+    + "\n",
+    encoding="utf-8",
+)
+print(path)
+PY
+}
+maybe_reuse_local_gamma_data_plane
 LOCAL_GAMMA_LEGAL_STATIC_ROOT="${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$CONFIG_SOURCE_ENV" <<'PY'
 import sys
 from quwoquan_ops.cli.lib.output_paths import legal_static_deployment_package_dir
@@ -274,6 +332,17 @@ export \
   LOCAL_GAMMA_READY_INDEX_QUEUE \
   LOCAL_GAMMA_CADDY_DATA_VOLUME \
   LOCAL_GAMMA_CADDY_CONFIG_VOLUME \
+  QWQ_PUBLIC_TLS_CERT_FILE \
+  QWQ_PUBLIC_TLS_KEY_FILE \
+  QWQ_PUBLIC_API_HOST \
+  QWQ_PUBLIC_WEB_HOST \
+  QWQ_PUBLIC_RTC_HOST \
+  QWQ_PUBLIC_OPS_HOST \
+  QWQ_PUBLIC_CDN_HOST \
+  MEDIA_AVATAR_BASE_URL \
+  MEDIA_IMAGE_BASE_URL \
+  MEDIA_VIDEO_BASE_URL \
+  MEDIA_UPLOAD_BASE_URL \
   LOCAL_GAMMA_CONFIG_ROOT \
   LOCAL_GAMMA_MEDIA_ROOT \
   LOCAL_GAMMA_MODEL_CACHE_ROOT \
@@ -547,86 +616,8 @@ start_colima_tunnels_if_needed() {
   sleep 2
 }
 
-admin_shell() {
-  local script="$1"
-  if [[ "$(id -u)" == "0" ]]; then
-    bash -c "$script"
-    return 0
-  fi
-  if sudo -n true >/dev/null 2>&1; then
-    sudo bash -c "$script"
-    return 0
-  fi
-  if [[ "${QWQ_GAMMA_LOCAL_ALLOW_ADMIN_PROMPT:-${QWQ_LOCAL_ALLOW_ADMIN_PROMPT:-0}}" == "1" ]] \
-    && command -v osascript >/dev/null 2>&1; then
-    local quoted
-    quoted="$(python3 - "$script" <<'PY'
-import sys
-
-print(repr(sys.argv[1]))
-PY
-)"
-    osascript -e "do shell script ${quoted} with administrator privileges"
-    return 0
-  fi
-  echo "[local-gamma] GATE_BLOCK: gamma HTTPS public hosts require /etc/hosts management." >&2
-  echo "[local-gamma] Run once with admin rights, or set QWQ_GAMMA_LOCAL_ALLOW_ADMIN_PROMPT=1 to allow the macOS password prompt." >&2
-  return 1
-}
-
-flush_host_cache() {
-  if [[ "$(uname -s)" == "Darwin" ]]; then
-    dscacheutil -flushcache >/dev/null 2>&1 || true
-    killall -HUP mDNSResponder >/dev/null 2>&1 || true
-  fi
-}
-
-ensure_public_hosts_mapping() {
-  local tmp_hosts
-  tmp_hosts="$(mktemp "${TMPDIR:-/tmp}/quwoquan-gamma-hosts.XXXXXX")"
-  python3 - "$tmp_hosts" "${PUBLIC_HOSTS[@]}" <<'PY'
-import re
-import sys
-from pathlib import Path
-
-out_path = Path(sys.argv[1])
-hosts = sys.argv[2:]
-hosts_path = Path("/etc/hosts")
-begin = "# BEGIN quwoquan gamma local public plane"
-end = "# END quwoquan gamma local public plane"
-block = f"{begin}\n127.0.0.1 {' '.join(hosts)}\n::1 {' '.join(hosts)}\n{end}\n"
-
-current = hosts_path.read_text(encoding="utf-8", errors="replace")
-next_text = re.sub(
-    rf"{re.escape(begin)}.*?{re.escape(end)}\n?",
-    "",
-    current,
-    flags=re.S,
-).rstrip() + "\n\n" + block
-out_path.write_text(next_text, encoding="utf-8")
-PY
-  chmod 0644 "$tmp_hosts"
-
-  local needs_update=0
-  if ! cmp -s "$tmp_hosts" /etc/hosts; then
-    needs_update=1
-  fi
-  if (( needs_update == 1 )); then
-    if [[ "${QWQ_GAMMA_LOCAL_ALLOW_ADMIN_PROMPT:-0}" == "1" ]] && admin_shell "/bin/cp '$tmp_hosts' /etc/hosts"; then
-      flush_host_cache
-    else
-      rm -f "$tmp_hosts"
-      echo "[local-gamma] WARN: gamma public hosts are not mapped in /etc/hosts; host checks will use explicit --resolve where supported." >&2
-      echo "[local-gamma] WARN: set QWQ_GAMMA_LOCAL_ALLOW_ADMIN_PROMPT=1 for one-time hosts repair, or LOCAL_GAMMA_STRICT_PUBLIC_HOSTS=1 to block." >&2
-      if [[ "${LOCAL_GAMMA_STRICT_PUBLIC_HOSTS:-0}" == "1" ]]; then
-        return 1
-      fi
-      return 0
-    fi
-  fi
-  rm -f "$tmp_hosts"
-
-  if ! python3 - "${PUBLIC_HOSTS[@]}" <<'PY'
+verify_public_dns() {
+  python3 - "${PUBLIC_HOSTS[@]}" <<'PY'
 import socket
 import sys
 
@@ -641,12 +632,6 @@ if failed:
         print(f"  - {item}", file=sys.stderr)
     raise SystemExit(1)
 PY
-  then
-    if [[ "${LOCAL_GAMMA_STRICT_PUBLIC_HOSTS:-0}" == "1" ]]; then
-      return 1
-    fi
-    echo "[local-gamma] WARN: continuing without public host loopback mapping; probes that cannot pass --resolve may fail." >&2
-  fi
 }
 
 usage() {
@@ -852,11 +837,7 @@ PY
 
   python3 "$ROOT/quwoquan_app/scripts/env/print_app_env_dart_defines.py" \
     --env "$LOCAL_GAMMA_APP_ENV" \
-    --gateway-base-url "$GATEWAY_BASE_URL" \
-    --media-avatar-base-url "$MEDIA_AVATAR_BASE_URL" \
-    --media-image-base-url "$MEDIA_IMAGE_BASE_URL" \
-    --media-video-base-url "$MEDIA_VIDEO_BASE_URL" \
-    --media-upload-base-url "$MEDIA_UPLOAD_BASE_URL"
+    --target gamma-local
 }
 
 preflight_local_gamma_inputs() {
@@ -1569,7 +1550,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -e RELIABLE_TASK_READY_INDEX_STREAM="$LOCAL_GAMMA_READY_INDEX_STREAM" \
     -e RELIABLE_TASK_READY_INDEX_GROUP="$LOCAL_GAMMA_READY_INDEX_GROUP" \
     -e RELIABLE_TASK_READY_INDEX_QUEUE="$LOCAL_GAMMA_READY_INDEX_QUEUE" \
-    -e CHAT_GROUP_AVATAR_CDN_BASE_URL="$MEDIA_BASE_URL" \
+    -e CHAT_GROUP_AVATAR_CDN_BASE_URL="$MEDIA_AVATAR_BASE_URL" \
     -e CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT=/var/lib/quwoquan/chat-media \
     -e RUNTIME_SYNC_PATCH_TTL_HOURS=720 \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
@@ -1769,17 +1750,25 @@ if [[ "$podman_compose" == "1" ]]; then
 
   podman run --pull=never --name quwoquan_service_gamma-proxy_1 -d \
     --net "$network_name" --network-alias gamma-proxy \
-    -e LOCAL_GAMMA_TLS_MODE="${LOCAL_GAMMA_TLS_MODE:-internal}" \
+    -e QWQ_PUBLIC_TLS_CERT_FILE=/etc/caddy/tls/fullchain.pem \
+    -e QWQ_PUBLIC_TLS_KEY_FILE=/etc/caddy/tls/privkey.pem \
+    -e QWQ_PUBLIC_API_HOST="$QWQ_PUBLIC_API_HOST" \
+    -e QWQ_PUBLIC_WEB_HOST="$QWQ_PUBLIC_WEB_HOST" \
+    -e QWQ_PUBLIC_RTC_HOST="$QWQ_PUBLIC_RTC_HOST" \
+    -e QWQ_PUBLIC_OPS_HOST="$QWQ_PUBLIC_OPS_HOST" \
+    -e QWQ_PUBLIC_CDN_HOST="$QWQ_PUBLIC_CDN_HOST" \
     -v "${LOCAL_GAMMA_CADDYFILE}:/etc/caddy/Caddyfile:ro" \
+    -v "${QWQ_PUBLIC_TLS_CERT_FILE}:/etc/caddy/tls/fullchain.pem:ro" \
+    -v "${QWQ_PUBLIC_TLS_KEY_FILE}:/etc/caddy/tls/privkey.pem:ro" \
     -v "${LOCAL_GAMMA_MEDIA_ROOT}:/srv/media:ro" \
     -v "${LOCAL_GAMMA_LEGAL_STATIC_ROOT}:/srv/legal:ro" \
     -v "${LOCAL_GAMMA_CADDY_DATA_VOLUME}:/data" \
     -v "${LOCAL_GAMMA_CADDY_CONFIG_VOLUME}:/config" \
-    -p "${LOCAL_GAMMA_HTTP_PORT:-19000}:443" \
-    -p "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:443" \
-    -p "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}:443" \
+    -p "${LOCAL_GAMMA_HTTP_PORT:-19000}:${LOCAL_GAMMA_HTTP_PORT:-19000}" \
+    -p "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}" \
+    -p "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}:${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}" \
     -p "${LOCAL_GAMMA_ADMIN_PORT:-2019}:2019" \
-    --healthcheck-command "wget -qO- http://127.0.0.1/healthz >/dev/null 2>&1" \
+    --healthcheck-command "wget -qO- https://${QWQ_PUBLIC_API_HOST}:${LOCAL_GAMMA_HTTP_PORT:-19000}/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 5s --healthcheck-retries 10 \
     "$LOCAL_GAMMA_CADDY_IMAGE" >/dev/null
   wait_healthy quwoquan_service_gamma-proxy_1
@@ -1931,7 +1920,7 @@ else
   ensure_docker_gamma_proxy_started
 fi
 start_colima_tunnels_if_needed
-ensure_public_hosts_mapping
+verify_public_dns
 
 # docker compose 分支不会逐项 wait_healthy；在宣告就绪前用主机侧探测避免 T3/T4 撞到端口未监听。
 gamma_canonical_video_range_mime_ready() {
@@ -1941,8 +1930,7 @@ gamma_canonical_video_range_mime_ready() {
   local status=""
   local content_type=""
   probe="$(
-    curl -kfsS \
-      --resolve "${host}:${port}:127.0.0.1" \
+    curl -fsS \
       -H "Range: bytes=0-1" \
       -o /dev/null \
       -w '%{http_code}|%{content_type}' \
@@ -1957,8 +1945,7 @@ gamma_product_ops_ready() {
   if [[ "$PRODUCT_TELEMETRY_AVAILABLE" != "1" ]]; then
     return 0
   fi
-  curl -kfsS --resolve "gamma-product-ops.quwoquan-env.test:${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:127.0.0.1" \
-    "${PRODUCT_OPS_BASE_URL%/}/healthz" >/dev/null 2>&1
+  curl -fsS "${PRODUCT_OPS_BASE_URL%/}/healthz" >/dev/null 2>&1
 }
 
 gamma_platform_ops_ready() {
@@ -1973,12 +1960,12 @@ gamma_platform_ops_ready() {
 
 wait_local_gamma_host_ready() {
   local gw="${GATEWAY_BASE_URL%/}"
-  local gw_host="gamma-api.quwoquan-env.test"
+  local gw_host="$QWQ_PUBLIC_API_HOST"
   local gw_port="${LOCAL_GAMMA_HTTP_PORT:-19000}"
-  local product_ops_host="gamma-product-ops.quwoquan-env.test"
+  local product_ops_host="$QWQ_PUBLIC_OPS_HOST"
   local product_ops_public_port="${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"
-  local media_host="gamma-image.quwoquan-env.test"
-  local video_host="gamma-video.quwoquan-env.test"
+  local media_host="$QWQ_PUBLIC_CDN_HOST"
+  local video_host="$QWQ_PUBLIC_CDN_HOST"
   local media_edge_port="${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}"
   local po_port="${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19250}"
   local user_port="${LOCAL_GAMMA_USER_PORT:-19210}"
@@ -1987,16 +1974,16 @@ wait_local_gamma_host_ready() {
   local tag_port="${LOCAL_GAMMA_TAG_PORT:-19270}"
   local deadline=$(( $(date +%s) + HOST_READY_TIMEOUT_SECONDS ))
   local last_gamma_proxy_retry=0
-  echo "[local-gamma] waiting for host probes (${HOST_READY_TIMEOUT_SECONDS}s): ${gw}/healthz + ${PRODUCT_OPS_BASE_URL%/}/healthz + ${MEDIA_BASE_URL%/}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png + ${MEDIA_VIDEO_BASE_URL%/}/media/video/s/video-primary-0001/post/video-content-0001/source.mp4(Range 206/video/*) + internal health"
+  echo "[local-gamma] waiting for host probes (${HOST_READY_TIMEOUT_SECONDS}s): ${gw}/healthz + ${PRODUCT_OPS_BASE_URL%/}/healthz + media health + internal health"
   while (( $(date +%s) < deadline )); do
     if (( $(date +%s) - last_gamma_proxy_retry >= 15 )); then
       ensure_docker_gamma_proxy_started || true
       last_gamma_proxy_retry=$(date +%s)
     fi
-    if curl -kfsS --resolve "${gw_host}:${gw_port}:127.0.0.1" "https://${gw_host}:${gw_port}/healthz" >/dev/null 2>&1 \
+    if curl -fsS "https://${gw_host}:${gw_port}/healthz" >/dev/null 2>&1 \
       && gamma_product_ops_ready \
-      && curl -kfsS --resolve "${media_host}:${media_edge_port}:127.0.0.1" "https://${media_host}:${media_edge_port}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" >/dev/null 2>&1 \
-      && gamma_canonical_video_range_mime_ready "$video_host" "$media_edge_port" \
+      && curl -fsS "https://${media_host}:${media_edge_port}/healthz" >/dev/null 2>&1 \
+      && curl -fsS "https://${video_host}:${media_edge_port}/healthz" >/dev/null 2>&1 \
       && { [[ "$PRODUCT_TELEMETRY_AVAILABLE" != "1" ]] || curl -fsS "http://127.0.0.1:${po_port}/healthz" >/dev/null 2>&1; } \
       && gamma_platform_ops_ready \
       && curl -fsS "http://127.0.0.1:${user_port}/healthz" >/dev/null 2>&1 \
@@ -2008,11 +1995,11 @@ wait_local_gamma_host_ready() {
     fi
     sleep 2
   done
-  echo "[local-gamma] FAIL: host cannot reach the canonical media video Range/MIME surface or required health probes within ${HOST_READY_TIMEOUT_SECONDS}s" >&2
-  curl -kfsS --resolve "${gw_host}:${gw_port}:127.0.0.1" "https://${gw_host}:${gw_port}/healthz" >&2 || true
+  echo "[local-gamma] FAIL: host cannot reach required Remote service health probes within ${HOST_READY_TIMEOUT_SECONDS}s" >&2
+  curl -fsS "https://${gw_host}:${gw_port}/healthz" >&2 || true
   gamma_product_ops_ready >&2 || true
-  curl -kfsS --resolve "${media_host}:${media_edge_port}:127.0.0.1" "https://${media_host}:${media_edge_port}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" >&2 || true
-  gamma_canonical_video_range_mime_ready "$video_host" "$media_edge_port" || true
+  curl -fsS "https://${media_host}:${media_edge_port}/healthz" >&2 || true
+  curl -fsS "https://${video_host}:${media_edge_port}/healthz" >&2 || true
   docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" ps >&2 || true
   curl -fsS "http://127.0.0.1:${integration_port}/healthz" >&2 || true
   curl -fsS "http://127.0.0.1:${notification_port}/healthz" >&2 || true
@@ -2028,31 +2015,6 @@ ensure_gamma_filter_catalog_release() {
 wait_local_gamma_host_ready
 ensure_gamma_filter_catalog_release
 
-export_local_gamma_root_ca() {
-  local container_name=""
-  local destination="${QWQ_DEPLOY_WORK_ROOT}/gamma-local/certificates/root.crt"
-  for candidate in quwoquan_service-gamma-proxy-1 quwoquan_service_gamma-proxy_1; do
-    if docker inspect "$candidate" >/dev/null 2>&1 || podman inspect "$candidate" >/dev/null 2>&1; then
-      container_name="$candidate"
-      break
-    fi
-  done
-  if [[ -z "$container_name" ]]; then
-    echo "[local-gamma] FAIL: gamma proxy container unavailable for CA export" >&2
-    return 1
-  fi
-  mkdir -p "$(dirname "$destination")"
-  if docker cp "${container_name}:/data/caddy/pki/authorities/local/root.crt" "$destination" >/dev/null 2>&1 \
-    || podman cp "${container_name}:/data/caddy/pki/authorities/local/root.crt" "$destination" >/dev/null 2>&1; then
-    chmod 0644 "$destination"
-    echo "[local-gamma] exported local trust root: $destination"
-    return 0
-  fi
-  echo "[local-gamma] FAIL: Caddy local root CA export failed" >&2
-  return 1
-}
-export_local_gamma_root_ca
-
 seed_integration_location_data() {
   local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
   local fixture="$ROOT/quwoquan_service/services/integration-service/tests/support/contract_fixtures/scenarios/integration_scenarios.json"
@@ -2062,6 +2024,7 @@ seed_integration_location_data() {
   fi
   python3 - "$fixture" "$mongo_port" <<'PY'
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -2173,27 +2136,6 @@ else
   echo "[local-gamma] skip tag seed because STAGE=${STAGE} uses persisted/host data"
 fi
 
-seed_gamma_content_data() {
-  echo "[local-gamma] seeding content posts (gamma curated manifest) ..."
-  if ! python3 - <<'PY' >/dev/null 2>&1; then
-import sys
-raise SystemExit(0 if sys.version_info >= (3, 10) else 1)
-PY
-    echo "[local-gamma] GATE_BLOCK: content seed requires python3 >= 3.10" >&2
-    return 1
-  fi
-  if ! python3 "$ROOT/quwoquan_app/scripts/gamma/run_local_gamma_t3.py" --seed-only --report "${GAMMA_RUN_ROOT}/content-seed-report.json"; then
-    echo "[local-gamma] GATE_BLOCK: content seed failed; home/discovery feeds are not valid without it" >&2
-    return 1
-  fi
-  echo "[local-gamma] content seed completed"
-}
-if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
-  seed_gamma_content_data
-else
-  echo "[local-gamma] skip content seed because STAGE=${STAGE} uses persisted/host data"
-fi
-
 seed_gamma_intersection_data() {
   local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
   local gateway="${GATEWAY_BASE_URL%/}"
@@ -2231,7 +2173,7 @@ entity = "fixture_homepage_travel_photo_west_lake"
 shared_post = "gamma_intersection_shared_post"
 profile_post = "gamma_intersection_profile_post"
 avatar = (
-    "https://gamma-image.quwoquan-env.test:19100/media/avatar/s/"
+    os.environ["MEDIA_AVATAR_BASE_URL"] + "/s/"
     "archived-avatar/user/fixture_user_photo/v1/avatar.png"
 )
 
@@ -2423,6 +2365,7 @@ seed_gamma_premium_pool_data() {
   echo "[local-gamma] seeding premium pool projection and recall proof ..."
   if ! python3 - "$ROOT" "$mongo_port" "$redis_port" "$gateway" "$report" <<'PY'
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -2447,7 +2390,7 @@ rolled_back = "gamma_premium_pool_rolled_back_post"
 takedown = "gamma_premium_pool_takedown_post"
 all_ids = [eligible, expired, rolled_back, takedown]
 cover = (
-    "https://gamma-image.quwoquan-env.test:19100/media/image/s/"
+    os.environ["MEDIA_IMAGE_BASE_URL"] + "/s/"
     "archived-image/post/fixture_photo_001/v1/cover.png"
 )
 
@@ -2747,11 +2690,13 @@ PY
 }
 if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
   seed_search_index
+  write_local_gamma_data_plane_watermark "$(compute_local_gamma_data_plane_digest)"
+  echo "[local-gamma] wrote data-plane watermark: ${LOCAL_GAMMA_DATA_PLANE_WATERMARK}"
 else
   echo "[local-gamma] skip search backfill because STAGE=${STAGE} uses persisted/host data"
 fi
 
-python3 - "$stack_report" "$CONFIG_VERSION" "$IMAGE_VERSION" "$PREVIOUS_IMAGE_VERSION" "$STAGE" "$LOCAL_GAMMA_APP_ENV" "$CONFIG_SOURCE_ENV" "$GATEWAY_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_BASE_URL" "$restarted_from_previous" "$WORKLOAD" <<'PY'
+python3 - "$stack_report" "$CONFIG_VERSION" "$IMAGE_VERSION" "$PREVIOUS_IMAGE_VERSION" "$STAGE" "$LOCAL_GAMMA_APP_ENV" "$CONFIG_SOURCE_ENV" "$GATEWAY_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_IMAGE_BASE_URL" "$restarted_from_previous" "$WORKLOAD" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
@@ -2796,6 +2741,6 @@ echo "[local-gamma] service mode: single-stack"
 echo "[local-gamma] mirror started"
 echo "[local-gamma] gateway: $GATEWAY_BASE_URL"
 echo "[local-gamma] product-ops: $PRODUCT_OPS_BASE_URL"
-echo "[local-gamma] media-edge: $MEDIA_BASE_URL"
+echo "[local-gamma] media-image: $MEDIA_IMAGE_BASE_URL"
 echo "[local-gamma] dart defines:"
 print_defines

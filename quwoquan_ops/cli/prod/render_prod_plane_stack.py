@@ -27,6 +27,7 @@ from quwoquan_ops.cli.lib.output_paths import remove_deployment_tree
 from quwoquan_ops.cli.lib.output_paths import resolve_deployment_target_path
 from quwoquan_ops.cli.lib.output_paths import service_deployment_package_dir
 from quwoquan_ops.cli.lib.output_paths import target_local_dir as resolve_target_local_dir
+from quwoquan_ops.cli.lib.output_paths import web_deployment_package_dir
 from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
 from quwoquan_ops.cli.lib.compose_layout import domain_service_compose_files
 
@@ -96,6 +97,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--config-version", required=True)
     parser.add_argument("--image-version", default=os.environ.get("IMAGE_VERSION", "0.0.1"))
+    parser.add_argument(
+        "--release-manifest-digest",
+        default=os.environ.get("RELEASE_MANIFEST_DIGEST", ""),
+    )
     parser.add_argument(
         "--output-dir",
         default="",
@@ -385,12 +390,14 @@ def _rewrite_service(
     *,
     image_version: str,
     config_version: str,
+    release_manifest_digest: str = "",
     versioned_image: bool,
     instance: str,
     config_root: str,
     media_root: str,
     legal_root: str,
     portal_root: str,
+    web_root: str,
     caddyfile_path: str,
     model_cache_root: str,
     credentials_root: str = "",
@@ -438,11 +445,31 @@ def _rewrite_service(
     if isinstance(environment, dict):
         if config_version:
             environment["CONFIG_VERSION"] = config_version
+        if image_version:
+            environment["IMAGE_VERSION"] = image_version
+        if name in RUNTIME_LOG_EXPORT_SERVICES and release_manifest_digest:
+            environment["RELEASE_MANIFEST_DIGEST"] = release_manifest_digest
         if instance == "prevalidate":
             environment["QWQ_NONPROMOTABLE_PREVALIDATION"] = "first-party"
         environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = (
             "${OTEL_EXPORTER_OTLP_ENDPOINT:-otel-collector:4318}"
         )
+        if name in RUNTIME_LOG_EXPORT_SERVICES:
+            # 所有受管服务在成功读取、校验当前发布包配置后，以服务+环境绑定的
+            # 短期凭据 ACK。固定实例身份来自渲染器，禁止使用容器随机 hostname
+            # 使 rollout convergence 无法判断成员完整性。
+            cluster_name = f"prod-{instance}-control-a"
+            environment["PLATFORM_OPS_BASE_URL"] = "http://platform-ops-service:18088"
+            environment["CLUSTER_NAME"] = cluster_name
+            environment["SERVICE_INSTANCE_ID"] = (
+                f"{name}-{cluster_name}-0"
+            )
+            if name == "platform-ops-service":
+                environment["CONFIG_ACK_REQUIRED_INSTANCES"] = ",".join(
+                    f"{service}-{cluster_name}-0"
+                    for service in sorted(RUNTIME_LOG_EXPORT_SERVICES)
+                )
+                environment["CONFIG_ACK_MAX_AGE_SECONDS"] = "120"
         if name in RUNTIME_LOG_EXPORT_SERVICES:
             # 云侧服务日志上云：stdout 镜像批量推送到 product-ops 内部
             # runtime log ingest（机器凭据）并先写持久 spool。product-ops
@@ -532,9 +559,6 @@ def _rewrite_service(
             environment["PRODUCT_OPS_REDIS_REC_ADDR"] = f"{redis_host}:{redis_port}"
             environment["PRODUCT_OPS_REDIS_GENERAL_ADDR"] = f"{redis_host}:{redis_port}"
             environment["PROMETHEUS_URL"] = "${PRODUCT_OPS_PROMETHEUS_URL:-http://prometheus:9090}"
-            # config_sync 循环从平台控制面拉取有效配置并回报 ACK；
-            # prod 缺该地址时 config_sync 会 fail-fast，禁止静默跳过。
-            environment["PLATFORM_OPS_BASE_URL"] = "http://platform-ops-service:18088"
             # 云侧服务日志上云内部通道的服务端校验密钥（fail-closed）。
             environment["RUNTIME_LOG_INGEST_TOKEN"] = (
                 "${RUNTIME_LOG_INGEST_TOKEN:?RUNTIME_LOG_INGEST_TOKEN is required}"
@@ -672,6 +696,10 @@ def _rewrite_service(
             ),
         ]
     volumes = list(updated.get("volumes") or [])
+    if name == "gamma-proxy":
+        web_mount = f"{_compose_bind_source(web_root)}:/srv/web:ro"
+        if web_mount not in volumes:
+            volumes.append(web_mount)
     credential_spec = (runtime_credentials or {}).get(name)
     if credential_spec is not None:
         if not credentials_root or not Path(credentials_root).is_absolute():
@@ -713,20 +741,6 @@ def _rewrite_service(
         spool_mount = "runtime-log-spool:/var/lib/quwoquan/runtime-log-spool"
         if spool_mount not in volumes:
             volumes.append(spool_mount)
-    if name == "platform-ops-service":
-        if instance == "prevalidate":
-            environment["QWQ_PROD_RELEASE_STATE_DIR"] = (
-                "/var/lib/quwoquan/prevalidation-release-state"
-            )
-        else:
-            environment["QWQ_PROD_RELEASE_STATE_DIR"] = (
-                "/var/lib/quwoquan/release-state"
-            )
-            ledger_mount = (
-                "./release-ledger:/var/lib/quwoquan/release-state:ro"
-            )
-            if ledger_mount not in volumes:
-                volumes.append(ledger_mount)
     if instance == "prevalidate":
         projected_volumes: list[Any] = []
         for item in volumes:
@@ -917,7 +931,14 @@ def _prod_public_hosts() -> dict[str, str]:
         or {}
     )
     hosts: dict[str, str] = {}
-    for key in ("api", "realtime", "productOps", "mediaImage", "mediaUpload"):
+    for key in (
+        "api",
+        "realtime",
+        "productOps",
+        "publicWeb",
+        "mediaImage",
+        "mediaUpload",
+    ):
         host = urlparse(str(public_bases.get(key) or "")).hostname or ""
         if (
             not host
@@ -1005,11 +1026,10 @@ def _write_caddyfile(
     )
     caddy_text = """{
 \tadmin 0.0.0.0:2019
-\tlocal_certs
 }
 
-(local_gamma_tls) {
-\ttls internal
+(public_sim_tls) {
+\ttls {$QWQ_PUBLIC_TLS_CERT_FILE} {$QWQ_PUBLIC_TLS_KEY_FILE}
 }
 
 (media_cors) {
@@ -1021,8 +1041,8 @@ def _write_caddyfile(
 \t}
 }
 
-prod-api.quwoquan-env.test {
-\timport local_gamma_tls
+api.sim.quwoquan.com {
+\timport public_sim_tls
 \thandle /healthz {
 \t\treverse_proxy content-service:18080
 \t}
@@ -1096,8 +1116,8 @@ prod-api.quwoquan-env.test {
 \t}
 }
 
-prod-product-ops.quwoquan-env.test {
-\timport local_gamma_tls
+ops.sim.quwoquan.com {
+\timport public_sim_tls
 \thandle /healthz {
 \t\treverse_proxy product-ops-service:18086
 \t}
@@ -1124,11 +1144,11 @@ prod-product-ops.quwoquan-env.test {
 \t}
 }
 
-prod-avatar.quwoquan-env.test,
-prod-image.quwoquan-env.test,
-prod-video.quwoquan-env.test,
-prod-upload.quwoquan-env.test {
-\timport local_gamma_tls
+cdn.sim.quwoquan.com,
+cdn.sim.quwoquan.com,
+cdn.sim.quwoquan.com,
+upload.sim.quwoquan.com {
+\timport public_sim_tls
 \timport media_cors
 \troot * /srv/media
 \tfile_server
@@ -1209,31 +1229,27 @@ prod-upload.quwoquan-env.test {
         caddy_text = "{\n\tadmin 0.0.0.0:2019\n}\n" + caddy_text[direct_http + 1 :]
     else:
         caddy_text = caddy_text.replace(
-            "{\n\tadmin 0.0.0.0:2019\n\tlocal_certs\n}",
-            "{\n\tadmin 0.0.0.0:2019\n}",
-            1,
-        )
-        caddy_text = caddy_text.replace(
-            "\n(local_gamma_tls) {\n\ttls internal\n}\n",
+            "\n(public_sim_tls) {\n\t"
+            "tls {$QWQ_PUBLIC_TLS_CERT_FILE} {$QWQ_PUBLIC_TLS_KEY_FILE}\n}\n",
             "",
             1,
-        ).replace("\timport local_gamma_tls\n", "")
+        ).replace("\timport public_sim_tls\n", "")
         api_sites = f"{public_hosts['api']}, {public_hosts['realtime']} {{"
         caddy_text = caddy_text.replace(
-            "prod-api.quwoquan-env.test {",
+            "api.sim.quwoquan.com {",
             api_sites,
             1,
         )
         caddy_text = caddy_text.replace(
-            "prod-product-ops.quwoquan-env.test {",
+            "ops.sim.quwoquan.com {",
             f"{public_hosts['productOps']} {{",
             1,
         )
         caddy_text = caddy_text.replace(
-            "prod-avatar.quwoquan-env.test,\n"
-            "prod-image.quwoquan-env.test,\n"
-            "prod-video.quwoquan-env.test,\n"
-            "prod-upload.quwoquan-env.test {",
+            "cdn.sim.quwoquan.com,\n"
+            "cdn.sim.quwoquan.com,\n"
+            "cdn.sim.quwoquan.com,\n"
+            "upload.sim.quwoquan.com {",
             f"{public_hosts['mediaImage']}, {public_hosts['mediaUpload']} {{",
             1,
         )
@@ -1249,6 +1265,43 @@ prod-upload.quwoquan-env.test {
 """
         global_end = caddy_text.index("}\n") + 2
         caddy_text = caddy_text[:global_end] + security_snippet + caddy_text[global_end:]
+        web_site = f"""
+quwoquan.com {{
+\timport prod_security
+\tredir https://{public_hosts['publicWeb']}{{uri}} 308
+}}
+
+{public_hosts['publicWeb']} {{
+\timport prod_security
+\tencode zstd gzip
+\thandle_path /api/* {{
+\t\treverse_proxy https://{public_hosts['api']} {{
+\t\t\theader_up Host {public_hosts['api']}
+\t\t}}
+\t}}
+\thandle /ops/app-recovery/version {{
+\t\treverse_proxy product-ops-service:18086
+\t}}
+\thandle /download* {{
+\t\treverse_proxy product-ops-service:18086
+\t}}
+\thandle /downloads/android/latest.json {{
+\t\treverse_proxy product-ops-service:18086
+\t}}
+\t@immutable path /assets/* /canvaskit/* /icons/* /fonts/*
+\theader @immutable Cache-Control "public, max-age=31536000, immutable"
+\t@html path / *.html
+\theader @html Content-Type "text/html; charset=utf-8"
+\thandle {{
+\t\theader {{
+\t\t\tContent-Security-Policy "default-src 'self'; connect-src 'self' https: wss:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'"
+\t\t}}
+\t\troot * /srv/web
+\t\ttry_files {{path}} /index.html
+\t\tfile_server
+\t}}
+}}
+"""
         for site in (
             api_sites,
             f"{public_hosts['productOps']} {{",
@@ -1258,7 +1311,7 @@ prod-upload.quwoquan-env.test {
         direct_http = caddy_text.rfind("\n:80 {")
         if direct_http < 0:
             raise SystemExit("FAIL: prod Caddy direct HTTP fallback block is missing")
-        caddy_text = caddy_text[:direct_http].rstrip() + "\n"
+        caddy_text = caddy_text[:direct_http].rstrip() + "\n\n" + web_site
     if gray_routing_block:
         # 灰度路由 matcher 必须在 API handle 之前：命中维度的请求整体转发到
         # gray 栈 edge；未命中继续走本栈稳定服务。
@@ -1677,6 +1730,7 @@ def main() -> int:
     media_root = str((resolve_target_local_dir("prod-hosted") / media_ref_path).resolve())
     legal_root = str(layout.get("legalStaticRoot") or "runtime/legal-static")
     portal_root = str(layout.get("portalStaticRoot") or "runtime/portal")
+    web_root = str(layout.get("webStaticRoot") or "runtime/public-web")
     model_cache_root = str(layout.get("modelCacheRoot") or "runtime/model-cache")
     if Path(config_root).is_absolute() or ".." in Path(config_root).parts:
         raise SystemExit("FAIL: rootlessRuntimeLayout.configRoot must remain relative")
@@ -1686,6 +1740,8 @@ def main() -> int:
         raise SystemExit("FAIL: rootlessRuntimeLayout.legalStaticRoot must remain relative")
     if Path(portal_root).is_absolute() or ".." in Path(portal_root).parts:
         raise SystemExit("FAIL: rootlessRuntimeLayout.portalStaticRoot must remain relative")
+    if Path(web_root).is_absolute() or ".." in Path(web_root).parts:
+        raise SystemExit("FAIL: rootlessRuntimeLayout.webStaticRoot must remain relative")
     if Path(model_cache_root).is_absolute() or ".." in Path(model_cache_root).parts:
         raise SystemExit("FAIL: rootlessRuntimeLayout.modelCacheRoot must remain relative")
 
@@ -1745,6 +1801,28 @@ def main() -> int:
         shutil.copytree(portal_release_dist, portal_output_root)
     else:
         portal_output_root.mkdir(parents=True, exist_ok=True)
+    web_release_public = (
+        web_deployment_package_dir("prod", target="prod-hosted")
+        / "current"
+        / "public"
+    )
+    web_output_root = deployment_target_path(
+        "prod-hosted",
+        "rendered",
+        render_name,
+        *Path(web_root).parts,
+    )
+    if web_output_root.exists():
+        remove_deployment_tree(
+            "prod-hosted",
+            "rendered",
+            render_name,
+            *Path(web_root).parts,
+        )
+    if web_release_public.is_dir():
+        shutil.copytree(web_release_public, web_output_root)
+    else:
+        web_output_root.mkdir(parents=True, exist_ok=True)
     deployment_target_path(
         "prod-hosted",
         "rendered",
@@ -1800,12 +1878,14 @@ def main() -> int:
             config_version=str(
                 (config_sources.get(service_name) or {}).get("configVersion") or ""
             ),
+            release_manifest_digest=args.release_manifest_digest,
             versioned_image=service_name in governed_names,
             instance=args.instance,
             config_root=config_root,
             media_root=media_root,
             legal_root=legal_root,
             portal_root=portal_root,
+            web_root=web_root,
             caddyfile_path=caddyfile_path,
             model_cache_root=model_cache_root,
             credentials_root=credentials_root,

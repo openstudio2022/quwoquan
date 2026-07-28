@@ -24,9 +24,11 @@ import 'package:quwoquan_app/cloud/services/chat/remote/chat_repository_remote.d
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/post_reader_remote.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/cloud/remote/user/persona/persona_query_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/profile/profile_query_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/profile/user_profile_query_remote.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
@@ -362,13 +364,27 @@ void main() {
     final userPosts = userPostsPage.items;
     expect(userPosts.length, greaterThanOrEqualTo(4));
     expect(userPosts.map((item) => item.id), contains('fixture_moment_001'));
+    final moment = userPosts.firstWhere(
+      (item) => item.id == 'fixture_moment_001',
+    );
+    final unavailableMediaResolver = MediaDeliveryResolver(
+      MediaEndpointConfig.tryCreateAvailable(
+        avatarBaseUrl: '',
+        imageBaseUrl: '',
+        videoBaseUrl: '',
+        attachmentBaseUrl: '',
+      )!,
+    );
+    final momentView = ContentSurfaceViewMapper.fromDto(
+      moment,
+      mediaResolver: unavailableMediaResolver,
+    );
     expect(
-      userPosts
-          .firstWhere((item) => item.id == 'fixture_moment_001')
-          .primaryVisualUrl,
-      isEmpty,
+      momentView.cover,
+      isNull,
       reason: '未注入媒体交付 endpoint 时，不得把 post object key 当作可加载 URL',
     );
+    expect(momentView.images, isEmpty);
     final userProfiles = await _getJsonList('$baseUrl/user/profile', 'items');
     expect(
       userProfiles.map((item) => item['userId']),

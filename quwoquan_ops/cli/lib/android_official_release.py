@@ -22,6 +22,7 @@ def package_android_official_release(
     public_origin: str,
     download_origin: str,
     expected_package: str,
+    expected_signing_certificate_sha256: str,
     verify_remote: bool = False,
     apkanalyzer: str = "",
     apksigner: str = "",
@@ -42,6 +43,10 @@ def package_android_official_release(
     build_number = _tool_output(
         [analyzer, "manifest", "version-code", str(apk_path)],
         "read APK build number",
+    )
+    min_android_version = _tool_output(
+        [analyzer, "manifest", "min-sdk", str(apk_path)],
+        "read APK minimum Android version",
     )
     if package_name != expected_package:
         raise AndroidOfficialReleaseError(
@@ -68,13 +73,28 @@ def package_android_official_release(
     certificate_sha256 = certificate_match.group(1).replace(":", "").lower()
     if not re.fullmatch(r"[0-9a-f]{64}", certificate_sha256):
         raise AndroidOfficialReleaseError("APK signing certificate digest is invalid")
+    expected_certificate = (
+        expected_signing_certificate_sha256.strip().replace(":", "").lower()
+    )
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_certificate):
+        raise AndroidOfficialReleaseError(
+            "expected APK signing certificate SHA-256 is required"
+        )
+    if certificate_sha256 != expected_certificate:
+        raise AndroidOfficialReleaseError(
+            "APK signing certificate does not match the trusted production identity"
+        )
 
     public_origin = _trusted_origin(public_origin, "public web origin")
     download_origin = _trusted_origin(download_origin, "APK download origin")
-    artifact_name = f"quwoquan-{version_name}-{build_number}.apk"
+    if not re.fullmatch(r"[1-9][0-9]{0,2}", min_android_version):
+        raise AndroidOfficialReleaseError(
+            f"APK minimum Android version is invalid: {min_android_version}"
+        )
+    artifact_name = f"quwoquan-{build_number}.apk"
     apk_url = urljoin(
         download_origin.rstrip("/") + "/",
-        f"app/android/{version_name}/{artifact_name}",
+        f"downloads/android/{version_name}/{build_number}/{artifact_name}",
     )
     apk_sha256 = _sha256(apk_path)
     apk_size = apk_path.stat().st_size
@@ -96,6 +116,7 @@ def package_android_official_release(
         "platform": "android",
         "versionName": version_name,
         "buildNumber": build_number,
+        "minAndroidVersion": min_android_version,
         "packageName": package_name,
         "apkUrl": apk_url,
         "apkSHA256": apk_sha256,
@@ -123,6 +144,7 @@ def package_android_official_release(
         "PRODUCT_OPS_ANDROID_APK_SHA256": apk_sha256,
         "PRODUCT_OPS_ANDROID_APK_SIZE_BYTES": str(apk_size),
         "PRODUCT_OPS_ANDROID_APK_SIGNING_CERTIFICATE_SHA256": certificate_sha256,
+        "PRODUCT_OPS_ANDROID_MIN_ANDROID_VERSION": min_android_version,
     }
     env_path = release_dir / "product-ops.env"
     env_path.write_text(
@@ -241,3 +263,25 @@ def _verify_remote_artifact(
         raise AndroidOfficialReleaseError(
             "official APK download digest/size differs from the signed package"
         )
+    range_request = urllib.request.Request(
+        apk_url,
+        headers={
+            "Accept": "application/vnd.android.package-archive",
+            "Range": "bytes=0-0",
+        },
+    )
+    try:
+        with urllib.request.urlopen(range_request, timeout=15) as response:
+            if response.status != 206:
+                raise AndroidOfficialReleaseError(
+                    "official APK download must support HTTP Range with 206"
+                )
+            content_range = response.headers.get("Content-Range", "")
+            if not content_range.startswith("bytes 0-0/"):
+                raise AndroidOfficialReleaseError(
+                    "official APK Range response has invalid Content-Range"
+                )
+    except OSError as error:
+        raise AndroidOfficialReleaseError(
+            f"official APK Range verification failed: {error}"
+        ) from error

@@ -87,7 +87,6 @@ func NewProfileService(
 		sync:                 sync,
 		regionTags:           PathRegionTagResolver{},
 		profileTags:          PathProfileTagValidator{},
-		publicProfileBaseURL: defaultPublicProfileBaseURL(),
 		qrTokenSecret:        defaultProfileQRTokenSecret(),
 		qrTokenTTL:           365 * 24 * time.Hour,
 	}
@@ -856,13 +855,6 @@ func shortTokenID(hash string) string {
 		return hash
 	}
 	return hash[:24]
-}
-
-func defaultPublicProfileBaseURL() string {
-	if value := normalizePublicProfileBaseURL(os.Getenv("PROFILE_PUBLIC_APP_HOST")); value != "" {
-		return value
-	}
-	return "https://app.quwoquan.com"
 }
 
 func normalizePublicProfileBaseURL(baseURL string) string {

@@ -1,0 +1,78 @@
+{
+  "version": 3,
+  "verifiedAt": "2026-07-27",
+  "method": "structural_contract_plus_real_env_runs",
+  "evidence": {
+    "contractTests": "quwoquan_ops/tests/local_contract/test_commit_gate_fast_path__local_contract_test.py",
+    "baseline": "quwoquan_ops/environments/commit_gate_timing_baseline.json",
+    "budgets": "quwoquan_ops/environments/pr_gate_timing_budgets.json#gates.00.local_commit_gate",
+    "envMatrix": ".qwq_output/env/repo/runs/commit-gate-env-matrix/matrix.json",
+    "prodProviderGap": ".qwq_output/env/repo/runs/commit-gate-env-matrix/prod-provider-gap.json"
+  },
+  "invariantsProven": [
+    "pre-commit invokes commit_gate.sh only (no make gate / scope=all)",
+    "Makefile gate no longer embeds test-local-contract (eliminates Flutter/Go double-run with gate_repo)",
+    "Flutter guard no longer forces concurrency=1 for local_contract",
+    "impacted Flutter selection respects hard cap with deferred_to_ci",
+    "Delivery Gate app path uses 4 shards @ concurrency 8 plus serial job",
+    "gate-local-gamma defaults LOCAL_GAMMA_SKIP_GATE=1",
+    "feature-tree verify --changes only fails on unowned paths; OPEN release blockers do not fail commit_gate",
+    "health without --scope follows content-release runtime workload scope",
+    "FilterCatalog Stage/Activate/Rollback bind Idempotency-Key on ContentHandler path"
+  ],
+  "sla": {
+    "softBudgetSeconds": 600,
+    "hardFailSeconds": 900,
+    "expectedWallSecondsModel": {
+      "crossArea": "max(L0_static_parallel<=120, L0_impacted_tests_parallel<=420) + summary <= 600 soft",
+      "notes": "Wall clock is parallel fan-out, not sum of phases. Full 598-file local_contract is CI-only."
+    },
+    "regressionCapture": {
+      "local": "impacted suite + fixed smoke static checks",
+      "ci": "Delivery Gate sharded local_contract + serial-tagged suites + service/data/portal scopes"
+    }
+  },
+  "environmentEvidence": {
+    "L0": {
+      "overall": "PASS",
+      "commitGate": ".qwq_output/env/repo/runs/commit-gate/summary.json"
+    },
+    "alpha": {
+      "overall": "PASS",
+      "package": ".qwq_output/env/alpha/runs/20260727T000636Z-package-alpha-local",
+      "up": ".qwq_output/env/alpha/runs/20260727T001225Z-up-alpha",
+      "health": ".qwq_output/env/alpha/runs/20260727T001248Z-health-alpha-local",
+      "healthScore": "4/4",
+      "verifySmoke": ".qwq_output/env/alpha/runs/20260727T001248Z-verify-alpha-local"
+    },
+    "beta": {
+      "overall": "PASS",
+      "package": ".qwq_output/env/beta/runs/20260726T233914Z-package-beta-local",
+      "up": ".qwq_output/env/beta/runs/20260726T233943Z-up-beta",
+      "health": ".qwq_output/env/beta/runs/20260726T235109Z-health-beta-local",
+      "healthScore": "5/5",
+      "verifyIntegration": ".qwq_output/env/beta/runs/20260726T235332Z-verify-beta-local"
+    },
+    "gamma": {
+      "overall": "PASS",
+      "package": ".qwq_output/env/gamma/runs/20260726T235517Z-package-gamma-local",
+      "up": ".qwq_output/env/gamma/runs/20260727T000144Z-up-gamma",
+      "health": ".qwq_output/env/gamma/runs/20260727T000507Z-health-gamma-local",
+      "healthScore": "28/28",
+      "verifyIntegration": ".qwq_output/env/gamma/runs/20260727T000516Z-verify-gamma-local",
+      "skipGateDefault": "PASS"
+    },
+    "prod": {
+      "overall": "PACKAGE_PURITY_PASS",
+      "release": "RELEASE_PROVIDER_GATE_BLOCK",
+      "package": ".qwq_output/env/prod/runs/20260727T001322Z-package-prod-hosted",
+      "purity": "PASS",
+      "verifyRelease": ".qwq_output/env/prod/runs/20260727T001332Z-verify-prod-hosted",
+      "prod_hosted_deploy": "NOT_RUN",
+      "providerGap": ".qwq_output/env/repo/runs/commit-gate-env-matrix/prod-provider-gap.json"
+    }
+  },
+  "result": "LOCAL_ENV_GATE_GREEN",
+  "claim": "LOCAL_ENV_GATE_GREEN",
+  "commercialReleaseClaim": "NOT_ALL_ENVS_PASSED"
+}

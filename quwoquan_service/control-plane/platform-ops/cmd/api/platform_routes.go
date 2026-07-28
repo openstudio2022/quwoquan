@@ -28,6 +28,7 @@ func newServerMux(service *platformService) *http.ServeMux {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 	})
 	mux.Handle("/metrics", rtmetrics.Handler())
+	mux.HandleFunc("/readyz/config-convergence", service.handleConfigAckConvergence)
 	mux.HandleFunc("/control-plane/platform/catalog/services", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
@@ -163,7 +164,7 @@ func newServerMux(service *platformService) *http.ServeMux {
 			writeRuntimeError(w, r, http.StatusMethodNotAllowed, "请求处理失败", "only GET")
 			return
 		}
-		service.handleListReleases(w, r.URL.Query().Get("service"))
+		service.handleListReleases(w, r, r.URL.Query().Get("service"))
 	})
 	mux.HandleFunc("/control-plane/platform/rollout/routing-policy", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

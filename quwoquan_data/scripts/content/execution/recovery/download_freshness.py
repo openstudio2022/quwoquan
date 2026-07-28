@@ -51,6 +51,7 @@ def _download_fetch_rule_mtime_ns() -> int:
         scripts_root / "content" / "source" / "handler_fetch.py",
         scripts_root / "content" / "source" / "handler.py",
         scripts_root / "content" / "source" / "source_unit.py",
+        scripts_root / "content" / "source" / "source_unit_writer.py",
         scripts_root / "content" / "source" / "research" / "image_provider_compliance.py",
         scripts_root.parent / "verticals" / "travel" / "rights" / "license_policy.yaml",
     ]

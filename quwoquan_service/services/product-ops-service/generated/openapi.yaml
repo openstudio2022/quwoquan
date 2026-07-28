@@ -58,6 +58,77 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /control-plane/platform/configs/instances:
+        get:
+            operationId: ListConfigInstanceReports
+            x-contract-operation-id: ops.config_instance_report.ListConfigInstanceReports
+            x-object-id: ops.config_instance_report
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ConfigInstanceReportQueryFacade
+                method: listConfigInstanceReports
+                reader: ConfigInstanceReportReader
+                slice: ConfigInstanceReportSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConfigInstanceReportSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/configs/instances/{instanceId}:report:
+        post:
+            operationId: ReportConfigInstance
+            x-contract-operation-id: ops.config_instance_report.ReportConfigInstance
+            x-object-id: ops.config_instance_report
+            x-actor: account
+            x-application:
+                kind: command
+                facet: ConfigInstanceReportCommandFacade
+                method: reportConfigInstance
+                aggregateOwner: ConfigInstanceReport
+            parameters:
+                - name: instanceId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ConfigInstanceReport'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConfigInstanceReport'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /control-plane/platform/configs/resolve:
         get:
             operationId: ResolveEffectiveConfig
@@ -694,6 +765,16 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ConfigDomainSlice
+            x-contract-placeholder: true
+        ConfigInstanceReport:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConfigInstanceReport
+            x-contract-placeholder: true
+        ConfigInstanceReportSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConfigInstanceReportSlice
             x-contract-placeholder: true
         ConfigKeyCatalogSlice:
             type: object

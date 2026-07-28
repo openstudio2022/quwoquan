@@ -37,7 +37,7 @@ Future<T?> showAppActionSheet<T>(
   String? title,
   String? message,
   required List<AppActionSheetSection<T>> sections,
-  String cancelLabel = UITextConstants.cancel,
+  String cancelLabel = FoundationText.cancel,
   double? maxHeightRatio,
 }) {
   return showAppBottomModal<T>(
@@ -59,8 +59,8 @@ Future<T?> showAppActionSheetForConfirm<T>(
   String? message,
   required List<AppActionSheetSection<T>> sections,
   required T initialValue,
-  String cancelLabel = UITextConstants.cancel,
-  String confirmLabel = UITextConstants.confirm,
+  String cancelLabel = FoundationText.cancel,
+  String confirmLabel = FoundationText.confirm,
   double? maxHeightRatio,
 }) {
   return showAppBottomModal<T>(

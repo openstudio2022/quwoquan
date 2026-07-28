@@ -161,7 +161,7 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
     if (path.isEmpty) {
       return Center(
         child: Text(
-          UITextConstants.loadFailed,
+          FoundationText.loadFailed,
           style: TextStyle(color: fgSecondary),
         ),
       );

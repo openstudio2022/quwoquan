@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, LogOut, Search } from 'lucide-react';
+import { ChevronDown, LogOut } from 'lucide-react';
 import { useMemo } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 
@@ -130,14 +130,6 @@ export function PortalLayout() {
               <strong>{environment}</strong>
               <ChevronDown size={16} />
             </div>
-            <div className="portal-pill">
-              工作域
-              <strong>{portalShell.default_domain}</strong>
-            </div>
-            <div className="portal-search">
-              <Search size={16} color="#6B7280" />
-              <input placeholder={portalShell.global_search.placeholder} />
-            </div>
           </div>
           <div className="portal-topbar__right">
             <select
@@ -151,10 +143,6 @@ export function PortalLayout() {
                 </option>
               ))}
             </select>
-            <div className="portal-pill">
-              <Bell size={16} />
-              {portalShell.notification_channels.length} 类通知
-            </div>
             <button type="button" className="portal-button portal-button--ghost" onClick={logout} title="退出登录">
               <LogOut size={16} />
               {claims.name || claims.email || claims.sub || 'operator'}

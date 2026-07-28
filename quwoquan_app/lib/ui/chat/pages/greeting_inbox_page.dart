@@ -127,7 +127,7 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text(UITextConstants.cancel),
+            child: const Text(FoundationText.cancel),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
@@ -334,7 +334,7 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
 
   Widget _buildContent(bool isDark) {
     if (_loading) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     if (_rawError case final error?) {
       return AppPageErrorState(

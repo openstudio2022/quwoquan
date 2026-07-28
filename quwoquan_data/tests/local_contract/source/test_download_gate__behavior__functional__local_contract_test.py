@@ -45,6 +45,7 @@ from content.source.gate import (  # noqa: E402
     gate_download,
 )
 from content.execution.recovery.download_gate import _download_repair_active_issues  # noqa: E402
+from content.execution.recovery.download_repair import _record_download_repair  # noqa: E402
 from content.execution.recovery.download_research_gate import _download_research_lane_issues  # noqa: E402
 from content.execution.context import ExecutionContext  # noqa: E402
 from governance.content_supply_policy import load_content_supply_policy  # noqa: E402
@@ -159,6 +160,46 @@ def test_download_repair_active_issues_only_decodes_typed_records():
         )
 
 
+def test_download_repair_uses_each_target_canonical_entity_type():
+    entity = "刘基庙"
+    shutil.rmtree(execution_root(TASK), ignore_errors=True)
+    fixture = ExecutionFixtureBuilder(
+        TASK,
+        targets=(
+            {"entityType": "地点/景区", "name": "测试景区"},
+            {"entityType": "地点/遗址", "name": entity},
+        ),
+    )
+    fixture.build()
+    plan = (
+        execution_entity_object_dir(TASK, "地点", "遗址", entity)
+        / "1.download"
+        / "homepage_source_plan.json"
+    )
+    write_json(plan, {"payload": {"entityId": entity, "sources": []}})
+    issue = data_issue(
+        DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING,
+        stage=DataIssueStage.DOWNLOAD_FETCH,
+        ref=entity,
+        lane=DataIssueLane.HOMEPAGE,
+        recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
+        message="homepage primary authority source is missing",
+    )
+
+    packet_path = _record_download_repair(
+        ExecutionContext(
+            execution_id=TASK,
+            entity_ids=(entity,),
+            spec=fixture.spec(),
+        ),
+        [issue],
+    )
+
+    repair = read_json(packet_path)["entities"][0]
+    assert Path(repair["sourcePlanPath"]) == plan
+    assert all("/地点/遗址/刘基庙/" in path for path in repair["sourcePlanPaths"])
+
+
 def _attach_image(unit_dir: Path, name: str) -> None:
     target_unit = unit_dir
     if unit_dir.parent.name == "sources" and unit_dir.parent.parent.name == "1.download":
@@ -219,6 +260,17 @@ def _write_verified_homepage_source(
             f"{entity_name}主峰海拔三千余米。"
             f"{entity_name}是中国著名山岳景区。"
             f"{entity_name}景区包括多条登山步道。"
+            f"{entity_name}始建于2001年，保护范围覆盖核心山体与历史建筑。"
+            f"{entity_name}每日开放，游客可通过预约渠道进入主要游览区域。"
+            f"{entity_name}设有服务中心、公共停车场和交通接驳设施。"
+            f"{entity_name}管理方持续巡检步道、观景平台与服务设施，并公布季节开放信息。"
+            f"{entity_name}周边保留多处历史遗址、自然植被与传统村落，形成连续游览空间。"
+            f"{entity_name}管理机构设置分时客流引导、无障碍通道和环境保护巡查制度。"
+            f"{entity_name}通过步行线路、观景节点和公共标识连接主要景观与服务区域。"
+            f"{entity_name}每年结合气候条件发布安全提示，并维护交通接驳和游客咨询服务。"
+            f"{entity_name}按照承载能力安排分时游览，定期检查山体、栈道和公共设施的安全状况。"
+            f"{entity_name}在主要入口提供导览信息、应急联络和文明游览提示，帮助游客规划行程。"
+            f"{entity_name}周边公共交通覆盖主要到达点，景区在节假日实施客流疏导与秩序维护。"
         ),
         quality={"sourceId": source_id, "quality": "B-fact", "score": 5},
         platform="Wikipedia",
@@ -226,6 +278,7 @@ def _write_verified_homepage_source(
         source_kind="wikipedia",
         extractor="wikipedia_api",
         policy_revision="encyclopedia-primary",
+        source_role="primary",
         research_lane="homepage",
         url=f"https://zh.wikipedia.org/wiki/{entity_name}",
         title=source_title or entity_name,
@@ -691,6 +744,52 @@ def test_gate_download_blocks_homepage_source_without_base_draft_facts():
     assert any(
         issue.code is DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING
         and "baseDraft-ready" in issue.message
+        for issue in issues
+    ), issues
+
+
+def test_gate_download_uses_full_homepage_source_not_article_clean_extract():
+    """Homepage gate and author input must consume the same frozen source.md."""
+    entity = "完整来源景区"
+    entity_dir = execution_entity_object_dir(TASK, "地点", "景区", entity)
+    write_source_unit(
+        entity_dir,
+        ordinal=1,
+        source_id="home_wikipedia",
+        source_md=(
+            f"{entity}位于测试省测试市，始建于2001年，占地10平方公里。\n"
+            "景区包括主展馆、历史街区和公共步道，是当地重要文化地标。\n"
+            f"{entity}每天开放，游客可通过官方渠道预约，并设置交通接驳设施。\n"
+            f"{entity}保护多处历史建筑和自然景观，长期开展公共教育活动。\n"
+            f"{entity}建成游客服务中心、公共停车场和无障碍步行线路。"
+            f"{entity}管理方持续巡检步道、观景平台和服务设施，并公布季节开放信息。"
+            f"{entity}周边保留历史建筑、公共绿地与自然植被，形成连续可达的游览空间。"
+            f"{entity}管理机构设置客流引导、无障碍通道和环境保护巡查制度。"
+            f"{entity}通过步行线路、观景节点和公共标识连接主要景观与服务区域。"
+            f"{entity}每年结合气候条件发布安全提示，并维护交通接驳和游客咨询服务。"
+            f"{entity}按照承载能力安排分时游览，定期检查步道、栈道和公共设施的安全状况。"
+            f"{entity}在主要入口提供导览信息、应急联络和文明游览提示，帮助游客规划行程。"
+            f"{entity}周边公共交通覆盖主要到达点，景区在节假日实施客流疏导与秩序维护。"
+        ),
+        clean_md=f"{entity}是测试景区。",
+        quality={"sourceId": "home_wikipedia", "quality": "A-fact", "score": 8},
+        platform="维基百科",
+        source_category="encyclopedia",
+        source_kind="wikipedia",
+        extractor="wikipedia_api",
+        policy_revision="encyclopedia-primary",
+        source_role="primary",
+        research_lane="homepage",
+        source_use_mode="licensed_adaptation",
+        url="https://zh.wikipedia.org/wiki/完整来源景区",
+        title=entity,
+        target_ref=f"/entity/地点/景区/{entity}",
+    )
+
+    issues = gate_download(TASK, target_entities={entity})
+
+    assert not any(
+        issue.code is DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING
         for issue in issues
     ), issues
 

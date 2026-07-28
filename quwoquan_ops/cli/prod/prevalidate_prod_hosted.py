@@ -91,7 +91,7 @@ def load_projection() -> tuple[dict[str, Any], dict[str, PlaneProjection]]:
         )
     if spec.get("capacityStrategy") != "constrained-single-host":
         raise PrevalidationError("prevalidation capacity strategy must be explicit")
-    reclaim = spec.get("legacyReclaimPolicy") or {}
+    reclaim = spec.get("staleRuntimeReclaimPolicy") or {}
     if not (
         reclaim.get("enabled") is True
         and reclaim.get("plane") == "service"
@@ -101,7 +101,7 @@ def load_projection() -> tuple[dict[str, Any], dict[str, PlaneProjection]]:
         and reclaim.get("allowedStates")
     ):
         raise PrevalidationError(
-            "prevalidation legacy reclaim must be scoped and volume-preserving"
+            "prevalidation stale runtime reclaim must be scoped and volume-preserving"
         )
     plane_specs = {
         str(item.get("plane")): item
@@ -351,7 +351,7 @@ def evaluate_host_snapshots(
     return issues
 
 
-def _reclaim_legacy_runtime(
+def _reclaim_stale_runtime(
     *,
     host: str,
     projection: PlaneProjection,
@@ -431,13 +431,13 @@ print(json.dumps({{
     )
     if result.returncode != 0:
         raise PrevalidationError(
-            "scoped legacy runtime reclaim failed: "
+            "scoped stale runtime reclaim failed: "
             f"{result.stderr.strip() or result.stdout.strip()}"
         )
     try:
         report = json.loads(result.stdout)
     except json.JSONDecodeError as error:
-        raise PrevalidationError("legacy reclaim returned invalid JSON") from error
+        raise PrevalidationError("stale runtime reclaim returned invalid JSON") from error
     required = int(
         ((policy.get("minimumHostResources") or {}).get("postReclaimContainerFreeBytes"))
         or 0
@@ -529,12 +529,12 @@ def execute_deployment(
 ) -> dict[str, Any]:
     steps: list[dict[str, Any]] = []
     image_reports: dict[str, Any] = {}
-    reclaim_policy = dict(spec.get("legacyReclaimPolicy") or {})
+    reclaim_policy = dict(spec.get("staleRuntimeReclaimPolicy") or {})
     reclaim_policy["minimumHostResources"] = dict(
         spec.get("minimumHostResources") or {}
     )
     reclaim_reports = [
-        _reclaim_legacy_runtime(
+        _reclaim_stale_runtime(
             host=args.host,
             projection=projection,
             key_dir=args.key_dir,
@@ -726,7 +726,7 @@ def execute_deployment(
             "mode": args.data_mode,
             "releaseEvidenceEligible": False,
         },
-        "legacyReclaim": reclaim_reports,
+        "staleRuntimeReclaim": reclaim_reports,
         "units": units,
         "runtime": runtime,
         "imageDelivery": image_reports,

@@ -11,7 +11,7 @@
 
 ## 2. Story 协作与状态流
 
-- [`app-release-recovery-routing`](./app-release-recovery-routing/spec.md)：读取每个平台唯一已发布版本，并把 iOS App Store、Android 官网 APK 和通用恢复页投影为公开只读恢复结果。
+- [`app-release-recovery-routing`](./app-release-recovery-routing/spec.md)：读取每个平台唯一已发布版本，并把公众 iOS PWA、Android 官网 APK 和通用恢复页投影为公开只读恢复结果。
 - [`product-control-plane-contract`](./product-control-plane-contract/spec.md)：每个控制面动作必须声明 operation scope；危险动作必须记录操作者、目标、原因、revision 与结果，失败时不得生成成功审计。
 
 ## 3. 端云与数据流
@@ -48,9 +48,9 @@
 
 <a id="dec-002"></a>
 ### DEC-002 官网只分发经过发布门禁的不可变 Android APK
-- 决策：Android 正式 APK 由发布流水线使用生产密钥签名、验证包名/Build/证书摘要和 SHA-256 后上传到官方 CDN 的不可变对象键；产品运维配置只在对象可下载且校验一致后原子切换 latest 指针。官网下载端点只重定向该已确认对象，iOS 只返回 App Store 产品页。
+- 决策：Android 正式 APK 由发布流水线使用生产密钥签名、验证包名/Build/证书摘要和 SHA-256 后上传到官方 CDN 的不可变对象键。产品运维配置只在对象可下载且校验一致后原子切换 latest 指针。官网下载端点只重定向该已确认对象。公众 iOS 只返回官方 PWA 安装与网页版地址，已认证且设备已登记的内测成员才可使用受控 Ad Hoc 通道。
 - 理由：版本查询、官网页面和二进制必须共享同一发布事实，避免页面显示新版但下载到旧包、调试签名包或第三方地址。
-- 被否决方案：运行时扫描对象存储猜测最新版、覆盖同名 APK、在应用内下载并安装、Android 跳第三方商店、使用 debug 签名发布。
+- 被否决方案：运行时扫描对象存储猜测最新版、覆盖同名 APK、在应用内下载并安装、Android 跳第三方商店、使用 debug 签名发布、公众 iOS 跳 App Store 或分发 IPA。
 - 约束与影响：正式签名材料只由 CI Secret 注入。服务端和客户端仅接受 HTTPS 白名单，下载失败不得回退到未知镜像。
 - 关联要求：`REQ-001`
 - 影响 Story：[`app-release-recovery-routing`](./app-release-recovery-routing/spec.md)

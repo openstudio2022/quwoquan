@@ -26,7 +26,7 @@ services:
       RELIABLE_TASK_READY_INDEX_STREAM: reliabletask:chat:avatar:ready:local-gamma
       RELIABLE_TASK_READY_INDEX_GROUP: chat.group_avatar_worker.local-gamma
       RELIABLE_TASK_READY_INDEX_QUEUE: reliabletask.chat.avatar
-      CHAT_GROUP_AVATAR_CDN_BASE_URL: "${QWQ_COMPOSE_MEDIA_PUBLIC_BASE_URL:-${QWQ_COMPOSE_MEDIA_BASE_URL:-http://127.0.0.1:19100}}"
+      CHAT_GROUP_AVATAR_CDN_BASE_URL: "${QWQ_COMPOSE_MEDIA_AVATAR_BASE_URL:?QWQ_COMPOSE_MEDIA_AVATAR_BASE_URL is required}"
       CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT: /var/lib/quwoquan/chat-media
       SSL_CERT_FILE: /etc/ssl/local-ca/object-storage-ca.crt
       USER_SERVICE_BASE_URL: http://user-service:18081

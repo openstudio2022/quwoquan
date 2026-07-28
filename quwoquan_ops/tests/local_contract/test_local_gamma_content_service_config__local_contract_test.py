@@ -128,6 +128,319 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             )
         self.assertEqual(failed["status"], "failed")
 
+    def test_content_t3_uses_metadata_owned_isolated_verification_principal(
+        self,
+    ) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "local_gamma_t3_principal_test",
+            T3_SCRIPT,
+        )
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        manifest = module.load_manifest()
+        core_scope = manifest["verificationScopes"]["app-core-readback"]
+        self.assertEqual(
+            set(core_scope["domains"]),
+            {"content", "chat", "user"},
+        )
+        self.assertTrue(
+            module.resolve_scope_verification_subject(
+                "app-core-readback",
+                core_scope,
+            ).startswith("app-core-readback-")
+        )
+        self.assertEqual(
+            {
+                endpoint["assertion"]
+                for endpoint in core_scope["strictEndpoints"]
+            },
+            {
+                "home_feed_page",
+                "video_feed_page",
+                "chat_inbox_page",
+                "my_profile",
+            },
+        )
+        home_probe = next(
+            endpoint
+            for endpoint in core_scope["strictEndpoints"]
+            if endpoint["assertion"] == "home_feed_page"
+        )
+        self.assertTrue(home_probe.get("requireObjectCards", False))
+        self.assertEqual(core_scope["probeMode"], "strictEndpointsOnly")
+        chat_probe = next(
+            endpoint
+            for endpoint in core_scope["strictEndpoints"]
+            if endpoint["assertion"] == "chat_inbox_page"
+        )
+        self.assertEqual(
+            chat_probe["expectedConversationId"],
+            "{coreConversationId}",
+        )
+        self.assertEqual(chat_probe["expectedMessageText"], "{coreMessageText}")
+
+        self.assertEqual(
+            module.resolve_domain_verification_subject(
+                manifest,
+                {"content"},
+                True,
+            ),
+            "fixture_user_outdoor_01",
+        )
+        self.assertIsNone(
+            module.resolve_domain_verification_subject(
+                manifest,
+                {"content", "user"},
+                True,
+            )
+        )
+        self.assertIsNone(
+            module.resolve_domain_verification_subject(
+                manifest,
+                {"content"},
+                False,
+            )
+        )
+        endpoints = [
+            {"domain": "content", "status": "passed"},
+            {"domain": "chat", "status": "not_ready"},
+        ]
+        self.assertFalse(
+            module.has_strict_not_ready_endpoint(
+                endpoints,
+                {"content"},
+                True,
+            )
+        )
+        self.assertTrue(
+            module.has_strict_not_ready_endpoint(
+                endpoints,
+                {"content"},
+                False,
+            )
+        )
+        source = T3_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('report["postHealth"] = wait_url(', source)
+        self.assertIn("post_health_failed", source)
+        with self.assertRaisesRegex(AssertionError, "presentation"):
+            module.assert_home_feed_page(
+                {
+                    "items": [
+                        {
+                            "postId": "post-1",
+                            "contentType": "image",
+                            "contentIdentity": "moment",
+                        }
+                    ]
+                },
+                {},
+            )
+        with self.assertRaisesRegex(AssertionError, "objectCards"):
+            module.assert_home_feed_page(
+                {
+                    "items": [
+                        {
+                            "postId": "post-1",
+                            "contentType": "image",
+                            "contentIdentity": "moment",
+                            "summary": "可渲染摘要",
+                        }
+                    ]
+                    * 8
+                },
+                {"requireObjectCards": True},
+            )
+        module.assert_home_feed_page(
+            {
+                "items": [
+                    {
+                        "postId": "post-1",
+                        "contentType": "image",
+                        "contentIdentity": "moment",
+                        "summary": "可渲染摘要",
+                    }
+                ],
+                "objectCards": [
+                    {
+                        "objectKind": "entity_homepage",
+                        "objectId": "homepage-1",
+                        "title": "西湖",
+                        "anchorIndex": 8,
+                    }
+                ],
+            },
+            {"requireObjectCards": True},
+        )
+        module.assert_video_feed_page(
+            {
+                "items": [
+                    {
+                        "contentType": "video",
+                        "contentIdentity": "work",
+                        "videoUrl": "https://media.example/video.mp4",
+                    }
+                ]
+            },
+            {},
+        )
+        module.assert_my_profile(
+            {
+                "ownerUserId": "fixture_user_current",
+                "subAccountId": "fixture_user_current",
+                "displayName": "Gamma 用户",
+                "postCount": 1,
+            },
+            {
+                "expectedOwnerUserId": "fixture_user_current",
+                "expectedSubAccountId": "fixture_user_current",
+            },
+        )
+        self.assertEqual(
+            module.resolve_probe_spec(
+                {
+                    "expectedOwnerUserId": "{activeOwnerId}",
+                    "expectedSubAccountId": "{activePersonaId}",
+                },
+                {
+                    "{activeOwnerId}": "owner-runtime",
+                    "{activePersonaId}": "persona-runtime",
+                },
+            ),
+            {
+                "expectedOwnerUserId": "owner-runtime",
+                "expectedSubAccountId": "persona-runtime",
+            },
+        )
+
+    def test_user_t3_provisions_contact_discovery_through_public_command(
+        self,
+    ) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "local_gamma_t3_contact_discovery_test",
+            T3_SCRIPT,
+        )
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module._ACTIVE_SESSION = mock.Mock(owner_id="fixture_user_current")
+        response = json.dumps(
+            {
+                "id": "contact-discovery-runtime-id",
+                "status": "completed",
+                "matchCount": 1,
+            }
+        ).encode("utf-8")
+
+        with mock.patch.object(
+            module,
+            "http_request",
+            return_value=(202, response),
+        ) as request:
+            result = module.provision_contact_discovery(
+                "https://api.gamma.quwoquan.com:19000"
+            )
+
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["matchCount"], 1)
+        request.assert_called_once()
+        _, kwargs = request.call_args
+        self.assertEqual(kwargs["method"], "POST")
+        self.assertEqual(
+            kwargs["body"]["hashedPhones"],
+            [
+                "7e6ee9eaabde53f4a704fd4f7fb8f66df56fe3e5d596bbfe3bc8af3cbf50fa02"
+            ],
+        )
+
+    def test_core_readback_ephemeral_identity_uses_public_anonymous_login(
+        self,
+    ) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "local_gamma_t3_public_login_test",
+            T3_SCRIPT,
+        )
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        response = json.dumps(
+            {
+                "ownerId": "runtime-owner",
+                "activeSub": {"subAccountId": "runtime-persona"},
+                "accessToken": "runtime-access-token",
+            }
+        ).encode("utf-8")
+
+        with mock.patch.object(
+            module,
+            "http_request",
+            return_value=(200, response),
+        ) as request:
+            session = module.open_public_anonymous_session(
+                "https://api.gamma.quwoquan.com:19000",
+                "app-core-readback-run",
+            )
+
+        self.assertEqual(session.owner_id, "runtime-owner")
+        self.assertEqual(session.persona_id, "runtime-persona")
+        _, kwargs = request.call_args
+        self.assertEqual(kwargs["method"], "POST")
+        self.assertEqual(
+            kwargs["body"]["installId"],
+            "gamma-t3-app-core-readback-run",
+        )
+
+    def test_core_readback_provisions_non_empty_chat_inbox(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "local_gamma_t3_chat_readback_test",
+            T3_SCRIPT,
+        )
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module._ACTIVE_SESSION = module.LocalGammaAcceptanceSession(
+            owner_id="runtime-owner",
+            persona_id="runtime-persona",
+            access_token="runtime-access-token",
+        )
+        create_response = json.dumps(
+            {
+                "id": "runtime-conversation",
+                "status": "active",
+                "type": "group",
+            }
+        ).encode("utf-8")
+        send_response = json.dumps(
+            {"messageId": "runtime-message", "seq": 1}
+        ).encode("utf-8")
+
+        with mock.patch.object(
+            module,
+            "http_request",
+            side_effect=[(201, create_response), (201, send_response)],
+        ) as request:
+            result = module.provision_chat_core_readback(
+                "https://api.gamma.quwoquan.com:19000"
+            )
+
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["conversationId"], "runtime-conversation")
+        self.assertIn("双端核心可用性验证", result["messageText"])
+        self.assertEqual(request.call_count, 2)
+        send_call = request.call_args_list[1]
+        self.assertIn(
+            "/chat/conversations/runtime-conversation/messages",
+            send_call.args[0],
+        )
+        self.assertEqual(
+            send_call.kwargs["body"]["content"],
+            result["messageText"],
+        )
+
     def test_content_service_declares_all_required_runtime_bindings(self) -> None:
         service_block = service_compose("content-service")
 
@@ -604,6 +917,18 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         self.assertIn('cp "$config_file" "$out/${service}.yaml"', source)
         self.assertIn('provenance.get("configVersion")', source)
         self.assertNotIn("releases/config", source)
+
+    def test_t3_rejects_reports_in_mutable_local_runtime_state(self) -> None:
+        spec = importlib.util.spec_from_file_location("local_gamma_t3_report_path_test", T3_SCRIPT)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with self.assertRaises(ValueError):
+            module.resolve_t3_report_path(
+                ".qwq_output/env/gamma/local/gamma-local/t3_forbidden.json"
+            )
 
 
 if __name__ == "__main__":

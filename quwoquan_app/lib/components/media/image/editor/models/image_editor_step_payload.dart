@@ -29,7 +29,7 @@ final class ImageEditorCropStepPayload extends ImageEditorStepPayload {
   String get toolType => 'crop';
 
   @override
-  String get label => UITextConstants.imageEditorCrop;
+  String get label => MediaText.imageEditorCrop;
 }
 
 final class ImageEditorRotateStepPayload extends ImageEditorStepPayload {
@@ -49,7 +49,7 @@ final class ImageEditorRotateStepPayload extends ImageEditorStepPayload {
   String get toolType => 'rotate';
 
   @override
-  String get label => UITextConstants.imageEditorRotate;
+  String get label => MediaText.imageEditorRotate;
 }
 
 final class ImageEditorFilterStepPayload extends ImageEditorStepPayload {
@@ -67,7 +67,7 @@ final class ImageEditorFilterStepPayload extends ImageEditorStepPayload {
   String get toolType => 'filter';
 
   @override
-  String get label => UITextConstants.imageEditorFilter;
+  String get label => MediaText.imageEditorFilter;
 }
 
 final class ImageEditorMosaicStepPayload extends ImageEditorStepPayload {
@@ -79,7 +79,7 @@ final class ImageEditorMosaicStepPayload extends ImageEditorStepPayload {
   String get toolType => 'mosaic';
 
   @override
-  String get label => UITextConstants.imageEditorMosaic;
+  String get label => MediaText.imageEditorMosaic;
 }
 
 final class ImageEditorTextStepPayload extends ImageEditorStepPayload {
@@ -91,7 +91,7 @@ final class ImageEditorTextStepPayload extends ImageEditorStepPayload {
   String get toolType => 'text';
 
   @override
-  String get label => UITextConstants.imageEditorText;
+  String get label => MediaText.imageEditorText;
 }
 
 final class ImageEditorProBaseStepPayload extends ImageEditorStepPayload {
@@ -106,7 +106,7 @@ final class ImageEditorProBaseStepPayload extends ImageEditorStepPayload {
   String get subType => 'baseAdjustments';
 
   @override
-  String get label => UITextConstants.imageEditorProTabOverall;
+  String get label => MediaText.imageEditorProTabOverall;
 }
 
 final class ImageEditorProLocalStepPayload extends ImageEditorStepPayload {
@@ -121,7 +121,7 @@ final class ImageEditorProLocalStepPayload extends ImageEditorStepPayload {
   String get subType => 'localAdjustments';
 
   @override
-  String get label => UITextConstants.imageEditorProTabLocal;
+  String get label => MediaText.imageEditorProTabLocal;
 }
 
 final class ImageEditorProHslStepPayload extends ImageEditorStepPayload {
@@ -136,7 +136,7 @@ final class ImageEditorProHslStepPayload extends ImageEditorStepPayload {
   String get subType => 'hslAdjustments';
 
   @override
-  String get label => UITextConstants.imageEditorProTabHsl;
+  String get label => MediaText.imageEditorProTabHsl;
 }
 
 final class ImageEditorProBwLevelsStepPayload extends ImageEditorStepPayload {
@@ -155,7 +155,7 @@ final class ImageEditorProBwLevelsStepPayload extends ImageEditorStepPayload {
   String get subType => 'bwLevelsAdjustments';
 
   @override
-  String get label => UITextConstants.imageEditorProTabBwLevels;
+  String get label => MediaText.imageEditorProTabBwLevels;
 }
 
 final class ImageEditorProCurvesStepPayload extends ImageEditorStepPayload {
@@ -170,7 +170,7 @@ final class ImageEditorProCurvesStepPayload extends ImageEditorStepPayload {
   String get subType => 'curves';
 
   @override
-  String get label => UITextConstants.imageEditorProCurve;
+  String get label => MediaText.imageEditorProCurve;
 }
 
 final class ImageEditorProWhiteBalanceStepPayload
@@ -190,5 +190,5 @@ final class ImageEditorProWhiteBalanceStepPayload
   String get subType => 'whiteBalance';
 
   @override
-  String get label => UITextConstants.imageEditorProWhiteBalance;
+  String get label => MediaText.imageEditorProWhiteBalance;
 }

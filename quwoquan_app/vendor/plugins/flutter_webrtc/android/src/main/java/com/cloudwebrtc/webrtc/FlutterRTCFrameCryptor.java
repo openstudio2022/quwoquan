@@ -50,7 +50,7 @@ public class FlutterRTCFrameCryptor {
         }
         private final EventChannel eventChannel;
         private EventChannel.EventSink eventSink;
-        private final ArrayList eventQueue = new ArrayList();
+        private final ArrayList<Object> eventQueue = new ArrayList<>();
         private final String frameCryptorId;
 
         @Override
@@ -112,7 +112,7 @@ public class FlutterRTCFrameCryptor {
     }
     public boolean handleMethodCall(MethodCall call, @NonNull Result result) {
         String method_name = call.method;
-        Map<String, Object> params = (Map<String, Object>) call.arguments;
+        Map<String, Object> params = methodArguments(call.arguments);
         if (method_name.equals("frameCryptorFactoryCreateFrameCryptor")) {
             frameCryptorFactoryCreateFrameCryptor(params, result);
           } else if (method_name.equals("frameCryptorSetKeyIndex")) {
@@ -297,7 +297,12 @@ public class FlutterRTCFrameCryptor {
 
     private void frameCryptorFactoryCreateKeyProvider(Map<String, Object> params, @NonNull Result result) {
         String keyProviderId = UUID.randomUUID().toString();
-        Map<String, Object> keyProviderOptions = (Map<String, Object>) params.get("keyProviderOptions");
+        Object rawOptions = params.get("keyProviderOptions");
+        if (!(rawOptions instanceof Map<?, ?>)) {
+            result.error("frameCryptorFactoryCreateKeyProviderFailed", "keyProviderOptions must be a map", null);
+            return;
+        }
+        Map<String, Object> keyProviderOptions = new ConstraintsMap((Map<?, ?>) rawOptions).toMap();
         boolean sharedKey = (boolean) keyProviderOptions.get("sharedKey");
         int ratchetWindowSize = (int) keyProviderOptions.get("ratchetWindowSize");
         int failureTolerance = (int) keyProviderOptions.get("failureTolerance");
@@ -321,6 +326,13 @@ public class FlutterRTCFrameCryptor {
         keyProviders.put(keyProviderId, keyProvider);
         paramsResult.putString("keyProviderId", keyProviderId);
         result.success(paramsResult.toMap());
+    }
+
+    private static Map<String, Object> methodArguments(Object arguments) {
+        if (!(arguments instanceof Map<?, ?>)) {
+            throw new IllegalArgumentException("Flutter method arguments must be a map");
+        }
+        return new ConstraintsMap((Map<?, ?>) arguments).toMap();
     }
 
     private void keyProviderSetSharedKey(Map<String, Object> params, @NonNull Result result) {

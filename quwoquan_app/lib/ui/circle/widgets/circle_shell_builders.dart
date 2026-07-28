@@ -161,13 +161,13 @@ extension _CircleShellBuilders on _CircleShellState {
     final sections = <Widget>[
       if (rulesText.isNotEmpty)
         _buildGovernanceSection(
-          title: UITextConstants.circleRulesTitle,
+          title: CommunityText.circleRulesTitle,
           body: rulesText,
           key: const ValueKey<String>('circle-rules-section'),
         ),
       if (_isMemberLike(state) && welcomeMessage.isNotEmpty)
         _buildGovernanceSection(
-          title: UITextConstants.circleWelcomeTitle,
+          title: CommunityText.circleWelcomeTitle,
           body: welcomeMessage,
           key: const ValueKey<String>('circle-welcome-section'),
         ),
@@ -245,9 +245,9 @@ extension _CircleShellBuilders on _CircleShellState {
     return ObjectIntersectionSection(
       key: const ValueKey<String>('circle-my-intersection-card'),
       query: query,
-      title: UITextConstants.objectMyIntersectionsTitle,
+      title: ObjectHomepageText.objectMyIntersectionsTitle,
       isDark: isDark,
-      emptyText: UITextConstants.objectIntersectionEmptyCircle,
+      emptyText: ObjectHomepageText.objectIntersectionEmptyCircle,
       emptyKey: const ValueKey<String>('circle-my-intersection-empty'),
     );
   }
@@ -258,8 +258,8 @@ extension _CircleShellBuilders on _CircleShellState {
       objectId: widget.circleId,
       target: ObjectImpactTarget.circle,
       referralSource: ReferralSource.circlePost,
-      title: UITextConstants.objectImpactTitleCircle,
-      enumerableHint: UITextConstants.impactEnumerableHintCircle,
+      title: ObjectHomepageText.objectImpactTitleCircle,
+      enumerableHint: ObjectHomepageText.impactEnumerableHintCircle,
       cardKey: const ValueKey<String>('circle-impact-card'),
       topDivider: false,
     );
@@ -553,8 +553,8 @@ extension _CircleShellBuilders on _CircleShellState {
         contentLocked
             ? _buildGateCard(
                 context,
-                title: UITextConstants.visibilityPrivate,
-                description: UITextConstants.circleVisibilityMembersDescription,
+                title: CreationText.visibilityPrivate,
+                description: CommunityText.circleVisibilityMembersDescription,
                 keySuffix: _activeTabId,
               )
             : SectionCreations(
@@ -567,10 +567,10 @@ extension _CircleShellBuilders on _CircleShellState {
         memberLocked
             ? _buildGateCard(
                 context,
-                title: UITextConstants.visibilityMembers,
+                title: CommunityText.visibilityMembers,
                 description: circle?.joinPolicy == 'approval'
-                    ? UITextConstants.circleJoinApprovalDescription
-                    : UITextConstants.circleJoinOpenDescription,
+                    ? CommunityText.circleJoinApprovalDescription
+                    : CommunityText.circleJoinOpenDescription,
                 keySuffix: _activeTabId,
               )
             : _buildDiscussionBody(context, isDark: isDark, state: state),
@@ -578,10 +578,10 @@ extension _CircleShellBuilders on _CircleShellState {
         memberLocked
             ? _buildGateCard(
                 context,
-                title: UITextConstants.visibilityMembers,
+                title: CommunityText.visibilityMembers,
                 description: circle?.joinPolicy == 'approval'
-                    ? UITextConstants.circleJoinApprovalDescription
-                    : UITextConstants.circleJoinOpenDescription,
+                    ? CommunityText.circleJoinApprovalDescription
+                    : CommunityText.circleJoinOpenDescription,
                 keySuffix: _activeTabId,
               )
             : Padding(
@@ -623,7 +623,7 @@ extension _CircleShellBuilders on _CircleShellState {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
               child: Text(
-                UITextConstants.circleStorageSection,
+                CommunityText.circleStorageSection,
                 style: TextStyle(
                   fontSize: AppTypography.sm,
                   fontWeight: AppTypography.semiBold,

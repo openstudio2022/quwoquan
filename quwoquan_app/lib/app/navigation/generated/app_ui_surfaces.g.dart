@@ -658,6 +658,7 @@ class AppUiSurfaces {
     pathTemplate: '/',
     description: '首页推荐与关注内容流',
     operationIds: <String>[
+      'GetFeed',
       'CreateReport',
       'LikePost',
       'UnlikePost',

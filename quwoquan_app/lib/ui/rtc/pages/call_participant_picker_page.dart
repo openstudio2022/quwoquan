@@ -193,7 +193,7 @@ class _CallParticipantPickerPageState
       });
       await _showActionFailure(
         error,
-        title: UITextConstants.callSwitchInviteSourceFailed,
+        title: CallText.callSwitchInviteSourceFailed,
       );
     }
   }
@@ -222,7 +222,7 @@ class _CallParticipantPickerPageState
       });
       await _showActionFailure(
         error,
-        title: UITextConstants.callSwitchGroupMembersFailed,
+        title: CallText.callSwitchGroupMembersFailed,
       );
     }
   }
@@ -249,7 +249,7 @@ class _CallParticipantPickerPageState
             resolved.primaryAction ??
             const UiErrorAction(
               type: UiErrorActionType.dismiss,
-              label: UITextConstants.confirm,
+              label: FoundationText.confirm,
             ),
         secondaryAction: resolved.secondaryAction,
         dismissible: true,
@@ -296,7 +296,7 @@ class _CallParticipantPickerPageState
           },
         ),
         middle: Text(
-          UITextConstants.callInviteParticipants,
+          CallText.callInviteParticipants,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
         trailing: CupertinoButton(
@@ -316,7 +316,7 @@ class _CallParticipantPickerPageState
       child: SafeArea(
         child: _pageErrorSemantic != null && !_isLoading
             ? AppPageErrorState(
-                semantic: _pageErrorSemantic!,
+                semantic: ensureRetryUiErrorSemantic(_pageErrorSemantic!),
                 onAction: (action) async {
                   if (action.type == UiErrorActionType.retry ||
                       action.type == UiErrorActionType.resubmit) {
@@ -332,7 +332,7 @@ class _CallParticipantPickerPageState
                   Padding(
                     padding: EdgeInsets.all(AppSpacing.md),
                     child: AppSearchField(
-                      placeholder: UITextConstants.callSearchContacts,
+                      placeholder: CallText.callSearchContacts,
                       onChanged: (value) {
                         setState(() => _searchQuery = value);
                       },
@@ -358,7 +358,7 @@ class _CallParticipantPickerPageState
                             setState(_selectedIds.clear);
                           },
                           child: Text(
-                            UITextConstants.callClearSelection,
+                            CallText.callClearSelection,
                             style: TextStyle(
                               color: AppColors.overlayMedium,
                               fontSize: AppTypography.sm,
@@ -375,7 +375,7 @@ class _CallParticipantPickerPageState
                             });
                           },
                           child: Text(
-                            UITextConstants.callRestoreDefaultSelection,
+                            CallText.callRestoreDefaultSelection,
                             style: TextStyle(
                               color: AppColors.primaryColor,
                               fontSize: AppTypography.sm,
@@ -401,13 +401,13 @@ class _CallParticipantPickerPageState
                   SizedBox(height: AppSpacing.sm),
                   Expanded(
                     child: _isLoading
-                        ? const Center(child: CupertinoActivityIndicator())
+                        ? AppRequestFeedback.section()
                         : filtered.isEmpty
                         ? Center(
                             child: Text(
                               _searchQuery.isEmpty
-                                  ? UITextConstants.callNoContacts
-                                  : UITextConstants.callNoMatchingContacts,
+                                  ? CallText.callNoContacts
+                                  : CallText.callNoMatchingContacts,
                               style: TextStyle(
                                 color: AppColors.overlayMedium,
                                 fontSize: AppTypography.md,
@@ -463,21 +463,21 @@ class _CallParticipantPickerPageState
               horizontal: AppSpacing.sm,
               vertical: AppSpacing.six,
             ),
-            child: Text(UITextConstants.callSourceCurrentConversation),
+            child: Text(CallText.callSourceCurrentConversation),
           ),
           _ParticipantSource.sameInterest: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: AppSpacing.sm,
               vertical: AppSpacing.six,
             ),
-            child: Text(UITextConstants.callSourceMutualFollow),
+            child: Text(CallText.callSourceMutualFollow),
           ),
           _ParticipantSource.otherGroups: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: AppSpacing.sm,
               vertical: AppSpacing.six,
             ),
-            child: Text(UITextConstants.callSourceOtherGroups),
+            child: Text(CallText.callSourceOtherGroups),
           ),
         },
         onValueChanged: (value) {
@@ -494,7 +494,7 @@ class _CallParticipantPickerPageState
       return Padding(
         padding: EdgeInsets.all(AppSpacing.md),
         child: Text(
-          UITextConstants.callNoSwitchableConversation,
+          CallText.callNoSwitchableConversation,
           style: TextStyle(
             color: AppColors.overlayMedium,
             fontSize: AppTypography.sm,

@@ -114,15 +114,10 @@ def _documents(manifest: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _legal_base_url(env_name: str, manifest: dict[str, Any]) -> str:
-    if env_name == "prod":
-        release_policy = manifest.get("releasePolicy") or {}
-        value = str(release_policy.get("prodCanonicalBaseUrl") or "").strip()
-        if value:
-            return value.rstrip("/")
+    del manifest
     topology = load_environment_topology()
     public_bases = get_environment(topology, env_name).get("publicBases") or {}
-    gateway_base = str(public_bases.get("api") or "").strip().rstrip("/")
-    return f"{gateway_base}/legal"
+    return str(public_bases.get("legal") or "").strip().rstrip("/")
 
 
 def _validate_owner(manifest: dict[str, Any], *, env_name: str) -> list[str]:
@@ -381,9 +376,6 @@ def build_package(
             "packageDir": relpath(package_dir),
             "stableUrls": {doc["slug"]: doc["stableUrl"] for doc in docs_payload},
             "versionedUrls": {doc["slug"]: doc["versionUrl"] for doc in docs_payload},
-            "prodCanonicalBaseUrl": (manifest.get("releasePolicy") or {}).get(
-                "prodCanonicalBaseUrl", ""
-            ),
             "prodRequiresGammaProbe": bool(
                 (manifest.get("releasePolicy") or {}).get("prodRequiresGammaProbe")
             ),

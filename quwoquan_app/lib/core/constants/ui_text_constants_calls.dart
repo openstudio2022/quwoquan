@@ -1,6 +1,6 @@
 part of 'ui_text_constants.dart';
 
-abstract final class _UITextCalls {
+abstract final class CallText {
   static const String call = '语音通话', videoCall = '视频通话';
   static const String callVoice = '语音通话', callVideo = '视频通话';
   static const String callGroupVoice = '语音通话';

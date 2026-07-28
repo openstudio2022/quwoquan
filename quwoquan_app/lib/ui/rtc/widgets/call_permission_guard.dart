@@ -42,24 +42,10 @@ class CallPermissionGuard {
     return CallPermissionOutcome.fallbackVoiceOnly;
   }
 
-  static UiErrorSemantic permissionSemantic({
-    required String title,
-    required String message,
-  }) {
-    final base = AppPermissionCoordinator.current.permissionSemantic(
+  static UiErrorSemantic permissionSemantic() {
+    return AppPermissionCoordinator.current.permissionSemantic(
       AppPermissionKind.microphone,
       openSettings: true,
-    );
-    return UiErrorSemantic(
-      category: base.category,
-      scope: base.scope,
-      title: title,
-      message: message,
-      primaryAction: base.primaryAction,
-      secondaryAction: base.secondaryAction,
-      dismissible: base.dismissible,
-      presentation: base.presentation,
-      tone: base.tone,
     );
   }
 }

@@ -23,21 +23,21 @@ void main() {
   });
 
   test('404 写入负缓存后冷却期内 shouldSkipNetwork', () {
-    const identity = 'https://alpha-image.quwoquan-env.test:17100/media/image/s/x.png';
+    const identity = 'https://cdn.alpha.quwoquan.com:17100/media/image/s/x.png';
     cache.recordFailure(identity, error: _StatusError(404), candidateUrl: identity);
     expect(cache.shouldSkipNetwork(identity), isTrue);
     expect(cache.activeFailure(identity)?.kind, MediaCandidateFailureKind.http404);
   });
 
   test('冷却到期后允许再试', () {
-    const identity = 'https://alpha-image.quwoquan-env.test:17100/media/image/s/y.png';
+    const identity = 'https://cdn.alpha.quwoquan.com:17100/media/image/s/y.png';
     cache.recordFailure(identity, error: _StatusError(404), candidateUrl: identity);
     now = now.add(const Duration(seconds: 61));
     expect(cache.shouldSkipNetwork(identity), isFalse);
   });
 
   test('同 identity 失败日志只允许一次', () {
-    const identity = 'https://alpha-image.quwoquan-env.test:17100/media/image/s/z.png';
+    const identity = 'https://cdn.alpha.quwoquan.com:17100/media/image/s/z.png';
     expect(cache.shouldLogFailure(identity), isTrue);
     expect(cache.shouldLogFailure(identity), isFalse);
   });

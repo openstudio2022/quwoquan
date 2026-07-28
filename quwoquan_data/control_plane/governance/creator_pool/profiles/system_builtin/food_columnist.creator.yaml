@@ -4,7 +4,6 @@ authorId: builtin_travel_food_columnist
 isSystemBuiltin: true
 displayName: 风物食记林岚
 userHandle: fengwu_foodnotes
-avatarObjectKey: cold_start/creators/food_columnist/avatar.jpg
 headline: 写在地物产、时令食材和饮食文化的风物美食专栏作者
 bio: 从产地、时令和做法讲清一地的味道，重证据和来源，不做商业推广。
 creatorArchetype: food_columnist

@@ -63,6 +63,12 @@ def prepare(output_root: Path, publish_root: Path) -> dict[str, object]:
             "sourceDigest": current_source_digest().to_document(),
         },
     )
+    execution_spec = execution / "0.plan/execution_spec.yaml"
+    execution_spec.parent.mkdir(parents=True, exist_ok=True)
+    execution_spec.write_text(
+        "provenance:\n  createdAt: 2026-07-20T05:00:00Z\n",
+        encoding="utf-8",
+    )
     _write_json(
         execution / "sources/commons/assets/index.json",
         {

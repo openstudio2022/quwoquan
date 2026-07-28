@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Material, MaterialType;
@@ -314,7 +315,7 @@ class _PersonalAssistantConversationBody extends ConsumerWidget {
         children: <Widget>[
           Expanded(
             child: state.historyLoading && state.transcript.isEmpty
-                ? Center(child: CupertinoActivityIndicator(color: foreground))
+                ? AppRequestFeedback.section()
                 : state.transcript.isEmpty && !hasRetryError
                 ? AssistantConversationEmptyState(
                     openContext: openContext,

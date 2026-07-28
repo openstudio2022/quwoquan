@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -172,7 +173,7 @@ class _InterestOnboardingPageState
     if (_submitting) return;
     final selectedCount = restored?.tagRefs.length ?? _selected.length;
     if (selectedCount < _catalog.minSelectionCount) {
-      _showMessage(UITextConstants.interestOnboardingSelectionRequiredMessage);
+      _showMessage(ProfileText.interestOnboardingSelectionRequiredMessage);
       return;
     }
     var continuationRegistered = false;
@@ -298,7 +299,7 @@ class _InterestOnboardingPageState
           .length;
       if (inDimension >= dimension.maxSelections ||
           _selected.length >= _catalog.maxSelectionCount) {
-        _showMessage(UITextConstants.interestOnboardingSelectionLimit);
+        _showMessage(ProfileText.interestOnboardingSelectionLimit);
         return;
       }
       _selected.add(tagRef);
@@ -314,7 +315,7 @@ class _InterestOnboardingPageState
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text(UITextConstants.confirm),
+            child: const Text(FoundationText.confirm),
           ),
         ],
       ),
@@ -326,12 +327,12 @@ class _InterestOnboardingPageState
     return CupertinoPageScaffold(
       key: const ValueKey<String>('interest-onboarding-page'),
       navigationBar: CupertinoNavigationBar(
-        middle: const Text(UITextConstants.interestOnboardingTitle),
+        middle: const Text(ProfileText.interestOnboardingTitle),
         trailing: CupertinoButton(
           key: const ValueKey<String>('interest-onboarding-skip'),
           padding: EdgeInsets.zero,
           onPressed: _submitting ? null : () => unawaited(_skip()),
-          child: const Text(UITextConstants.interestOnboardingSkip),
+          child: const Text(ProfileText.interestOnboardingSkip),
         ),
       ),
       child: SafeArea(child: _buildBody(context)),
@@ -339,16 +340,18 @@ class _InterestOnboardingPageState
   }
 
   Widget _buildBody(BuildContext context) {
-    if (_loading) return const Center(child: CupertinoActivityIndicator());
+    if (_loading) return AppRequestFeedback.section();
     final loadError = _loadError;
     if (loadError != null) {
       return AppPageErrorState(
-        semantic: runtimeErrorSemantic(
-          context,
-          error: loadError,
-          category: UiErrorCategory.pageLoad,
-          scope: UiErrorScope.global,
-          sourceSurfaceId: AppUiSurfaces.interestOnboarding.id,
+        semantic: ensureRetryUiErrorSemantic(
+          runtimeErrorSemantic(
+            context,
+            error: loadError,
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.global,
+            sourceSurfaceId: AppUiSurfaces.interestOnboarding.id,
+          ),
         ),
         onAction: (_) => _load(),
       );
@@ -358,7 +361,7 @@ class _InterestOnboardingPageState
       padding: const EdgeInsets.all(AppSpacing.containerLg),
       children: <Widget>[
         Text(
-          UITextConstants.interestOnboardingSubtitle,
+          ProfileText.interestOnboardingSubtitle,
           style: colors.textTheme.textStyle.copyWith(
             color: AppColors.iosSecondaryLabel(context),
           ),
@@ -409,8 +412,8 @@ class _InterestOnboardingPageState
           onPressed: _submitting ? null : () => unawaited(_submit()),
           child: Text(
             _submitting
-                ? UITextConstants.interestOnboardingSubmitting
-                : UITextConstants.interestOnboardingSubmit,
+                ? ProfileText.interestOnboardingSubmitting
+                : ProfileText.interestOnboardingSubmit,
           ),
         ),
       ],

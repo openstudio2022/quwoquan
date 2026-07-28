@@ -21,13 +21,13 @@ void main() {
     await tester.pump();
 
     expect(
-      find.text(UITextConstants.scanQrCameraUnavailableTitle),
+      find.text(ContactText.scanQrCameraUnavailableTitle),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.scanQrCameraUnavailableBody),
+      find.text(ContactText.scanQrCameraUnavailableBody),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.scanQrAlbum), findsOneWidget);
+    expect(find.text(ContactText.scanQrAlbum), findsOneWidget);
   });
 }

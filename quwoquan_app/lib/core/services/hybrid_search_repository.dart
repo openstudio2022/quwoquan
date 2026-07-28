@@ -110,7 +110,7 @@ final class HybridSearchRepository implements SearchRepository {
         degradeSignals: const <SearchDegradeSignal>[
           SearchDegradeSignal(
             code: _remoteUnavailableCode,
-            message: UITextConstants.searchCloudSuggestUnavailable,
+            message: SearchText.searchCloudSuggestUnavailable,
           ),
         ],
       );
@@ -128,7 +128,7 @@ final class HybridSearchRepository implements SearchRepository {
         degradeSignals: const <SearchDegradeSignal>[
           SearchDegradeSignal(
             code: 'search_local_namespace_unavailable',
-            message: UITextConstants.searchLocalContactsUnavailable,
+            message: SearchText.searchLocalContactsUnavailable,
           ),
         ],
       );
@@ -175,7 +175,7 @@ final class HybridSearchRepository implements SearchRepository {
         degradeSignals.add(
           const SearchDegradeSignal(
             code: 'search_local_contacts_unavailable',
-            message: UITextConstants.searchLocalContactsUnavailable,
+            message: SearchText.searchLocalContactsUnavailable,
             objectType: SearchObjectType.chatContact,
           ),
         );
@@ -252,7 +252,7 @@ final class HybridSearchRepository implements SearchRepository {
         degradeSignals.add(
           const SearchDegradeSignal(
             code: 'search_local_messages_unavailable',
-            message: UITextConstants.searchLocalMessagesUnavailable,
+            message: SearchText.searchLocalMessagesUnavailable,
             objectType: SearchObjectType.chatMessage,
           ),
         );
@@ -311,7 +311,7 @@ final class HybridSearchRepository implements SearchRepository {
         degradeSignals.add(
           const SearchDegradeSignal(
             code: 'search_local_circle_groups_unavailable',
-            message: UITextConstants.searchLocalDiscussionsUnavailable,
+            message: SearchText.searchLocalDiscussionsUnavailable,
             objectType: SearchObjectType.circleGroup,
           ),
         );

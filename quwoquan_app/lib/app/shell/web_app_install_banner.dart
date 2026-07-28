@@ -1,25 +1,37 @@
 import 'package:flutter/cupertino.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/core/platform/platform_providers.dart';
+import 'package:quwoquan_app/core/platform/web_install_context.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
-class WebAppInstallBanner extends StatelessWidget {
+class WebAppInstallBanner extends ConsumerStatefulWidget {
   const WebAppInstallBanner({super.key});
 
   @override
+  ConsumerState<WebAppInstallBanner> createState() =>
+      _WebAppInstallBannerState();
+}
+
+class _WebAppInstallBannerState extends ConsumerState<WebAppInstallBanner> {
+  var _dismissed = false;
+
+  @override
   Widget build(BuildContext context) {
+    final installContext = ref.watch(webInstallContextProvider);
+    if (_dismissed ||
+        installContext.dismissedForSession ||
+        installContext.isStandalone) {
+      return const SizedBox.shrink();
+    }
+    final content = _contentFor(installContext.recommendation);
     final isWide = AppSpacing.isWideLayout(context);
-    final height = AppSpacing.webInstallBannerHeight(context);
-    final horizontalPadding = AppSpacing.webShellContentPadding(context);
-    final subtitle = isWide
-        ? UITextConstants.webInstallBannerDesktopSubtitle
-        : UITextConstants.webInstallBannerMobileSubtitle;
 
     return Semantics(
       container: true,
-      label: UITextConstants.webInstallBannerTitle,
+      label: '${content.title}。${content.subtitle}',
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: AppColors.iosGroupedSurface(context),
@@ -29,10 +41,12 @@ class WebAppInstallBanner extends StatelessWidget {
         ),
         child: SafeArea(
           bottom: false,
-          child: SizedBox(
-            height: height,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: AppSpacing.webInstallBannerHeight(context),
+            ),
             child: Padding(
-              padding: horizontalPadding,
+              padding: AppSpacing.webShellContentPadding(context),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(
@@ -40,16 +54,31 @@ class WebAppInstallBanner extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      const _InstallBrandMark(),
+                      Expanded(child: _InstallBannerCopy(content: content)),
                       SizedBox(width: AppSpacing.containerSm),
-                      Expanded(
-                        child: _InstallBannerCopy(
-                          subtitle: subtitle,
-                          compact: !isWide,
+                      _InstallBannerActions(
+                        recommendation: installContext.recommendation,
+                        compact: !isWide,
+                      ),
+                      SizedBox(width: AppSpacing.intraGroupXs),
+                      CupertinoButton(
+                        key: const ValueKey<String>('web-install-dismiss'),
+                        minimumSize: const Size(
+                          AppSpacing.buttonHeightSm,
+                          AppSpacing.buttonHeightSm,
+                        ),
+                        padding: EdgeInsets.zero,
+                        onPressed: () {
+                          dismissWebInstallForSession();
+                          setState(() => _dismissed = true);
+                        },
+                        child: Icon(
+                          CupertinoIcons.xmark,
+                          size: AppSpacing.md,
+                          color: AppColors.iosSecondaryLabel(context),
+                          semanticLabel: FoundationText.close,
                         ),
                       ),
-                      SizedBox(width: AppSpacing.containerSm),
-                      _InstallBannerActions(isWide: isWide),
                     ],
                   ),
                 ),
@@ -62,136 +91,123 @@ class WebAppInstallBanner extends StatelessWidget {
   }
 }
 
-class _InstallBrandMark extends StatelessWidget {
-  const _InstallBrandMark();
+class _InstallBannerContent {
+  const _InstallBannerContent({required this.title, required this.subtitle});
 
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.primaryColor.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
-      ),
-      child: const SizedBox(
-        width: AppSpacing.forty,
-        height: AppSpacing.forty,
-        child: Icon(
-          CupertinoIcons.sparkles,
-          color: AppColors.assistantMarkColor,
-          size: AppSpacing.twenty,
-        ),
-      ),
-    );
-  }
+  final String title;
+  final String subtitle;
+}
+
+_InstallBannerContent _contentFor(WebInstallRecommendation recommendation) {
+  return switch (recommendation) {
+    WebInstallRecommendation.android => const _InstallBannerContent(
+      title: FoundationText.webInstallBannerAndroidTitle,
+      subtitle: FoundationText.webInstallBannerAndroidSubtitle,
+    ),
+    WebInstallRecommendation.ios => const _InstallBannerContent(
+      title: FoundationText.webInstallBannerIosTitle,
+      subtitle: FoundationText.webInstallBannerIosSubtitle,
+    ),
+    WebInstallRecommendation.desktop ||
+    WebInstallRecommendation.unknown => const _InstallBannerContent(
+      title: FoundationText.webInstallBannerTitle,
+      subtitle: FoundationText.webInstallBannerDesktopSubtitle,
+    ),
+  };
 }
 
 class _InstallBannerCopy extends StatelessWidget {
-  const _InstallBannerCopy({required this.subtitle, required this.compact});
+  const _InstallBannerCopy({required this.content});
 
-  final String subtitle;
-  final bool compact;
+  final _InstallBannerContent content;
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = TextStyle(
-      fontSize: AppTypography.iosSubheadline,
-      fontWeight: AppTypography.semiBold,
-      color: AppColors.iosLabel(context),
-      height: AppTypography.lineHeightTight,
-    );
-    final subtitleStyle = TextStyle(
-      fontSize: AppTypography.iosCaption1,
-      fontWeight: AppTypography.regular,
-      color: AppColors.iosSecondaryLabel(context),
-      height: AppTypography.lineHeightCompact,
-    );
-
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          UITextConstants.webInstallBannerTitle,
+          content.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: titleStyle,
-        ),
-        if (!compact) ...[
-          SizedBox(height: AppSpacing.two),
-          Text(
-            subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: subtitleStyle,
+          style: TextStyle(
+            fontSize: AppTypography.iosSubheadline,
+            fontWeight: AppTypography.semiBold,
+            color: AppColors.iosLabel(context),
+            height: AppTypography.lineHeightTight,
           ),
-        ],
+        ),
+        SizedBox(height: AppSpacing.two),
+        Text(
+          content.subtitle,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: AppTypography.iosCaption1,
+            fontWeight: AppTypography.regular,
+            color: AppColors.iosSecondaryLabel(context),
+            height: AppTypography.lineHeightCompact,
+          ),
+        ),
       ],
     );
   }
 }
 
 class _InstallBannerActions extends StatelessWidget {
-  const _InstallBannerActions({required this.isWide});
+  const _InstallBannerActions({
+    required this.recommendation,
+    required this.compact,
+  });
 
-  final bool isWide;
+  final WebInstallRecommendation recommendation;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    if (isWide) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _InstallActionButton(
-            label: UITextConstants.webInstallBannerIosPackage,
-            onPressed: () => _open(CloudRuntimeConfig.webAppIosDownloadUrl),
-          ),
-          SizedBox(width: AppSpacing.intraGroupXs),
-          _InstallActionButton(
-            label: UITextConstants.webInstallBannerAndroidPackage,
-            onPressed: () =>
-                _open(CloudRuntimeConfig.webAppAndroidDownloadUrl),
-          ),
-          SizedBox(width: AppSpacing.intraGroupXs),
-          _InstallActionButton(
-            label: UITextConstants.webInstallBannerShareInstall,
-            secondary: true,
-            onPressed: _shareInstallPage,
-          ),
-        ],
-      );
+    switch (recommendation) {
+      case WebInstallRecommendation.android:
+        return _InstallActionButton(
+          label: FoundationText.webInstallBannerDownload,
+          onPressed: () => _open(CloudRuntimeConfig.webAppAndroidDownloadUrl),
+        );
+      case WebInstallRecommendation.ios:
+        return _InstallActionButton(
+          label: FoundationText.webInstallBannerInstall,
+          onPressed: () => _open(CloudRuntimeConfig.webAppIosDownloadUrl),
+        );
+      case WebInstallRecommendation.desktop:
+      case WebInstallRecommendation.unknown:
+        if (compact) {
+          return _InstallActionButton(
+            label: FoundationText.webInstallBannerChoose,
+            onPressed: () => _open(CloudRuntimeConfig.webAppMobileDownloadUrl),
+          );
+        }
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _InstallActionButton(
+              label: FoundationText.webInstallBannerAndroidPackage,
+              onPressed: () =>
+                  _open(CloudRuntimeConfig.webAppAndroidDownloadUrl),
+            ),
+            SizedBox(width: AppSpacing.intraGroupXs),
+            _InstallActionButton(
+              label: FoundationText.webInstallBannerIosPackage,
+              secondary: true,
+              onPressed: () => _open(CloudRuntimeConfig.webAppIosDownloadUrl),
+            ),
+          ],
+        );
     }
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _InstallActionButton(
-          label: UITextConstants.webInstallBannerDownloadApp,
-          onPressed: () => _open(CloudRuntimeConfig.webAppMobileDownloadUrl),
-        ),
-        SizedBox(width: AppSpacing.intraGroupXs),
-        _InstallActionButton(
-          label: UITextConstants.share,
-          secondary: true,
-          onPressed: _shareInstallPage,
-        ),
-      ],
-    );
   }
 
   Future<void> _open(String rawUrl) async {
     final parsed = Uri.parse(rawUrl);
     final uri = parsed.hasScheme ? parsed : Uri.base.resolveUri(parsed);
     await launchUrl(uri, webOnlyWindowName: '_self');
-  }
-
-  Future<void> _shareInstallPage() async {
-    await SharePlus.instance.share(
-      ShareParams(
-        text:
-            '${UITextConstants.webInstallBannerTitle}：'
-            '${CloudRuntimeConfig.webAppShareInstallUrl}',
-      ),
-    );
   }
 }
 
@@ -208,7 +224,7 @@ class _InstallActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = secondary ? AppColors.iosLabel(context) : AppColors.white;
+    final foreground = secondary ? AppColors.primaryColor : AppColors.white;
     final background = secondary
         ? AppColors.iosPageBackground(context)
         : AppColors.primaryColor;
@@ -226,7 +242,7 @@ class _InstallActionButton extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: color,
+          color: foreground,
           fontSize: AppTypography.iosFootnote,
           fontWeight: AppTypography.medium,
           height: AppTypography.lineHeightTight,

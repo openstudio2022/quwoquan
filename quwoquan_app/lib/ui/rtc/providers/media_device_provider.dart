@@ -7,8 +7,8 @@ enum AudioOutput {
   speaker;
 
   String get label => switch (this) {
-    AudioOutput.earpiece => UITextConstants.callAudioEarpiece,
-    AudioOutput.speaker => UITextConstants.callAudioSpeaker,
+    AudioOutput.earpiece => CallText.callAudioEarpiece,
+    AudioOutput.speaker => CallText.callAudioSpeaker,
   };
 }
 

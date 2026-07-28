@@ -27,6 +27,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	runtimemedia "quwoquan_service/runtime/media"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 
@@ -39,7 +40,8 @@ const importedModerationStatus = "approved"
 func Run() {
 	releaseRoot := flag.String("release-root", "", "immutable release root containing payload/desired_state.json (required)")
 	mongoURI := flag.String("mongo-uri", "mongodb://localhost:27017", "mongo connection uri")
-	mediaBaseURL := flag.String("media-base-url", "", "environment media origin/CDN base URL")
+	mediaImageBaseURL := flag.String("media-image-base-url", "", "environment image media public base URL")
+	mediaVideoBaseURL := flag.String("media-video-base-url", "", "environment video media public base URL")
 	creatorReceipt := flag.String("creator-receipt", "", "user-service creator import receipt")
 	postsDB := flag.String("posts-db", "quwoquan_content", "target db for posts")
 	entitiesDB := flag.String("entities-db", "quwoquan_entity", "target db for entities")
@@ -65,6 +67,10 @@ func Run() {
 	if err != nil {
 		log.Fatalf("load release object closure: %v", err)
 	}
+	releaseMediaAssets, err := LoadReleaseMediaAssets(*releaseRoot, desired.ReleaseID)
+	if err != nil {
+		log.Fatalf("load release media authority: %v", err)
+	}
 	creatorAuthors, err := LoadCreatorAuthorIDs(objectRoot, creatorFilter)
 	if err != nil {
 		log.Fatalf("load release creators: %v", err)
@@ -85,7 +91,14 @@ func Run() {
 	if err := ValidatePostAuthors(posts, creatorAuthors); err != nil {
 		log.Fatalf("validate post authors: %v", err)
 	}
-	if err := BindPostAssetURLs(posts, *mediaBaseURL); err != nil {
+	if err := BindPostAssetURLs(
+		posts,
+		releaseMediaAssets,
+		runtimemedia.MediaDeliveryBases{
+			Image: *mediaImageBaseURL,
+			Video: *mediaVideoBaseURL,
+		},
+	); err != nil {
 		log.Fatalf("bind post asset URLs: %v", err)
 	}
 	postBindings, err := ImportedPostBindings(posts)
@@ -590,9 +603,11 @@ func ImportedMediaFields(assets []AssetManifestItem) importedMediaSummary {
 		}
 		urls = append(urls, url)
 		item := bson.M{
-			"assetId": asset.AssetID,
-			"kind":    asset.Kind,
-			"url":     url,
+			"assetId":        asset.AssetID,
+			"kind":           asset.Kind,
+			"version":        asset.Version,
+			"publicSliceKey": asset.PublicSliceKey,
+			"url":            url,
 		}
 		if asset.Caption != "" {
 			item["caption"] = asset.Caption

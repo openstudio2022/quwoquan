@@ -48,7 +48,19 @@ routes:
     path: /user/{username}
   - id: workBrowser
     path: /works/browser/{workId}
-    query_params: [filter, source, index, sourceTheme]
+    query_params:
+      [
+        filter,
+        source,
+        index,
+        sourceTheme,
+        openComments,
+        commentEntrySource,
+        targetCommentId,
+        targetParentCommentId,
+        targetReplyId,
+        replyToCommentId,
+      ]
   - id: assistant
     path: /assistant
   - id: assistantPersonal

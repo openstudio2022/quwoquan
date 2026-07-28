@@ -17,6 +17,7 @@
 - 当前不保存或门控模型 token、价格、成本、预算或消费账本；Agent 运行证据只保留 provider、model、runId、promptSha256、结果与产物摘要。任何此类已退休字段或模块由 `verify reusable-data-contract` 阻断回潮。
 
 ## 内容供给端到端闭环
+- alpha/beta/gamma/prod 的第一方 App 可见业务数据只能由同一环境中已激活的 immutable release 产生；禁止 T3/UAT、环境 bootstrap、API 脚本或数据库脚本自建待验证对象，禁止把 contract fixture、测试 seed 或基础设施灰度探针投影到 feed/homepage/profile。
 
 - 数据工程必须同时覆盖两条供给线：内容稿件线（article/image/moment/video/route 等 post package）与实体/标签/素材治理线（entity homepage、tagRefs、semantic mentions、review ledger、asset safety）。
 - 标准链路为 `0.plan -> sources -> 1.download -> 2.quality -> 3.compose -> 4.draft -> 5.review -> publish -> ship -> service importer`。

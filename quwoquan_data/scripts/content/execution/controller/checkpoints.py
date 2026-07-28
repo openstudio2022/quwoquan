@@ -396,21 +396,6 @@ def _checkpoint_build_homepage(ctx: ExecutionContext) -> StageResult:
     ok, issues = _homepages_done(ctx)
     if ok:
         return StageResult(ExecutionStage.BUILD_HOMEPAGE, CHECKPOINT, StageStatus.DONE, "实体主页三件套已就绪")
-    source_failures = _homepage_source_failure_entities(ctx)
-    if source_failures:
-        return StageResult(
-            ExecutionStage.BUILD_HOMEPAGE,
-            CHECKPOINT,
-            StageStatus.FAILED,
-            "Agent rejected one or more homepage base sources; rewind source discovery",
-            fallback_stage=ExecutionStage.DOWNLOAD_PLAN,
-            issue_records=stage_issues(
-                ExecutionStage.BUILD_HOMEPAGE,
-                _format_download_unresolved(source_failures, prefix=ExecutionStage.BUILD_HOMEPAGE),
-                code=DataIssueCode.SOURCE_RETAINED_SHORTFALL,
-                recovery=DataRecoveryAction.REWIND_DOWNLOAD,
-            ),
-        )
     finalize_issues: list[str] = []
     try:
         from content.homepage.homepage import homepage_runtime_spec
@@ -421,14 +406,38 @@ def _checkpoint_build_homepage(ctx: ExecutionContext) -> StageResult:
         )
     except Exception as exc:  # noqa: BLE001
         finalize_issues = [f"homepage finalize failed: {type(exc).__name__}: {exc}"]
-    ok, issues = _homepages_done(ctx)
-    if ok:
+    from content.execution.controller.homepage_authoring import homepage_quota_verdict
+
+    verdict = homepage_quota_verdict(ctx)
+    if verdict.passed:
+        for line in verdict.discard_summary():
+            print(f"[build_homepage] {line}")
         return StageResult(
             ExecutionStage.BUILD_HOMEPAGE,
             CHECKPOINT,
             StageStatus.DONE,
-            "实体主页三件套已 finalize（Agent 正文 + 资产闭环）并通过采纳门",
+            f"实体主页达标 {verdict.qualified_count}/{verdict.approved_quota}（配额门通过，"
+            f"{len(verdict.discarded)} 个对象丢弃不重试）",
         )
+    # 配额未达成时才回退 source：底稿与实体不匹配的对象本身由过采吸收，
+    # 只有过采后仍补不齐配额，才说明区域来源供给不足、必须重找 source。
+    source_failures = _homepage_source_failure_entities(ctx)
+    if source_failures:
+        return StageResult(
+            ExecutionStage.BUILD_HOMEPAGE,
+            CHECKPOINT,
+            StageStatus.FAILED,
+            f"主页达标 {verdict.qualified_count}/{verdict.approved_quota}，"
+            "且 Agent 判定部分底稿与实体不匹配；候选池已耗尽，回退 source discovery",
+            fallback_stage=ExecutionStage.DOWNLOAD_PLAN,
+            issue_records=stage_issues(
+                ExecutionStage.BUILD_HOMEPAGE,
+                _format_download_unresolved(source_failures, prefix=ExecutionStage.BUILD_HOMEPAGE),
+                code=DataIssueCode.SOURCE_RETAINED_SHORTFALL,
+                recovery=DataRecoveryAction.REWIND_DOWNLOAD,
+            ),
+        )
+    issues = verdict.blocking_issues()
     from content.execution.reliabletask_jobs import prepare_reliable_author_jobs
 
     prepare_reliable_author_jobs(ctx, "build_homepage")

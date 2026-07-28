@@ -156,9 +156,9 @@ class MediaViewerResult extends MediaViewerInteractionSnapshot {
 /// “查看原评论 / 在上下文中定位”的目标语义，`replyToCommentId` 用于落地后
 /// 直接进入回复输入态。
 ///
-/// 评论深链 query 参数与入口来源的唯一真相源即本类的 `query*` / `entrySource*`
-/// 常量与 [buildDeepLinkQuery]；所有入口（我的互动、我的评论等）必须复用，
-/// 禁止在各页面散落字面量或维护第二套方言。
+/// 评论深链 query 参数由 `app_routes.yaml#workBrowser` 声明；本类只负责将
+/// Router 已解析的 query 映射为 typed context。所有入口必须使用
+/// `AppRoutePaths.workBrowser(...)`，禁止手工 URI 拼接或维护第二套方言。
 class MediaViewerCommentContext {
   const MediaViewerCommentContext({
     this.openComments = false,
@@ -211,31 +211,6 @@ class MediaViewerCommentContext {
       (targetCommentId?.trim().isNotEmpty ?? false) ||
       (targetParentCommentId?.trim().isNotEmpty ?? false) ||
       (targetReplyId?.trim().isNotEmpty ?? false);
-
-  /// 构造评论深链 query（单一方言）。一级评论传 [targetCommentId]；二级回复传
-  /// [targetParentCommentId] + [targetReplyId]；需落地直接进入回复态时传
-  /// [replyToCommentId]。两个入口共用，禁止再各自拼字面量。
-  static Map<String, String> buildDeepLinkQuery({
-    required String entrySource,
-    String? targetCommentId,
-    String? targetParentCommentId,
-    String? targetReplyId,
-    String? replyToCommentId,
-  }) {
-    final query = <String, String>{
-      queryOpenComments: 'true',
-      queryEntrySource: entrySource,
-    };
-    final comment = targetCommentId?.trim() ?? '';
-    final parent = targetParentCommentId?.trim() ?? '';
-    final reply = targetReplyId?.trim() ?? '';
-    final replyTo = replyToCommentId?.trim() ?? '';
-    if (comment.isNotEmpty) query[queryTargetCommentId] = comment;
-    if (parent.isNotEmpty) query[queryTargetParentCommentId] = parent;
-    if (reply.isNotEmpty) query[queryTargetReplyId] = reply;
-    if (replyTo.isNotEmpty) query[queryReplyToCommentId] = replyTo;
-    return query;
-  }
 
   static MediaViewerCommentContext fromQueryParameters(
     Map<String, String> query,

@@ -23,6 +23,20 @@ final generatedCloudOperationClientProvider =
       );
     });
 
+/// 登录 bootstrap 专用 generated client：永不读取、等待或附加既有 bearer。
+final unauthenticatedGeneratedCloudOperationClientProvider =
+    Provider<GeneratedCloudOperationClient>((ref) {
+      final clientContext = ref.watch(cloudClientContextProvider);
+      return buildGeneratedCloudOperationClient(
+        httpClient: ref.watch(unauthenticatedCloudHttpClientProvider),
+        clientContextProvider: clientContext,
+        environment: ref.watch(cloudRuntimeEnvironmentProvider),
+        telemetrySink: AppCloudOperationTelemetrySink(
+          clientContextProvider: clientContext,
+        ),
+      );
+    });
+
 /// VisitRecord typed append 写面：production Remote-only（08 Mock 隔离），
 /// alpha/test 经 ProviderScope override 注入替身。
 final opsVisitAppendWriterProvider = Provider<OpsVisitAppendWriter>((ref) {
@@ -211,20 +225,8 @@ final _accountSessionCommandWriterProvider =
       >(
         AppProductionAdapter.accountSession,
         client: ref.watch(generatedCloudOperationClientProvider),
-        invocationContext: (clientPageId) {
-          final surface =
-              clientPageId == UserRequestPageIds.loginAnonymous ||
-                  clientPageId == UserRequestPageIds.refreshToken
-              ? AppUiSurfaces.appShell
-              : clientPageId == UserRequestPageIds.logout
-              ? AppUiSurfaces.settingsHome
-              : AppUiSurfaces.login;
-          return _reportInvocationContext(
-            ref,
-            surface: surface,
-            clientPageId: clientPageId,
-          );
-        },
+        invocationContext: (clientPageId) =>
+            _accountSessionInvocationContext(ref, clientPageId),
       );
     });
 
@@ -237,7 +239,14 @@ final accountSessionCommandWriterProvider =
 /// 六路 public bootstrap 登录写面。
 final accountSessionLoginCommandWriterProvider =
     Provider<AccountSessionLoginCommandWriter>((ref) {
-      return ref.watch(accountSessionCommandWriterProvider);
+      return AppProductionComposition.generatedAdapter<
+        AccountSessionCommandWriter
+      >(
+        AppProductionAdapter.accountSession,
+        client: ref.watch(unauthenticatedGeneratedCloudOperationClientProvider),
+        invocationContext: (clientPageId) =>
+            _accountSessionInvocationContext(ref, clientPageId),
+      );
     });
 
 /// refresh/logout 会话生命周期写面。
@@ -270,7 +279,7 @@ final authenticationChallengeCommandWriterProvider =
         AuthenticationChallengeCommandWriter
       >(
         AppProductionAdapter.authenticationChallenge,
-        client: ref.watch(generatedCloudOperationClientProvider),
+        client: ref.watch(unauthenticatedGeneratedCloudOperationClientProvider),
         invocationContext: (clientPageId) => _reportInvocationContext(
           ref,
           surface: AppUiSurfaces.login,
@@ -278,6 +287,24 @@ final authenticationChallengeCommandWriterProvider =
         ),
       );
     });
+
+CloudOperationInvocationContext _accountSessionInvocationContext(
+  Ref ref,
+  String clientPageId,
+) {
+  final surface =
+      clientPageId == UserRequestPageIds.loginAnonymous ||
+          clientPageId == UserRequestPageIds.refreshToken
+      ? AppUiSurfaces.appShell
+      : clientPageId == UserRequestPageIds.logout
+      ? AppUiSurfaces.settingsHome
+      : AppUiSurfaces.login;
+  return _reportInvocationContext(
+    ref,
+    surface: surface,
+    clientPageId: clientPageId,
+  );
+}
 
 /// 设置页当前暴露的 CredentialBinding 商用写面。
 final appCredentialBindingCommandWriterProvider =

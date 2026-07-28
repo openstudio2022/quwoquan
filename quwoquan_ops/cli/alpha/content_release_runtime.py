@@ -16,6 +16,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+from urllib.parse import urlsplit
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
@@ -37,6 +38,7 @@ from quwoquan_ops.cli.lib.local_provider_credentials import (
 from quwoquan_ops.cli.lib.local_runtime_reservation import (
     assert_local_runtime_available,
 )
+from quwoquan_ops.cli.lib.observability import write_run_manifest
 from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
     load_environment_topology,
@@ -44,11 +46,14 @@ from quwoquan_ops.cli.lib.environment_topology import (
 from quwoquan_ops.cli.lib.output_paths import (
     deployment_target_path,
     env_observability_run_dir,
+    env_run_dir,
+    legal_static_deployment_package_dir,
     service_deployment_package_dir,
     target_cache_dir,
     target_process_dir,
 )
 from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
+from quwoquan_ops.cli.lib.public_domain_tls import certificate_paths
 
 
 ENVIRONMENT = "alpha"
@@ -68,10 +73,12 @@ COMPOSE_SERVICES = ("postgres", "mongodb", "mongo-init", "redis", "object-storag
 class RuntimePaths:
     process_dir: Path
     media_root: Path
+    run_root: Path
+    observability_root: Path
     logs_root: Path
     config_root: Path
+    legal_root: Path
     caddyfile: Path
-    ca_export: Path
 
     @property
     def state_path(self) -> Path:
@@ -93,23 +100,49 @@ def _run(arguments: list[str], *, env: Mapping[str, str] | None = None) -> None:
         raise RuntimeError(f"command failed ({arguments[0]}): {detail[-1200:]}")
 
 
-def _paths() -> RuntimePaths:
+def _paths(*, new_run: bool = False) -> RuntimePaths:
     process_dir = target_process_dir(TARGET)
     cache_root = target_cache_dir(TARGET)
     external_root = deployment_target_path(TARGET, "rendered", "content-release")
+    configured_run = os.environ.get("QWQ_RUN_ROOT", "").strip()
     configured_observability = os.environ.get("QWQ_OBSERVABILITY_RUN_ROOT", "").strip()
-    observability_root = (
-        Path(configured_observability)
-        if configured_observability
-        else env_observability_run_dir(ENVIRONMENT, "alpha-content-release-local")
-    )
+    if configured_run:
+        run_root = Path(configured_run)
+    elif new_run:
+        run_root = env_run_dir(ENVIRONMENT, "up", target=TARGET)
+    else:
+        run_root = process_dir
+    if configured_observability:
+        observability_root = Path(configured_observability)
+    elif new_run or configured_run:
+        observability_root = env_observability_run_dir(ENVIRONMENT, run_root.name)
+    else:
+        observability_root = env_observability_run_dir(
+            ENVIRONMENT,
+            "alpha-content-release-local",
+        )
     return RuntimePaths(
         process_dir=process_dir,
         media_root=cache_root / "media",
+        run_root=run_root,
+        observability_root=observability_root,
         logs_root=observability_root / "logs" / "service",
         config_root=external_root / "config-root",
+        legal_root=legal_static_deployment_package_dir(ENVIRONMENT) / "current" / "public",
         caddyfile=external_root / "public.Caddyfile",
-        ca_export=deployment_target_path(TARGET, "certificates", "content-release-caddy", "root.crt"),
+    )
+
+
+def _materialize_observability_run(paths: RuntimePaths) -> None:
+    """Create the run manifest before any managed process can emit logs."""
+    paths.run_root.mkdir(parents=True, exist_ok=True)
+    write_run_manifest(
+        paths.observability_root,
+        env_name=ENVIRONMENT,
+        run_id=paths.observability_root.name,
+        command="up",
+        target=TARGET,
+        report_dir=paths.run_root,
     )
 
 
@@ -124,6 +157,17 @@ def _service_package_config(service: str) -> Path:
 
 def _prepare_config_root(paths: RuntimePaths) -> dict[str, str]:
     paths.config_root.mkdir(parents=True, exist_ok=True)
+    _run([
+        sys.executable,
+        "quwoquan_ops/cli/stackctl.py",
+        "package",
+        "--env",
+        ENVIRONMENT,
+        "--kind",
+        "legal-static",
+    ])
+    if not (paths.legal_root / "legal" / "user-agreement").is_file():
+        raise RuntimeError("Alpha legal-static package is incomplete")
     versions: dict[str, str] = {}
     for service in SERVICE_NAMES:
         _run([
@@ -157,6 +201,7 @@ def _prepare_config_root(paths: RuntimePaths) -> dict[str, str]:
 
 def _compose_build_environment() -> dict[str, str]:
     target = get_target(load_environment_topology(), TARGET)
+    public_bases = target.get("publicBases") or {}
     build_images = target.get("buildImages")
     if not isinstance(build_images, Mapping):
         raise RuntimeError(f"{TARGET}.buildImages policy must be an object")
@@ -172,6 +217,8 @@ def _compose_build_environment() -> dict[str, str]:
     return {
         "QWQ_COMPOSE_GO_BASE_IMAGE": required_image("goBaseImage"),
         "QWQ_COMPOSE_ALPINE_BASE_IMAGE": required_image("alpineBaseImage"),
+        "QWQ_COMPOSE_PUBLIC_WEB_BASE_URL": str(public_bases["publicWeb"]),
+        "QWQ_COMPOSE_MEDIA_AVATAR_BASE_URL": str(public_bases["mediaAvatar"]),
     }
 
 
@@ -191,7 +238,7 @@ def _base_environment(paths: RuntimePaths, versions: Mapping[str, str]) -> dict[
             "QWQ_LOCAL_MONGO_PORT": str(ports["mongodb"]),
             "QWQ_LOCAL_REDIS_PORT": str(ports["redis"]),
             "QWQ_LOCAL_OBJECT_STORAGE_EDGE_PORT": str(ports["object-storage-edge"]),
-            "QWQ_LOCAL_PUBLIC_UPLOAD_HOST": "alpha-upload.quwoquan-env.test",
+            "QWQ_LOCAL_PUBLIC_UPLOAD_HOST": "upload.alpha.quwoquan.com",
             "QWQ_LOCAL_UPLOAD_LOCAL_HOST": "alpha-upload.localhost",
             "QWQ_LOCAL_OBJECT_STORAGE_BUCKET": env["ALPHA_OBJECT_STORAGE_BUCKET"],
             "QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_ID": env["ALPHA_OBJECT_STORAGE_ACCESS_KEY_ID"],
@@ -265,8 +312,31 @@ def _ensure_compose_images(env: Mapping[str, str]) -> None:
             _run([*base, "build", service], env=env)
 
 
-def _wait_http(url: str, *, timeout_seconds: int) -> None:
+def _compose_service_logs_indicate_migration_drift(service: str) -> str:
+    result = subprocess.run(
+        [*_compose_arguments(), "logs", "--no-color", "--tail", "80", service],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    text = result.stdout or ""
+    markers = (
+        "migration checksum",
+        "checksum drift",
+        "checksum mismatch",
+        "Dirty database version",
+    )
+    for marker in markers:
+        if marker.lower() in text.lower():
+            return marker
+    return ""
+
+
+def _wait_http(url: str, *, timeout_seconds: int, compose_service: str = "") -> None:
     deadline = time.monotonic() + timeout_seconds
+    early_deadline = time.monotonic() + min(30, timeout_seconds)
     while time.monotonic() < deadline:
         try:
             with urllib.request.urlopen(url, timeout=2) as response:
@@ -274,6 +344,15 @@ def _wait_http(url: str, *, timeout_seconds: int) -> None:
                     return
         except OSError:
             pass
+        if compose_service and time.monotonic() >= early_deadline:
+            marker = _compose_service_logs_indicate_migration_drift(compose_service)
+            if marker:
+                raise RuntimeError(
+                    f"GATE_BLOCK: {compose_service} migration drift detected "
+                    f"({marker}); wipe local postgres instead of waiting "
+                    f"readiness for {url}"
+                )
+            early_deadline = deadline + 1  # only probe once
         time.sleep(0.5)
     raise RuntimeError(f"service readiness timed out: {url}")
 
@@ -297,22 +376,32 @@ def _write_caddyfile(paths: RuntimePaths, ports: Mapping[str, int]) -> None:
     paths.caddyfile.parent.mkdir(parents=True, exist_ok=True)
     api_port = ports["api-edge"]
     media_port = ports["media-edge"]
+    public_bases = get_target(load_environment_topology(), TARGET)["publicBases"]
+    api_host = urlsplit(str(public_bases["api"])).hostname
+    web_host = urlsplit(str(public_bases["publicWeb"])).hostname
+    cdn_host = urlsplit(str(public_bases["mediaImage"])).hostname
+    upload_host = urlsplit(str(public_bases["mediaUpload"])).hostname
     paths.caddyfile.write_text(
         "\n".join(
             (
                 "{",
                 "  admin off",
-                "  local_certs",
                 "}",
                 "",
-                "(local_tls) { tls internal }",
+                "(public_tls) {",
+                "  tls /etc/caddy/tls/fullchain.pem /etc/caddy/tls/privkey.pem",
+                "}",
                 "",
-                f"https://alpha-api.quwoquan-env.test:{api_port}, https://alpha-api.localhost:{api_port}, https://localhost:{api_port} {{",
-                "  import local_tls",
+                f"https://{api_host}:{api_port}, https://{web_host}:{api_port} {{",
+                "  import public_tls",
                 "  handle /healthz {",
                 f"    reverse_proxy host.docker.internal:{ports['content-service']}",
                 "  }",
-                f"  @content path /content /content/*",
+                "  handle /legal/* {",
+                "    root * /srv/legal",
+                "    file_server",
+                "  }",
+                f"  @content path /content /content/* /config/app",
                 "  handle @content {",
                 f"    reverse_proxy host.docker.internal:{ports['content-service']}",
                 "  }",
@@ -327,8 +416,8 @@ def _write_caddyfile(paths: RuntimePaths, ports: Mapping[str, int]) -> None:
                 "  respond 404",
                 "}",
                 "",
-                f"https://alpha-avatar.quwoquan-env.test:{media_port}, https://alpha-image.quwoquan-env.test:{media_port}, https://alpha-video.quwoquan-env.test:{media_port}, https://alpha-upload.quwoquan-env.test:{media_port}, https://localhost:{media_port} {{",
-                "  import local_tls",
+                f"https://{cdn_host}:{media_port}, https://{upload_host}:{media_port} {{",
+                "  import public_tls",
                 "  header Access-Control-Allow-Origin \"*\"",
                 f"  reverse_proxy host.docker.internal:{ports['media-processor']}",
                 "}",
@@ -342,30 +431,21 @@ def _write_caddyfile(paths: RuntimePaths, ports: Mapping[str, int]) -> None:
 def _start_caddy(paths: RuntimePaths, ports: Mapping[str, int]) -> None:
     if _container_exists(CADDY_NAME):
         _run(["docker", "rm", "-f", CADDY_NAME])
-    paths.ca_export.parent.mkdir(parents=True, exist_ok=True)
+    public_cert, public_key = certificate_paths(TARGET)
     _run(
         [
             "docker", "run", "-d", "--name", CADDY_NAME,
             "-p", f"{ports['api-edge']}:{ports['api-edge']}",
             "-p", f"{ports['media-edge']}:{ports['media-edge']}",
             "-v", f"{paths.caddyfile}:/etc/caddy/Caddyfile:ro",
+            "-v", f"{public_cert}:/etc/caddy/tls/fullchain.pem:ro",
+            "-v", f"{public_key}:/etc/caddy/tls/privkey.pem:ro",
+            "-v", f"{paths.legal_root}:/srv/legal:ro",
             "-v", "quwoquan_alpha_content_release_caddy_data:/data",
             "-v", "quwoquan_alpha_content_release_caddy_config:/config",
             "docker.io/library/caddy:2.8.4-alpine",
         ]
     )
-    deadline = time.monotonic() + 30
-    while time.monotonic() < deadline:
-        export = subprocess.run(
-            ["docker", "cp", f"{CADDY_NAME}:/data/caddy/pki/authorities/local/root.crt", str(paths.ca_export)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-        if export.returncode == 0 and paths.ca_export.is_file():
-            return
-        time.sleep(0.5)
-    raise RuntimeError("Alpha content-release Caddy did not materialize its local CA")
 
 
 def _container_exists(name: str) -> bool:
@@ -398,15 +478,24 @@ def up() -> None:
         raise RuntimeError("Docker daemon is unavailable for Alpha content-release")
     assert_local_runtime_available(load_environment_topology(), TARGET)
     down()
-    paths = _paths()
+    paths = _paths(new_run=True)
+    _materialize_observability_run(paths)
     ports = profile_ports(load_port_manifest(), TARGET)
     versions = _prepare_config_root(paths)
     env = _base_environment(paths, versions)
     paths.media_root.mkdir(parents=True, exist_ok=True)
     _ensure_compose_images(env)
     _run([*_compose_arguments(), "up", "-d", *COMPOSE_SERVICES], env=env)
-    _wait_http(f"http://127.0.0.1:{ports['content-service']}/healthz", timeout_seconds=300)
-    _wait_http(f"http://127.0.0.1:{ports['user-service']}/healthz", timeout_seconds=300)
+    _wait_http(
+        f"http://127.0.0.1:{ports['content-service']}/healthz",
+        timeout_seconds=300,
+        compose_service="content-service",
+    )
+    _wait_http(
+        f"http://127.0.0.1:{ports['user-service']}/healthz",
+        timeout_seconds=300,
+        compose_service="user-service",
+    )
     processes = {
         "media-origin": _start_process(
             paths,

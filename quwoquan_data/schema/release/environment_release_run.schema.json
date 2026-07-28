@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Append-only environment release run identity",
+  "type": "object",
+  "required": ["schema", "environment", "releaseId", "runId", "kind", "startedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.environment_release_run"},
+    "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+    "releaseId": {"type": "string", "minLength": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "kind": {"enum": ["apply", "rollback", "verify"]},
+    "startedAt": {"type": "string", "minLength": 1}
+  }
+}

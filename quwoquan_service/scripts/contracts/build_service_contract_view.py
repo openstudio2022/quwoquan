@@ -41,6 +41,12 @@ def safe_output(root: Path, requested: Path) -> Path:
     allowed = root.joinpath(*ENV_OUTPUT_PARTS).resolve()
     if output == allowed or allowed not in output.parents:
         raise ValueError(f"output must be below {allowed}")
+    relative = output.relative_to(allowed)
+    if len(relative.parts) < 3 or relative.parts[1] != "cache":
+        raise ValueError(
+            "output must use local/<target>/cache/<run>: "
+            f"{output}"
+        )
     return output
 
 
@@ -184,7 +190,12 @@ def main() -> int:
     parser.add_argument(
         "--output",
         type=Path,
-        default=root.joinpath(*ENV_OUTPUT_PARTS, "service-contract-view", "cache"),
+        default=root.joinpath(
+            *ENV_OUTPUT_PARTS,
+            "service-contract-view",
+            "cache",
+            "view",
+        ),
     )
     args = parser.parse_args()
     try:

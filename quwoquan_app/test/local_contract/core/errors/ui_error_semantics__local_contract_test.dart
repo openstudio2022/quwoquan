@@ -1,11 +1,11 @@
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-001
-// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-001
-// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-009
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-013
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/core/auth/auth_continuation.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
@@ -14,6 +14,24 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import '../../../support/runtime_failure_fixtures.dart';
 
 void main() {
+  Future<BuildContext> pumpContext(WidgetTester tester) async {
+    late BuildContext capturedContext;
+    await tester.pumpWidget(
+      CupertinoApp(
+        locale: const Locale('zh'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Builder(
+          builder: (context) {
+            capturedContext = context;
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+    return capturedContext;
+  }
+
   test('source appearance helpers map route values and brightness', () {
     expect(
       uiErrorAppearanceModeFromRouteValue('light'),
@@ -37,27 +55,35 @@ void main() {
     );
   });
 
-  testWidgets('权限永久拒绝时优先透传本地 permission 文案并给出去设置动作', (tester) async {
-    late BuildContext capturedContext;
-    await tester.pumpWidget(
-      CupertinoApp(
-        locale: const Locale('zh'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Builder(
-          builder: (context) {
-            capturedContext = context;
-            return const SizedBox.shrink();
-          },
+  test('用户恢复组文案只表达已确认事实与可执行下一步', () {
+    for (final group in AppUserRecoveryGroup.values) {
+      final copy = AppUserRecoveryContract.copyFor(group);
+      final visibleCopy = '${copy.title}${copy.message}${copy.action.label}';
+      expect(
+        visibleCopy,
+        isNot(
+          anyOf(
+            contains('DNS'),
+            contains('TLS'),
+            contains('HTTP'),
+            contains('证书'),
+          ),
         ),
-      ),
+        reason: group.name,
+      );
+    }
+    expect(
+      AppUserRecoveryContract.copyFor(AppUserRecoveryGroup.reloadLater).title,
+      SearchText.recoveryReloadLaterTitle,
     );
+  });
 
+  testWidgets('权限错误不透传技术或页面文案，统一为可执行的去设置语义', (tester) async {
     final semantic = UiErrorSemanticResolver.resolve(
-      capturedContext,
+      await pumpContext(tester),
       error: CloudException(
         type: CloudErrorType.forbidden,
-        message: '请在设置中为本应用开启定位权限',
+        message: 'permission denied permanently',
         runtimeFailure: testRuntimeFailure(
           code: 'INTEGRATION.USER.location_permission_required',
           kind: RuntimeFailureKind.permission,
@@ -70,59 +96,34 @@ void main() {
       allowOpenSettings: true,
     );
 
-    expect(semantic.message, '请在设置中为本应用开启定位权限');
+    expect(semantic.userRecoveryGroup, AppUserRecoveryGroup.enablePermission);
+    expect(semantic.title, SearchText.recoveryEnablePermissionTitle);
+    expect(semantic.message, SearchText.recoveryEnablePermissionMessage);
     expect(semantic.primaryAction?.type, UiErrorActionType.openSettings);
-    expect(semantic.primaryAction?.label, '去设置');
+    expect(
+      semantic.primaryAction?.label,
+      SearchText.recoveryEnablePermissionAction,
+    );
   });
 
-  testWidgets('auth gate 语义会携带 continuation 的续接提示', (tester) async {
-    late BuildContext capturedContext;
-    await tester.pumpWidget(
-      CupertinoApp(
-        locale: const Locale('zh'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Builder(
-          builder: (context) {
-            capturedContext = context;
-            return const SizedBox.shrink();
-          },
-        ),
-      ),
-    );
-
+  testWidgets('auth gate 不按业务动作改写用户标题和说明', (tester) async {
     final semantic = authGateSemantic(
-      capturedContext,
+      await pumpContext(tester),
       reason: AuthGateReason.startGroupChat,
-      continuation: const OpenSheetContinuation(
-        AuthContinuationSheet.startGroupChat,
-      ),
       scope: UiErrorScope.section,
     );
 
     expect(semantic.category, UiErrorCategory.authRequired);
+    expect(semantic.userRecoveryGroup, AppUserRecoveryGroup.loginAgain);
+    expect(semantic.title, SearchText.recoveryLoginAgainTitle);
+    expect(semantic.message, SearchText.recoveryLoginAgainMessage);
     expect(semantic.primaryAction?.type, UiErrorActionType.login);
-    expect(semantic.secondaryMessage, '登录后将继续打开发起讨论流程');
+    expect(semantic.secondaryMessage, isNull);
   });
 
-  testWidgets('列表追加失败映射为 footer 而不是区块卡片', (tester) async {
-    late BuildContext capturedContext;
-    await tester.pumpWidget(
-      CupertinoApp(
-        locale: const Locale('zh'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Builder(
-          builder: (context) {
-            capturedContext = context;
-            return const SizedBox.shrink();
-          },
-        ),
-      ),
-    );
-
+  testWidgets('列表追加仍用 footer，但文案和动作来自恢复组', (tester) async {
     final semantic = UiErrorSemanticResolver.resolve(
-      capturedContext,
+      await pumpContext(tester),
       error: CloudException(
         type: CloudErrorType.network,
         message: 'network',
@@ -137,29 +138,15 @@ void main() {
     );
 
     expect(semantic.presentation, UiErrorPresentation.appendFooter);
-    expect(semantic.message, UITextConstants.appendFailedRetry);
-    expect(semantic.copyKey, 'appendFailedRetry');
-    expect(semantic.primaryAction?.label, '再试一次');
+    expect(semantic.userRecoveryGroup, AppUserRecoveryGroup.connectNetwork);
+    expect(semantic.message, SearchText.recoveryConnectNetworkMessage);
+    expect(semantic.copyKey, 'recovery.connectNetwork');
+    expect(semantic.primaryAction?.label, SearchText.reload);
   });
 
-  testWidgets('后台刷新失败映射为短暂提示且不强制重试按钮', (tester) async {
-    late BuildContext capturedContext;
-    await tester.pumpWidget(
-      CupertinoApp(
-        locale: const Locale('zh'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Builder(
-          builder: (context) {
-            capturedContext = context;
-            return const SizedBox.shrink();
-          },
-        ),
-      ),
-    );
-
+  testWidgets('后台刷新保留短提示，恢复组合同仍保持唯一动作', (tester) async {
     final semantic = UiErrorSemanticResolver.resolve(
-      capturedContext,
+      await pumpContext(tester),
       error: CloudException(
         type: CloudErrorType.network,
         message: 'network',
@@ -175,79 +162,252 @@ void main() {
     );
 
     expect(semantic.presentation, UiErrorPresentation.transientNotice);
-    expect(semantic.primaryAction, isNull);
+    expect(semantic.primaryAction?.label, SearchText.reload);
   });
 
-  testWidgets('无本地化上下文时也按错误码给出可理解的失效页文案', (tester) async {
-    late BuildContext capturedContext;
-    await tester.pumpWidget(
-      CupertinoApp(
-        home: Builder(
-          builder: (context) {
-            capturedContext = context;
-            return const SizedBox.shrink();
-          },
-        ),
+  testWidgets('不透明 404 只陈述内容不可用事实，不猜测具体删除原因', (tester) async {
+    final semantic = UiErrorSemanticResolver.resolve(
+      await pumpContext(tester),
+      error: CloudErrorMapper.fromStatusCode(
+        404,
+        requestPath: '/content/opaque-id',
       ),
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
     );
 
+    expect(semantic.userRecoveryGroup, AppUserRecoveryGroup.contentUnavailable);
+    expect(semantic.title, SearchText.recoveryContentUnavailableTitle);
+    expect(semantic.message, SearchText.recoveryContentUnavailableMessage);
+    expect(semantic.primaryAction?.type, UiErrorActionType.dismiss);
+  });
+
+  testWidgets('仅系统确认离线进入连网组，拒绝连接进入稍后重载组', (tester) async {
+    final context = await pumpContext(tester);
+    final offline = UiErrorSemanticResolver.resolve(
+      context,
+      error: CloudException(
+        type: CloudErrorType.network,
+        message: 'offline',
+        runtimeFailure: testRuntimeFailure(
+          code: RuntimeFailureCodes.appNetworkOffline,
+          kind: RuntimeFailureKind.network,
+        ),
+      ),
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+    );
+    final refused = UiErrorSemanticResolver.resolve(
+      context,
+      error: CloudException(
+        type: CloudErrorType.network,
+        message: 'connection refused',
+        requestId: 'request-1',
+        traceId: 'trace-1',
+        runtimeFailure: testRuntimeFailure(
+          code: RuntimeFailureCodes.appNetworkConnectionRefused,
+          kind: RuntimeFailureKind.network,
+        ),
+      ),
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+      sourceOperationId: 'GetFeed',
+    );
+
+    expect(offline.userRecoveryGroup, AppUserRecoveryGroup.connectNetwork);
+    expect(offline.title, SearchText.recoveryConnectNetworkTitle);
+    expect(offline.message, SearchText.recoveryConnectNetworkMessage);
+    expect(refused.userRecoveryGroup, AppUserRecoveryGroup.reloadLater);
+    expect(refused.title, SearchText.recoveryReloadLaterTitle);
+    expect(refused.message, SearchText.recoveryReloadLaterMessage);
+    expect(refused.sourceOperationId, 'GetFeed');
+    expect(refused.requestId, 'request-1');
+    expect(refused.traceId, 'trace-1');
+  });
+
+  testWidgets('组合查询保留实际失败 operation，禁止被页面外层 GetFeed 覆盖', (tester) async {
     final semantic = UiErrorSemanticResolver.resolve(
-      capturedContext,
+      await pumpContext(tester),
       error: CloudException(
         type: CloudErrorType.notFound,
-        message: 'Not found',
-        code: EntityErrorCode.homepageNotFound.code,
+        message: 'privacy route missing',
+        statusCode: 404,
+        sourceOperationId: 'GetPrivacySettings',
         runtimeFailure: testRuntimeFailure(
-          code: EntityErrorCode.homepageNotFound.code,
+          code: 'APP.USER.not_found',
           kind: RuntimeFailureKind.notFound,
         ),
       ),
       category: UiErrorCategory.pageLoad,
       scope: UiErrorScope.page,
-      allowRetry: false,
+      sourceOperationId: 'GetFeed',
     );
 
-    expect(semantic.title, UITextConstants.homepageLoadFailedTitle);
-    expect(
-      semantic.message,
-      EntityErrorMessages.zh[EntityErrorCode.homepageNotFound],
-    );
-    expect(semantic.copyKey, 'homepageLoadFailedTitle');
-    expect(semantic.primaryAction, isNull);
+    expect(semantic.sourceOperationId, 'GetPrivacySettings');
+    expect(semantic.userRecoveryGroup, AppUserRecoveryGroup.contentUnavailable);
+    expect(semantic.title, SearchText.recoveryContentUnavailableTitle);
+    expect(semantic.title, isNot(SearchText.feedVersionMismatchTitle));
   });
 
-  testWidgets('可重试的首屏网络失败不在说明中重复恢复动作', (tester) async {
-    late BuildContext capturedContext;
-    await tester.pumpWidget(
-      CupertinoApp(
-        home: Builder(
-          builder: (context) {
-            capturedContext = context;
-            return const SizedBox.shrink();
-          },
+  testWidgets('DNS、TLS、5xx、超时和未知异常统一进入稍后重载组', (tester) async {
+    final context = await pumpContext(tester);
+    final cases = <({Object error})>[
+      (
+        error: CloudException(
+          type: CloudErrorType.network,
+          message: 'dns',
+          runtimeFailure: testRuntimeFailure(
+            code: RuntimeFailureCodes.appNetworkNameResolutionFailed,
+            kind: RuntimeFailureKind.network,
+            nature: RuntimeFailureNature.transient,
+          ),
         ),
       ),
-    );
+      (
+        error: CloudException(
+          type: CloudErrorType.network,
+          message: 'tls',
+          runtimeFailure: testRuntimeFailure(
+            code: RuntimeFailureCodes.appNetworkSecureConnectionFailed,
+            kind: RuntimeFailureKind.network,
+            nature: RuntimeFailureNature.permanent,
+          ),
+        ),
+      ),
+      (
+        error: CloudErrorMapper.fromStatusCode(
+          500,
+          requestPath: '/content/feed',
+        ),
+      ),
+      (
+        error: CloudErrorMapper.fromStatusCode(
+          504,
+          requestPath: '/content/feed',
+        ),
+      ),
+      (error: Exception('unexpected response shape')),
+    ];
 
-    final semantic = UiErrorSemanticResolver.resolve(
-      capturedContext,
+    for (final entry in cases) {
+      final semantic = UiErrorSemanticResolver.resolve(
+        context,
+        error: entry.error,
+        category: UiErrorCategory.pageLoad,
+        scope: UiErrorScope.page,
+      );
+      expect(semantic.userRecoveryGroup, AppUserRecoveryGroup.reloadLater);
+      expect(semantic.title, SearchText.recoveryReloadLaterTitle);
+      expect(semantic.message, SearchText.recoveryReloadLaterMessage);
+      expect(semantic.primaryAction?.type, UiErrorActionType.retry);
+    }
+  });
+
+  testWidgets('明确删除事实与普通 404 使用不同视觉语义', (tester) async {
+    final context = await pumpContext(tester);
+    final gone = UiErrorSemanticResolver.resolve(
+      context,
       error: CloudException(
-        type: CloudErrorType.network,
-        message: 'network',
+        type: CloudErrorType.notFound,
+        message: 'gone',
+        code: ContentErrorCode.contentDeleted.code,
+        statusCode: 410,
         runtimeFailure: testRuntimeFailure(
-          code: 'APP.NETWORK.offline',
-          kind: RuntimeFailureKind.network,
-          nature: RuntimeFailureNature.transient,
+          code: ContentErrorCode.contentDeleted.code,
+          kind: RuntimeFailureKind.notFound,
         ),
       ),
       category: UiErrorCategory.pageLoad,
       scope: UiErrorScope.page,
     );
+    final opaque = UiErrorSemanticResolver.resolve(
+      context,
+      error: CloudErrorMapper.fromStatusCode(
+        404,
+        requestPath: '/content/opaque-id',
+      ),
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+    );
 
-    expect(semantic.primaryAction?.label, UITextConstants.tryAgain);
-    expect(semantic.message, UITextConstants.pageLoadFailedMessage);
-    expect(semantic.message, isNot(contains('再试一次')));
-    expect(semantic.message, isNot(contains('稍后')));
+    expect(gone.userRecoveryGroup, AppUserRecoveryGroup.contentGone);
+    expect(gone.title, SearchText.recoveryContentGoneTitle);
+    expect(opaque.userRecoveryGroup, AppUserRecoveryGroup.contentUnavailable);
+    expect(opaque.title, SearchText.recoveryContentUnavailableTitle);
+  });
+
+  testWidgets('Feed HTTP 状态只映射到唯一用户恢复组', (tester) async {
+    final context = await pumpContext(tester);
+    const expected = <int, AppUserRecoveryGroup>{
+      400: AppUserRecoveryGroup.reloadLater,
+      401: AppUserRecoveryGroup.loginAgain,
+      403: AppUserRecoveryGroup.noAccess,
+      404: AppUserRecoveryGroup.contentUnavailable,
+      409: AppUserRecoveryGroup.reloadLater,
+      422: AppUserRecoveryGroup.reloadLater,
+      429: AppUserRecoveryGroup.waitThenReload,
+      500: AppUserRecoveryGroup.reloadLater,
+      503: AppUserRecoveryGroup.reloadLater,
+      504: AppUserRecoveryGroup.reloadLater,
+    };
+
+    for (final entry in expected.entries) {
+      final semantic = UiErrorSemanticResolver.resolve(
+        context,
+        error: CloudErrorMapper.fromStatusCode(
+          entry.key,
+          requestPath: '/content/feed',
+          retryAfter: entry.key == 429 ? '12' : null,
+        ),
+        category: UiErrorCategory.pageLoad,
+        scope: UiErrorScope.page,
+        sourceOperationId: 'GetFeed',
+      );
+      final copy = AppUserRecoveryContract.copyFor(
+        entry.value,
+        retryAfterSeconds: entry.key == 429 ? 12 : 0,
+      );
+      expect(
+        semantic.userRecoveryGroup,
+        entry.value,
+        reason: 'HTTP ${entry.key}',
+      );
+      expect(semantic.title, copy.title, reason: 'HTTP ${entry.key}');
+      expect(semantic.message, copy.message, reason: 'HTTP ${entry.key}');
+      expect(
+        semantic.primaryAction?.type,
+        copy.action.type,
+        reason: 'HTTP ${entry.key}',
+      );
+      expect(
+        semantic.primaryAction?.availableAfterSeconds ?? 0,
+        entry.key == 429 ? 12 : 0,
+      );
+    }
+  });
+
+  testWidgets('只有已确认且存在官方入口时才展示立即更新语义', (tester) async {
+    final context = await pumpContext(tester);
+    final unverified = UiErrorSemanticResolver.resolve(
+      context,
+      error: Exception('minimum version mismatch'),
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+    );
+    final verified = UiErrorSemanticResolver.resolve(
+      context,
+      error: Exception('minimum version mismatch'),
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+      verifiedUpdateAvailable: true,
+    );
+
+    expect(unverified.userRecoveryGroup, AppUserRecoveryGroup.reloadLater);
+    expect(unverified.title, SearchText.recoveryReloadLaterTitle);
+    expect(unverified.message, SearchText.recoveryReloadLaterMessage);
+    expect(verified.userRecoveryGroup, AppUserRecoveryGroup.updateApp);
+    expect(verified.primaryAction?.type, UiErrorActionType.openUpdate);
+    expect(verified.primaryAction?.label, SearchText.recoveryUpdateAppAction);
   });
 
   // 错误展示载体：守护 error-permission-display-semantics L3 spec。

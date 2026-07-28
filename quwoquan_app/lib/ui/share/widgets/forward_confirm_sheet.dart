@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
@@ -205,7 +206,7 @@ class _ForwardConfirmSheetState extends ConsumerState<ForwardConfirmSheet> {
               children: [
                 Expanded(
                   child: _SheetActionButton(
-                    label: UITextConstants.cancel,
+                    label: FoundationText.cancel,
                     foregroundColor: primary,
                     backgroundColor: SettingsSemanticConstants.blockBackground(
                       isDark,
@@ -392,7 +393,7 @@ class _SheetActionButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
         ),
         child: busy
-            ? const CupertinoActivityIndicator()
+            ? AppRequestFeedback.inline()
             : Text(
                 label,
                 style: TextStyle(
@@ -427,7 +428,7 @@ class _InlineSendButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
         ),
         child: busy
-            ? const CupertinoActivityIndicator()
+            ? AppRequestFeedback.inline()
             : Text(
                 ChatText.send,
                 style: TextStyle(

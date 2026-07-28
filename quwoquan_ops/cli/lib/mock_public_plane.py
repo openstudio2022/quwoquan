@@ -24,10 +24,13 @@ from quwoquan_ops.cli.lib.output_paths import legal_static_deployment_package_di
 class MockPublicPlaneHandler(BaseHTTPRequestHandler):
     mode: str = "api"
     runtime_env: str = "alpha"
-    data_source: str = "mock"
     gateway_base_url: str = ""
+    legal_base_url: str = ""
     product_ops_base_url: str = ""
-    media_base_url: str = ""
+    media_avatar_base_url: str = ""
+    media_image_base_url: str = ""
+    media_video_base_url: str = ""
+    media_upload_base_url: str = ""
     legal_static_root: str = ""
     ops_policy_version: str = "mock-alpha"
     ops_lock = threading.Lock()
@@ -60,11 +63,13 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "appRuntimeEnv": self.runtime_env,
-                    "dataSource": self.data_source,
                     "gatewayBaseUrl": self.gateway_base_url,
                     "legalBaseUrl": self._legal_base_url(),
                     "productOpsBaseUrl": self.product_ops_base_url,
-                    "mediaBaseUrl": self.media_base_url,
+                    "mediaAvatarBaseUrl": self.media_avatar_base_url,
+                    "mediaImageBaseUrl": self.media_image_base_url,
+                    "mediaVideoBaseUrl": self.media_video_base_url,
+                    "mediaUploadBaseUrl": self.media_upload_base_url,
                 }
             )
             return
@@ -76,6 +81,31 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
             return
         if self.mode == "api" and path.startswith("/content/feed"):
             self._send_json({"items": [], "nextCursor": None, "mockBoundary": True})
+            return
+        if self.mode == "api" and path == "/user/settings/privacy":
+            authorization = (self.headers.get("Authorization") or "").strip()
+            if not authorization.startswith("Bearer "):
+                status, payload, headers = self._auth_error(
+                    401,
+                    "USER.AUTH.unauthorized",
+                    "登录状态已失效，请重新登录",
+                )
+                self._send_json(payload, status=status, headers=headers)
+                return
+            token_digest = hashlib.sha256(authorization.encode("utf-8")).hexdigest()
+            self._send_json(
+                {
+                    "userId": f"alpha_user_{token_digest[:16]}",
+                    "allowStrangerMsg": True,
+                    "profileVisibility": "public",
+                    "contentLanguage": None,
+                    "feedPreference": None,
+                    "assistantEnabled": True,
+                    "blockedKeywords": [],
+                    "version": 1,
+                    "updatedAt": "2026-01-01T00:00:00Z",
+                }
+            )
             return
         if self.mode == "api" and path == "/homepages/search":
             self._send_json({"items": [], "nextCursor": None, "mockBoundary": True})
@@ -344,11 +374,23 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
         return self.mode in {"api", "product-ops"}
 
     def _redirect_to_media(self, path: str, query: str) -> None:
-        base = self.media_base_url.rstrip("/")
+        role_prefix, base = next(
+            (
+                (prefix, value)
+                for prefix, value in (
+                    ("/media/avatar", self.media_avatar_base_url),
+                    ("/media/image", self.media_image_base_url),
+                    ("/media/video", self.media_video_base_url),
+                )
+                if path == prefix or path.startswith(f"{prefix}/")
+            ),
+            ("", ""),
+        )
+        base = base.rstrip("/")
         if not base:
-            self.send_error(404, "media base is not configured")
+            self.send_error(404, "media role base is not configured")
             return
-        target = base + path
+        target = base + path.removeprefix(role_prefix)
         if query:
             target = f"{target}?{query}"
         self.send_response(307)
@@ -357,10 +399,7 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _legal_base_url(self) -> str:
-        gateway_base = self.gateway_base_url.rstrip("/")
-        if not gateway_base:
-            return ""
-        return f"{gateway_base}/legal"
+        return self.legal_base_url.rstrip("/")
 
     def _legal_root(self) -> Path:
         configured = type(self).legal_static_root.strip()
@@ -788,10 +827,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--listen-port", type=int, required=True)
     parser.add_argument("--mode", choices=["api", "product-ops"], default="api")
     parser.add_argument("--runtime-env", default="alpha")
-    parser.add_argument("--data-source", default="mock")
     parser.add_argument("--gateway-base-url", default="")
+    parser.add_argument("--legal-base-url", default="")
     parser.add_argument("--product-ops-base-url", default="")
-    parser.add_argument("--media-base-url", default="")
+    parser.add_argument("--media-avatar-base-url", default="")
+    parser.add_argument("--media-image-base-url", default="")
+    parser.add_argument("--media-video-base-url", default="")
+    parser.add_argument("--media-upload-base-url", default="")
     parser.add_argument("--legal-static-root", default="")
     return parser.parse_args()
 
@@ -800,10 +842,13 @@ def main() -> int:
     args = parse_args()
     MockPublicPlaneHandler.mode = args.mode
     MockPublicPlaneHandler.runtime_env = args.runtime_env
-    MockPublicPlaneHandler.data_source = args.data_source
     MockPublicPlaneHandler.gateway_base_url = args.gateway_base_url.rstrip("/")
+    MockPublicPlaneHandler.legal_base_url = args.legal_base_url.rstrip("/")
     MockPublicPlaneHandler.product_ops_base_url = args.product_ops_base_url.rstrip("/")
-    MockPublicPlaneHandler.media_base_url = args.media_base_url.rstrip("/")
+    MockPublicPlaneHandler.media_avatar_base_url = args.media_avatar_base_url.rstrip("/")
+    MockPublicPlaneHandler.media_image_base_url = args.media_image_base_url.rstrip("/")
+    MockPublicPlaneHandler.media_video_base_url = args.media_video_base_url.rstrip("/")
+    MockPublicPlaneHandler.media_upload_base_url = args.media_upload_base_url.rstrip("/")
     MockPublicPlaneHandler.legal_static_root = args.legal_static_root.rstrip("/")
     server = ThreadingHTTPServer((args.listen_host, args.listen_port), MockPublicPlaneHandler)
     print(

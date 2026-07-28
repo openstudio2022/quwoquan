@@ -1,6 +1,6 @@
 part of 'ui_text_constants.dart';
 
-abstract final class _UITextMedia {
+abstract final class MediaText {
   static const String articleCoverOptionTwo = '二图封面';
   static const String articleCoverOptionThree = '三图封面';
   static const String addImage = '添加图片';

@@ -13,7 +13,7 @@ class _RelatedObjectsSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            UITextConstants.objectIntroRelatedObjectsTitle,
+            ObjectHomepageText.objectIntroRelatedObjectsTitle,
             style: TextStyle(
               fontSize: AppTypography.iosTitle3,
               fontWeight: AppTypography.semiBold,
@@ -64,8 +64,8 @@ class _RelatedObjectsSection extends StatelessWidget {
                                   item.memberCount,
                                 )
                               : homepageId.isNotEmpty
-                              ? UITextConstants.objectIntroViewHomepage
-                              : UITextConstants.objectIntroViewCircle,
+                              ? ObjectHomepageText.objectIntroViewHomepage
+                              : ObjectHomepageText.objectIntroViewCircle,
                           style: TextStyle(
                             fontSize: AppTypography.iosFootnote,
                             color: AppColors.iosSecondaryLabel(context),
@@ -110,15 +110,15 @@ class _ReturnLinksCard extends StatelessWidget {
             runSpacing: AppSpacing.intraGroupSm,
             children: <Widget>[
               _ReturnChip(
-                label: UITextConstants.objectIntroReturnRecord,
+                label: ObjectHomepageText.objectIntroReturnRecord,
                 onTap: () => onTap(HomepageDetailTabTarget.record),
               ),
               _ReturnChip(
-                label: UITextConstants.objectIntroReturnDiscussion,
+                label: ObjectHomepageText.objectIntroReturnDiscussion,
                 onTap: () => onTap(HomepageDetailTabTarget.discussion),
               ),
               _ReturnChip(
-                label: UITextConstants.objectIntroReturnCircles,
+                label: ObjectHomepageText.objectIntroReturnCircles,
                 onTap: () => onTap(HomepageDetailTabTarget.relatedCircles),
               ),
             ],
@@ -194,7 +194,7 @@ class _HomepageSourceCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    UITextConstants.objectIntroSourceTitle,
+                    ObjectHomepageText.objectIntroSourceTitle,
                     style: TextStyle(
                       fontSize: AppTypography.iosFootnote,
                       fontWeight: AppTypography.semiBold,
@@ -233,7 +233,7 @@ class _HomepageSourceCard extends StatelessWidget {
               CupertinoIcons.arrow_up_right_square,
               size: AppSpacing.iconMedium,
               color: AppColors.iosSecondaryLabel(context),
-              semanticLabel: UITextConstants.objectIntroSourceOpen,
+              semanticLabel: ObjectHomepageText.objectIntroSourceOpen,
             ),
           ],
         ),
@@ -290,7 +290,7 @@ class _IntroductionEmptyState extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.containerSm),
             Text(
-              UITextConstants.objectIntroEmptyTitle,
+              ObjectHomepageText.objectIntroEmptyTitle,
               style: TextStyle(
                 fontSize: AppTypography.iosTitle3,
                 fontWeight: AppTypography.semiBold,
@@ -299,7 +299,7 @@ class _IntroductionEmptyState extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.intraGroupXs),
             Text(
-              UITextConstants.objectIntroEmptyMessage,
+              ObjectHomepageText.objectIntroEmptyMessage,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: AppTypography.iosBody,
@@ -309,7 +309,7 @@ class _IntroductionEmptyState extends StatelessWidget {
             SizedBox(height: AppSpacing.containerMd),
             CupertinoButton.filled(
               onPressed: onBack,
-              child: const Text(UITextConstants.objectIntroBackToHomepage),
+              child: const Text(ObjectHomepageText.objectIntroBackToHomepage),
             ),
           ],
         ),

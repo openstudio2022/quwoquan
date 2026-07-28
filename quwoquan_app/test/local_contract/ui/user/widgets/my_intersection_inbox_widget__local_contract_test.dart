@@ -8,7 +8,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
@@ -18,6 +17,8 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_card.dart';
+
+import '../../../../support/cloud_services/behavior_repository_double.dart';
 
 bool _tapSpanByText(WidgetTester tester, String text) {
   final richText = tester.widget<RichText>(
@@ -127,7 +128,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(
-      find.text(UITextConstants.profileIntersectionEmptyGuidance),
+      find.text(ProfileText.profileIntersectionEmptyGuidance),
       findsOneWidget,
     );
   });

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/chat_contracts.dart';
-import 'package:quwoquan_cloud_mock/chat_fixture.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 

@@ -25,6 +25,7 @@ class CloudException implements Exception {
     this.userMessage,
     this.requestId,
     this.traceId,
+    this.sourceOperationId,
     this.retryAfter,
     this.cause,
   });
@@ -48,12 +49,34 @@ class CloudException implements Exception {
   /// Correlation identifiers returned by RuntimeErrorResponse.
   final String? requestId;
   final String? traceId;
+  final String? sourceOperationId;
   final Duration? retryAfter;
 
   final Object? cause;
 
+  CloudException withSourceOperationId(String operationId) {
+    final normalized = operationId.trim();
+    if (normalized.isEmpty || sourceOperationId?.trim().isNotEmpty == true) {
+      return this;
+    }
+    return CloudException(
+      type: type,
+      message: message,
+      statusCode: statusCode,
+      code: code,
+      domainErrorCode: domainErrorCode,
+      runtimeFailure: runtimeFailure,
+      userMessage: userMessage,
+      requestId: requestId,
+      traceId: traceId,
+      sourceOperationId: normalized,
+      retryAfter: retryAfter,
+      cause: cause,
+    );
+  }
+
   @override
   String toString() {
-    return 'CloudException(type: $type, message: $message, statusCode: $statusCode, code: $code, requestId: $requestId, traceId: $traceId)';
+    return 'CloudException(type: $type, message: $message, statusCode: $statusCode, code: $code, requestId: $requestId, traceId: $traceId, sourceOperationId: $sourceOperationId)';
   }
 }

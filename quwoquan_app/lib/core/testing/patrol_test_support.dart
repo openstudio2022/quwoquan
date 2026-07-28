@@ -6,7 +6,6 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:patrol/patrol.dart';
@@ -15,7 +14,6 @@ import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.da
 import 'package:quwoquan_app/app_bootstrap.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/platform/local_dev_https_trust.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart'
     show accountSessionLoginCommandWriterProvider;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
@@ -66,16 +64,12 @@ Completer<void> _runtimeAnonymousSessionGate() =>
 
 /// Starts the real App exactly once from the generated Patrol target.
 ///
-/// Environment-specific test wiring is supplied by the caller so production
-/// libraries never retain an Alpha fixture or Mock composition callback.
-Future<void> launchPatrolAppOnce(
-  PatrolIntegrationTester $, {
-  List<Override> providerScopeOverrides = const <Override>[],
-}) async {
+/// 仅认证会话控制器允许测试装配；业务 Query/Command 始终使用 production
+/// Remote composition，调用方不能注入业务 Provider double。
+Future<void> launchPatrolAppOnce(PatrolIntegrationTester $) async {
   _patrolAppLaunch ??= runQuwoquanApp(
     autoCompleteStartupWelcomeForTest: true,
     providerScopeOverrides: [
-      ...providerScopeOverrides,
       authSessionControllerProvider.overrideWith(
         _PatrolAuthSessionController.new,
       ),
@@ -107,7 +101,7 @@ Future<void> _awaitPatrolBootstrap(PatrolIntegrationTester $) async {
     if (_tryReadPatrolRouter() != null) {
       return;
     }
-    if (find.text(UITextConstants.startupRecoveryTitle).evaluate().isNotEmpty) {
+    if (find.text(FoundationText.startupRecoveryTitle).evaluate().isNotEmpty) {
       throw StateError(
         _patrolBootstrapFailureDescription(recoveryVisible: true),
       );
@@ -135,9 +129,6 @@ Future<void> _startRuntimeAnonymousSessionFromMountedApp() async {
   }
   final container = ProviderScope.containerOf(navigators.first);
   // UAT 已绕过欢迎流程，不能依赖欢迎页时序间接打开 auth restore gate。
-  // 这里先完成真实本地 HTTPS 信任安装，再驱动 production Remote composition
-  // 发起匿名登录；不注入会话或假数据。
-  await LocalDevHttpsTrust.installForCurrentRuntime();
   container.read(startupAuthRestoreGateProvider.notifier).open();
   container.read(authSessionControllerProvider);
   _runtimeAnonymousSessionLogin ??= _authenticateLocalRuntimeAnonymously(
@@ -153,11 +144,13 @@ Future<void> _authenticateLocalRuntimeAnonymously(
   try {
     final result = await _loginAnonymousForPatrolWithRetry(container);
     final controller = container.read(authSessionControllerProvider.notifier);
-    await controller.applyLoginGrant(result);
+    await controller.applyTrustedGuestGrant(result);
     final session = container.read(authSessionControllerProvider);
-    if (!session.isAuthenticated || session.activeSubAccountId.trim().isEmpty) {
+    if (!session.hasTrustedSession ||
+        session.isAuthenticated ||
+        session.activeSubAccountId.trim().isEmpty) {
       throw StateError(
-        'anonymous login did not install a complete authenticated session',
+        'anonymous login did not install a trusted guest session',
       );
     }
     if (!gate.isCompleted) {
@@ -173,8 +166,7 @@ Future<void> _authenticateLocalRuntimeAnonymously(
       gate.completeError(
         StateError(
           'Patrol local Remote anonymous session failed: '
-          '$_runtimeAnonymousSessionFailure, '
-          'localHttpsTrustInstalled=${LocalDevHttpsTrust.isInstalled}',
+          '$_runtimeAnonymousSessionFailure',
         ),
         stackTrace,
       );
@@ -237,7 +229,7 @@ Future<GoRouter> _waitForPatrolRouter(
     if (router != null) {
       return router;
     }
-    if (find.text(UITextConstants.startupRecoveryTitle).evaluate().isNotEmpty) {
+    if (find.text(FoundationText.startupRecoveryTitle).evaluate().isNotEmpty) {
       throw StateError(
         _patrolBootstrapFailureDescription(recoveryVisible: true),
       );

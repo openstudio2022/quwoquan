@@ -24,7 +24,7 @@ void main() {
 
     expect(find.byKey(TestKeys.createPublishResultSheet), findsOneWidget);
     expect(
-      find.text(UITextConstants.publishResultSuccessTitle),
+      find.text(CreationText.publishResultSuccessTitle),
       findsOneWidget,
     );
     expect(
@@ -52,8 +52,8 @@ void main() {
     await tester.tap(find.text('打开结果页'));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.publishResultQueuedTitle), findsOneWidget);
-    expect(find.text(UITextConstants.publishResultSuccessTitle), findsNothing);
+    expect(find.text(CreationText.publishResultQueuedTitle), findsOneWidget);
+    expect(find.text(CreationText.publishResultSuccessTitle), findsNothing);
     expect(
       find.byKey(TestKeys.createPublishResultViewWorkButton),
       findsNothing,
@@ -81,7 +81,7 @@ void main() {
 
     await tester.tap(find.text('打开结果页'));
     await tester.pumpAndSettle();
-    expect(find.text(UITextConstants.publishResultQueuedTitle), findsOneWidget);
+    expect(find.text(CreationText.publishResultQueuedTitle), findsOneWidget);
 
     presentation.value = const CreatePublishResultPresentation(
       state: CreatePublishResultState.pendingReview,
@@ -89,7 +89,7 @@ void main() {
     );
     await tester.pump();
     expect(
-      find.text(UITextConstants.publishResultPendingReviewTitle),
+      find.text(CreationText.publishResultPendingReviewTitle),
       findsOneWidget,
     );
     expect(
@@ -103,7 +103,7 @@ void main() {
     );
     await tester.pump();
     expect(
-      find.text(UITextConstants.publishResultSuccessTitle),
+      find.text(CreationText.publishResultSuccessTitle),
       findsOneWidget,
     );
     expect(
@@ -134,16 +134,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(UITextConstants.publishResultPendingReviewTitle),
+      find.text(CreationText.publishResultPendingReviewTitle),
       findsOneWidget,
     );
     expect(
       find.byKey(TestKeys.createPublishResultViewWorkButton),
       findsNothing,
     );
-    expect(find.text(UITextConstants.publishResultViewTasks), findsOneWidget);
+    expect(find.text(CreationText.publishResultViewTasks), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.publishResultViewTasks));
+    await tester.tap(find.text(CreationText.publishResultViewTasks));
     await tester.pumpAndSettle();
     expect(selectedAction, CreatePublishResultAction.viewPublicationTasks);
   });

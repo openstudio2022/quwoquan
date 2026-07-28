@@ -9,6 +9,7 @@ import (
 
 	platformgenerated "quwoquan_service/control-plane/platform-ops/generated/platform_ops/config_snapshot"
 	configapp "quwoquan_service/control-plane/platform-ops/internal/ops/platform_ops/config_snapshot/application/platform_ops/config_layer"
+	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
 )
@@ -40,7 +41,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/control-plane/platform/configs/resolve":
 		h.resolve(w, r)
 	case "/control-plane/platform/configs/resolve-for-instance":
-		h.resolve(w, r)
+		h.resolveForInstance(w, r)
 	case "/control-plane/platform/configs/snapshot":
 		h.snapshot(w, r)
 	case "/control-plane/platform/configs/domains":
@@ -64,6 +65,40 @@ func (h *Handler) resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) resolveForInstance(w http.ResponseWriter, r *http.Request) {
+	principal, ok := rtauth.PrincipalFromContext(r.Context())
+	service, environment, valid := configAckServiceIdentity(principal)
+	if !ok || !valid ||
+		service != strings.TrimSpace(r.URL.Query().Get("service")) ||
+		environment != strings.TrimSpace(r.URL.Query().Get("env")) {
+		// 外层 generated operation guard 已对无 principal / scope 写 401/403。
+		// 此处是纵深绑定：即使调用点错误复用 handler，也不能跨服务或跨环境读取配置。
+		writeError(w, r, platformgenerated.AppErrorFromConfigInvalid("service config scope does not match principal"))
+		return
+	}
+	h.resolve(w, r)
+}
+
+func configAckServiceIdentity(principal rtauth.Principal) (service string, environment string, valid bool) {
+	isService := false
+	for _, role := range principal.Roles {
+		if strings.TrimSpace(role) == "service" {
+			isService = true
+			break
+		}
+	}
+	subject := strings.TrimSpace(principal.Actor.AccountID)
+	if !isService || !strings.HasPrefix(subject, "service:") {
+		return "", "", false
+	}
+	identity := strings.TrimPrefix(subject, "service:")
+	service, environment, found := strings.Cut(identity, "@")
+	if !found || strings.TrimSpace(service) == "" || strings.TrimSpace(environment) == "" {
+		return "", "", false
+	}
+	return service, environment, true
 }
 
 func (h *Handler) snapshot(w http.ResponseWriter, r *http.Request) {

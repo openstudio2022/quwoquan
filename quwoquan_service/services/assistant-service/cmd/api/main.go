@@ -14,6 +14,7 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
+	"quwoquan_service/runtime/controlplane"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
@@ -77,6 +78,9 @@ func run() error {
 	if err := validateRuntimeDependenciesConfig(cfg); err != nil {
 		return err
 	}
+	controlplane.StartReleaseConfigAttestation(
+		serviceName, appEnv, configRoot, configVersion, imageVersion,
+	)
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
 		runtimeConfigProvider,
 	)

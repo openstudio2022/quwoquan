@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -456,11 +457,13 @@ class _ConnectedContentShareSheetState
       }
       await AppActionErrorFeedback.show(
         context,
-        semantic: runtimeErrorSemantic(
-          context,
-          error: error,
-          category: UiErrorCategory.submit,
-          scope: UiErrorScope.dialog,
+        semantic: ensureRetryUiErrorSemantic(
+          runtimeErrorSemantic(
+            context,
+            error: error,
+            category: UiErrorCategory.submit,
+            scope: UiErrorScope.dialog,
+          ),
         ),
         onAction: (action) async {
           if (action.type == UiErrorActionType.retry ||
@@ -520,11 +523,13 @@ class _ConnectedContentShareSheetState
         }
         await AppActionErrorFeedback.show(
           context,
-          semantic: runtimeErrorSemantic(
-            context,
-            error: error,
-            category: UiErrorCategory.submit,
-            scope: UiErrorScope.dialog,
+          semantic: ensureRetryUiErrorSemantic(
+            runtimeErrorSemantic(
+              context,
+              error: error,
+              category: UiErrorCategory.submit,
+              scope: UiErrorScope.dialog,
+            ),
           ),
           onAction: (action) async {
             if (action.type == UiErrorActionType.retry ||
@@ -667,19 +672,21 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
                   if (snapshot.connectionState != ConnectionState.done) {
                     return SizedBox(
                       height: AppSpacing.avatarUserXl,
-                      child: const Center(child: CupertinoActivityIndicator()),
+                      child: AppRequestFeedback.section(),
                     );
                   }
                   if (snapshot.hasError) {
                     return AppSectionErrorCard(
                       margin: EdgeInsets.zero,
-                      semantic: runtimeErrorSemantic(
-                        context,
-                        error:
-                            snapshot.error ??
-                            StateError(UITextConstants.loadFailed),
-                        category: UiErrorCategory.sectionLoad,
-                        scope: UiErrorScope.section,
+                      semantic: ensureRetryUiErrorSemantic(
+                        runtimeErrorSemantic(
+                          context,
+                          error:
+                              snapshot.error ??
+                              StateError(FoundationText.loadFailed),
+                          category: UiErrorCategory.sectionLoad,
+                          scope: UiErrorScope.section,
+                        ),
                       ),
                       onAction: (action) async {
                         if (action.type == UiErrorActionType.retry ||
@@ -710,7 +717,7 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
               children: <Widget>[
                 _ShareTargetAction(
                   icon: CupertinoIcons.circle_grid_hex_fill,
-                  label: UITextConstants.shareTargetCircle,
+                  label: ContentText.shareTargetCircle,
                   color: AppColors.iosAccent(context),
                   onPressed: widget.onCircleTap,
                 ),
@@ -855,11 +862,13 @@ class _ContentShareSheetState extends State<ContentShareSheet> {
     if (completionError != null && mounted) {
       await AppActionErrorFeedback.show(
         context,
-        semantic: runtimeErrorSemantic(
-          context,
-          error: completionError,
-          category: UiErrorCategory.submit,
-          scope: UiErrorScope.dialog,
+        semantic: ensureRetryUiErrorSemantic(
+          runtimeErrorSemantic(
+            context,
+            error: completionError,
+            category: UiErrorCategory.submit,
+            scope: UiErrorScope.dialog,
+          ),
         ),
         onAction: (retryAction) async {
           if (retryAction.type == UiErrorActionType.retry ||

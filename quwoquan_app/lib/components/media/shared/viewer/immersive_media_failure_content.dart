@@ -32,12 +32,14 @@ class ImmersiveMediaFailureContent extends StatelessWidget {
     this.retrying = false,
     this.onRetry,
     this.retryKey,
+    this.actionLabel = SearchText.reload,
   });
 
   final MediaFailurePresentation presentation;
   final bool retrying;
   final VoidCallback? onRetry;
   final Key? retryKey;
+  final String actionLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -87,16 +89,16 @@ class ImmersiveMediaFailureContent extends StatelessWidget {
               disabledColor: AppColors.white.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
               onPressed: retrying ? null : onRetry,
-              child: Text(
-                retrying
-                    ? UITextConstants.mediaRetrying
-                    : UITextConstants.retry,
-                style: TextStyle(
-                  color: AppColors.white.withValues(alpha: retrying ? 0.72 : 1),
-                  fontSize: AppTypography.sm,
-                  fontWeight: AppTypography.semiBold,
-                ),
-              ),
+              child: retrying
+                  ? const CupertinoActivityIndicator(color: AppColors.white)
+                  : Text(
+                      actionLabel,
+                      style: TextStyle(
+                        color: AppColors.white,
+                        fontSize: AppTypography.sm,
+                        fontWeight: AppTypography.semiBold,
+                      ),
+                    ),
             ),
           ],
         ],

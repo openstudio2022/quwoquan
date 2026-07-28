@@ -2,7 +2,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock_identity.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 void main() {
   test('shared user without persona refs falls back to its user id', () {

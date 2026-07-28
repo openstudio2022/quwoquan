@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/application/content/create_location_coordinato
 import 'package:quwoquan_app/cloud/services/integration/location_query_contracts.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/platform/location/location_gateway.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_page.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/l10n/app_localizations_zh.dart';
@@ -153,9 +154,9 @@ void main() {
 
     final l10n = AppLocalizationsZh();
     expect(
-      find.text(l10n.locationAppPermissionRequired),
+      find.text(SearchText.recoveryEnablePermissionMessage),
       findsOneWidget,
-      reason: '永久拒绝时应展示 locationAppPermissionRequired 文案',
+      reason: '永久拒绝时应展示统一且可执行的权限恢复文案',
     );
     expect(
       find.widgetWithText(CupertinoButton, l10n.locationOpenSettings),
@@ -197,23 +198,23 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(UITextConstants.pageLoadFailedTitle),
+      find.text(SearchText.recoveryReloadLaterTitle),
       findsOneWidget,
       reason: '云端超时应展示统一页态标题',
     );
     expect(
-      find.text(UITextConstants.pageLoadFailedMessage),
+      find.text(SearchText.recoveryReloadLaterMessage),
       findsOneWidget,
       reason: 'pageLoad 类别 timeout 走统一页态说明文案',
     );
     expect(
-      find.widgetWithText(CupertinoButton, UITextConstants.tryAgain),
+      find.widgetWithText(CupertinoButton, SearchText.reload),
       findsOneWidget,
       reason: '非权限错误时应展示内联重试按钮（与错误文案同区）',
     );
   });
 
-  testWidgets('加载态展示 locationFetchingResult', (tester) async {
+  testWidgets('加载态使用统一占位并保留无障碍语义', (tester) async {
     final completer = Completer<LocationPoiListSlice>();
     final pendingReader = _PendingLocationQuery(completer);
     final coordinator = _coordinator(
@@ -236,11 +237,17 @@ void main() {
       ),
     );
     await tester.pump();
-    final l10n = AppLocalizationsZh();
+    expect(find.byType(AppRequestFeedback), findsOneWidget);
+    final feedbackSemantics = tester.widget<Semantics>(
+      find.descendant(
+        of: find.byType(AppRequestFeedback),
+        matching: find.byType(Semantics),
+      ),
+    );
     expect(
-      find.text(l10n.locationFetchingResult),
-      findsOneWidget,
-      reason: '加载时应展示 locationFetchingResult',
+      feedbackSemantics.properties.label,
+      FoundationText.loading,
+      reason: '占位加载不额外制造可见 spinner，但必须可被读屏识别',
     );
   });
 }

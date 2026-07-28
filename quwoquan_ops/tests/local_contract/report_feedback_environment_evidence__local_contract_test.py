@@ -181,14 +181,14 @@ class ReportFeedbackEnvironmentEvidenceTest(unittest.TestCase):
         ) as issue:
             actual = support.operator_session(
                 environment="gamma",
-                base_url="https://gamma-api.quwoquan-env.test:19000",
+                base_url="https://api.gamma.quwoquan.com:19000",
                 resolve_host="127.0.0.1",
                 hosted_token_env="unused",
             )
 
         self.assertIs(actual, session)
         issue.assert_called_once_with(
-            "https://gamma-api.quwoquan-env.test:19000",
+            "https://api.gamma.quwoquan.com:19000",
             environment="gamma",
             target_name="gamma-local",
             profile="content-report-operator",

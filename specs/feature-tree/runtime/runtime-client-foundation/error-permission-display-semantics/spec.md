@@ -21,6 +21,8 @@
 - 跨页面/沉浸入口失败态按 sourceAppearanceMode 保持来源外观。
 - 错误组件与宿主页面/模态的导航所有权。
 - 整页、区块、刷新、分页和动作失败的分层载体。
+- `AppUserRecoveryGroup` 的唯一用户文案与动作合同。
+- `AppRequestWaitController` 的 1.5/3/6 秒等待节奏与 `AppPageLoadArbiter` 的页面唯一裁决。
 
 ### Out of Scope
 
@@ -54,14 +56,14 @@
 
 - `AuthGateReason` + `AuthContinuation` 的统一用户语义。
 - `UiErrorSemantic` 与统一 resolver 契约。
-- 视频播放失败的内联覆盖层：可重试时只展示“再试一次”，不可重试时提供非按钮替代路径。
+- 视频播放失败的内联覆盖层：可恢复时只展示“重新加载”，不支持播放时展示“返回”并真实离开媒体区域。
 - 整页阻塞、区块阻塞、局部软失败、刷新失败、分页失败必须选择不同载体，不得用同一灰色卡片覆盖所有失败。
 - **约束**：必须使用设计系统 token（AppTypography、AppSpacing、AppColors）；文案必须来自 l10n。
 - **门禁**：页面不得直接消费裸 `RuntimeFailureKind` 或手写 “加载失败/请先登录/操作失败” 作为最终页态语义。
 - 沉浸式或跨页面入口的首屏错误必须保留来源 `sourceAppearanceMode`，错误页不继承错误的深色沉浸上下文。
 - 聊天语音发送失败仅 status bar（`chatVoicePendingRetry`），禁止 actionDialog 叠加。
 - 表单发送/提交/依赖失败在操作点附近使用 `AppFormErrorCard`，字段校验使用 `AppInlineFieldError`；二者必须复用同一透明圆形感叹号错误行，同一失败不得再叠加 Toast、dialog 或第二段弱提示。
-- 错误标题只说明状态；可点恢复动作不在说明或 `user_message` 中重复。可重试播放失败只展示一个“再试一次”CTA，不可重试播放失败不展示伪重试。
+- 错误标题只说明状态；页面名称和业务对象不得覆盖恢复组标题、说明或动作。
 
 <a id="req-006"></a>
 ### REQ-006 必须完成“error-permission-display-semantics”并获得明确的成功或失败结果，且失败时不得写入成功事实
@@ -94,6 +96,46 @@
 - **统一协调层**：`AppPermissionCoordinator` + `AppPermissionSurface`（`jit` / `page`）
 - gate 语义：权限被拒绝时说明“当前为什么不能继续”以及“继续所需动作”。
 - **统一 gate 载体**：权限态与登录门禁态共享 `AppInlineGateState` 结构，但图标、按钮和副说明由权限语义决定。
+
+<a id="req-012"></a>
+### REQ-012 页面错误只表达已确认事实，不猜测原因
+
+- 页面必须先根据 canonical error code 归入唯一用户恢复组，再由恢复组选择标题、说明与恢复动作；未知临时失败进入 `reloadLater`，不得推断为设备离线。
+- 只有系统已确认设备离线或无路由时才允许展示“网络未连接”；DNS、连接拒绝、TLS、客户端超时、5xx、可恢复响应异常和未知临时失败统一进入 `reloadLater`，同时在脱敏日志与遥测中保留原 canonical error code。
+- 取消或被新请求取代的操作静默吸收，不展示错误。
+- 成功空结果使用空态，不伪装成失败。
+- 已有缓存时保留内容，并使用非阻断“内容未更新”提示。
+- 整页错误只允许一个真实可执行的主操作；没有 handler 的动作不得显示。
+- 整页错误不得显示图标、插画、诊断折叠区或技术卡片；所有 build mode 的用户 widget 与 semantics tree 均不得出现 operation、canonical error code、route、requestId、traceId、端口、内部域名、证书路径或堆栈。
+- operation、canonical error code、route、surface、requestId 与 traceId 只进入脱敏日志与遥测，不得以 debug build 作为向用户界面暴露技术字段的授权边界。
+
+<a id="req-013"></a>
+### REQ-013 用户恢复组合同唯一且按可执行下一步聚类
+
+| 恢复组 | 固定标题 | 固定说明 | 固定动作 |
+|---|---|---|---|
+| `connectNetwork` | 网络未连接 | 打开手机的 Wi‑Fi 或移动数据后，重新加载。 | 重新加载 |
+| `reloadLater` | 暂时无法加载 | 趣我圈暂时没有响应，请稍后重新加载。 | 重新加载 |
+| `loginAgain` | 需要重新登录 | 登录后，可以继续刚才的操作。 | 重新登录 |
+| `enablePermission` | 需要开启权限 | 在设置中允许此权限后，返回继续。 | 去设置 |
+| `waitThenReload` | 请稍等一下 | 操作有点频繁，`{n}` 秒后可以重新加载。 | 倒计时后重新加载 |
+| `updateApp` | 需要更新应用 | 更新到最新版本后，可以继续使用。 | 立即更新 |
+| `noAccess` | 当前不能查看 | 你的账号暂时不能查看此内容。 | 返回 |
+| `contentGone` | 内容已不可用 | 内容已被删除或下架。 | 返回 |
+| `contentUnavailable` | 当前内容无法使用 | 返回后，可以继续查看其他内容。 | 返回 |
+
+- 不透明 404 只能进入 `contentUnavailable`；只有明确 tombstone、删除或下架事实才进入 `contentGone`。
+- `updateApp` 只有在最低版本不满足且官方更新入口已验证时可用；普通 404 不得猜测为版本问题。
+- 用户文案禁止出现 DNS、TLS、CA、证书、host、端口、HTTP、解析、连接拒绝、上游、契约、响应格式和堆栈。
+
+<a id="req-014"></a>
+### REQ-014 等待节奏与页面唯一裁决
+
+- 缓存查找最多占前 1.5 秒。3 秒只显示“还在加载，请稍候”。页面首屏和媒体准备最迟 6 秒进入成功、空态或错误终态。
+- 页面和区块使用共享低疲劳占位；视频保留同源封面，300ms 后显示紧凑进度，3 秒显示慢提示，6 秒进入恢复组终态。
+- cancel、supersede、返回与 dispose 必须终止旧 generation，旧结果不得回写。
+- 关键首屏无内容时只显示一个整页状态。有缓存时保留内容并显示一个非阻断提示。一个可选区块失败由区块呈现。两个以上失败由页面合并。
+- 多恢复组同时失败时只显示最高优先级：`updateApp → loginAgain → enablePermission → connectNetwork → waitThenReload → reloadLater → noAccess/contentUnavailable`；页面级状态可见时隐藏子区块 loading/error。
 
 ## 4. 契约引用
 
@@ -131,6 +173,31 @@
 - WHEN 用户阅读说明并选择继续。
 - THEN 文案解释当前阻断原因，继续动作只触发说明声明的下一步。
 
+<a id="gwt-009"></a>
+### GWT-009 页面加载错误不猜测原因并提供真实恢复动作
+
+- GIVEN 首页首屏、缓存回退、分页追加或页面切换期间发生 canonical failure。
+- WHEN 页面解析并呈现该失败。
+- THEN 标题、说明与唯一恢复动作均由 canonical error code 对应的用户恢复组决定，未知失败不得猜测为网络原因，技术诊断只在脱敏日志与遥测中保留原 canonical error code。
+- AND 取消操作不展示错误、成功空结果只展示空态、缓存回退不遮挡已有内容。
+
+<a id="gwt-013"></a>
+### GWT-013 同一恢复组在全 App 使用完全相同语义
+
+- GIVEN 首页、主页、搜索、聊天或视频书收到不同 canonical failure。
+- WHEN 这些失败映射到同一 `AppUserRecoveryGroup`。
+- THEN 标题、说明、动作与 copyKey 完全相同，页面不得按业务对象改写。
+- AND 任意 build mode 的用户 widget 与 semantics tree 均不包含错误图标、插画或 operation/errorCode/route/requestId/traceId。
+- AND 不透明 404 不显示“已删除”，普通连接失败不显示“网络未连接”。
+
+<a id="gwt-014"></a>
+### GWT-014 页面和视频在统一预算内进入唯一终态
+
+- GIVEN 页面关键首屏、两个可选区块或视频播放器正在取数和初始化。
+- WHEN 请求到达 300ms、3 秒或 6 秒节点，或被取消、替换、返回与释放。
+- THEN 只显示当前范围允许的一个等待或错误状态，6 秒内进入终态，旧 generation 不回写，媒体槽位被释放。
+- AND 两个以上区块失败时页面只显示一个最高优先级恢复组提示。
+
 ## 6. 依赖
 
 - 前置要求：[`runtime-client-foundation`](../spec.md) 的范围、要求与 SIT。
@@ -138,24 +205,6 @@
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
 
 ## 7. 开放事项
-
-<a id="open-001"></a>
-### OPEN-001 结构化错误页保持来源外观且使用统一载体
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：完成“error-permission-display-semantics”并获得明确的成功或失败结果。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
-
-<a id="open-002"></a>
-### OPEN-002 错误权限展示语义 验收证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺少能够证明“错误权限展示语义”已满足当前规格的真实测试证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-003"></a>
 ### OPEN-003 JIT 麦克风权限 — 无冗余 App modal

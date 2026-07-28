@@ -55,17 +55,30 @@ def _reliabletask_accepted_throughput(root: Path) -> dict[str, Any] | None:
             f"（status={report.get('acceptedContentThroughputStatus')}）"
         )
     return {
-        "measurementMode": "reliabletask_commercial_accepted",
+        "measurementMode": "reliabletask_commercial_accepted_end_to_end",
         "backend": str(report.get("backend") or ""),
         "publishedObjectCount": accepted,
         "requiredQuota": required_quota,
         "finalizedObjectCount": int(report.get("finalizedObjectCount") or 0),
+        "elapsedSeconds": round(
+            float(report.get("endToEndWallClockMilliseconds") or 0) / 1000,
+            3,
+        ),
+        "fleetWallClockSeconds": round(
+            float(report.get("fleetWallClockMilliseconds") or 0) / 1000,
+            3,
+        ),
         "objectsPerHour": float(
-            report.get("acceptedContentThroughputPerHour") or 0.0
+            report.get("endToEndAcceptedThroughputPerHour") or 0.0
+        ),
+        "fleetAcceptedObjectsPerHour": float(
+            report.get("fleetAcceptedThroughputPerHour") or 0.0
         ),
         "controlPlaneTasksPerHour": float(
-            report.get("controlPlaneTaskThroughputPerHour") or 0.0
+            report.get("fleetControlPlaneThroughputPerHour") or 0.0
         ),
+        "executionCreatedAt": str(report.get("executionCreatedAt") or ""),
+        "canonicalFinalizedAt": str(report.get("canonicalFinalizedAt") or ""),
         "finalizedWithinStageBudgetRate": float(
             report.get("finalizedWithinStageBudgetRate") or 0.0
         ),

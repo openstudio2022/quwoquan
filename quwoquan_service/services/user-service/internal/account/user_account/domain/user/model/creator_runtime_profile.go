@@ -14,7 +14,9 @@ type CreatorRuntimeProfile struct {
 	Bio                   string                 `json:"bio" bson:"bio"`
 	Slogan                string                 `json:"slogan" bson:"slogan"`
 	AvatarURL             string                 `json:"avatarUrl" bson:"avatarUrl"`
-	AvatarObjectKey       string                 `json:"avatarObjectKey" bson:"avatarObjectKey"`
+	AvatarAssetID         string                 `json:"avatarAssetId" bson:"avatarAssetId"`
+	AvatarVersion         int64                  `json:"avatarVersion" bson:"avatarVersion"`
+	AvatarPublicSliceKey  string                 `json:"avatarPublicSliceKey" bson:"avatarPublicSliceKey"`
 	AvatarSHA256          string                 `json:"avatarSha256" bson:"avatarSha256"`
 	CoverURL              string                 `json:"coverUrl" bson:"coverUrl"`
 	CoverObjectKey        string                 `json:"coverObjectKey" bson:"coverObjectKey"`

@@ -1,8 +1,7 @@
 /// 测试专用 content 聚合替身（原 lib/cloud/services/content 三个 mock part 迁入）。
 ///
-/// 生产组合根为 Remote-only；本文件只服务 local_contract / user_acceptance
-/// 测试装配（R15 物理隔离）。alpha 设备运行时由 runners/alpha 的
-/// AlphaContentRepository（contract fixture bundle 回放）承接，不共享本文件。
+/// 生产组合根为 Remote-only；本文件只服务 local_contract，不得进入 Patrol/UAT
+/// 装配（R15 物理隔离）。
 library;
 
 import 'package:quwoquan_app/cloud/content/models/content_behavior_batch_event_dto.dart';
@@ -23,8 +22,8 @@ import 'package:quwoquan_app/cloud/services/content/content_repository_contract.
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/cloud/services/content/footprint_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
 
+import '../repository_mock_reexports.dart';
 import 'content_mock_data.dart';
 // ── 发现区 wire 聚合与查找（原 lib discovery_wire_lookup.dart，仅测试消费）──
 
@@ -84,7 +83,7 @@ const String _mockContentDefaultAuthorAvatarUrl =
     'media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png';
 
 List<PostBaseDto>? _contractSeedPosts() {
-  final seed = alphaFixtureSeedReader.contentSeedSet();
+  final seed = objectScenarioSeedReader.contentSeedSet();
   final posts = seed?['posts'];
   final contractPosts = <PostBaseDto>[];
   if (posts is! List) {
@@ -279,7 +278,7 @@ class MockContentRepository
 
   /// 精品池成员（home_feed_core.featuredFeedPostIds，env-seed-first 唯一池 seed）。
   Set<String> _premiumPoolPostIds() {
-    final raw = alphaFixtureSeedReader.contentSeedSet(
+    final raw = objectScenarioSeedReader.contentSeedSet(
       'home_feed_core',
     )?['featuredFeedPostIds'];
     if (raw is! List) {
@@ -699,7 +698,7 @@ extension _MockContentPosts on MockContentRepository {
     if (trimmed.isEmpty) {
       return null;
     }
-    final raw = alphaFixtureSeedReader.contentSeedSet()?['posts'];
+    final raw = objectScenarioSeedReader.contentSeedSet()?['posts'];
     if (raw is! List) {
       return null;
     }
@@ -850,7 +849,7 @@ class MockFootprintRepository implements FootprintRepository {
     String? cursor,
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
   }) async {
-    final seed = alphaFixtureSeedReader.contentSeedSet('footprint_core');
+    final seed = objectScenarioSeedReader.contentSeedSet('footprint_core');
     final rawItems = seed?['items'];
     if (rawItems is! List) {
       return const CursorPage<FootprintEntry>(items: <FootprintEntry>[]);
@@ -887,7 +886,7 @@ class MockFootprintRepository implements FootprintRepository {
   }
 
   static Map<String, Map<String, dynamic>> _discoveryPostsById() {
-    final seed = alphaFixtureSeedReader.contentSeedSet();
+    final seed = objectScenarioSeedReader.contentSeedSet();
     final rawPosts = seed?['posts'];
     final byId = <String, Map<String, dynamic>>{};
     if (rawPosts is List) {

@@ -31,13 +31,37 @@ def _git_head() -> str:
 
 
 class ProdReleaseTransactionContractTest(unittest.TestCase):
+    def test_service_images_alone_are_not_marked_deployable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            artifact = root / "artifact"
+            descriptors = root / "image-descriptors"
+            artifact.mkdir()
+            descriptors.mkdir()
+            generator.write_json(
+                artifact / "manifest.json",
+                {
+                    "schema": "mainline-release-artifact",
+                    "requiredImages": [],
+                    "imageRepositories": {},
+                    "versions": {"imageVersion": "1.0.0"},
+                    "releaseFiles": {},
+                    "releaseFileDigests": {},
+                },
+            )
+            finalized = finalizer.finalize(artifact, descriptors)
+            self.assertEqual(finalized["status"], "component-ready")
+            self.assertNotIn("artifacts", finalized)
+
     def test_manifest_requires_every_digest_and_attestation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             artifact = root / "artifact"
             descriptors = root / "descriptors"
+            artifact_descriptors = root / "artifact-descriptors"
             artifact.mkdir()
             descriptors.mkdir()
+            artifact_descriptors.mkdir()
             image_version = "1.20260720.1"
             config_version = "v2026.07.20.1"
 
@@ -77,6 +101,31 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             }
             generator.write_json(artifact / "manifest.json", manifest)
 
+            artifact_schemas = {
+                "publicWeb": "qwq.public-web.release.v1",
+                "androidOfficialRelease": "qwq.android.official-release.v1",
+                "opsPortal": "qwq.ops_portal_package.v1",
+                "contractGraph": "qwq.contract-graph.v1",
+                "providerBindings": "compiled-external-provider-bindings",
+                "testEvidence": "qwq.three-layer-case-results.v1",
+            }
+            for artifact_id in finalizer.REQUIRED_RELEASE_ARTIFACTS:
+                relative = Path("artifacts") / f"{artifact_id}.json"
+                artifact_path = artifact / relative
+                generator.write_json(
+                    artifact_path,
+                    {"schema": artifact_schemas[artifact_id]},
+                )
+                generator.write_json(
+                    artifact_descriptors / f"{artifact_id}.json",
+                    {
+                        "artifactId": artifact_id,
+                        "schema": artifact_schemas[artifact_id],
+                        "path": relative.as_posix(),
+                        "sha256": generator.sha256_file(artifact_path),
+                    },
+                )
+
             for index, service in enumerate(generator.DEPLOYED_SERVICES, start=1):
                 repository = repositories[service]
                 digest = f"sha256:{index:064x}"
@@ -96,7 +145,15 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
                     },
                 )
 
-            finalized = finalizer.finalize(artifact, descriptors)
+            finalized = finalizer.finalize(
+                artifact,
+                descriptors,
+                artifact_descriptors,
+            )
+            self.assertEqual(
+                set(finalized["artifacts"]),
+                set(finalizer.REQUIRED_RELEASE_ARTIFACTS),
+            )
             generator.write_json(
                 artifact / "governance-receipt.json",
                 {

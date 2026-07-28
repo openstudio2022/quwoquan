@@ -439,7 +439,7 @@ func (s *SubAccountService) GetSubAccountProfileView(ctx context.Context, handle
 	}
 	if persona == nil {
 		if s.creatorProfiles != nil {
-			creator, found, creatorErr := s.creatorProfiles.FindActiveByIdentity(ctx, handleOrPersonaID)
+			creator, found, creatorErr := s.creatorProfiles.FindActiveByPublicIdentity(ctx, handleOrPersonaID)
 			if creatorErr != nil {
 				return nil, generated.AppErrorFromInternalError(
 					fmt.Sprintf("creator runtime profile read failed: %v", creatorErr),

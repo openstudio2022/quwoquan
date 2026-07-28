@@ -330,7 +330,7 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
           result: 'miss',
         );
     if (!mounted) return;
-    AppToast.show(context, UITextConstants.commentDeeplinkTargetMissing);
+    AppToast.show(context, ContentText.commentDeeplinkTargetMissing);
   }
 
   Future<void> _scrollToComment(String commentId, int index, int total) async {
@@ -446,14 +446,11 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
       children: [
         if (state.failure != null && state.comments.isNotEmpty)
           AppTransientErrorNotice(
-            semantic: const UiErrorSemantic(
+            semantic: AppUserRecoveryContract.semanticFor(
+              group: AppUserRecoveryGroup.reloadLater,
               category: UiErrorCategory.backgroundAction,
               scope: UiErrorScope.global,
-              title: UITextConstants.operationFailed,
-              message: UITextConstants.refreshFailedRetained,
-              copyKey: 'refreshFailedRetained',
               presentation: UiErrorPresentation.transientNotice,
-              tone: UiErrorTone.caution,
             ),
             margin: EdgeInsets.symmetric(
               horizontal: AppSpacing.md,
@@ -472,7 +469,7 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
     if (state.isLoading && state.comments.isEmpty) {
       return Padding(
         padding: EdgeInsets.all(AppSpacing.xl),
-        child: const Center(child: CupertinoActivityIndicator()),
+        child: AppRequestFeedback.section(),
       );
     }
     if (state.status == CommentListStatus.error && state.comments.isEmpty) {
@@ -483,26 +480,7 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
         scope: UiErrorScope.section,
       );
       return AppSectionErrorState(
-        semantic: UiErrorSemantic(
-          category: resolved.category,
-          scope: resolved.scope,
-          title: UITextConstants.commentLoadFailedTitle,
-          message: resolved.message,
-          secondaryMessage: resolved.secondaryMessage,
-          primaryAction:
-              resolved.primaryAction ??
-              const UiErrorAction(
-                type: UiErrorActionType.retry,
-                label: UITextConstants.tryAgain,
-              ),
-          secondaryAction: resolved.secondaryAction,
-          sourceCode: resolved.sourceCode,
-          failureKind: resolved.failureKind,
-          copyKey: 'commentLoadFailedTitle',
-          recoveryAction: resolved.recoveryAction,
-          presentation: UiErrorPresentation.emptyPage,
-          tone: resolved.tone,
-        ),
+        semantic: resolved,
         onAction: (_) async {
           await ref
               .read(commentProviderFamily(widget.postId).notifier)
@@ -515,7 +493,7 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
         padding: EdgeInsets.all(AppSpacing.xl),
         child: Center(
           child: Text(
-            UITextConstants.noComment,
+            ContentText.noComment,
             style: TextStyle(
               fontSize: AppTypography.sm,
               color: AppColorsFunctional.getColor(
@@ -564,24 +542,7 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
               presentation: UiErrorPresentation.appendFooter,
             );
             return AppListAppendErrorFooter(
-              semantic: UiErrorSemantic(
-                category: resolved.category,
-                scope: resolved.scope,
-                title: resolved.title,
-                message: UITextConstants.appendFailedRetry,
-                primaryAction:
-                    resolved.primaryAction ??
-                    const UiErrorAction(
-                      type: UiErrorActionType.retry,
-                      label: UITextConstants.tryAgain,
-                    ),
-                sourceCode: resolved.sourceCode,
-                failureKind: resolved.failureKind,
-                copyKey: 'appendFailedRetry',
-                recoveryAction: resolved.recoveryAction,
-                presentation: UiErrorPresentation.appendFooter,
-                tone: resolved.tone,
-              ),
+              semantic: resolved,
               onAction: (_) async {
                 await ref
                     .read(commentProviderFamily(widget.postId).notifier)
@@ -591,7 +552,7 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
           }
           return Padding(
             padding: EdgeInsets.all(AppSpacing.md),
-            child: const Center(child: CupertinoActivityIndicator()),
+            child: AppRequestFeedback.section(),
           );
         }
         final comment = state.comments[index];

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Environment release run result",
+  "type": "object",
+  "required": ["schema", "environment", "releaseId", "runId", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.environment_release_result"},
+    "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+    "releaseId": {"type": "string", "minLength": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "importRunId": {"type": "string", "minLength": 1},
+    "status": {"enum": ["completed", "dry_run", "prepared", "failed"]},
+    "homepageVerificationCasesRef": {"type": "string"},
+    "tagImportReportRef": {"type": "string"},
+    "creatorImportReportRef": {"type": "string"},
+    "contentImportReportRef": {"type": "string"},
+    "homepageImportReportRef": {"type": "string"},
+    "postApiVerificationRef": {"type": "string"},
+    "tagConsumerVerificationRef": {"type": "string"},
+    "homepageApiVerificationRef": {"type": "string"},
+    "baselineApiVerificationRef": {"type": "string"},
+    "failedStage": {"type": "string", "minLength": 1},
+    "error": {"type": "string", "minLength": 1},
+    "verificationChecksum": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

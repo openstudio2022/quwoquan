@@ -211,7 +211,6 @@ def prepare_reliable_publish_jobs(
         return ()
     from core.paths import execution_root
     from core.tree_integrity import tree_integrity_stats
-    from content.post import object_index as content_object
 
     root = execution_root(ctx.execution_id)
     jobs: list[QueueJob] = []
@@ -238,15 +237,25 @@ def prepare_reliable_publish_jobs(
         )
     if homepage_refs is not None:
         return tuple(jobs)
-    for ref in content_object.iter_content_refs(ctx.execution_id):
-        object_dir = content_object.content_object_dir(ctx.execution_id, ref)
+    from content.execution.post_review_closure import (
+        indexed_post_targets,
+        load_post_review_closure,
+    )
+
+    closure = load_post_review_closure(
+        ctx.execution_id,
+        expected_object_targets=indexed_post_targets(ctx.execution_id),
+    )
+    for verdict in closure.qualified:
+        ref = verdict.object_ref
+        object_dir = root / verdict.publish_ref
         attestation = object_dir / "5.review" / "attestation.json"
         if not attestation.is_file() or not (object_dir / "manifest.json").is_file():
-            continue
+            raise ValueError(f"qualified post evidence is incomplete: {ref}")
         review = read_json(attestation)
         if review.get("decision") != "approved":
-            continue
-        relative = object_dir.relative_to(root).as_posix()
+            raise ValueError(f"qualified post is no longer review-approved: {ref}")
+        relative = verdict.publish_ref
         carrier = relative.split("/", 2)[1] if relative.startswith("posts/") else ""
         if not carrier:
             raise ValueError(f"ReliableTask publish object path 无载体：{relative}")

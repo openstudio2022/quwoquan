@@ -2,8 +2,8 @@
 //
 // 消费 quwoquan_data publish 主线的 entities 目录树（page.md 三件套），构建
 // application.ImportedHomepageInput 投影：introductionMarkdown 承载 page.md 全文，
-// introductionAssets 把 manifest assets 的 CAS objectKey 经 media origin/CDN base
-// 映射为可访问 URL，role 归一为 metadata 闭集 cover/inline/related
+// introductionAssets 只通过 release MediaAsset authority 解析 public slice URL，
+// role 归一为 metadata 闭集 cover/inline/related
 // （services/entity-service/contracts/entity_homepage/homepage/projections/homepage_introduction_asset.yaml）。
 package homepageimport
 
@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	runtimemedia "quwoquan_service/runtime/media"
 	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration"
 )
 
@@ -103,10 +104,12 @@ func validatePublicHomepageSources(header entityHeader) error {
 
 type entityManifestAsset struct {
 	AssetID   string `json:"assetId"`
+	Kind      string `json:"kind"`
+	SHA256    string `json:"sha256"`
 	Caption   string `json:"caption"`
 	Role      string `json:"role"`
-	ObjectKey string `json:"objectKey"`
 	SourceRef string `json:"sourceRef"`
+	ObjectKey string `json:"objectKey"`
 }
 
 type entityHomepageManifest struct {
@@ -114,16 +117,12 @@ type entityHomepageManifest struct {
 	Assets      []entityManifestAsset `json:"assets"`
 }
 
-func assetURL(asset entityManifestAsset, mediaBaseURL string) string {
-	objectKey := strings.TrimSpace(asset.ObjectKey)
-	base := strings.TrimRight(strings.TrimSpace(mediaBaseURL), "/")
-	if base != "" && objectKey != "" {
-		return base + "/" + strings.TrimLeft(objectKey, "/")
-	}
-	return ""
-}
-
-func loadIntroductionAssets(entityRef string, entityDir string, mediaBaseURL string) ([]application.HomepageIntroductionAsset, string, error) {
+func loadIntroductionAssets(
+	entityRef string,
+	entityDir string,
+	releaseAssets map[string]runtimemedia.ReleaseMediaAsset,
+	mediaBases runtimemedia.MediaDeliveryBases,
+) ([]application.HomepageIntroductionAsset, string, error) {
 	rawManifest, err := os.ReadFile(filepath.Join(entityDir, "manifest.json"))
 	if err != nil {
 		return nil, "", fmt.Errorf("%s: read semantic manifest.json: %w", entityRef, err)
@@ -143,20 +142,39 @@ func loadIntroductionAssets(entityRef string, entityDir string, mediaBaseURL str
 		if assetID == "" {
 			return nil, "", fmt.Errorf("%s: manifest assets[%d] lacks assetId", entityRef, index)
 		}
+		if strings.TrimSpace(asset.ObjectKey) != "" {
+			return nil, "", fmt.Errorf(
+				"%s: manifest asset %s contains forbidden objectKey",
+				entityRef,
+				assetID,
+			)
+		}
 		role, ok := assetRoleToIntroductionRole[strings.TrimSpace(asset.Role)]
 		if !ok {
 			return nil, "", fmt.Errorf("%s: manifest asset %s has unsupported role %q", entityRef, assetID, asset.Role)
 		}
-		url := assetURL(asset, mediaBaseURL)
-		if url == "" {
-			return nil, "", fmt.Errorf("%s: manifest asset %s lacks canonical objectKey or environment media base URL", entityRef, assetID)
+		resolved, resolveErr := runtimemedia.ResolveReleaseMediaAsset(
+			releaseAssets,
+			mediaBases,
+			assetID,
+			asset.Kind,
+			asset.SHA256,
+			"entities/"+entityRef,
+		)
+		if resolveErr != nil {
+			return nil, "", fmt.Errorf(
+				"%s: manifest asset %s differs from release media authority: %w",
+				entityRef,
+				assetID,
+				resolveErr,
+			)
 		}
 		if role == "cover" {
 			coverCount++
 		}
 		assets = append(assets, application.HomepageIntroductionAsset{
 			AssetID: assetID,
-			URL:     url,
+			URL:     resolved.PublicURL,
 			Caption: strings.TrimSpace(asset.Caption),
 			Role:    role,
 		})
@@ -203,7 +221,8 @@ func frontmatterCoverAssetID(page []byte) (string, error) {
 func LoadHomepageProjections(
 	publishRoot string,
 	filter map[string]bool,
-	mediaBaseURL string,
+	releaseAssets map[string]runtimemedia.ReleaseMediaAsset,
+	mediaBases runtimemedia.MediaDeliveryBases,
 ) ([]application.ImportedHomepageInput, []string, error) {
 	entRoot := filepath.Join(publishRoot, "entities")
 	var inputs []application.ImportedHomepageInput
@@ -256,7 +275,12 @@ func LoadHomepageProjections(
 			title = segs[len(segs)-1]
 		}
 
-		assets, executionID, assetErr := loadIntroductionAssets(entityRef, filepath.Dir(path), mediaBaseURL)
+		assets, executionID, assetErr := loadIntroductionAssets(
+			entityRef,
+			filepath.Dir(path),
+			releaseAssets,
+			mediaBases,
+		)
 		if assetErr != nil {
 			return assetErr
 		}

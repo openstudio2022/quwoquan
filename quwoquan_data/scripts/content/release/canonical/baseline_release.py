@@ -1,4 +1,5 @@
 """Immutable empty baseline release for data-owned environment rollback."""
+
 from __future__ import annotations
 
 import shutil
@@ -6,15 +7,6 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from core.release_layout import (
-    attestation_root,
-    object_closure_digest,
-    payload_digest,
-    payload_file,
-    payload_root,
-)
-from core.schema import assert_valid
-from core.source_digest import current_source_digest
 from content.release.canonical.object_transaction_contract import (
     RELEASE_SCHEMA,
     ObjectTransactionError,
@@ -26,7 +18,15 @@ from content.release.canonical.object_transaction_contract import (
 )
 from content.release.canonical.release_attestation import ReleaseAttestation
 from content.release.model import ReleaseKind
-
+from core.release_layout import (
+    attestation_root,
+    object_closure_digest,
+    payload_digest,
+    payload_file,
+    payload_root,
+)
+from core.schema import assert_valid
+from core.source_digest import current_source_digest
 
 _EMPTY_DESIRED_REFS = {"creators": [], "entities": [], "posts": [], "tags": []}
 
@@ -75,25 +75,33 @@ def build_empty_baseline_release(
     try:
         payload = payload_root(staging)
         canonical_merkle = object_closure_digest(staging, create=True)
-        _write_json(
-            payload / "release.json",
-            {
-                "schema": RELEASE_SCHEMA,
-                "releaseId": release_id,
-                "releaseKind": ReleaseKind.EMPTY_BASELINE,
-                "canonicalMerkle": canonical_merkle,
-                "executionIds": [],
-                "sourceDigests": [source_digest.to_document()],
-            },
+        release_header = {
+            "schema": RELEASE_SCHEMA,
+            "releaseId": release_id,
+            "releaseKind": ReleaseKind.EMPTY_BASELINE,
+            "canonicalMerkle": canonical_merkle,
+            "executionIds": [],
+            "sourceDigests": [source_digest.to_document()],
+        }
+        desired_state = {
+            "schema": "quwoquan_data.release_desired_state",
+            "releaseId": release_id,
+            "desiredRefs": _EMPTY_DESIRED_REFS,
+        }
+        assert_valid(
+            release_header,
+            "release",
+            "release_header",
+            label=f"release_header:{release_id}",
         )
-        _write_json(
-            payload / "desired_state.json",
-            {
-                "schema": "quwoquan_data.release_desired_state",
-                "releaseId": release_id,
-                "desiredRefs": _EMPTY_DESIRED_REFS,
-            },
+        assert_valid(
+            desired_state,
+            "release",
+            "release_desired_state",
+            label=f"release_desired_state:{release_id}",
         )
+        _write_json(payload / "release.json", release_header)
+        _write_json(payload / "desired_state.json", desired_state)
         _write_json(
             payload / "index/objects.json",
             {"schema": "quwoquan_data.release_object_index", **_EMPTY_DESIRED_REFS},
@@ -112,8 +120,10 @@ def build_empty_baseline_release(
             {
                 "schema": "quwoquan_data.release_media_manifest",
                 "releaseId": release_id,
+                "sourceOwner": "qwq_data",
                 "assets": [],
                 "issues": [],
+                "counts": {"assets": 0, "issues": 0},
             },
         )
         release_attestation = ReleaseAttestation(

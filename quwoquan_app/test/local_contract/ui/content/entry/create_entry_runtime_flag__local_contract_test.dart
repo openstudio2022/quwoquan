@@ -37,38 +37,38 @@ void main() {
     await tester.pump();
 
     expect(
-      find.text(UITextConstants.createActionPostPhotoShort),
+      find.text(CreationText.createActionPostPhotoShort),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.createActionPhotoSubtitle),
+      find.text(CreationText.createActionPhotoSubtitle),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.createActionWriteLong), findsOneWidget);
-    expect(find.text(UITextConstants.createActionResumeDraft), findsNothing);
+    expect(find.text(CreationText.createActionWriteLong), findsOneWidget);
+    expect(find.text(CreationText.createActionResumeDraft), findsNothing);
     expect(
-      find.text(UITextConstants.createActionCameraSubtitle),
-      findsOneWidget,
-    );
-    expect(
-      find.text(UITextConstants.createActionPostVideoShort),
+      find.text(CreationText.createActionCameraSubtitle),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.createActionAddContactShort),
+      find.text(CreationText.createActionPostVideoShort),
+      findsOneWidget,
+    );
+    expect(
+      find.text(CreationText.createActionAddContactShort),
       findsOneWidget,
     );
     expect(find.text(ChatText.createActionCreateGroupShort), findsOneWidget);
     expect(
-      find.text(UITextConstants.createActionCreateCircleShort),
+      find.text(CreationText.createActionCreateCircleShort),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.createActionInterestMatchShort),
+      find.text(CreationText.createActionInterestMatchShort),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.createActionInterestMatchSubtitle),
+      find.text(CreationText.createActionInterestMatchSubtitle),
       findsOneWidget,
     );
     expect(find.text('发点滴'), findsNothing);

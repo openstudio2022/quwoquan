@@ -335,8 +335,8 @@ void main() {
 
       // 可关注：主页/卡片提供「关注/已关注」语义入口。
       expect(
-        _existsInTree($, find.text(UITextConstants.follow)) ||
-            _existsInTree($, find.text(UITextConstants.following)),
+        _existsInTree($, find.text(FoundationText.follow)) ||
+            _existsInTree($, find.text(FoundationText.following)),
         isTrue,
         reason: '主页/卡片应提供「关注/已关注」入口（可关注）',
       );

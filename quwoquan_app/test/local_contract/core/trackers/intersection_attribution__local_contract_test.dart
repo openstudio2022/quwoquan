@@ -3,6 +3,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 
+import '../../../support/cloud_services/behavior_repository_double.dart';
+
 /// SIT4 · 交集曝光 → 点击 → 转化漏斗归因（T2 模块交互 + T1 契约对齐）。
 ///
 /// 校验 ContentBehaviorTracker 上报的 BehaviorEvent 携带 behaviors.yaml 声明的

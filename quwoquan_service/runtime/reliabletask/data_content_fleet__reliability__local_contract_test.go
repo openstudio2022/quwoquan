@@ -624,6 +624,7 @@ func TestDataContentFleetRecordsAuthorStageWithoutCommercialAcceptance(t *testin
 	}
 	report := BuildDataContentFleetReport(
 		[]ReliableAsyncTask{stored},
+		time.Now().UTC().Add(-2*time.Hour),
 		time.Now().UTC().Add(-time.Hour),
 		time.Now().UTC(),
 		0,
@@ -726,6 +727,7 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 	blocked := BuildDataContentFleetReport(
 		[]ReliableAsyncTask{controlOnly},
 		started,
+		started,
 		completed,
 		0,
 		0,
@@ -733,7 +735,7 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 		0,
 	)
 	if blocked.CommercialAcceptedCount != 0 ||
-		blocked.AcceptedContentThroughputPerHour != 0 ||
+		blocked.EndToEndAcceptedThroughputPerHour != 0 ||
 		blocked.AcceptedContentThroughputStatus != "GATE_BLOCK_NO_COMMERCIAL_BATCH" {
 		t.Fatalf("control-plane completion was misreported as accepted: %#v", blocked)
 	}
@@ -750,6 +752,7 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 	fixtureOnly := BuildDataContentFleetReport(
 		[]ReliableAsyncTask{fixture},
 		started,
+		started,
 		completed,
 		0,
 		0,
@@ -758,7 +761,7 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 	)
 	if fixtureOnly.ObjectTransactionResultCount != 0 ||
 		fixtureOnly.CommercialAcceptedCount != 0 ||
-		fixtureOnly.AcceptedContentThroughputPerHour != 0 ||
+		fixtureOnly.EndToEndAcceptedThroughputPerHour != 0 ||
 		fixtureOnly.AcceptedContentThroughputStatus != "GATE_BLOCK_NO_COMMERCIAL_BATCH" {
 		t.Fatalf("contract fixture was misreported as commercial throughput: %#v", fixtureOnly)
 	}
@@ -785,6 +788,7 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 	measured := BuildDataContentFleetReport(
 		[]ReliableAsyncTask{accepted},
 		started,
+		started,
 		completed,
 		0,
 		0,
@@ -795,7 +799,7 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 		measured.PublishTaskCount != 1 ||
 		measured.ObjectTransactionResultCount != 1 ||
 		measured.CommercialAcceptedCount != 1 ||
-		measured.AcceptedContentThroughputPerHour <= 0 ||
+		measured.EndToEndAcceptedThroughputPerHour <= 0 ||
 		measured.AcceptedContentThroughputStatus != "MEASURED" {
 		t.Fatalf("accepted object throughput was not measured: %#v", measured)
 	}
@@ -828,6 +832,7 @@ func TestDataContentFleetReportRejectsUnboundOrMalformedCommercialEvidence(t *te
 	report := BuildDataContentFleetReport(
 		[]ReliableAsyncTask{task},
 		started,
+		started,
 		completed,
 		0,
 		0,
@@ -837,7 +842,7 @@ func TestDataContentFleetReportRejectsUnboundOrMalformedCommercialEvidence(t *te
 	if report.Passed ||
 		report.ObjectTransactionResultCount != 0 ||
 		report.CommercialAcceptedCount != 0 ||
-		report.AcceptedContentThroughputPerHour != 0 {
+		report.EndToEndAcceptedThroughputPerHour != 0 {
 		t.Fatalf("invalid commercial evidence was accepted: %#v", report)
 	}
 }

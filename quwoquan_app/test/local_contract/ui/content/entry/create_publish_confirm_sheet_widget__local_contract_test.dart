@@ -94,11 +94,11 @@ void main() {
   testWidgets('仅渲染四项核心设置：谁可以看 / 所在位置 / 关联主页 / 发布到圈子', (tester) async {
     await _openSheet(tester);
 
-    expect(find.text(UITextConstants.whoCanSeeLabel), findsOneWidget);
-    expect(find.text(UITextConstants.locationLabel), findsOneWidget);
-    expect(find.text(UITextConstants.attachHomepageTitle), findsOneWidget);
+    expect(find.text(CreationText.whoCanSeeLabel), findsOneWidget);
+    expect(find.text(CreationText.locationLabel), findsOneWidget);
+    expect(find.text(CreationText.attachHomepageTitle), findsOneWidget);
     expect(
-      find.text(UITextConstants.selectPublishCirclesLabel),
+      find.text(CreationText.selectPublishCirclesLabel),
       findsOneWidget,
     );
   });
@@ -112,12 +112,12 @@ void main() {
     expect(find.text('标签'), findsNothing);
     expect(find.text('关联地点和事物'), findsNothing);
     expect(
-      find.text(UITextConstants.publishAssistantSuggestTitle),
+      find.text(ObjectHomepageText.publishAssistantSuggestTitle),
       findsNothing,
     );
     expect(find.text('小趣使用'), findsNothing);
     expect(find.text('内容概览'), findsNothing);
-    expect(find.text(UITextConstants.circlePublishModeLabel), findsNothing);
+    expect(find.text(CreationText.circlePublishModeLabel), findsNothing);
     // 已删区块对应的 TestKey 控件也不应存在。
     expect(find.byKey(TestKeys.createPublishSummaryField), findsNothing);
     expect(find.byKey(TestKeys.createPublishTagInput), findsNothing);
@@ -157,7 +157,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(UITextConstants.createPublishCirclesUnavailable),
+      find.text(CreationText.createPublishCirclesUnavailable),
       findsOneWidget,
     );
     await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
@@ -177,12 +177,12 @@ void main() {
     await tester.tap(find.text('打开发布确认'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(UITextConstants.whoCanSeeLabel));
+    await tester.tap(find.text(CreationText.whoCanSeeLabel));
     await tester.pumpAndSettle();
     // 动作面板出现：选中「私密」选项后点确认。
-    await tester.tap(find.text(UITextConstants.visibilityPrivate).last);
+    await tester.tap(find.text(CreationText.visibilityPrivate).last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.confirm));
+    await tester.tap(find.text(FoundationText.confirm));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));

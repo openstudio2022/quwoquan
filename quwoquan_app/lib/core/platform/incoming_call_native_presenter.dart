@@ -47,7 +47,7 @@ final class CallKitIncomingNativePresenter
     final params = CallKitParams(
       id: envelope.callId,
       nameCaller: envelope.callerName,
-      appName: UITextConstants.settingsAppOfficialName,
+      appName: SettingsText.settingsAppOfficialName,
       handle: envelope.callerName,
       type: envelope.isVideo ? 1 : 0,
       duration: 30000,
@@ -62,8 +62,8 @@ final class CallKitIncomingNativePresenter
         isShowFullLockedScreen: fullScreenAllowed,
         isFullScreen: false,
         isImportant: true,
-        textAccept: UITextConstants.callAccept,
-        textDecline: UITextConstants.callReject,
+        textAccept: CallText.callAccept,
+        textDecline: CallText.callReject,
       ),
       ios: IOSParams(
         iconName: 'CallKitLogo',

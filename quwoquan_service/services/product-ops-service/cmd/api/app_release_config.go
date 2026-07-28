@@ -18,13 +18,17 @@ func buildAppReleaseService(cfg config) (*apprelease.Service, error) {
 		strings.TrimSpace(cfg.AppRelease.Android.APKURL) != "" {
 		androidUpdateURL = publicOrigin + "/download/android"
 	}
+	iosRecoveryURL := strings.TrimSpace(cfg.AppRelease.IOS.PWAURL)
+	if iosRecoveryURL == "" && publicOrigin != "" {
+		iosRecoveryURL = publicOrigin + "/download/ios"
+	}
 	return apprelease.NewService(apprelease.Catalog{
 		PublicOrigin: publicOrigin,
 		IOS: apprelease.Release{
 			LatestVersion: cfg.AppRelease.IOS.LatestVersion,
 			LatestBuild:   cfg.AppRelease.IOS.LatestBuild,
-			UpdateURL:     cfg.AppRelease.IOS.AppStoreURL,
-			RecoveryURL:   recoveryURL,
+			UpdateURL:     "",
+			RecoveryURL:   iosRecoveryURL,
 		},
 		Android: apprelease.Release{
 			LatestVersion:               cfg.AppRelease.Android.LatestVersion,
@@ -37,6 +41,7 @@ func buildAppReleaseService(cfg config) (*apprelease.Service, error) {
 			APKSHA256:                   cfg.AppRelease.Android.APKSHA256,
 			APKSizeBytes:                cfg.AppRelease.Android.APKSizeBytes,
 			APKSigningCertificateSHA256: cfg.AppRelease.Android.APKSigningCertificateSHA256,
+			MinAndroidVersion:           cfg.AppRelease.Android.MinAndroidVersion,
 		},
 	})
 }

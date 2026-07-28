@@ -4,11 +4,11 @@ extension _CreateMediaPickerPageStateHelpers on _CreateMediaPickerPageState {
   Widget _buildTopBar(Color fg, Color sub) {
     final selectedAlbum = _selectedAlbum;
     final albumName = selectedAlbum == null
-        ? UITextConstants.mediaPickerAlbumAll
+        ? MediaText.mediaPickerAlbumAll
         : _albumDisplayName(selectedAlbum);
     final title = switch (widget.entryMode) {
-      MediaPickerEntryMode.image => UITextConstants.mediaPickerPhotoTitle,
-      MediaPickerEntryMode.video => UITextConstants.mediaPickerVideoTitle,
+      MediaPickerEntryMode.image => MediaText.mediaPickerPhotoTitle,
+      MediaPickerEntryMode.video => MediaText.mediaPickerVideoTitle,
       MediaPickerEntryMode.mixed => albumName,
     };
     return SizedBox(
@@ -54,7 +54,7 @@ extension _CreateMediaPickerPageStateHelpers on _CreateMediaPickerPageState {
               ),
               onPressed: _openDrafts,
               child: Text(
-                UITextConstants.drafts,
+                CreationText.drafts,
                 style: TextStyle(
                   color: fg,
                   fontSize: AppTypography.base,
@@ -224,11 +224,11 @@ extension _CreateMediaPickerPageStateHelpers on _CreateMediaPickerPageState {
               SizedBox(height: AppSpacing.interGroupSm),
               Text(
                 switch (widget.entryMode) {
-                  MediaPickerEntryMode.video => UITextConstants.videoNoVideo,
+                  MediaPickerEntryMode.video => MediaText.videoNoVideo,
                   MediaPickerEntryMode.mixed =>
-                    UITextConstants.mediaPickerMixedAlbumEmpty,
+                    MediaText.mediaPickerMixedAlbumEmpty,
                   MediaPickerEntryMode.image =>
-                    UITextConstants.mediaPickerAlbumEmpty,
+                    MediaText.mediaPickerAlbumEmpty,
                 },
                 style: TextStyle(
                   color: primary,
@@ -240,11 +240,11 @@ extension _CreateMediaPickerPageStateHelpers on _CreateMediaPickerPageState {
               Text(
                 switch (widget.entryMode) {
                   MediaPickerEntryMode.video =>
-                    UITextConstants.mediaPickerVideoCameraEntry,
+                    MediaText.mediaPickerVideoCameraEntry,
                   MediaPickerEntryMode.mixed =>
-                    UITextConstants.mediaPickerMixedCameraEntry,
+                    MediaText.mediaPickerMixedCameraEntry,
                   MediaPickerEntryMode.image =>
-                    UITextConstants.mediaPickerCameraEntry,
+                    MediaText.mediaPickerCameraEntry,
                 },
                 style: TextStyle(color: secondary, fontSize: AppTypography.sm),
               ),

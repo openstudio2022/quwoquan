@@ -3,7 +3,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.baike_source_contract import HOMEPAGE_SOURCE_POLICY_REVISION, SOURCE_EXTRACTORS
+from core.baike_source_contract import (
+    HOMEPAGE_SOURCE_POLICY_REVISION,
+    SOURCE_EXTRACTORS,
+    SOURCE_URL_PATTERNS,
+)
 from core.data_issue import DataIssueCode, DataIssueError
 from content.homepage.homepage_text import homepage_base_draft_readiness
 from content.source.research.homepage_text_quality import (
@@ -19,6 +23,7 @@ from content.source.research.baike_com import (
     resolve_toutiao_baike_page,
 )
 from content.source.research.wiki_core import _wiki_title_for_entity, _wiki_url
+from content.source.research.source_registry import _travel_registry_url_fetchable
 from content.source.fetch_payload import fetch_source_payload
 from content.source.contracts import (
     HomepageAuthorityProvider,
@@ -118,6 +123,16 @@ class HomepageAuthorityDiscovery:
         return tuple(candidates)
 
 
+def _authority_provider_is_fetchable(provider: HomepageAuthorityProvider) -> bool:
+    """Read batch eligibility from the provider registry via the source contract."""
+
+    patterns = SOURCE_URL_PATTERNS.get(provider.value, ())
+    return any(
+        _travel_registry_url_fetchable(pattern.replace("*", "probe"))
+        for pattern in patterns
+    )
+
+
 def discover_homepage_authority(
     entity_id: str,
     *,
@@ -131,28 +146,32 @@ def discover_homepage_authority(
     if not canonical_name:
         raise ValueError("entity_id must be non-empty")
     aliases = tuple(str(alias).strip() for alias in entity_aliases if str(alias).strip())
-    resolved_title = (
-        str(wikipedia_title).strip()
-        if wikipedia_title is not None
-        else _wiki_title_for_entity(
-            "zh.wikipedia.org",
-            canonical_name,
-            entity_aliases=aliases,
+    resolved_title = ""
+    if _authority_provider_is_fetchable(HomepageAuthorityProvider.WIKIPEDIA):
+        resolved_title = (
+            str(wikipedia_title).strip()
+            if wikipedia_title is not None
+            else _wiki_title_for_entity(
+                "zh.wikipedia.org",
+                canonical_name,
+                entity_aliases=aliases,
+            )
         )
-    )
     baidu_baike = None
     toutiao_baike = None
     if include_external:
-        baidu_baike = resolve_baidu_baike_page(
-            canonical_name,
-            entity_aliases=aliases,
-            geo_context_terms=geo_context_terms,
-        )
-        toutiao_baike = resolve_toutiao_baike_page(
-            canonical_name,
-            entity_aliases=aliases,
-            geo_context_terms=geo_context_terms,
-        )
+        if _authority_provider_is_fetchable(HomepageAuthorityProvider.BAIDU_BAIKE):
+            baidu_baike = resolve_baidu_baike_page(
+                canonical_name,
+                entity_aliases=aliases,
+                geo_context_terms=geo_context_terms,
+            )
+        if _authority_provider_is_fetchable(HomepageAuthorityProvider.TOUTIAO_BAIKE):
+            toutiao_baike = resolve_toutiao_baike_page(
+                canonical_name,
+                entity_aliases=aliases,
+                geo_context_terms=geo_context_terms,
+            )
     return HomepageAuthorityDiscovery(
         wikipedia_title=resolved_title,
         wikipedia_url=_wiki_url("zh.wikipedia.org", resolved_title),
@@ -166,6 +185,9 @@ def qualify_homepage_authority_content(
     *,
     entity_aliases: tuple[str, ...] = (),
     geo_context_terms: tuple[str, ...] = (),
+    minimum_body_chars: int,
+    minimum_fact_count: int,
+    minimum_fact_chars: int,
 ) -> HomepageAuthorityQualification:
     """Prove that a primary encyclopedia candidate can seed a homepage draft."""
     wikipedia_discovery = discover_homepage_authority(
@@ -181,8 +203,6 @@ def qualify_homepage_authority_content(
 
     def attempt(candidates_to_check: tuple[HomepageAuthorityCandidate, ...]) -> QualifiedHomepageSource | None:
         nonlocal readable_candidate_seen
-        from content.source.research.source_registry import _travel_registry_url_fetchable
-
         for candidate in candidates_to_check:
             if not _travel_registry_url_fetchable(candidate.url):
                 continue
@@ -200,6 +220,9 @@ def qualify_homepage_authority_content(
                 str(payload.get("text") or ""),
                 entity_name=entity_id,
                 aliases=entity_aliases,
+                minimum_body_chars=minimum_body_chars,
+                minimum_fact_count=minimum_fact_count,
+                minimum_fact_chars=minimum_fact_chars,
             )
             quality_verdict = assess_homepage_text_quality(
                 str(payload.get("text") or ""),

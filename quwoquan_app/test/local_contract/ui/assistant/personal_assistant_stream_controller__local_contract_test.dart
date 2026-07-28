@@ -24,6 +24,7 @@ import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_co
 import 'package:quwoquan_app/ui/assistant/widgets/message/regenerate_options_popup.dart';
 import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../support/cloud_services/behavior_repository_double.dart';
 import '../../../support/cloud_services/assistant_facet_overrides.dart';
 import '../../../support/actor_queue_test_storage.dart';
 import '../../../support/fixtures/assistant/assistant_scenario_fixtures.dart';

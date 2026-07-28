@@ -28,7 +28,7 @@ func GateFollowFeedSource(source rtrec.CandidateSource, allowFollow bool) rtrec.
 func (s followFeedGateSource) Recall(ctx context.Context, req rtrec.RecallRequest) ([]rtrec.ContentCandidate, error) {
 	if req.FeedType == rtrec.FeedFollow && !s.allowFollow {
 		rtrec.RecordFeedGateFiltered("follow_feed", 1)
-		return nil, nil
+		return nil, rtrec.SkipRecall("source is not applicable to following feed")
 	}
 	return s.source.Recall(ctx, req)
 }

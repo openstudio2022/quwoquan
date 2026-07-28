@@ -11,7 +11,7 @@ import '../../../support/recording_cloud_operation_telemetry_sink.dart';
 
 const _gatewayUrl = String.fromEnvironment(
   'GAMMA_GATEWAY_URL',
-  defaultValue: 'https://gamma-api.quwoquan-env.test:19000',
+  defaultValue: '',
 );
 
 final class _GammaCircleClientContext implements CloudClientContextProvider {

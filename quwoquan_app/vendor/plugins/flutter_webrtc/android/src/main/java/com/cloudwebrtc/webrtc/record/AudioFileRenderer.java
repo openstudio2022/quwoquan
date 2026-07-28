@@ -20,9 +20,6 @@ class AudioFileRenderer implements SamplesReadyCallback {
     private static final String TAG = "AudioFileRenderer";
     private final HandlerThread audioThread;
     private final Handler audioThreadHandler;
-    private ByteBuffer[] audioInputBuffers;
-    private ByteBuffer[] audioOutputBuffers;
-
     private final MediaMuxer mediaMuxer;
     private MediaCodec.BufferInfo audioBufferInfo;
     private int audioTrackIndex = -1;
@@ -122,9 +119,6 @@ class AudioFileRenderer implements SamplesReadyCallback {
             int encoderStatus = audioEncoder.dequeueOutputBuffer(audioBufferInfo, 100); // 100ms timeout
             if (encoderStatus == MediaCodec.INFO_TRY_AGAIN_LATER) {
                 break;
-            } else if (encoderStatus == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED) {
-                audioOutputBuffers = audioEncoder.getOutputBuffers();
-                Log.w(TAG, "audio encoder output buffers changed");
             } else if (encoderStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                 MediaFormat newFormat = audioEncoder.getOutputFormat();
                 Log.i(TAG, "audio encoder output format changed: " + newFormat);
@@ -143,7 +137,7 @@ class AudioFileRenderer implements SamplesReadyCallback {
                 Log.e(TAG, "unexpected result from audio encoder.dequeueOutputBuffer: " + encoderStatus);
             } else { // encoderStatus >= 0
                 try {
-                    ByteBuffer encodedData = audioOutputBuffers[encoderStatus];
+                    ByteBuffer encodedData = audioEncoder.getOutputBuffer(encoderStatus);
                     if (encodedData == null) {
                         Log.e(TAG, "audio encoderOutputBuffer " + encoderStatus + " was null");
                         break;
@@ -196,7 +190,11 @@ class AudioFileRenderer implements SamplesReadyCallback {
                 // Get input buffer and write audio data
                 int bufferIndex = audioEncoder.dequeueInputBuffer(100); // 100ms timeout
                 if (bufferIndex >= 0) {
-                    ByteBuffer buffer = audioInputBuffers[bufferIndex];
+                    ByteBuffer buffer = audioEncoder.getInputBuffer(bufferIndex);
+                    if (buffer == null) {
+                        Log.e(TAG, "audio encoder input buffer " + bufferIndex + " was null");
+                        return;
+                    }
                     buffer.clear();
                     
                     byte[] data = audioSamples.getData();
@@ -244,8 +242,6 @@ class AudioFileRenderer implements SamplesReadyCallback {
             audioEncoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
             audioEncoder.start();
             
-            audioInputBuffers = audioEncoder.getInputBuffers();
-            audioOutputBuffers = audioEncoder.getOutputBuffers();
             audioEncoderStarted = true;
             
             Log.i(TAG, "Audio encoder initialized successfully");

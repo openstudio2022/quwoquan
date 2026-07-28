@@ -11,7 +11,7 @@ Future<ContentReportReason?> showContentReportReasonSheet(
 ) {
   return showAppActionSheet<ContentReportReason>(
     context,
-    title: UITextConstants.profileReportReasonTitle,
+    title: ContentText.profileReportReasonTitle,
     sections: <AppActionSheetSection<ContentReportReason>>[
       AppActionSheetSection<ContentReportReason>(
         items: <AppActionSheetItem<ContentReportReason>>[
@@ -28,12 +28,12 @@ Future<ContentReportReason?> showContentReportReasonSheet(
 
 String contentReportReasonLabel(ContentReportReason reason) {
   return switch (reason) {
-    ContentReportReason.spam => UITextConstants.profileReportReasonSpam,
+    ContentReportReason.spam => ContentText.profileReportReasonSpam,
     ContentReportReason.harassment =>
-      UITextConstants.profileReportReasonHarassment,
-    ContentReportReason.violence => UITextConstants.reportReasonViolence,
-    ContentReportReason.adult => UITextConstants.profileReportReasonPornography,
-    ContentReportReason.copyright => UITextConstants.reportReasonCopyright,
-    ContentReportReason.other => UITextConstants.profileReportReasonOther,
+      ContentText.profileReportReasonHarassment,
+    ContentReportReason.violence => ContentText.reportReasonViolence,
+    ContentReportReason.adult => ContentText.profileReportReasonPornography,
+    ContentReportReason.copyright => ContentText.reportReasonCopyright,
+    ContentReportReason.other => ContentText.profileReportReasonOther,
   };
 }

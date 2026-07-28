@@ -236,17 +236,30 @@ def _review_homepage_target(
     return [f"{name}: {item}" for item in bound]
 
 
-def run_homepage_independent_reviews(
-    ctx: ExecutionContext,
-    runtime_spec: Mapping[str, Any],
-) -> list[str]:
-    """Run read-only Cursor reviews at the runtime-policy concurrency."""
-    model_pair = execution_model_pair_for_execution(ctx.execution_id)
+def independent_reviewer_precondition_issues(execution_id: str) -> list[str]:
+    """审阅装配前置条件：属批次级配置事实，不可被过采候选池吸收。"""
+    model_pair = execution_model_pair_for_execution(execution_id)
     if (
         model_pair.reviewer.model_id == model_pair.author.model_id
         or model_pair.reviewer.family is model_pair.author.family
     ):
         return ["independent reviewer model family must differ from author model family"]
+    return []
+
+
+def run_homepage_independent_reviews(
+    ctx: ExecutionContext,
+    runtime_spec: Mapping[str, Any],
+) -> list[str]:
+    """Run read-only Cursor reviews at the runtime-policy concurrency.
+
+    返回的是逐对象审阅问题；批次级前置条件由
+    ``independent_reviewer_precondition_issues`` 单独判定。
+    """
+    precondition = independent_reviewer_precondition_issues(ctx.execution_id)
+    if precondition:
+        return precondition
+    model_pair = execution_model_pair_for_execution(ctx.execution_id)
     scope = runtime_spec.get("scope")
     raw_targets = scope.get("coverageTargets") if isinstance(scope, Mapping) else []
     targets = [target for target in raw_targets or [] if isinstance(target, Mapping)]
@@ -267,4 +280,7 @@ def run_homepage_independent_reviews(
         return [issue for future in futures for issue in future.result()]
 
 
-__all__ = ["run_homepage_independent_reviews"]
+__all__ = [
+    "independent_reviewer_precondition_issues",
+    "run_homepage_independent_reviews",
+]

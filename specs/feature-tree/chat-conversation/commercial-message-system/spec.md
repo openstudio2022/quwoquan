@@ -95,7 +95,7 @@
 
 - MessageHome、ContactHome、GroupHome、IntersectionSummary、AppMessage 均有 metadata 真相源。
 - App RemoteRepository 只使用 codegen path/operation/surface/header。
-- MockRepository 仅作为 alpha/test fixture，并与 Remote 返回同结构 DTO。
+- 对象级 typed double 仅存在测试树，并与 Remote 返回同结构 DTO；不得进入任何环境 App。
 - 商用服务必须使用真实持久化存储，不得以 mock 或内存仓储替代消息、会话与成员事实。
 
 <a id="req-007"></a>
@@ -179,7 +179,7 @@
 - WHEN 参与者发起“metadata/codegen/Remote DTO 与商用消息体系一致”对应动作。
 - THEN MessageHome、ContactHome、GroupHome、IntersectionSummary、AppMessage 均有 metadata 真相源。
 - THEN App RemoteRepository 只使用 codegen path/operation/surface/header。
-- THEN MockRepository 仅作为 alpha/test fixture，并与 Remote 返回同结构 DTO。
+- THEN 对象级 typed double 仅存在测试树，并与 Remote 返回同结构 DTO；四环境 App 只装配 Remote。
 - THEN 消息、会话与成员事实写入真实持久化存储，重启后仍可回读，且商用路径无 mock/内存仓储。
 
 ## 8. 开放事项
@@ -238,7 +238,7 @@
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：MessageHome、ContactHome、GroupHome、IntersectionSummary、AppMessage 均有 metadata 真相源。
 - 完成判定：MessageHome、ContactHome、GroupHome、IntersectionSummary、AppMessage 均有 metadata 真相源。
 - App RemoteRepository 只使用 codegen path/operation/surface/header。
-- MockRepository 仅作为 alpha/test fixture，并与 Remote 返回同结构 DTO。
+- 对象级 typed double 仅存在测试树，并与 Remote 返回同结构 DTO；环境 artifact 不可达。
 
 <a id="open-007"></a>
 ### OPEN-007 业务事件到设备通知的完整投递链

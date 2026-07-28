@@ -8,6 +8,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
+import '../../../../support/cloud_services/behavior_repository_double.dart';
 import '../../../../support/cloud_services/content/alpha_intersection_repository.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -93,24 +94,24 @@ void main() {
     expect(
       find.widgetWithText(
         ProfileIosActionButton,
-        UITextConstants.homepageWishlistAction,
+        ObjectHomepageText.homepageWishlistAction,
       ),
       findsOneWidget,
     );
     expect(
-      find.widgetWithText(ProfileIosActionButton, UITextConstants.follow),
+      find.widgetWithText(ProfileIosActionButton, FoundationText.follow),
       findsNothing,
     );
 
     await tester.tap(
       find.widgetWithText(
         ProfileIosActionButton,
-        UITextConstants.homepageWishlistAction,
+        ObjectHomepageText.homepageWishlistAction,
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.homepageWishlistedAction), findsOneWidget);
+    expect(find.text(ObjectHomepageText.homepageWishlistedAction), findsOneWidget);
     expect(reporter.events, hasLength(1));
     expect(reporter.events.single.action, BehaviorAction.wishlistAdd);
     expect(reporter.events.single.objectId, _homepageId);
@@ -123,12 +124,12 @@ void main() {
     await tester.tap(
       find.widgetWithText(
         ProfileIosActionButton,
-        UITextConstants.homepageWishlistedAction,
+        ObjectHomepageText.homepageWishlistedAction,
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.homepageWishlistAction), findsOneWidget);
+    expect(find.text(ObjectHomepageText.homepageWishlistAction), findsOneWidget);
     expect(reporter.events, hasLength(2));
     expect(reporter.events.last.action, BehaviorAction.wishlistRemove);
   });
@@ -179,7 +180,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.homepageWishlistedAction), findsOneWidget);
+    expect(find.text(ObjectHomepageText.homepageWishlistedAction), findsOneWidget);
   });
 
   testWidgets('非地点主页不读取想去状态并保留关注语义', (tester) async {
@@ -226,13 +227,13 @@ void main() {
 
     expect(reader.calls, 0);
     expect(
-      find.widgetWithText(ProfileIosActionButton, UITextConstants.follow),
+      find.widgetWithText(ProfileIosActionButton, FoundationText.follow),
       findsOneWidget,
     );
     expect(
       find.widgetWithText(
         ProfileIosActionButton,
-        UITextConstants.homepageWishlistAction,
+        ObjectHomepageText.homepageWishlistAction,
       ),
       findsNothing,
     );

@@ -161,26 +161,39 @@ void main() {
   });
 
   testWidgets('任务区错误态可见', (tester) async {
+    var taskLoadCount = 0;
     await tester.pumpWidget(
       _buildApp(
         AlphaAssistantFacets(),
         visitRecorder: _CapturingVisitRecorder(),
         extraOverrides: <Override>[
-          assistantScheduleTasksProvider.overrideWith(
-            (ref) => Future<List<AssistantUserTaskView>>.error(
-              StateError('tasks unavailable'),
-            ),
-          ),
+          assistantScheduleTasksProvider.overrideWith((ref) {
+            taskLoadCount += 1;
+            if (taskLoadCount == 1) {
+              return Future<List<AssistantUserTaskView>>.error(
+                StateError('tasks unavailable'),
+              );
+            }
+            return Future<List<AssistantUserTaskView>>.value(
+              const <AssistantUserTaskView>[],
+            );
+          }),
         ],
       ),
     );
     await tester.pumpAndSettle();
 
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsWidgets);
+    expect(find.text(SearchText.reload), findsWidgets);
+
+    await tester.tap(find.text(SearchText.reload).first);
+    await tester.pumpAndSettle();
+
+    expect(taskLoadCount, 2);
     expect(
-      find.text(UITextConstants.sectionLoadFailedTitleDefault),
-      findsWidgets,
+      find.text(AssistantText.assistantSkillCenterNoOngoingTasks),
+      findsOneWidget,
     );
-    expect(find.text(UITextConstants.tryAgain), findsWidgets);
   });
 
   testWidgets('技能切换失败可见且状态按远端值回弹', (tester) async {
@@ -207,7 +220,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(CupertinoAlertDialog), findsOneWidget);
-    expect(find.text(UITextConstants.submitNotCompleted), findsOneWidget);
+    expect(find.text(ContentText.submitNotCompleted), findsOneWidget);
     expect(
       (await repository.listSkillSubscriptions()).single.status,
       SkillSubscriptionStatus.active,
@@ -244,7 +257,7 @@ void main() {
     await tester.tap(sessionsToggle);
     await tester.pump();
     expect(find.text('真实会话 4'), findsOneWidget);
-    expect(find.text(UITextConstants.collapse), findsOneWidget);
+    expect(find.text(CommunityText.collapse), findsOneWidget);
 
     await tester.tap(sessionsToggle);
     await tester.pump();

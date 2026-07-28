@@ -3,7 +3,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 void main() {
@@ -28,7 +28,7 @@ void main() {
         'avatarUrl',
         'imageUrls',
       };
-      final rawPosts = alphaFixtureSeedReader.contentSeedSet()?['posts'];
+      final rawPosts = objectScenarioSeedReader.contentSeedSet()?['posts'];
       expect(rawPosts, isA<List>());
       final source = (rawPosts! as List)
           .whereType<Map>()

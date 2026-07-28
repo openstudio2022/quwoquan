@@ -57,13 +57,13 @@ class _ImageEditorCurvePanelState extends State<ImageEditorCurvePanel> {
   String _channelLabel(ImageEditorCurveChannel channel) {
     switch (channel) {
       case ImageEditorCurveChannel.rgb:
-        return UITextConstants.imageEditorProCurveChannelRgb;
+        return MediaText.imageEditorProCurveChannelRgb;
       case ImageEditorCurveChannel.red:
-        return UITextConstants.imageEditorProChannelRed;
+        return MediaText.imageEditorProChannelRed;
       case ImageEditorCurveChannel.green:
-        return UITextConstants.imageEditorProChannelGreen;
+        return MediaText.imageEditorProChannelGreen;
       case ImageEditorCurveChannel.blue:
-        return UITextConstants.imageEditorProChannelBlue;
+        return MediaText.imageEditorProChannelBlue;
     }
   }
 

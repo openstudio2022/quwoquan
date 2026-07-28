@@ -6,6 +6,7 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -22,6 +23,18 @@ from content.release.model import DeploymentEnvironment  # noqa: E402
 
 
 RELEASE_ID = "release-post-api-a"
+VIDEO_ATTRIBUTION = {
+    "isOriginal": False,
+    "originalCreatorName": "测试作者",
+    "platform": "Wikimedia Commons",
+    "sourcePostUrl": "https://commons.wikimedia.org/wiki/File:test.webm",
+    "attributionText": "测试作者 — CC BY-SA 4.0",
+    "rightsBasis": "CC BY-SA 4.0",
+    "commercialAuthorizationStatus": "verified",
+    "publicationAdmission": "commercial_release",
+    "watermarkStatus": "absent",
+    "audioRightsStatus": "no_audio",
+}
 POSTS = (
     {
         "postRef": "article/test-article-a",
@@ -46,6 +59,7 @@ POSTS = (
         "mediaUrls": ["https://media.test/video-a.mp4"],
         "coverUrl": "https://media.test/video-a.jpg",
         "videoUrl": "https://media.test/video-a.mp4",
+        "sourceAttribution": VIDEO_ATTRIBUTION,
     },
 )
 CREATORS = tuple(
@@ -87,6 +101,17 @@ def _write_release(root: Path) -> Path:
                 "subAccountId": creator["subAccountId"],
                 "displayName": creator["displayName"],
             },
+        )
+    for post in POSTS:
+        manifest = {"contentType": post["contentType"]}
+        if post["contentType"] == "video":
+            manifest["sourceAttribution"] = VIDEO_ATTRIBUTION
+        write_json(
+            release
+            / "payload/objects/posts"
+            / post["postRef"]
+            / "manifest.json",
+            manifest,
         )
     return release
 
@@ -134,6 +159,7 @@ def _write_creator_import_report(root: Path, *, environment: DeploymentEnvironme
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
             "mode": "sync",
+            "projectionDatabase": "quwoquan_user",
             "counts": {
                 "creatorsLoaded": len(CREATORS),
                 "usersUpserted": len(CREATORS),
@@ -142,6 +168,7 @@ def _write_creator_import_report(root: Path, *, environment: DeploymentEnvironme
                 "creatorsRemoved": 0,
             },
             "authorIds": [row["authorId"] for row in CREATORS],
+            "verifiedCreatorIds": [row["creatorRef"] for row in CREATORS],
             "generatedAt": "2026-07-23T00:00:00Z",
         },
     )
@@ -216,6 +243,23 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
     _write_pagination_contract(pagination)
     monkeypatch.setattr(subject, "OUTPUT_ROOT", tmp_path)
     monkeypatch.setattr(subject, "SERVICE_PAGINATION_CONTRACT_PATH", pagination)
+
+    def _get_bytes(_client, url: str, **_kwargs):
+        if url.endswith(".mp4"):
+            return SimpleNamespace(
+                status=206,
+                content_type="video/mp4",
+                content_range="bytes 0-15/128",
+                body=b"\x00\x00\x00\x18ftypisomtest",
+            )
+        return SimpleNamespace(
+            status=206,
+            content_type="image/jpeg",
+            content_range="bytes 0-3/64",
+            body=b"\xff\xd8\xff\xe0",
+        )
+
+    monkeypatch.setattr(subject.PublicApiClient, "get_bytes", _get_bytes)
     server = HTTPServer(("127.0.0.1", 0), _PostApiHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -246,6 +290,8 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
         "video",
     }
     assert {row["authorProfileStatus"] for row in payload["posts"]} == {200}
+    assert {row["sourceAttributionReady"] for row in payload["posts"]} == {True}
+    assert sum(row["mediaProbeCount"] for row in payload["posts"]) == 3
 
 
 def test_post_api_verification__rejects_incomplete_releaseimport_binding__contract__local_contract(
@@ -274,4 +320,38 @@ def test_post_api_verification__rejects_incomplete_releaseimport_binding__contra
             output_path=tmp_path / "env/beta/runs/data-release" / RELEASE_ID / "consumer-api-002/post-api-verification.json",
             api_base_url="http://127.0.0.1:1",
             insecure_tls=False,
+        )
+
+
+def test_video_media_probe_requires_range_and_playable_header() -> None:
+    client = SimpleNamespace(
+        get_bytes=lambda _url: SimpleNamespace(
+            status=200,
+            content_type="video/mp4",
+            content_range="",
+            body=b"not-a-video",
+        )
+    )
+
+    with pytest.raises(subject.PostApiVerificationError, match="byte ranges"):
+        subject._verify_binary_media(
+            client,
+            "https://media.test/video.mp4",
+            expected_kind="video",
+        )
+
+
+def test_video_source_attribution_drift_blocks_consumer_verification() -> None:
+    case = subject.PostApiCase(
+        post_ref="video/test/1",
+        post_id="post-video",
+        content_type=subject.ContentType.VIDEO,
+        author_id="author-video",
+        source_attribution=VIDEO_ATTRIBUTION,
+    )
+
+    with pytest.raises(subject.PostApiVerificationError, match="sourceAttribution drift"):
+        subject._verify_source_attribution(
+            {"sourceAttribution": {**VIDEO_ATTRIBUTION, "rightsBasis": "unknown"}},
+            case,
         )

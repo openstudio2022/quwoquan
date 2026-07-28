@@ -3,10 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/components/pageflip/types.dart';
 
-/// StPageFlip native soft render: page state `position` is converted with the
-/// active direction. In portrait BACK, this maps the left-side previous page
-/// onto the visible current page across the spine at the current page's left
-/// edge. Do not force BACK through the forward projection.
+/// StPageFlip soft render converts the page state with the frame's visual
+/// geometry direction. Portrait BACK replays the forward geometry across the
+/// spine, so callers pass that projected direction while keeping BACK as the
+/// semantic turn direction.
 StPageFlipDirection softLayerViewportDirection(StPageFlipDirection direction) {
   return direction;
 }
@@ -113,6 +113,47 @@ Rect? polygonBounds(List<Offset> polygon) {
     bottom = math.max(bottom, point.dy);
   }
   return Rect.fromLTRB(left, top, right, bottom);
+}
+
+/// Converts the leaf-frame's positive recto/verso intervals into the local
+/// horizontal span of the one StPageFlip soft sheet. The outer clip polygon is
+/// already the native moving-sheet geometry; this only assigns its material
+/// faces, so rendering and diagnostics share one coordinate source.
+@immutable
+class ArticlePageBackwardSheetLocalSlices {
+  const ArticlePageBackwardSheetLocalSlices({
+    required this.rectoLeft,
+    required this.rectoWidth,
+    required this.versoLeft,
+    required this.versoWidth,
+  });
+
+  final double rectoLeft;
+  final double rectoWidth;
+  final double versoLeft;
+  final double versoWidth;
+}
+
+ArticlePageBackwardSheetLocalSlices?
+resolveArticlePageBackwardSheetLocalSlices({
+  required List<Offset> sheetLocalPolygon,
+  required double coveredWidth,
+  required double rectoWidth,
+}) {
+  final sheetBounds = polygonBounds(sheetLocalPolygon);
+  if (sheetBounds == null ||
+      sheetBounds.width <= 0.001 ||
+      coveredWidth <= 0.001) {
+    return null;
+  }
+  final rectoFraction = (rectoWidth / coveredWidth).clamp(0.0, 1.0);
+  final visibleRectoWidth = sheetBounds.width * rectoFraction;
+  return ArticlePageBackwardSheetLocalSlices(
+    rectoLeft: sheetBounds.left,
+    rectoWidth: visibleRectoWidth,
+    versoLeft: sheetBounds.left + visibleRectoWidth,
+    versoWidth: math.max(0.0, sheetBounds.width - visibleRectoWidth),
+  );
 }
 
 Offset transformSoftLayerLocalPoint({

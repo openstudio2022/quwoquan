@@ -12,8 +12,8 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
       return AppRequestFeedback.page(
         key: const ValueKey<String>('global_search_primary_progress'),
         showSlowHint: state.isSlow,
-        loadingLabel: UITextConstants.loading,
-        slowLabel: UITextConstants.searchWaitSlow,
+        loadingLabel: FoundationText.loading,
+        slowLabel: SearchText.searchWaitSlow,
       );
     }
     if (state.failure case final failure?
@@ -47,7 +47,7 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.containerLg),
           child: Text(
-            UITextConstants.searchEmptyResult,
+            SearchText.searchEmptyResult,
             style: TextStyle(
               fontSize: AppTypography.iosBody,
               color: fgSecondary,
@@ -65,17 +65,11 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
       children: <Widget>[
         if (state.isPartial)
           AppTransientErrorNotice(
-            semantic: const UiErrorSemantic(
-              category: UiErrorCategory.sectionLoad,
+            semantic: AppUserRecoveryContract.semanticFor(
+              group: AppUserRecoveryGroup.reloadLater,
+              category: UiErrorCategory.backgroundAction,
               scope: UiErrorScope.section,
-              title: UITextConstants.searchPartialResult,
-              message: UITextConstants.searchPartialResult,
               presentation: UiErrorPresentation.transientNotice,
-              tone: UiErrorTone.caution,
-              primaryAction: UiErrorAction(
-                type: UiErrorActionType.retry,
-                label: UITextConstants.tryAgain,
-              ),
               sourceRouteId: AppRoutePaths.globalSearch,
               sourceSurfaceId: 'globalSearch',
             ),
@@ -102,8 +96,8 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
           AppRequestFeedback.section(
             key: const ValueKey<String>('global_search_network_progress'),
             showSlowHint: state.isSlow,
-            loadingLabel: UITextConstants.loading,
-            slowLabel: UITextConstants.searchWaitSlow,
+            loadingLabel: FoundationText.loading,
+            slowLabel: SearchText.searchWaitSlow,
           ),
       ],
     );
@@ -302,7 +296,7 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
                 ? circle.description!.trim()
                 : (circle.subCategory?.trim().isNotEmpty == true
                       ? circle.subCategory!.trim()
-                      : UITextConstants.searchCategoryCircle),
+                      : SearchText.searchCategoryCircle),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -332,7 +326,7 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
           subtitle: Text(
             (location.address ?? '').trim().isNotEmpty
                 ? location.address!.trim()
-                : UITextConstants.searchFollowedLocation,
+                : SearchText.searchFollowedLocation,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -362,7 +356,7 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
           subtitle: Text(
             person.headline?.trim().isNotEmpty == true
                 ? person.headline!.trim()
-                : UITextConstants.searchFollowed,
+                : SearchText.searchFollowed,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(

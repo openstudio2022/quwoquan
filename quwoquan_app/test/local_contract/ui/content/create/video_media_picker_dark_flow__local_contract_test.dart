@@ -82,7 +82,7 @@ void main() {
       expect(actions, hasLength(1));
       expect(actions.single.action, CreateMediaPickerBottomAction.nextStep);
       expect(actions.single.label, '下一步(1)');
-      expect(actions.single.label, isNot(UITextConstants.mediaPickerEditImage));
+      expect(actions.single.label, isNot(MediaText.mediaPickerEditImage));
     });
 
     testWidgets('视频选择器以宫格展示拍视频与全部视频，并过滤图片', (tester) async {
@@ -105,7 +105,7 @@ void main() {
       );
       await _pumpMediaPickerFrame(tester);
 
-      expect(find.text(UITextConstants.mediaPickerVideoTitle), findsOneWidget);
+      expect(find.text(MediaText.mediaPickerVideoTitle), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('media-picker-video-camera-hero')),
         findsNothing,
@@ -124,14 +124,14 @@ void main() {
       expect(cameraDecoration.color, isNot(AppColors.black));
       expect(cameraDecoration.border, isNotNull);
       expect(
-        find.text(UITextConstants.mediaPickerVideoCameraEntry),
+        find.text(MediaText.mediaPickerVideoCameraEntry),
         findsOneWidget,
       );
       expect(
         find.byKey(const ValueKey<String>('media-picker-one-tap-movie-tile')),
         findsNothing,
       );
-      expect(find.text(UITextConstants.mediaPickerOneTapMovie), findsNothing);
+      expect(find.text(MediaText.mediaPickerOneTapMovie), findsNothing);
       expect(
         find.byKey(const ValueKey<String>('media-picker-asset-v1')),
         findsOneWidget,

@@ -42,7 +42,9 @@
 ### REQ-001 runtime recommendation 引擎能力 SIT
 
 - HotPath 处理 impression/engagement/dislike 后，SessionState 中 exposed/negative/tagWeights 与实时兴趣可被读取。
-- Engine 7 阶段管线在召回源超时、模型 scorer 失败、候选重复、冷启动等场景下仍返回稳定结果或明确空态。
+- Engine 7 阶段管线必须区分召回源 skipped/not-applicable、succeeded-empty 与 failed；部分源失败且仍有候选可降级下发，全部失败或部分失败后零候选必须产生 typed failure。
+- scorer 错误或对非空输入返回空输出不得记为成功；CascadeScorer 只有在 fallback scorer 产生有效输出时才可标记 degraded success。
+- discovery/recommend 首刷必须非空或返回 typed failure；following 的健康零结果与有效 continuation 自然结束是唯一允许的推荐成功空态。
 - RuleScorer 消费用户特征、交集信号、搜索意图、负反馈惩罚、UCB1 探索和 MMR 多样性。
 - `SessionCache`、`BufferedHotPath` 与 Redis key hash-tag 必须在 pipeline 和 parallel 路径保持同一会话状态语义。
 
@@ -50,6 +52,7 @@
 ### REQ-002 CascadeScorer 保证 ML 不可用时降级到 RuleScorer
 
 - CascadeScorer 保证 ML 不可用时降级到 RuleScorer。
+- Primary scorer 的 `scorer_unavailable` / `scorer_empty_output` 必须保留为本次 degraded terminal 的低基数 failure stage；RuleScorer fallback 同样错误或空输出时返回 typed failure。
 
 ## 6. 契约与依赖
 
@@ -65,7 +68,9 @@
 - GIVEN 执行“runtime recommendation 引擎能力”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“runtime recommendation 引擎能力”对应动作。
 - THEN HotPath 处理 impression/engagement/dislike 后，SessionState 中 exposed/negative/tagWeights 与实时兴趣可被读取。
-- THEN Engine 7 阶段管线在召回源超时、模型 scorer 失败、候选重复、冷启动等场景下仍返回稳定结果或明确空态。
+- THEN Engine 能区分召回 skipped、健康空、部分失败和全部失败；部分失败有候选时降级下发，失败后零候选不伪装成功空态。
+- THEN scorer 非空输入的错误/空输出只在有效 RuleScorer fallback 后成为 degraded success，否则返回 typed failure。
+- THEN discovery/recommend 首刷非空或失败；following 健康空与有效 continuation end 可返回成功空数组。
 - THEN RuleScorer 消费用户特征、交集信号、搜索意图、负反馈惩罚、UCB1 探索和 MMR 多样性。
 - THEN pipeline 与 parallel 路径读取相同会话状态，Redis key 落在预期 hash slot，重放不重复更新。
 

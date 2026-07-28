@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import '../../../../../support/cloud_services/content_facet_overrides.dart';
@@ -221,7 +222,11 @@ void main() {
 
       final feed = container.read(discoveryFeedMapProvider)['photo']?.value;
       expect(feed, isNotNull);
-      expect(feed!.error, '操作失败，请稍后重试', reason: '错误消息应传播到 feed state');
+      expect(
+        feed!.error,
+        SearchText.recoveryReloadLaterMessage,
+        reason: '错误应映射到唯一用户恢复组后再进入 feed state',
+      );
       expect(feed.items, isEmpty);
     });
 

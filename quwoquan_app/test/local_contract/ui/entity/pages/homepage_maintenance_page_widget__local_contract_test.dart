@@ -38,7 +38,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(CupertinoTextField).first, '新的主页名称');
-    await tester.tap(find.text(UITextConstants.homepageMaintenanceSave));
+    await tester.tap(find.text(ObjectHomepageText.homepageMaintenanceSave));
     await tester.pumpAndSettle();
 
     expect(repository.updateCalls, 1);
@@ -68,10 +68,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
-    expect(
-      find.text(UITextConstants.homepageMaintenanceUnavailableTitle),
-      findsOneWidget,
-    );
+    expect(find.text(SearchText.recoveryNoAccessTitle), findsOneWidget);
     expect(find.byType(CupertinoTextField), findsNothing);
     expect(repository.updateCalls, 0);
   });
@@ -92,7 +89,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(CupertinoTextField).first, '新的主页名称');
-    await tester.tap(find.text(UITextConstants.homepageMaintenanceSave));
+    await tester.tap(find.text(ObjectHomepageText.homepageMaintenanceSave));
     await tester.pumpAndSettle();
 
     expect(find.byType(AppFormErrorCard), findsOneWidget);
@@ -132,7 +129,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(CupertinoTextField).first, '过期资料');
-    await tester.tap(find.text(UITextConstants.homepageMaintenanceSave));
+    await tester.tap(find.text(ObjectHomepageText.homepageMaintenanceSave));
     await tester.pumpAndSettle();
 
     final errorCard = tester.widget<AppFormErrorCard>(
@@ -167,7 +164,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
-    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+    expect(find.text(SearchText.reload), findsOneWidget);
   });
 
   testWidgets('游客关闭维护登录页回详情且不循环', (tester) async {

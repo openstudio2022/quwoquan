@@ -41,7 +41,6 @@ def handle_filter_catalog(args: argparse.Namespace) -> None:
                 ),
                 rollback_release_id=str(args.rollback_release_id),
                 allow_gray_activation=bool(args.prod_gray_activation),
-                insecure_local_tls=bool(args.insecure_local_tls),
             )
         else:
             raise CatalogContractError("filter-catalog subcommand required")
@@ -98,10 +97,5 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         "--prod-gray-activation",
         action="store_true",
         help="仅在 prod gray 已获人工审批后允许 activate",
-    )
-    publish.add_argument(
-        "--insecure-local-tls",
-        action="store_true",
-        help="仅允许 beta/gamma 本地 public host 的自签名 TLS",
     )
     parser.set_defaults(handler=handle_filter_catalog)

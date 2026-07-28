@@ -84,12 +84,12 @@ class ProfileActionBar extends StatelessWidget {
     if (mode == ProfileMode.mine) {
       final editAction = profileComplete
           ? neutralAction(
-              label: UITextConstants.profileEditLabel,
+              label: ProfileText.profileEditLabel,
               icon: CupertinoIcons.pencil,
               onPressed: onEditProfile,
             )
           : primaryFollowAction(
-              label: UITextConstants.profileEditLabel,
+              label: ProfileText.profileEditLabel,
               icon: CupertinoIcons.pencil,
               onPressed: onEditProfile,
             );
@@ -98,12 +98,12 @@ class ProfileActionBar extends StatelessWidget {
           if (onManagePersonas != null)
             profileComplete
                 ? primaryFollowAction(
-                    label: UITextConstants.personaSwitchProfile,
+                    label: ProfileText.personaSwitchProfile,
                     icon: CupertinoIcons.person_2,
                     onPressed: onManagePersonas,
                   )
                 : neutralAction(
-                    label: UITextConstants.personaSwitchProfile,
+                    label: ProfileText.personaSwitchProfile,
                     icon: CupertinoIcons.person_2,
                     onPressed: onManagePersonas,
                   ),
@@ -116,17 +116,17 @@ class ProfileActionBar extends StatelessWidget {
     final primaryActions = <ObjectAction>[
       alreadyFollowing
           ? neutralAction(
-              label: UITextConstants.following,
+              label: FoundationText.following,
               icon: CupertinoIcons.check_mark,
               onPressed: onFollow,
             )
           : primaryFollowAction(
-              label: UITextConstants.follow,
+              label: FoundationText.follow,
               icon: CupertinoIcons.add,
               onPressed: onFollow,
             ),
       neutralAction(
-        label: UITextConstants.profileDirectMessage,
+        label: ProfileText.profileDirectMessage,
         icon: CupertinoIcons.chat_bubble,
         onPressed: onMessage,
       ),
@@ -145,13 +145,13 @@ class ProfileActionBar extends StatelessWidget {
     final callActions = <ObjectAction>[
       if (voiceAvailable)
         neutralAction(
-          label: UITextConstants.callVoice,
+          label: CallText.callVoice,
           icon: CupertinoIcons.phone,
           onPressed: onVoiceCall,
         ),
       if (videoAvailable)
         neutralAction(
-          label: UITextConstants.callVideo,
+          label: CallText.callVideo,
           icon: CupertinoIcons.video_camera,
           onPressed: onVideoCall,
         ),

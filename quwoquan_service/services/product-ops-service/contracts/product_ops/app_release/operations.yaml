@@ -60,6 +60,6 @@ contract_test:
       - name: android_official_download
         command: GetAppRecoveryVersion platform=android
         assertions: [official_https_download_page, current_release_build]
-      - name: ios_app_store
+      - name: ios_pwa_recovery
         command: GetAppRecoveryVersion platform=ios
-        assertions: [official_app_store_url, current_release_build]
+        assertions: [empty_update_url, official_pwa_recovery_url, current_release_build]

@@ -20,7 +20,6 @@ import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -29,7 +28,7 @@ import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 import 'package:quwoquan_app/ui/search/providers/search_coordinator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 GoRouter _buildRouter({
   SearchLaunchContext launchContext = const SearchLaunchContext(
@@ -109,7 +108,6 @@ Widget _buildApp({
   final recentSearches = AlphaRecentSearchFacet();
   return ProviderScope(
     overrides: [
-      appDataSourceModeProvider.overrideWith(_MockModeNotifier.new),
       searchRepositoryProvider.overrideWithValue(_FakeSearchRepository()),
       searchHotQueryReaderProvider.overrideWithValue(AlphaHotQueryReader()),
       recentSearchQueryProvider.overrideWithValue(
@@ -134,11 +132,6 @@ Widget _buildApp({
       routerConfig: _buildRouter(launchContext: launchContext),
     ),
   );
-}
-
-final class _MockModeNotifier extends AppDataSourceModeNotifier {
-  @override
-  AppDataSourceMode build() => AppDataSourceMode.mock;
 }
 
 void _suppressImageErrors() {
@@ -475,10 +468,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 220));
     await tester.pump(const Duration(milliseconds: 2959));
 
-    expect(find.text(UITextConstants.searchWaitSlow), findsNothing);
+    expect(find.text(SearchText.searchWaitSlow), findsNothing);
 
     await tester.pump(const Duration(milliseconds: 1));
-    expect(find.text(UITextConstants.searchWaitSlow), findsOneWidget);
+    expect(find.text(SearchText.searchWaitSlow), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 2899));
     expect(find.text('东钱湖'), findsNothing);
@@ -486,7 +479,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
     await tester.pump();
     expect(find.text('东钱湖'), findsOneWidget);
-    expect(find.text(UITextConstants.searchWaitSlow), findsNothing);
+    expect(find.text(SearchText.searchWaitSlow), findsNothing);
   });
 
   testWidgets('云实体 6 秒未返回时停止 indicator 且不误报空态', (tester) async {
@@ -503,20 +496,29 @@ void main() {
     // 正好落在请求开始后的 5999ms。
     await tester.pump(const Duration(milliseconds: 5959));
 
-    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
-    expect(find.text(UITextConstants.searchEmptyResult), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('global_search_network_progress')),
+      findsOneWidget,
+    );
+    expect(find.text(SearchText.searchEmptyResult), findsNothing);
 
     await tester.pump(const Duration(milliseconds: 1));
     await tester.pump();
 
-    expect(find.byType(CupertinoActivityIndicator), findsNothing);
-    expect(find.text(UITextConstants.searchPartialResult), findsOneWidget);
-    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
-    expect(find.text(UITextConstants.searchEmptyResult), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('global_search_network_progress')),
+      findsNothing,
+    );
+    expect(find.text(SearchText.recoveryReloadLaterMessage), findsOneWidget);
+    expect(find.text(SearchText.reload), findsOneWidget);
+    expect(find.text(SearchText.searchEmptyResult), findsNothing);
 
-    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.tap(find.text(SearchText.reload));
     await tester.pump();
-    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('global_search_network_progress')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('聊天记录最多三条且可直达对应对话页', (tester) async {

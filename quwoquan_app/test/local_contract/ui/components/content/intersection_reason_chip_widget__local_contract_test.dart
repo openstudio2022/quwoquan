@@ -15,6 +15,8 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/components/content/intersection_reason_chip.dart';
 
+import '../../../../support/cloud_services/behavior_repository_double.dart';
+
 /// A4 / N5：内容卡交集理由位 / post 作者信任徽标口径一致（云侧主结论句直出，G2 端不本地
 /// 拼装）+ 渲染归一（统一 [IntersectionTypeIcon] + 可点击 [InteractiveIntersectionText]）。
 Widget _wrap(Widget child) {

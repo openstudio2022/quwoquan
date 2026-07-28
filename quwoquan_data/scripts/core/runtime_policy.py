@@ -57,6 +57,7 @@ class RuntimePolicy:
     reviewer_workers: int
     research_workers: int
     research_wave_size: int
+    campaign_lane_workers: int
     research_max_waves_per_run: int
     source_plan_recovery_passes: int
     source_plan_recovery_workers: int
@@ -64,6 +65,8 @@ class RuntimePolicy:
     cursor_bridge_instances: int
     oversample_factor: float
     startup_timeout_seconds: int
+    campaign_submission_timeout_seconds: int
+    campaign_lane_timeout_seconds: int
     preflight_network_timeout_seconds: int
     agent_timeout_seconds: int
     auth_retry_limit: int
@@ -99,6 +102,7 @@ class RuntimePolicy:
     api_request_timeout_seconds: int
     direct_fetch_timeout_seconds: int
     source_fetch_timeout_seconds: int
+    source_video_read_timeout_seconds: int
     source_fetch_max_retries: int
     ocr_timeout_seconds: int
     video_probe_timeout_seconds: int
@@ -264,6 +268,10 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         author_workers=_positive_int(workers.get("author"), label="workers.author"),
         reviewer_workers=_positive_int(workers.get("reviewer"), label="workers.reviewer"),
         research_workers=_positive_int(workers.get("research"), label="workers.research"),
+        campaign_lane_workers=_positive_int(
+            workers.get("campaignLaneWorkers"),
+            label="workers.campaignLaneWorkers",
+        ),
         research_wave_size=_positive_int(budgets.get("researchWaveSize"), label="budgets.researchWaveSize"),
         research_max_waves_per_run=_non_negative_int(
             budgets.get("researchMaxWavesPerRun"),
@@ -287,6 +295,14 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
             label="selection.oversampleFactor",
         ),
         startup_timeout_seconds=_positive_int(budgets.get("startupTimeoutSeconds"), label="budgets.startupTimeoutSeconds"),
+        campaign_submission_timeout_seconds=_positive_int(
+            budgets.get("campaignSubmissionTimeoutSeconds"),
+            label="budgets.campaignSubmissionTimeoutSeconds",
+        ),
+        campaign_lane_timeout_seconds=_positive_int(
+            budgets.get("campaignLaneTimeoutSeconds"),
+            label="budgets.campaignLaneTimeoutSeconds",
+        ),
         preflight_network_timeout_seconds=_positive_int(
             budgets.get("preflightNetworkTimeoutSeconds"),
             label="budgets.preflightNetworkTimeoutSeconds",
@@ -331,6 +347,10 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         api_request_timeout_seconds=_positive_int(budgets.get("apiRequestTimeoutSeconds"), label="budgets.apiRequestTimeoutSeconds"),
         direct_fetch_timeout_seconds=_positive_int(budgets.get("directFetchTimeoutSeconds"), label="budgets.directFetchTimeoutSeconds"),
         source_fetch_timeout_seconds=_positive_int(budgets.get("sourceFetchTimeoutSeconds"), label="budgets.sourceFetchTimeoutSeconds"),
+        source_video_read_timeout_seconds=_positive_int(
+            budgets.get("sourceVideoReadTimeoutSeconds"),
+            label="budgets.sourceVideoReadTimeoutSeconds",
+        ),
         source_fetch_max_retries=_positive_int(budgets.get("sourceFetchMaxRetries"), label="budgets.sourceFetchMaxRetries"),
         ocr_timeout_seconds=_positive_int(budgets.get("ocrTimeoutSeconds"), label="budgets.ocrTimeoutSeconds"),
         video_probe_timeout_seconds=_positive_int(

@@ -175,7 +175,7 @@ void main() {
     );
     expect(find.byIcon(Icons.image_not_supported_outlined), findsNothing);
     expect(find.byIcon(CupertinoIcons.refresh), findsNothing);
-    expect(find.text(UITextConstants.retry), findsOneWidget);
+    expect(find.text(SearchText.reload), findsOneWidget);
     expect(
       tester
           .getRect(find.byKey(const ValueKey<String>('image-book-retry')))

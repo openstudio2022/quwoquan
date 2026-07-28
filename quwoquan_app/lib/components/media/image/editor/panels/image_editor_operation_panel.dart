@@ -275,23 +275,23 @@ class ImageEditorOperationPanel extends StatelessWidget {
           children: [
             _buildRotateActionItem(
               icon: Icons.rotate_left,
-              label: UITextConstants.imageEditorRotateLeft90,
+              label: MediaText.imageEditorRotateLeft90,
               onTap: onRotateLeft,
             ),
             _buildRotateActionItem(
               icon: Icons.rotate_right,
-              label: UITextConstants.imageEditorRotateRight90,
+              label: MediaText.imageEditorRotateRight90,
               onTap: onRotateRight,
             ),
             _buildRotateActionItem(
               icon: Icons.flip,
-              label: UITextConstants.imageEditorFlipHorizontal,
+              label: MediaText.imageEditorFlipHorizontal,
               onTap: onFlipHorizontal,
             ),
             _buildRotateActionItem(
               icon: Icons.flip,
               rotateQuarterTurns: 1,
-              label: UITextConstants.imageEditorFlipVertical,
+              label: MediaText.imageEditorFlipVertical,
               onTap: onFlipVertical,
             ),
           ],

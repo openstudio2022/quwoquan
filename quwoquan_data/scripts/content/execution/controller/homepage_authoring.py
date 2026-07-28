@@ -1,6 +1,8 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
+from dataclasses import dataclass
 from content.execution.coverage import coverage_entity_type
+from content.execution.spec_contract import approved_quota
 from content.execution.support import Any, DataIssueCode, DataIssueStage, DataIssueLane, DataRecoveryAction, ExecutionContext, Mapping, Path, _IMAGE_SOURCE_TEXT_NOISE_PATTERNS, _IMAGE_SOURCE_TEXT_NOISE_TOKENS, _active_spec, _is_homepage_only_execution, data_issue, execution_root, load_execution_state, os, re, read_json, require_domain_etype, save_execution_state, shutil, store, write_json
 from content.execution.controller.homepage_author_evidence import (
     _finalize_existing_managed_author_outputs,
@@ -10,12 +12,51 @@ from content.execution.controller.homepage_author_finalization import (
     _finalize_existing_object_queue_author_outputs,
 )
 
-def _homepages_done(ctx: ExecutionContext) -> tuple[bool, list[str]]:
-    """build_homepage checkpoint：coverage 实体三件套是否物化（用 build validate 复核）。"""
+@dataclass(frozen=True, slots=True)
+class HomepageQuotaVerdict:
+    """One batch 的配额门判定：达标对象数 >= approvedQuota 即准出。
+
+    候选池按 runtime policy 的 oversampleFactor 过采，未达标对象直接丢弃、不重试，
+    因此「批次是否准出」只看达标数，绝不看全量成功。
+    """
+
+    approved_quota: int
+    qualified_refs: tuple[str, ...]
+    discarded: Mapping[str, tuple[str, ...]]
+
+    @property
+    def qualified_count(self) -> int:
+        return len(self.qualified_refs)
+
+    @property
+    def passed(self) -> bool:
+        return self.qualified_count >= self.approved_quota
+
+    def blocking_issues(self) -> list[str]:
+        """配额未达成时暴露全部未过项；达成后丢弃项不再阻断批次。"""
+        if self.passed:
+            return []
+        return [issue for ref in sorted(self.discarded) for issue in self.discarded[ref]]
+
+    def discard_summary(self) -> list[str]:
+        return [
+            f"{ref}: discarded（{'; '.join(self.discarded[ref][:3])}）"
+            for ref in sorted(self.discarded)
+        ]
+
+
+def homepage_quota_verdict(ctx: ExecutionContext) -> HomepageQuotaVerdict:
+    """build_homepage / build_validate 共用的唯一配额门判定。
+
+    ``validate_entity_pages`` 逐条返回 ``<domain>/<etype>/<name>: ...`` 前缀问题；
+    这里按 coverage target 归并，未产生任何问题的对象即达标对象。
+    """
     from content.homepage.homepage import homepage_runtime_spec
     from content.homepage.homepage_release_validation import validate_entity_pages
+
     runtime_spec = homepage_runtime_spec(ctx.execution_id, _active_spec(ctx))
     issues = validate_entity_pages(ctx.execution_id, runtime_spec)
+    labels: list[str] = []
     for target in ((runtime_spec.get("scope") or {}).get("coverageTargets") or []):
         if not isinstance(target, Mapping):
             continue
@@ -23,10 +64,61 @@ def _homepages_done(ctx: ExecutionContext) -> tuple[bool, list[str]]:
         if not name:
             continue
         domain, etype = require_domain_etype(target.get("entityType"), context=name)
+        labels.append(f"{domain}/{etype}/{name}")
         issues.extend(_homepage_independent_review_issues(ctx, domain, etype, name))
-    return (not issues), issues
+    per_target: dict[str, list[str]] = {label: [] for label in labels}
+    unattributed: list[str] = []
+    for issue in issues:
+        owner = next(
+            (label for label in labels if str(issue).startswith(f"{label}:")),
+            "",
+        )
+        if owner:
+            per_target[owner].append(str(issue))
+        else:
+            unattributed.append(str(issue))
+    if unattributed:
+        # 批次级问题（scope 缺失、spec 不合法）不属于任何对象，不可被过采吸收。
+        return HomepageQuotaVerdict(
+            approved_quota=approved_quota(ctx.execution_id),
+            qualified_refs=(),
+            discarded={"<execution>": tuple(unattributed)},
+        )
+    return HomepageQuotaVerdict(
+        approved_quota=approved_quota(ctx.execution_id),
+        qualified_refs=tuple(
+            label for label in labels if not per_target[label]
+        ),
+        discarded={
+            label: tuple(per_target[label]) for label in labels if per_target[label]
+        },
+    )
+
+
+def _homepages_done(ctx: ExecutionContext) -> tuple[bool, list[str]]:
+    """build_homepage checkpoint：达标主页对象数是否已满足准出配额。"""
+    verdict = homepage_quota_verdict(ctx)
+    return verdict.passed, verdict.blocking_issues()
 
 def _homepage_independent_review_issues(
+    ctx: ExecutionContext,
+    domain: str,
+    etype: str,
+    name: str,
+) -> list[str]:
+    """审阅结论必须带对象标签前缀。
+
+    配额门按 ``<domain>/<etype>/<name>:`` 前缀把问题归属到对象；审阅员写回的是自然语言
+    结论，不带前缀就会被判成「不属于任何对象」的批次级问题，把整批达标数清零——
+    逐对象的质量结论必须能被过采候选池吸收，而不是拖垮整批。
+    """
+    return [
+        issue if issue.startswith(f"{domain}/{etype}/{name}:") else f"{domain}/{etype}/{name}: {issue}"
+        for issue in _raw_homepage_independent_review_issues(ctx, domain, etype, name)
+    ]
+
+
+def _raw_homepage_independent_review_issues(
     ctx: ExecutionContext,
     domain: str,
     etype: str,

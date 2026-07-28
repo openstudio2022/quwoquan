@@ -2,6 +2,8 @@
 from __future__ import annotations
 from core.control_types import ExecutionStage, StageStatus
 from core.data_issue import DataIssue
+from content.execution.diagnostics import unexpected_stage_issue
+from content.execution.workspace import ExecutionSourceDigestDriftError
 from content.execution.support import AUTO, Any, DataIssueCode, DataIssueStage, DataRecoveryAction, ExecutionContext, Mapping, StageResult, _active_spec, _entity_homepages_per_target, _prune_inactive_entity_homepage_artifacts, data_issue, issue_messages, stage_issues
 
 _MEDIA_RECOVERY_BY_CODE = {
@@ -40,6 +42,20 @@ def _media_validation_fallback(issues: tuple[DataIssue, ...]) -> ExecutionStage:
     if DataIssueCode.MEDIA_DOWNLOAD_INCOMPLETE in codes:
         return ExecutionStage.DOWNLOAD_FETCH
     return ExecutionStage.BUILD_HOMEPAGE
+
+
+def _source_digest_drift_issue(
+    error: ExecutionSourceDigestDriftError,
+) -> DataIssue:
+    """Render immutable input drift without treating it as a source retry."""
+    return data_issue(
+        DataIssueCode.CONTRACT_INVALID,
+        stage=DataIssueStage.DOWNLOAD_FETCH,
+        recovery=DataRecoveryAction.STOP,
+        message="execution source digest drift; execution must be recreated",
+        attributes={"contract": "sourceDigest", "reason": str(error)},
+    )
+
 
 def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
     from content.execution.agent.auto_research import _download_auto_research_lanes, _entity_ids_grouped_by_type, _refresh_stale_source_plans_for_fetch
@@ -162,13 +178,23 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
                 fallback_stage=ExecutionStage.DOWNLOAD_PLAN,
                 issue_records=issues,
             )
+    except ExecutionSourceDigestDriftError as exc:
+        issue = _source_digest_drift_issue(exc)
+        _record_download_repair(ctx, [issue])
+        _write_download_availability(ctx, {}, source="download_fetch_contract_invalid")
+        return StageResult(
+            ExecutionStage.DOWNLOAD_FETCH,
+            AUTO,
+            StageStatus.FAILED,
+            "download fetch blocked by immutable execution contract drift",
+            issue_records=[issue],
+        )
     except Exception as exc:  # noqa: BLE001
-        issue = data_issue(
-            DataIssueCode.INTERNAL_UNEXPECTED,
-            stage=DataIssueStage.DOWNLOAD_FETCH,
+        issue = unexpected_stage_issue(
+            DataIssueStage.DOWNLOAD_FETCH,
+            exc,
             recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
             message="download handler raised an unexpected exception",
-            attributes={"errorType": type(exc).__name__},
         )
         _record_download_repair(ctx, [issue])
         _write_download_availability(ctx, {}, source="download_fetch_failed")
@@ -236,10 +262,27 @@ def _run_build_prepare(ctx: ExecutionContext) -> StageResult:
         )
     return StageResult(ExecutionStage.BUILD_PREPARE, AUTO, StageStatus.DONE, f"下发 {len(refs)} 个主页产出契约 -> {inputs_dir}")
 
+def _qualified_entity_names(verdict: Any) -> tuple[str, ...]:
+    """从采纳门的 ``<domain>/<etype>/<name>`` 标签取回实体名。
+
+    准出集合是图片完整性门与来源资格门共同的裁剪口径：两者都只对本批次真正要发布的
+    对象负责，过采丢弃对象的素材缺口不参与准出判定。
+    """
+    names: list[str] = []
+    for label in verdict.qualified_refs:
+        parts = str(label).split("/")
+        if len(parts) >= 3 and parts[2].strip():
+            names.append("/".join(parts[2:]).strip())
+    return tuple(names)
+
+
 def _run_build_validate(ctx: ExecutionContext) -> StageResult:
-    from content.execution.controller.homepage_review_stage import run_homepage_independent_reviews
+    from content.execution.controller.homepage_review_stage import (
+        independent_reviewer_precondition_issues,
+        run_homepage_independent_reviews,
+    )
+    from content.execution.controller.homepage_authoring import homepage_quota_verdict
     from content.homepage.homepage import homepage_runtime_spec
-    from content.homepage.homepage_release_validation import validate_entity_pages
     from verify.verify_homepage_media_completeness import homepage_media_completeness_report
     if _entity_homepages_per_target(ctx) <= 0:
         return StageResult(
@@ -248,14 +291,15 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
             StageStatus.DONE,
             "entityHomepagesPerTarget=0；非主页载体跳过主页采纳门",
         )
-    runtime_spec = homepage_runtime_spec(ctx.execution_id, _active_spec(ctx))
-    issues = validate_entity_pages(ctx.execution_id, runtime_spec)
-    if issues:
+    verdict = homepage_quota_verdict(ctx)
+    if not verdict.passed:
+        issues = verdict.blocking_issues()
         return StageResult(
             ExecutionStage.BUILD_VALIDATE,
             AUTO,
             StageStatus.FAILED,
-            "主页采纳门未过:\n  - " + "\n  - ".join(issues[:10]),
+            f"主页采纳门未达配额（达标 {verdict.qualified_count}/{verdict.approved_quota}）:\n  - "
+            + "\n  - ".join(issues[:10]),
             fallback_stage=ExecutionStage.BUILD_HOMEPAGE,
             issue_records=stage_issues(
                 ExecutionStage.BUILD_VALIDATE,
@@ -264,7 +308,12 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
                 recovery=DataRecoveryAction.REWIND_COMPOSE,
             ),
         )
-    media_report = homepage_media_completeness_report(ctx.execution_id)
+    for line in verdict.discard_summary():
+        print(f"[build_validate] {line}")
+    media_report = homepage_media_completeness_report(
+        ctx.execution_id,
+        publishable_names=_qualified_entity_names(verdict),
+    )
     if not bool(media_report.get("passed")):
         typed_issues = _typed_media_validation_issues(media_report)
         media_issues = issue_messages(typed_issues)
@@ -280,19 +329,48 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
                 code=DataIssueCode.CONTRACT_INVALID,
             ),
         )
-    review_issues = run_homepage_independent_reviews(ctx, runtime_spec)
-    if review_issues:
+    precondition = independent_reviewer_precondition_issues(ctx.execution_id)
+    if precondition:
         return StageResult(
             ExecutionStage.BUILD_VALIDATE,
             AUTO,
             StageStatus.FAILED,
-            "主页独立审阅未过:\n  - " + "\n  - ".join(review_issues[:10]),
+            "主页独立审阅装配未就绪:\n  - " + "\n  - ".join(precondition),
             fallback_stage=ExecutionStage.BUILD_HOMEPAGE,
             issue_records=stage_issues(
                 ExecutionStage.BUILD_VALIDATE,
-                review_issues,
+                precondition,
+                code=DataIssueCode.AGENT_REVIEW_UNAVAILABLE,
+                recovery=DataRecoveryAction.STOP,
+            ),
+        )
+    run_homepage_independent_reviews(
+        ctx, homepage_runtime_spec(ctx.execution_id, _active_spec(ctx))
+    )
+    # 审阅结论逐对象写回 5.review/review.json，配额判定据此重算：
+    # 审阅未过的对象按丢弃处理，只要达标对象数仍满足配额，批次即可准出。
+    reviewed = homepage_quota_verdict(ctx)
+    if not reviewed.passed:
+        issues = reviewed.blocking_issues()
+        return StageResult(
+            ExecutionStage.BUILD_VALIDATE,
+            AUTO,
+            StageStatus.FAILED,
+            f"主页独立审阅后未达配额（达标 {reviewed.qualified_count}/{reviewed.approved_quota}）:\n  - "
+            + "\n  - ".join(issues[:10]),
+            fallback_stage=ExecutionStage.BUILD_HOMEPAGE,
+            issue_records=stage_issues(
+                ExecutionStage.BUILD_VALIDATE,
+                issues,
                 code=DataIssueCode.AGENT_REVIEW_INVALID,
                 recovery=DataRecoveryAction.REWIND_COMPOSE,
             ),
         )
-    return StageResult(ExecutionStage.BUILD_VALIDATE, AUTO, StageStatus.DONE, "所有 coverage 实体主页及独立审阅达标")
+    for line in reviewed.discard_summary():
+        print(f"[build_validate] 审阅丢弃 {line}")
+    return StageResult(
+        ExecutionStage.BUILD_VALIDATE,
+        AUTO,
+        StageStatus.DONE,
+        f"主页采纳门与独立审阅达标 {reviewed.qualified_count}/{reviewed.approved_quota}",
+    )

@@ -26,10 +26,14 @@ class ProdColdStartRenderContractTest(unittest.TestCase):
 
         for token in (
             "api.quwoquan.com",
-            "realtime.quwoquan.com",
+            "api.quwoquan.com",
             "ops.quwoquan.com",
             "cdn.quwoquan.com",
             "upload.quwoquan.com",
+            "quwoquan.com",
+            "redir https://quwoquan.com{uri} 308",
+            "root * /srv/web",
+            'Content-Type "text/html; charset=utf-8"',
             "Strict-Transport-Security",
             "Content-Security-Policy",
             "try_files {path} /index.html",
@@ -37,6 +41,10 @@ class ProdColdStartRenderContractTest(unittest.TestCase):
             self.assertIn(token, caddy)
         for forbidden in ("local_certs", "tls internal", ".test", "\n:80 {"):
             self.assertNotIn(forbidden, caddy)
+        self.assertNotIn(
+            'header {\n\t\t\tContent-Type "text/html; charset=utf-8"',
+            caddy,
+        )
 
     def test_gray_caddy_is_private_http_upstream_without_certificate_issuance(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -79,6 +87,7 @@ class ProdColdStartRenderContractTest(unittest.TestCase):
             media_root="/runtime/media",
             legal_root="/runtime/legal",
             portal_root="/runtime/portal",
+            web_root="/runtime/public-web",
             caddyfile_path="/runtime/Caddyfile",
             model_cache_root="/runtime/model-cache",
         )
@@ -94,6 +103,7 @@ class ProdColdStartRenderContractTest(unittest.TestCase):
     def test_prod_domain_truth_source_rejects_local_fallbacks(self) -> None:
         hosts = render._prod_public_hosts()
         self.assertEqual(hosts["api"], "api.quwoquan.com")
+        self.assertEqual(hosts["publicWeb"], "quwoquan.com")
         self.assertTrue(all(not host.endswith(".test") for host in hosts.values()))
 
     def test_render_rejects_disposable_output_as_deployment_root(self) -> None:

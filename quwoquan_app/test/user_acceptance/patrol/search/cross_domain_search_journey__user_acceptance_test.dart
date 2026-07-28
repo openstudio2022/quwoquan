@@ -84,12 +84,12 @@ void main() {
       );
       expect(resultsVisible, isTrue, reason: '真实 Gamma 查询必须进入全部结果流');
       for (final tabLabel in <String>[
-        UITextConstants.searchXiaoquTab,
-        UITextConstants.searchAllTab,
-        UITextConstants.searchIntersectionTab,
-        UITextConstants.searchImageTab,
-        UITextConstants.searchVideoTab,
-        UITextConstants.searchArticleTab,
+        SearchText.searchXiaoquTab,
+        SearchText.searchAllTab,
+        SearchText.searchIntersectionTab,
+        SearchText.searchImageTab,
+        SearchText.searchVideoTab,
+        SearchText.searchArticleTab,
       ]) {
         expect(find.text(tabLabel).evaluate(), isNotEmpty, reason: tabLabel);
       }

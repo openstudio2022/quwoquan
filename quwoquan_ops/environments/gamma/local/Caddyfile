@@ -1,10 +1,9 @@
 {
 	admin 0.0.0.0:2019
-	local_certs
 }
 
-(local_gamma_tls) {
-	tls internal
+(public_gamma_tls) {
+	tls {$QWQ_PUBLIC_TLS_CERT_FILE} {$QWQ_PUBLIC_TLS_KEY_FILE}
 }
 
 (media_cors) {
@@ -18,10 +17,9 @@
 
 # Ops owns the single immutable local-gamma route table. Compose mounts this
 # file directly; runtime output contains evidence and process state only.
-https://gamma-api.quwoquan-env.test:{$LOCAL_GAMMA_HTTP_PORT:19000},
-https://gamma-api.localhost:{$LOCAL_GAMMA_HTTP_PORT:19000},
-https://localhost:{$LOCAL_GAMMA_HTTP_PORT:19000} {
-	import local_gamma_tls
+https://{$QWQ_PUBLIC_API_HOST}:{$LOCAL_GAMMA_HTTP_PORT:19000},
+https://{$QWQ_PUBLIC_WEB_HOST}:{$LOCAL_GAMMA_HTTP_PORT:19000} {
+	import public_gamma_tls
 	handle /healthz {
 		reverse_proxy content-service:18080
 	}
@@ -114,16 +112,13 @@ https://localhost:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 	}
 }
 
-https://gamma-rtc.quwoquan-env.test:{$LOCAL_GAMMA_HTTP_PORT:19000},
-https://gamma-rtc.localhost:{$LOCAL_GAMMA_HTTP_PORT:19000} {
-	import local_gamma_tls
+https://{$QWQ_PUBLIC_RTC_HOST}:{$LOCAL_GAMMA_HTTP_PORT:19000} {
+	import public_gamma_tls
 	reverse_proxy livekit-sfu:7880
 }
 
-https://gamma-product-ops.quwoquan-env.test:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010},
-https://gamma-product-ops.localhost:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010},
-https://localhost:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010} {
-	import local_gamma_tls
+https://{$QWQ_PUBLIC_OPS_HOST}:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010} {
+	import public_gamma_tls
 	handle /healthz {
 		reverse_proxy product-ops-service:18086
 	}
@@ -149,14 +144,8 @@ https://localhost:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010} {
 	}
 }
 
-https://gamma-avatar.quwoquan-env.test:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100},
-https://gamma-image.quwoquan-env.test:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100},
-https://gamma-video.quwoquan-env.test:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100},
-https://gamma-avatar.localhost:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100},
-https://gamma-image.localhost:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100},
-https://gamma-video.localhost:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100},
-https://localhost:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100} {
-	import local_gamma_tls
+https://{$QWQ_PUBLIC_CDN_HOST}:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100} {
+	import public_gamma_tls
 	import media_cors
 	handle /healthz {
 		respond "ok" 200

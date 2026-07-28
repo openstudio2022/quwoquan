@@ -30,7 +30,7 @@ class WelcomeBrandCluster extends StatelessWidget {
 
   /// 品牌簇单一无障碍语义。
   static String get semanticLabel =>
-      '${UITextConstants.welcomeTitle}，${UITextConstants.welcomeMainSlogan}';
+      '${FoundationText.welcomeTitle}，${FoundationText.welcomeMainSlogan}';
 
   /// 图一高保花朵可见直径：约占屏宽 40%，clamp 132 ~ 168dp。
   static double flowerVisibleDiameterFor(double viewportWidth) {
@@ -63,7 +63,7 @@ class WelcomeBrandCluster extends StatelessWidget {
       // 极端字体缩放时优先整体缩小字号，保证一行不截断、不贴边。
       fit: BoxFit.scaleDown,
       child: Text(
-        UITextConstants.welcomeMainSlogan,
+        FoundationText.welcomeMainSlogan,
         maxLines: 1,
         textAlign: TextAlign.center,
         style: TextStyle(
@@ -171,7 +171,7 @@ class WelcomeBrandFooter extends StatelessWidget {
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(
-                    UITextConstants.welcomeTitle,
+                    FoundationText.welcomeTitle,
                     maxLines: 1,
                     textAlign: TextAlign.center,
                     style: TextStyle(

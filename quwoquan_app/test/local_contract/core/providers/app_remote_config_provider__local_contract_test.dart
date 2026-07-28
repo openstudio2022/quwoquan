@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import '../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../support/cloud_services/content/mock_content_repository.dart';
 
@@ -55,9 +54,6 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
-    container
-        .read(appDataSourceModeProvider.notifier)
-        .setMode(AppDataSourceMode.remote);
 
     await container.read(appRemoteConfigProvider.notifier).refresh();
     final state = container.read(appRemoteConfigProvider);
@@ -88,9 +84,6 @@ void main() {
         ],
       );
       addTearDown(container.dispose);
-      container
-          .read(appDataSourceModeProvider.notifier)
-          .setMode(AppDataSourceMode.remote);
 
       await container.read(appRemoteConfigProvider.notifier).refresh();
       final state = container.read(appRemoteConfigProvider);

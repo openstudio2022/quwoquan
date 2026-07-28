@@ -7,7 +7,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:camera/camera.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../../support/cloud_services/repository_mock_reexports.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/camera/camera_session_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
@@ -280,7 +280,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
       ImageEditorFilterPreset(
         id: 'original',
         categoryId: ImageEditorFilterRepository.cameraPhotoCategoryId,
-        name: UITextConstants.imageEditOriginal,
+        name: MediaText.imageEditOriginal,
         sort: 1,
         enabled: true,
         defaultStrength: 0,
@@ -476,7 +476,7 @@ void main() {
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
-    await tester.tap(find.text(UITextConstants.cameraUsePhoto));
+    await tester.tap(find.text(MediaText.cameraUsePhoto));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(
@@ -558,7 +558,7 @@ void main() {
       find.byKey(const ValueKey<String>('camera-capture-action')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.cameraUsePhoto));
+    await tester.tap(find.text(MediaText.cameraUsePhoto));
     await tester.pumpAndSettle();
 
     expect(container.read(createEditorProvider).imagePaths, <String>[

@@ -71,6 +71,24 @@ class ChatGroupLifecycleProbeLocalContractTest(unittest.TestCase):
         self.assertNotEqual(evidence_id, raw_id)
         self.assertNotIn(raw_id, evidence_id)
 
+    def test_inbox_item_uses_typed_nested_conversation_identity(self) -> None:
+        self.assertEqual(
+            PROBE._inbox_item_conversation_id(
+                {"conversation": {"id": "conversation-new-group"}}
+            ),
+            "conversation-new-group",
+        )
+        self.assertEqual(
+            PROBE._inbox_item_conversation_id(
+                {"conversationId": "conversation-legacy-flat"}
+            ),
+            "conversation-legacy-flat",
+        )
+        self.assertEqual(
+            PROBE._inbox_item_conversation_id({"id": "conversation-api-flat"}),
+            "conversation-api-flat",
+        )
+
     def test_mentioned_message_round_trip_requires_canonical_target(self) -> None:
         items = [
             {

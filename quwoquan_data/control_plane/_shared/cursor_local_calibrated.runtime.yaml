@@ -4,17 +4,14 @@ policy:
   cursor:
     provider: cursor_sdk
     model: grok-4.5
-    modelParameters:
-      - id: effort
-        value: high
-      - id: fast
-        value: "false"
+    modelParameters: []
     runtime: local
   workers:
     author: 8
     reviewer: 2
     research: 4
     download: 8
+    campaignLaneWorkers: 4
     cursorBridgeInstances: 8
   selection:
     # 候选池 = ceil(准出配额 * oversampleFactor)。1.8 来自实测首过率，
@@ -22,6 +19,8 @@ policy:
     oversampleFactor: 1.8
   budgets:
     startupTimeoutSeconds: 240
+    campaignSubmissionTimeoutSeconds: 3600
+    campaignLaneTimeoutSeconds: 21600
     preflightNetworkTimeoutSeconds: 5
     agentTimeoutSeconds: 1200
     authRetryLimit: 12
@@ -61,6 +60,7 @@ policy:
     apiRequestTimeoutSeconds: 30
     directFetchTimeoutSeconds: 15
     sourceFetchTimeoutSeconds: 20
+    sourceVideoReadTimeoutSeconds: 180
     sourceFetchMaxRetries: 4
     ocrTimeoutSeconds: 8
     videoProbeTimeoutSeconds: 60

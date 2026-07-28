@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""门禁：群聊 memberCount、名册、contract seed 与 alpha 媒体 alias 一致性。"""
+"""门禁：群聊 memberCount、名册与 contract 媒体 alias 一致性。"""
 from __future__ import annotations
 
 import hashlib
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -20,10 +19,6 @@ CHAT_SCENARIOS_GAMMA = (
     ROOT
     / "quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.gamma-curated.json"
 )
-DART_RUNNER = (
-    ROOT / "quwoquan_app/scripts/chat/verify_chat_group_roster_consistency_runner.dart"
-)
-APP_DIR = ROOT / "quwoquan_app"
 LIB = ROOT / "quwoquan_app/lib"
 
 violations: list[str] = []
@@ -129,21 +124,6 @@ def _check_contract_fixture(path: Path, label: str) -> None:
                 )
 
 
-def _check_mock_dart() -> None:
-    if not DART_RUNNER.is_file():
-        _fail(f"missing dart runner: {DART_RUNNER}")
-        return
-    proc = subprocess.run(
-        ["dart", "run", str(DART_RUNNER.relative_to(APP_DIR))],
-        cwd=APP_DIR,
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
-        detail = (proc.stdout + proc.stderr).strip()
-        _fail(f"AlphaChatStateEngine roster check failed:\n{detail}")
-
-
 def main() -> int:
     _check_alpha_alias()
     _check_conv_grid_avatar_distinct()
@@ -151,8 +131,6 @@ def main() -> int:
     _check_contract_fixture(CHAT_SCENARIOS, "chat_scenarios.json")
     if CHAT_SCENARIOS_GAMMA.is_file():
         _check_contract_fixture(CHAT_SCENARIOS_GAMMA, "chat_scenarios.gamma-curated.json")
-    _check_mock_dart()
-
     if violations:
         print("verify_chat_group_roster_consistency: FAIL", file=sys.stderr)
         for item in violations:

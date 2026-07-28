@@ -84,53 +84,88 @@ void main() {
   });
 
   group('加载失败归因', () {
-    test('同一 channel::reason 去重，不同 reason 各上报一次', () async {
+    test('同一 channel::errorCode 去重，不同 errorCode 各上报一次', () async {
       observability.recordFeedLoadFailed(
         channelId: 'recommend',
-        reason: 'page_load',
+        errorCode: 'CONTENT.DEPENDENCY.UNAVAILABLE',
+        operation: 'queryFeed',
+        surface: 'home_feed',
+        hasCache: false,
       );
       observability.recordFeedLoadFailed(
         channelId: 'recommend',
-        reason: 'page_load',
+        errorCode: 'CONTENT.DEPENDENCY.UNAVAILABLE',
+        operation: 'queryFeed',
+        surface: 'home_feed',
+        hasCache: false,
       );
       observability.recordFeedLoadFailed(
         channelId: 'recommend',
-        reason: 'timeout',
+        errorCode: 'GATEWAY.DEPENDENCY.TIMEOUT',
+        operation: 'queryFeed',
+        surface: 'home_feed',
+        hasCache: false,
       );
 
-      final failures = eventsNamed(FeedPerformanceMetricNames.feedLoadFailed);
+      final failures = ops.recorded
+          .where((event) => event.eventType == 'operation_result')
+          .toList();
       expect(failures, hasLength(2));
       expect(
         failures.map((event) => event.extensions['failReasonCode']).toSet(),
-        equals(<String>{'page_load', 'timeout'}),
+        equals(<String>{
+          'CONTENT.DEPENDENCY.UNAVAILABLE',
+          'GATEWAY.DEPENDENCY.TIMEOUT',
+        }),
       );
+      expect(failures.first.extensions['operationId'], equals('queryFeed'));
+      expect(failures.first.extensions['surfaceId'], equals('home_feed'));
+      expect(failures.first.extensions['hasCache'], isFalse);
       expect(failures.first.extensions['result'], equals('failed'));
     });
 
-    test('首屏成功后复位失败去重，相同 reason 可再次上报', () async {
+    test('首屏成功后复位失败去重，相同 errorCode 可再次上报', () async {
       observability.recordFeedLoadFailed(
         channelId: 'recommend',
-        reason: 'page_load',
+        errorCode: 'CONTENT.DEPENDENCY.UNAVAILABLE',
+        operation: 'queryFeed',
+        surface: 'home_feed',
+        hasCache: false,
       );
       observability.markFeedRequested('recommend');
       observability.markFirstContentReady('recommend', itemCount: 6);
       observability.recordFeedLoadFailed(
         channelId: 'recommend',
-        reason: 'page_load',
+        errorCode: 'CONTENT.DEPENDENCY.UNAVAILABLE',
+        operation: 'queryFeed',
+        surface: 'home_feed',
+        hasCache: false,
       );
 
       expect(
-        eventsNamed(FeedPerformanceMetricNames.feedLoadFailed),
+        ops.recorded.where((event) => event.eventType == 'operation_result'),
         hasLength(2),
       );
     });
 
-    test('空 reason 归一化为 unknown', () async {
-      observability.recordFeedLoadFailed(channelId: 'recommend', reason: '   ');
+    test('空 errorCode 归一化为 canonical unknown error', () async {
+      observability.recordFeedLoadFailed(
+        channelId: 'recommend',
+        errorCode: '   ',
+        operation: 'queryFeed',
+        surface: 'home_feed',
+        hasCache: true,
+      );
 
-      final failures = eventsNamed(FeedPerformanceMetricNames.feedLoadFailed);
+      final failures = ops.recorded
+          .where((event) => event.eventType == 'operation_result')
+          .toList();
       expect(failures, hasLength(1));
-      expect(failures.first.extensions['failReasonCode'], equals('unknown'));
+      expect(
+        failures.first.extensions['failReasonCode'],
+        equals('APP.SYSTEM.unknown_error'),
+      );
+      expect(failures.first.extensions['hasCache'], isTrue);
     });
   });
 

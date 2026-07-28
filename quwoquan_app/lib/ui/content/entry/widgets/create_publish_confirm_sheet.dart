@@ -67,7 +67,7 @@ class _CreatePublishConfirmSheetState
   Widget build(BuildContext context) {
     return IosSelectionPageScaffold(
       pageKey: TestKeys.createPublishConfirmSheet,
-      title: UITextConstants.publishSettingsTitle,
+      title: CreationText.publishSettingsTitle,
       onBack: () => Navigator.of(context).pop(),
       backgroundColor: AppColors.iosPageBackground(context),
       body: ListView(
@@ -100,10 +100,10 @@ class _CreatePublishConfirmSheetState
       child: Column(
         children: <Widget>[
           PublishConfirmSettingRow(
-            title: UITextConstants.whoCanSeeLabel,
+            title: CreationText.whoCanSeeLabel,
             value: _settings.isPublic
-                ? UITextConstants.visibilityPublic
-                : UITextConstants.visibilityPrivate,
+                ? CreationText.visibilityPublic
+                : CreationText.visibilityPrivate,
             onTap: _pickVisibility,
             borderRadius: BorderRadius.vertical(
               top: Radius.circular(AppSpacing.radiusTwentyEight),
@@ -111,33 +111,33 @@ class _CreatePublishConfirmSheetState
           ),
           const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
           PublishConfirmSettingRow(
-            title: UITextConstants.locationLabel,
+            title: CreationText.locationLabel,
             value: _settings.locationName.trim().isEmpty
-                ? UITextConstants.locationHidden
+                ? CreationText.locationHidden
                 : _settings.locationName.trim(),
             onTap: _pickLocation,
             borderRadius: BorderRadius.zero,
           ),
           const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
           PublishConfirmSettingRow(
-            title: UITextConstants.attachHomepageTitle,
+            title: CreationText.attachHomepageTitle,
             value: !_settings.isPublic
-                ? UITextConstants.createPublishHomepagePublicOnlyHint
+                ? CreationText.createPublishHomepagePublicOnlyHint
                 : _settings.homepage == null
-                ? UITextConstants.attachHomepageNone
+                ? CreationText.attachHomepageNone
                 : _settings.homepage!.title,
             onTap: _settings.isPublic ? _pickHomepage : null,
             borderRadius: BorderRadius.zero,
           ),
           const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
           PublishConfirmSettingRow(
-            title: UITextConstants.selectPublishCirclesLabel,
+            title: CreationText.selectPublishCirclesLabel,
             value: !_settings.isPublic
-                ? UITextConstants.createPublishCirclesPublicOnlyHint
+                ? CreationText.createPublishCirclesPublicOnlyHint
                 : widget.circleLoadUnavailable
-                ? UITextConstants.createPublishCirclesUnavailable
+                ? CreationText.createPublishCirclesUnavailable
                 : _settings.circleNames.isEmpty
-                ? UITextConstants.createPublishNoCirclesSelected
+                ? CreationText.createPublishNoCirclesSelected
                 : _settings.circleNames.join('、'),
             onTap: _settings.isPublic && !widget.circleLoadUnavailable
                 ? _pickCircles
@@ -154,7 +154,7 @@ class _CreatePublishConfirmSheetState
   Widget _buildPublishBottomBar(BuildContext context) {
     return IosSelectionBottomBar(
       confirmButtonKey: TestKeys.createPublishConfirmButton,
-      confirmLabel: UITextConstants.createPublishConfirmButton,
+      confirmLabel: CreationText.createPublishConfirmButton,
       onConfirm: () => Navigator.of(context).pop(_settings),
     );
   }
@@ -168,13 +168,13 @@ class _CreatePublishConfirmSheetState
           items: [
             AppActionSheetItem<bool>(
               value: true,
-              label: UITextConstants.visibilityPublic,
+              label: CreationText.visibilityPublic,
               icon: CupertinoIcons.globe,
               isSelected: _settings.isPublic,
             ),
             AppActionSheetItem<bool>(
               value: false,
-              label: UITextConstants.visibilityPrivate,
+              label: CreationText.visibilityPrivate,
               icon: CupertinoIcons.lock,
               isSelected: !_settings.isPublic,
             ),

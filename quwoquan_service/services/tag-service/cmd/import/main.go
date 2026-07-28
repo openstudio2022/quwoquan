@@ -24,6 +24,7 @@ import (
 	model "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/model"
 	persistence "quwoquan_service/services/tag-service/internal/tag/tag_node_view/infrastructure/persistence"
 	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/application/taxonomyrelease"
+	releasemodel "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/domain/taxonomyrelease/model"
 	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/infrastructure/taxonomyreleasestore"
 )
 
@@ -79,10 +80,14 @@ var validGroups = map[string]bool{"Topic": true, "Entity": true, "Audience": tru
 
 func main() {
 	tagsDir := flag.String("tags-dir", "../quwoquan_data/control_plane/governance/taxonomy", "path to canonical control-plane taxonomy tree")
+	releaseRoot := flag.String("release-root", "", "immutable Data release root; imports payload/objects/tags exactly")
 	mongoURI := flag.String("mongo-uri", "mongodb://localhost:27017", "mongo connection uri")
 	dbName := flag.String("db", "quwoquan_tag", "target database")
 	releaseID := flag.String("release-id", "", "immutable taxonomy release id (required; must match the consuming catalog)")
+	environment := flag.String("env", "", "deployment environment recorded in the import receipt")
+	reportPath := flag.String("report", "", "append-only JSON import receipt path")
 	sourceOwner := flag.String("source-owner", "qwq_data", "source owner for imported tag nodes")
+	dryRun := flag.Bool("dry-run", false, "validate the release projection and write a dry-run receipt")
 	validateOnly := flag.Bool(
 		"validate-only",
 		false,
@@ -91,11 +96,34 @@ func main() {
 	flag.Parse()
 
 	// 第一趟：收集全部节点并计算 canonical digest（节点集内容哈希，顺序无关）。
-	nodes, err := collectTaxonomyNodes(*tagsDir)
+	var (
+		nodes               []taxonomyNode
+		resolvedReleaseID   = strings.TrimSpace(*releaseID)
+		resolvedReleaseKind = releasemodel.ReleaseKindContent
+		err                 error
+	)
+	if strings.TrimSpace(*releaseRoot) != "" {
+		var releaseIdentity, releaseKind string
+		releaseIdentity, releaseKind, nodes, err = collectReleaseTaxonomyNodes(*releaseRoot)
+		if err == nil {
+			resolvedReleaseKind = releasemodel.ReleaseKind(releaseKind)
+			if resolvedReleaseID == "" {
+				resolvedReleaseID = releaseIdentity
+			} else if resolvedReleaseID != releaseIdentity {
+				err = fmt.Errorf(
+					"release-id %s differs from immutable release identity %s",
+					resolvedReleaseID,
+					releaseIdentity,
+				)
+			}
+		}
+	} else {
+		nodes, err = collectTaxonomyNodes(*tagsDir)
+	}
 	if err != nil {
 		log.Fatalf("collect taxonomy nodes: %v", err)
 	}
-	if len(nodes) == 0 {
+	if len(nodes) == 0 && strings.TrimSpace(*releaseRoot) == "" {
 		log.Fatalf("taxonomy tree %s has no importable nodes", *tagsDir)
 	}
 	digest := canonicalDigest(nodes)
@@ -105,9 +133,24 @@ func main() {
 		}
 		return
 	}
-	resolvedReleaseID := strings.TrimSpace(*releaseID)
 	if resolvedReleaseID == "" {
 		log.Fatal("release-id is required so the staged taxonomy snapshot can bind to its consuming catalog")
+	}
+	if *dryRun {
+		if err := writeTagImportReport(*reportPath, tagImportReport{
+			Schema:          tagImportReportSchema,
+			Status:          "dry-run",
+			Environment:     strings.TrimSpace(*environment),
+			ReleaseID:       resolvedReleaseID,
+			SourceOwner:     strings.TrimSpace(*sourceOwner),
+			CanonicalDigest: digest,
+			ReleaseKind:     string(resolvedReleaseKind),
+			NodeCount:       len(nodes),
+			TagRefs:         tagRefs(nodes),
+		}); err != nil {
+			log.Fatalf("write tag import report: %v", err)
+		}
+		return
 	}
 
 	ctx := context.Background()
@@ -124,6 +167,22 @@ func main() {
 	if err := releaseStore.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("ensure tag_taxonomy_releases indexes: %v", err)
 	}
+	if err := releaseStore.BackfillReleaseKind(
+		ctx,
+		resolvedReleaseID,
+		*sourceOwner,
+		digest,
+		len(nodes),
+		resolvedReleaseKind,
+	); err != nil {
+		log.Fatalf("backfill taxonomy release kind: %v", err)
+	}
+	previousReleaseID := ""
+	if previous, found, err := releaseStore.FindActive(ctx); err != nil {
+		log.Fatalf("load active taxonomy release: %v", err)
+	} else if found && previous.ReleaseID != resolvedReleaseID {
+		previousReleaseID = previous.ReleaseID
+	}
 	if err := store.MigrateSnapshotIdentity(ctx); err != nil {
 		log.Fatalf("migrate tag_nodes snapshot identity: %v", err)
 	}
@@ -137,6 +196,7 @@ func main() {
 		ReleaseID:       resolvedReleaseID,
 		SourceOwner:     *sourceOwner,
 		CanonicalDigest: digest,
+		ReleaseKind:     resolvedReleaseKind,
 		NodeCount:       len(nodes),
 	})
 	if err != nil {
@@ -167,6 +227,22 @@ func main() {
 	activated, err := releaseFacade.Activate(ctx, release.ReleaseID)
 	if err != nil {
 		log.Fatalf("activate taxonomy release %s: %v", release.ReleaseID, err)
+	}
+	if strings.TrimSpace(*reportPath) != "" {
+		if err := writeTagImportReport(*reportPath, tagImportReport{
+			Schema:            tagImportReportSchema,
+			Status:            "active",
+			Environment:       strings.TrimSpace(*environment),
+			ReleaseID:         activated.ReleaseID,
+			SourceOwner:       strings.TrimSpace(*sourceOwner),
+			CanonicalDigest:   digest,
+			ReleaseKind:       string(activated.ReleaseKind),
+			PreviousReleaseID: previousReleaseID,
+			NodeCount:         len(nodes),
+			TagRefs:           tagRefs(nodes),
+		}); err != nil {
+			log.Fatalf("write tag import report: %v", err)
+		}
 	}
 	log.Printf("OK: imported %d tag nodes into %s.tag_nodes (release=%s digest=%s status=%s)",
 		count, *dbName, activated.ReleaseID, digest[:16], activated.Status)

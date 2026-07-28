@@ -33,7 +33,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["postRef", "postId", "contentType", "authorId", "detailStatus", "feedStatus", "mediaReady", "authorProfileStatus"],
+        "required": ["postRef", "postId", "contentType", "authorId", "detailStatus", "feedStatus", "mediaReady", "mediaProbeCount", "sourceAttributionReady", "authorProfileStatus"],
         "properties": {
           "postRef": {"type": "string", "minLength": 1},
           "postId": {"type": "string", "minLength": 1},
@@ -42,6 +42,8 @@
           "detailStatus": {"const": 200},
           "feedStatus": {"const": 200},
           "mediaReady": {"const": true},
+          "mediaProbeCount": {"type": "integer", "minimum": 0},
+          "sourceAttributionReady": {"const": true},
           "authorProfileStatus": {"const": 200}
         }
       }

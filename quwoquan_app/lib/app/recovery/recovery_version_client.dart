@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_api_metadata.g.dart';
 
 class RecoveryVersionResult {
   const RecoveryVersionResult({
@@ -35,7 +36,7 @@ final class RecoveryVersionClient {
       throw const FormatException('invalid recovery origin');
     }
     final uri = origin.replace(
-      path: '/ops/app-recovery/version',
+      path: OpsApiMetadata.getAppRecoveryVersionPath,
       queryParameters: <String, String>{
         'platform': platform,
         'appVersion': appVersion,

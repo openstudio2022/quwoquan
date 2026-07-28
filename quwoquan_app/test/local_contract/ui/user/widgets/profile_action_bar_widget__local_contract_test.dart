@@ -47,13 +47,13 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text(UITextConstants.personaSwitchProfile), findsOneWidget);
-      expect(find.text(UITextConstants.profileEditLabel), findsOneWidget);
-      expect(find.text(UITextConstants.profileBrowseHistory), findsNothing);
-      expect(find.text(UITextConstants.profileShareHomepage), findsNothing);
+      expect(find.text(ProfileText.personaSwitchProfile), findsOneWidget);
+      expect(find.text(ProfileText.profileEditLabel), findsOneWidget);
+      expect(find.text(ProfileText.profileBrowseHistory), findsNothing);
+      expect(find.text(ContentText.profileShareHomepage), findsNothing);
 
-      await tester.tap(find.text(UITextConstants.personaSwitchProfile));
-      await tester.tap(find.text(UITextConstants.profileEditLabel));
+      await tester.tap(find.text(ProfileText.personaSwitchProfile));
+      await tester.tap(find.text(ProfileText.profileEditLabel));
       await tester.pump();
 
       expect(managed, isTrue);
@@ -78,14 +78,14 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text(UITextConstants.follow), findsOneWidget);
-      expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
-      expect(find.text(UITextConstants.profileGreet), findsNothing);
-      expect(find.text(UITextConstants.callVoice), findsNothing);
-      expect(find.text(UITextConstants.callVideo), findsNothing);
+      expect(find.text(FoundationText.follow), findsOneWidget);
+      expect(find.text(ProfileText.profileDirectMessage), findsOneWidget);
+      expect(find.text(ProfileText.profileGreet), findsNothing);
+      expect(find.text(CallText.callVoice), findsNothing);
+      expect(find.text(CallText.callVideo), findsNothing);
 
-      await tester.tap(find.text(UITextConstants.follow));
-      await tester.tap(find.text(UITextConstants.profileDirectMessage));
+      await tester.tap(find.text(FoundationText.follow));
+      await tester.tap(find.text(ProfileText.profileDirectMessage));
       await tester.pump();
 
       expect(followed, isTrue);
@@ -108,10 +108,10 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text(UITextConstants.following), findsOneWidget);
-      expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
+      expect(find.text(FoundationText.following), findsOneWidget);
+      expect(find.text(ProfileText.profileDirectMessage), findsOneWidget);
 
-      await tester.tap(find.text(UITextConstants.following));
+      await tester.tap(find.text(FoundationText.following));
       await tester.pump();
 
       expect(followed, isTrue);
@@ -137,10 +137,10 @@ void main() {
         ),
       );
 
-      expect(find.text(UITextConstants.callVoice), findsOneWidget);
-      expect(find.text(UITextConstants.callVideo), findsOneWidget);
-      await tester.tap(find.text(UITextConstants.callVoice));
-      await tester.tap(find.text(UITextConstants.callVideo));
+      expect(find.text(CallText.callVoice), findsOneWidget);
+      expect(find.text(CallText.callVideo), findsOneWidget);
+      await tester.tap(find.text(CallText.callVoice));
+      await tester.tap(find.text(CallText.callVideo));
       expect(voiceCallCount, 1);
       expect(videoCallCount, 1);
     });
@@ -162,8 +162,8 @@ void main() {
         ),
       );
 
-      expect(find.text(UITextConstants.callVoice), findsNothing);
-      expect(find.text(UITextConstants.callVideo), findsNothing);
+      expect(find.text(CallText.callVoice), findsNothing);
+      expect(find.text(CallText.callVideo), findsNothing);
     });
   });
 }

@@ -255,7 +255,7 @@ class LoginHeroBrand extends StatelessWidget {
       children: <Widget>[
         Semantics(
           image: true,
-          label: UITextConstants.loginBrandIconSemanticLabel,
+          label: FoundationText.loginBrandIconSemanticLabel,
           child: Container(
             width: AppSpacing.loginBrandMarkSize,
             height: AppSpacing.loginBrandMarkSize,
@@ -281,7 +281,7 @@ class LoginHeroBrand extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.ten),
         Text(
-          UITextConstants.loginBrandName,
+          FoundationText.loginBrandName,
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: AppTypography.iosTitle3,
@@ -415,7 +415,7 @@ class AccountBlockedPanel extends StatelessWidget {
     return AppFormErrorCard(
       key: const ValueKey<String>('loginAccountBlocked'),
       semantic: UiErrorSemantic(
-        category: UiErrorCategory.authRequired,
+        category: UiErrorCategory.validation,
         scope: UiErrorScope.form,
         title: '',
         message: state.message,
@@ -435,7 +435,7 @@ class ReturningAccountPanel extends StatelessWidget {
     final displayName =
         hint?.nicknameCustomized == true && hint?.displayName.isNotEmpty == true
         ? hint!.displayName
-        : UITextConstants.loginReturningDefaultName;
+        : FoundationText.loginReturningDefaultName;
     final maskedPhone = hint?.maskedPhone ?? '';
     return Column(
       key: const ValueKey<String>('returningAccount'),
@@ -480,7 +480,7 @@ class CarrierPhonePanel extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
         Text(
-          phone.isEmpty ? UITextConstants.loginCarrierDefaultPhone : phone,
+          phone.isEmpty ? FoundationText.loginCarrierDefaultPhone : phone,
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: AppTypography.iosProfileTitle,
@@ -490,7 +490,7 @@ class CarrierPhonePanel extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
-          UITextConstants.loginCarrierCreateHint,
+          FoundationText.loginCarrierCreateHint,
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: AppTypography.iosSubheadline,
@@ -611,16 +611,16 @@ class PhoneOtpPanel extends StatelessWidget {
     }
     if (state.message.isNotEmpty) return state.message;
     return state.phase == LoginPhoneOtpPhase.invalid
-        ? UITextConstants.loginPhoneInvalid
-        : UITextConstants.loginOtpMismatch;
+        ? FoundationText.loginPhoneInvalid
+        : FoundationText.loginOtpMismatch;
   }
 
   String _statusMessageForState() {
     if (state.phase == LoginPhoneOtpPhase.success) {
-      return UITextConstants.loginRedirecting;
+      return FoundationText.loginRedirecting;
     }
     return state.phase == LoginPhoneOtpPhase.sendingCode
-        ? UITextConstants.loginSendOtpSubmitting
+        ? FoundationText.loginSendOtpSubmitting
         : '';
   }
 
@@ -636,13 +636,13 @@ class PhoneOtpPanel extends StatelessWidget {
     };
     if (!isFormError) return null;
     final fallback = switch (state.phase) {
-      LoginPhoneOtpPhase.rateLimited => UITextConstants.loginOtpRateLimited,
-      LoginPhoneOtpPhase.codeExpired => UITextConstants.loginOtpExpired,
-      LoginPhoneOtpPhase.loginLocked => UITextConstants.loginPhoneLoginLocked,
+      LoginPhoneOtpPhase.rateLimited => FoundationText.loginOtpRateLimited,
+      LoginPhoneOtpPhase.codeExpired => FoundationText.loginOtpExpired,
+      LoginPhoneOtpPhase.loginLocked => FoundationText.loginPhoneLoginLocked,
       LoginPhoneOtpPhase.accountSuspended =>
-        UITextConstants.loginAccountSuspended,
-      LoginPhoneOtpPhase.accountDeleted => UITextConstants.loginAccountDeleted,
-      _ => UITextConstants.loginOtpSendFailed,
+        FoundationText.loginAccountSuspended,
+      LoginPhoneOtpPhase.accountDeleted => FoundationText.loginAccountDeleted,
+      _ => FoundationText.loginOtpSendFailed,
     };
     return UiErrorSemantic(
       category: state.phase == LoginPhoneOtpPhase.rateLimited
@@ -659,7 +659,7 @@ class PhoneOtpPanel extends StatelessWidget {
     final maskedPhone = state.maskedPhone.isEmpty
         ? _maskPhone(state.phone)
         : state.maskedPhone;
-    final base = UITextConstants.loginOtpSentTo.replaceFirst('%s', maskedPhone);
+    final base = FoundationText.loginOtpSentTo.replaceFirst('%s', maskedPhone);
     return base;
   }
 }
@@ -697,7 +697,7 @@ class _OtpDestinationSummary extends StatelessWidget {
             AppSpacing.minInteractiveSize,
           ),
           onPressed: onChangePhone,
-          child: const Text(UITextConstants.loginPhoneChange),
+          child: const Text(FoundationText.loginPhoneChange),
         ),
       ],
     );

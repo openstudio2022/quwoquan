@@ -65,7 +65,11 @@ public final class CommercialAuthPlugin {
   }
 
   boolean onActivityResult(int requestCode, int resultCode, Intent data) {
-    return Tencent.onActivityResultData(requestCode, resultCode, data, qqLoginListener);
+    if (requestCode != Constants.REQUEST_LOGIN) {
+      return false;
+    }
+    Tencent.handleResultData(data, qqLoginListener);
+    return true;
   }
 
   private Map<String, Object> capability(String provider) {

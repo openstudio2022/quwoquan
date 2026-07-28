@@ -179,7 +179,7 @@ func AppErrorFromUnauthorized(debugMessage string) *rterr.AppError {
 // AppErrorFromUpstreamTimeout returns *AppError for CONTENT.MIDDLEWARE.upstream_timeout (user_message from errors.yaml).
 func AppErrorFromUpstreamTimeout(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.MIDDLEWARE.upstream_timeout")
-	return rterr.NewAppError(code, "请求超时，请检查网络后重试", debugMessage).WithMetadata("timeout", 504).WithRecovery("retry", 10)
+	return rterr.NewAppError(code, "内容服务响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 504).WithRecovery("retry", 10)
 }
 
 // AppErrorFromVersionConflict returns *AppError for CONTENT.USER.version_conflict (user_message from errors.yaml).

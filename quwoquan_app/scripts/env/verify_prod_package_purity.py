@@ -27,6 +27,9 @@ FORBIDDEN_TOKENS = (
     "192.168.",
     "mock-cdn.example.com",
 )
+PROD_SIM_PACKAGE_ALLOWED_HOST_TOKENS = frozenset(
+    {".test", "127.0.0.1", "10.0.2.2", "192.168."}
+)
 PROD_SOURCES = [
     ROOT / "quwoquan_app" / "configs" / "prod" / "app_runtime.yaml",
 ]
@@ -78,9 +81,28 @@ def iter_text_files(*, scope: str, target: str) -> list[Path]:
 def main() -> int:
     args = parse_args()
     issues: list[str] = []
+    target_name = deployment_target_for_env("prod", target=args.target)
+    app_package_root = app_deployment_package_dir(
+        "prod",
+        target=target_name,
+    ).resolve()
     for path in iter_text_files(scope=args.scope, target=args.target):
         text = path.read_text(encoding="utf-8", errors="replace")
-        for token in FORBIDDEN_TOKENS:
+        resolved = path.resolve()
+        try:
+            is_app_package = resolved.is_relative_to(app_package_root)
+        except AttributeError:
+            is_app_package = app_package_root in resolved.parents
+        forbidden_tokens = (
+            tuple(
+                token
+                for token in FORBIDDEN_TOKENS
+                if token not in PROD_SIM_PACKAGE_ALLOWED_HOST_TOKENS
+            )
+            if target_name == "prod-sim" and is_app_package
+            else FORBIDDEN_TOKENS
+        )
+        for token in forbidden_tokens:
             if token in text:
                 try:
                     display = path.relative_to(ROOT).as_posix()

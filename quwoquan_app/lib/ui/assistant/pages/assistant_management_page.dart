@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,7 +11,6 @@ import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/core/constants/assistant_text_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -188,17 +188,11 @@ class _AssistantManagementPageState
   }
 
   UiErrorSemantic _consentErrorSemantic(String message) {
-    return UiErrorSemantic(
+    return AppUserRecoveryContract.semanticFor(
+      group: AppUserRecoveryGroup.reloadLater,
       category: UiErrorCategory.sectionLoad,
       scope: UiErrorScope.section,
-      title: AssistantText.assistantConsentLoadFailedTitle,
-      message: message,
-      primaryAction: const UiErrorAction(
-        type: UiErrorActionType.retry,
-        label: UITextConstants.tryAgain,
-      ),
       presentation: UiErrorPresentation.sectionSoftCard,
-      tone: UiErrorTone.caution,
     );
   }
 
@@ -276,16 +270,11 @@ class _AssistantManagementPageState
         preferencesAsync.when(
           loading: () => Padding(
             padding: EdgeInsets.all(AppSpacing.md),
-            child: const Center(child: CupertinoActivityIndicator()),
+            child: AppRequestFeedback.section(),
           ),
           error: (error, _) => AppSectionErrorCard(
             margin: EdgeInsets.all(AppSpacing.md),
-            semantic: runtimeErrorSemantic(
-              context,
-              error: error,
-              category: UiErrorCategory.sectionLoad,
-              scope: UiErrorScope.section,
-            ),
+            semantic: _preferenceLoadErrorSemantic(error),
             onAction: (action) async {
               if (action.type == UiErrorActionType.retry ||
                   action.type == UiErrorActionType.resubmit) {
@@ -335,6 +324,17 @@ class _AssistantManagementPageState
           },
         ),
       ],
+    );
+  }
+
+  UiErrorSemantic _preferenceLoadErrorSemantic(Object error) {
+    return ensureRetryUiErrorSemantic(
+      runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.sectionLoad,
+        scope: UiErrorScope.section,
+      ),
     );
   }
 

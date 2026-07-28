@@ -86,18 +86,18 @@ const Map<AuthGateReason, AuthGateEntry>
 authGateMatrix = <AuthGateReason, AuthGateEntry>{
   AuthGateReason.profileTab: AuthGateEntry(
     reason: AuthGateReason.profileTab,
-    title: UITextConstants.authGateTitleProfile,
-    subtitle: UITextConstants.authGateSubtitleProfile,
-    prompt: UITextConstants.authGatePromptProfile,
+    title: FoundationText.authGateTitleProfile,
+    subtitle: FoundationText.authGateSubtitleProfile,
+    prompt: FoundationText.authGatePromptProfile,
     // 个人页读取契约允许游客查看其他公开资料；「我的」tab 的登录门是产品
     // 导航决策，不得错误绑定 optional 的 GetSubAccountProfile operation。
     requiredOperations: <String>[],
   ),
   AuthGateReason.createPost: AuthGateEntry(
     reason: AuthGateReason.createPost,
-    title: UITextConstants.authGateTitleCreate,
-    subtitle: UITextConstants.authGateSubtitleCreate,
-    prompt: UITextConstants.authGatePromptCreate,
+    title: FoundationText.authGateTitleCreate,
+    subtitle: FoundationText.authGateSubtitleCreate,
+    prompt: FoundationText.authGatePromptCreate,
     requiredOperations: <String>[
       AppCloudOperationIds.contentPostSubmitPostPublication,
     ],
@@ -121,9 +121,9 @@ authGateMatrix = <AuthGateReason, AuthGateEntry>{
   ),
   AuthGateReason.comment: AuthGateEntry(
     reason: AuthGateReason.comment,
-    title: UITextConstants.authGateTitleComment,
-    subtitle: UITextConstants.authGateSubtitleComment,
-    prompt: UITextConstants.authGatePromptComment,
+    title: FoundationText.authGateTitleComment,
+    subtitle: FoundationText.authGateSubtitleComment,
+    prompt: FoundationText.authGatePromptComment,
     requiredOperations: <String>[],
   ),
   // 点赞已下放为「游客设备态可写」：LikePost 鉴权为 optional + anonymous_policy=allow，
@@ -132,9 +132,9 @@ authGateMatrix = <AuthGateReason, AuthGateEntry>{
   // UX 分类，不映射到 required operation。
   AuthGateReason.like: AuthGateEntry(
     reason: AuthGateReason.like,
-    title: UITextConstants.authGateTitleLike,
-    subtitle: UITextConstants.authGateSubtitleLike,
-    prompt: UITextConstants.authGatePromptLike,
+    title: FoundationText.authGateTitleLike,
+    subtitle: FoundationText.authGateSubtitleLike,
+    prompt: FoundationText.authGatePromptLike,
     requiredOperations: <String>[],
   ),
   // 「想去」需要读取账号私有的状态投影；行为写入仍复用 public ReportBehaviors
@@ -142,18 +142,18 @@ authGateMatrix = <AuthGateReason, AuthGateEntry>{
   // 契约锚点，不能复用关注关系的 FollowUser operation。
   AuthGateReason.wishlist: AuthGateEntry(
     reason: AuthGateReason.wishlist,
-    title: UITextConstants.authGateTitleWishlist,
-    subtitle: UITextConstants.authGateSubtitleWishlist,
-    prompt: UITextConstants.authGatePromptWishlist,
+    title: FoundationText.authGateTitleWishlist,
+    subtitle: FoundationText.authGateSubtitleWishlist,
+    prompt: FoundationText.authGatePromptWishlist,
     requiredOperations: <String>[
       AppCloudOperationIds.contentPostGetEntityWishlistState,
     ],
   ),
   AuthGateReason.follow: AuthGateEntry(
     reason: AuthGateReason.follow,
-    title: UITextConstants.authGateTitleFollow,
-    subtitle: UITextConstants.authGateSubtitleFollow,
-    prompt: UITextConstants.authGatePromptFollow,
+    title: FoundationText.authGateTitleFollow,
+    subtitle: FoundationText.authGateSubtitleFollow,
+    prompt: FoundationText.authGatePromptFollow,
     requiredOperations: <String>[
       AppCloudOperationIds.userPersonaRelationshipFollowUser,
     ],
@@ -170,73 +170,73 @@ authGateMatrix = <AuthGateReason, AuthGateEntry>{
   // 登录约束是产品决策而非 API 强制。
   AuthGateReason.followingFeed: AuthGateEntry(
     reason: AuthGateReason.followingFeed,
-    title: UITextConstants.authGateTitleFollowingFeed,
-    subtitle: UITextConstants.authGateSubtitleFollowingFeed,
-    prompt: UITextConstants.authGatePromptFollowingFeed,
+    title: FoundationText.authGateTitleFollowingFeed,
+    subtitle: FoundationText.authGateSubtitleFollowingFeed,
+    prompt: FoundationText.authGatePromptFollowingFeed,
     requiredOperations: <String>[],
   ),
   // 系统分享、复制链接和转发本身不要求账号；只有圈内投放等实际业务写命令
   // 在其独立入口通过对应 operation 的登录门处理。
   AuthGateReason.share: AuthGateEntry(
     reason: AuthGateReason.share,
-    title: UITextConstants.authGateTitleShare,
-    subtitle: UITextConstants.authGateSubtitleShare,
-    prompt: UITextConstants.authGatePromptShare,
+    title: FoundationText.authGateTitleShare,
+    subtitle: FoundationText.authGateSubtitleShare,
+    prompt: FoundationText.authGatePromptShare,
     requiredOperations: <String>[],
   ),
   AuthGateReason.personaManage: AuthGateEntry(
     reason: AuthGateReason.personaManage,
-    title: UITextConstants.authGateTitlePersona,
-    subtitle: UITextConstants.authGateSubtitlePersona,
-    prompt: UITextConstants.authGatePromptPersona,
+    title: FoundationText.authGateTitlePersona,
+    subtitle: FoundationText.authGateSubtitlePersona,
+    prompt: FoundationText.authGatePromptPersona,
     requiredOperations: <String>[],
   ),
   AuthGateReason.settingsAccount: AuthGateEntry(
     reason: AuthGateReason.settingsAccount,
-    title: UITextConstants.authGateTitleSettingsAccount,
-    subtitle: UITextConstants.authGateSubtitleSettingsAccount,
-    prompt: UITextConstants.authGatePromptSettingsAccount,
+    title: FoundationText.authGateTitleSettingsAccount,
+    subtitle: FoundationText.authGateSubtitleSettingsAccount,
+    prompt: FoundationText.authGatePromptSettingsAccount,
     requiredOperations: <String>[],
   ),
   AuthGateReason.mediaUpload: AuthGateEntry(
     reason: AuthGateReason.mediaUpload,
-    title: UITextConstants.authGateTitleMediaUpload,
-    subtitle: UITextConstants.authGateSubtitleMediaUpload,
-    prompt: UITextConstants.authGatePromptMediaUpload,
+    title: FoundationText.authGateTitleMediaUpload,
+    subtitle: FoundationText.authGateSubtitleMediaUpload,
+    prompt: FoundationText.authGatePromptMediaUpload,
     requiredOperations: <String>[
       AppCloudOperationIds.contentMediaUploadSessionInitMediaUpload,
     ],
   ),
   AuthGateReason.deletePost: AuthGateEntry(
     reason: AuthGateReason.deletePost,
-    title: UITextConstants.authGateTitleDeletePost,
-    subtitle: UITextConstants.authGateSubtitleDeletePost,
-    prompt: UITextConstants.authGatePromptDeletePost,
+    title: FoundationText.authGateTitleDeletePost,
+    subtitle: FoundationText.authGateSubtitleDeletePost,
+    prompt: FoundationText.authGatePromptDeletePost,
     requiredOperations: <String>[],
   ),
   AuthGateReason.report: AuthGateEntry(
     reason: AuthGateReason.report,
-    title: UITextConstants.authGateTitleReport,
-    subtitle: UITextConstants.authGateSubtitleReport,
-    prompt: UITextConstants.authGatePromptReport,
+    title: FoundationText.authGateTitleReport,
+    subtitle: FoundationText.authGateSubtitleReport,
+    prompt: FoundationText.authGatePromptReport,
     requiredOperations: <String>[
       AppCloudOperationIds.contentReportCreateReport,
     ],
   ),
   AuthGateReason.blockUser: AuthGateEntry(
     reason: AuthGateReason.blockUser,
-    title: UITextConstants.authGateTitleBlockUser,
-    subtitle: UITextConstants.authGateSubtitleBlockUser,
-    prompt: UITextConstants.authGatePromptBlockUser,
+    title: ContentText.authGateTitleBlockUser,
+    subtitle: ContentText.authGateSubtitleBlockUser,
+    prompt: ContentText.authGatePromptBlockUser,
     requiredOperations: <String>[
       AppCloudOperationIds.userPersonaRelationshipBlockUser,
     ],
   ),
   AuthGateReason.homepageWrite: AuthGateEntry(
     reason: AuthGateReason.homepageWrite,
-    title: UITextConstants.authGateTitleHomepageWrite,
-    subtitle: UITextConstants.authGateSubtitleHomepageWrite,
-    prompt: UITextConstants.authGatePromptHomepageWrite,
+    title: ContentText.authGateTitleHomepageWrite,
+    subtitle: ContentText.authGateSubtitleHomepageWrite,
+    prompt: ContentText.authGatePromptHomepageWrite,
     requiredOperations: <String>[
       AppCloudOperationIds.entityHomepageSuggestHomepageCandidate,
       AppCloudOperationIds.entityHomepageUpdateClaimedHomepageBasics,
@@ -246,9 +246,9 @@ authGateMatrix = <AuthGateReason, AuthGateEntry>{
   ),
   AuthGateReason.joinCircle: AuthGateEntry(
     reason: AuthGateReason.joinCircle,
-    title: UITextConstants.authGateTitleJoinCircle,
-    subtitle: UITextConstants.authGateSubtitleJoinCircle,
-    prompt: UITextConstants.authGatePromptJoinCircle,
+    title: FoundationText.authGateTitleJoinCircle,
+    subtitle: FoundationText.authGateSubtitleJoinCircle,
+    prompt: FoundationText.authGatePromptJoinCircle,
     requiredOperations: <String>[
       AppCloudOperationIds.circleCircleMembershipJoinCircle,
     ],
@@ -257,9 +257,9 @@ authGateMatrix = <AuthGateReason, AuthGateEntry>{
   // 登录约束是产品决策而非单一 required API，故 requiredOperations 留空。
   AuthGateReason.addContact: AuthGateEntry(
     reason: AuthGateReason.addContact,
-    title: UITextConstants.authGateTitleAddContact,
-    subtitle: UITextConstants.authGateSubtitleAddContact,
-    prompt: UITextConstants.authGatePromptAddContact,
+    title: FoundationText.authGateTitleAddContact,
+    subtitle: FoundationText.authGateSubtitleAddContact,
+    prompt: FoundationText.authGatePromptAddContact,
     requiredOperations: <String>[],
   ),
   AuthGateReason.startGroupChat: AuthGateEntry(
@@ -271,25 +271,25 @@ authGateMatrix = <AuthGateReason, AuthGateEntry>{
   ),
   AuthGateReason.createCircle: AuthGateEntry(
     reason: AuthGateReason.createCircle,
-    title: UITextConstants.authGateTitleCreateCircle,
-    subtitle: UITextConstants.authGateSubtitleCreateCircle,
-    prompt: UITextConstants.authGatePromptCreateCircle,
+    title: FoundationText.authGateTitleCreateCircle,
+    subtitle: FoundationText.authGateSubtitleCreateCircle,
+    prompt: FoundationText.authGatePromptCreateCircle,
     requiredOperations: <String>[],
   ),
   AuthGateReason.startCall: AuthGateEntry(
     reason: AuthGateReason.startCall,
-    title: UITextConstants.authGateTitleStartCall,
-    subtitle: UITextConstants.authGateSubtitleStartCall,
-    prompt: UITextConstants.authGatePromptStartCall,
+    title: FoundationText.authGateTitleStartCall,
+    subtitle: FoundationText.authGateSubtitleStartCall,
+    prompt: FoundationText.authGatePromptStartCall,
     requiredOperations: <String>[
       AppCloudOperationIds.rtcCallSessionInitiateCall,
     ],
   ),
   AuthGateReason.generic: AuthGateEntry(
     reason: AuthGateReason.generic,
-    title: UITextConstants.authGateTitleGeneric,
-    subtitle: UITextConstants.authGateSubtitleGeneric,
-    prompt: UITextConstants.authGatePromptGeneric,
+    title: FoundationText.authGateTitleGeneric,
+    subtitle: FoundationText.authGateSubtitleGeneric,
+    prompt: FoundationText.authGatePromptGeneric,
     requiredOperations: <String>[],
   ),
 };
@@ -457,8 +457,8 @@ LoginReasonCopy loginReasonCopyForName(String? name) {
     return loginReasonCopyForPromptReason(promptReason);
   }
   return const LoginReasonCopy(
-    title: UITextConstants.loginDefaultTitle,
-    subtitle: UITextConstants.loginDefaultSubtitle,
+    title: FoundationText.loginDefaultTitle,
+    subtitle: FoundationText.loginDefaultSubtitle,
     source: LoginReasonCopySource.localApp,
   );
 }
@@ -466,33 +466,33 @@ LoginReasonCopy loginReasonCopyForName(String? name) {
 LoginReasonCopy loginReasonCopyForPromptReason(AuthPromptReason reason) {
   return switch (reason) {
     AuthPromptReason.firstRun => const LoginReasonCopy(
-      title: UITextConstants.loginTitleFirstRun,
-      subtitle: UITextConstants.loginSubtitleFirstRun,
+      title: FoundationText.loginTitleFirstRun,
+      subtitle: FoundationText.loginSubtitleFirstRun,
       source: LoginReasonCopySource.localApp,
     ),
     AuthPromptReason.manualLoggedOut => const LoginReasonCopy(
-      title: UITextConstants.loginTitleManualLoggedOut,
-      subtitle: UITextConstants.loginSubtitleManualLoggedOut,
+      title: FoundationText.loginTitleManualLoggedOut,
+      subtitle: FoundationText.loginSubtitleManualLoggedOut,
       source: LoginReasonCopySource.localSession,
     ),
     AuthPromptReason.sessionExpired => const LoginReasonCopy(
-      title: UITextConstants.loginTitleReturn,
-      subtitle: UITextConstants.loginSubtitleSessionExpired,
+      title: FoundationText.loginTitleReturn,
+      subtitle: FoundationText.loginSubtitleSessionExpired,
       source: LoginReasonCopySource.localSession,
     ),
     AuthPromptReason.accountSuspended => const LoginReasonCopy(
-      title: UITextConstants.loginTitleActionRequired,
-      subtitle: UITextConstants.loginAccountSuspended,
+      title: FoundationText.loginTitleActionRequired,
+      subtitle: FoundationText.loginAccountSuspended,
       source: LoginReasonCopySource.localSession,
     ),
     AuthPromptReason.accountClosed => const LoginReasonCopy(
-      title: UITextConstants.loginTitleActionRequired,
-      subtitle: UITextConstants.loginAccountDeleted,
+      title: FoundationText.loginTitleActionRequired,
+      subtitle: FoundationText.loginAccountDeleted,
       source: LoginReasonCopySource.localSession,
     ),
     AuthPromptReason.actionRequired => const LoginReasonCopy(
-      title: UITextConstants.loginTitleActionRequired,
-      subtitle: UITextConstants.loginSubtitleActionRequired,
+      title: FoundationText.loginTitleActionRequired,
+      subtitle: FoundationText.loginSubtitleActionRequired,
       source: LoginReasonCopySource.localApp,
     ),
   };

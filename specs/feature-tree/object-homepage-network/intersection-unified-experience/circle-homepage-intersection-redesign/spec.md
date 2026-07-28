@@ -21,7 +21,7 @@
 - 打动卡标题统一为「圈子打动的人」，AuthorImpactCard 同构、去好友化/去收藏，circleImpactProvider 单一真相源。
 - 移除头部成员头像簇（你认识的人收敛进我的交集模块）；次按钮由私信改「进入讨论」（切讨论 tab）。
 - 一级 tab 内容改记录；记录流去胶囊改右侧过滤、双列瀑布、卡内交集句。
-- 头部 N 成员单计数；圈子独立头像字段契约预留 + alpha mock。
+- 头部 N 成员单计数；圈子独立头像字段由 Remote contract 与已物化 public avatar slice 提供，四环境不得端侧 mock。
 
 ### Out of Scope
 

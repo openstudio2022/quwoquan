@@ -15,6 +15,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
@@ -81,6 +82,7 @@ import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider
 import 'package:quwoquan_app/ui/discovery/widgets/following_subject_strip.dart';
 
 part 'home_multi_form_feed_scroll.dart';
+part 'home_multi_form_feed_channel_config.dart';
 part 'home_multi_form_feed_post_cards.dart';
 part 'home_multi_form_feed_states.dart';
 part 'home_multi_form_feed_media.dart';
@@ -90,16 +92,6 @@ part 'home_multi_form_feed_actions.dart';
 part 'home_multi_form_feed_report_actions.dart';
 part 'home_multi_form_feed_object_cards.dart';
 
-const double _feedCardVerticalPadding = AppSpacing.fourteen;
-const double _feedCardSectionGap =
-    DiscoveryFeedSpacing.homeFeedCardSectionGapCompact;
-const double _feedToolbarIconSize = AppSpacing.twenty;
-const double _feedMediaGap = AppSpacing.xs;
-typedef _HomeFeedItemBuilder =
-    Widget Function(
-      int index,
-      ValueListenable<_HomeFeedVideoScrollSignal> videoScrollSignal,
-    );
 const ArticleDistributionProfileConfig _followingArticleDistributionProfile =
     ArticleDistributionProfileConfig(
       id: 'follow_list_with_optional_cover',
@@ -185,10 +177,17 @@ class HomeMultiFormFeed extends ConsumerWidget {
     final blockingError = feedAsync.value?.blockingError;
     final appendError = feedAsync.value?.appendError;
     final staleDataError = feedAsync.value?.staleDataError;
-    final hasBlockingError = blockingError != null;
-
     final isFeedLoading =
         feedAsync.isLoading || (feedAsync.value?.isLoading ?? false);
+    final effectiveBlockingError =
+        blockingError ??
+        (!isFeedLoading &&
+                feedAsync.value != null &&
+                feedPosts.isEmpty &&
+                channelId != 'following'
+            ? discoveryFeedInitialEmptyPageFailure(channelId)
+            : null);
+    final hasBlockingError = effectiveBlockingError != null;
     if (isFeedLoading && feedPosts.isEmpty && !hasBlockingError) {
       // 任务 A · 加载态：用占位渐显的骨架屏代替裸 spinner，避免白屏并提示版式。
       return Column(
@@ -199,45 +198,84 @@ class HomeMultiFormFeed extends ConsumerWidget {
               key: const ValueKey<String>('home_feed_slow_hint'),
               showSlowHint: true,
               showIndicator: false,
-              slowLabel: UITextConstants.requestWaitSlow,
+              slowLabel: FoundationText.requestWaitSlow,
             ),
         ],
       );
     }
 
     if (hasBlockingError && feedPosts.isEmpty) {
+      final semantic = runtimeErrorSemantic(
+        context,
+        error: effectiveBlockingError,
+        category: UiErrorCategory.pageLoad,
+        scope: UiErrorScope.page,
+        sourceOperationId: ContentApiMetadata.getFeedOperation,
+        sourceRouteId: AppUiSurfaces.homeFeed.routeId,
+        sourceSurfaceId: AppUiSurfaces.homeFeed.id,
+      );
       // 任务 B · 页面级异常可观测：首屏阻断态空内容上报加载失败归因（按因去重）。
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref
             .read(feedPerformanceObservabilityProvider)
-            .recordFeedLoadFailed(channelId: channelId, reason: 'page_load');
+            .recordFeedLoadFailed(
+              channelId: channelId,
+              errorCode: semantic.sourceCode ?? 'APP.SYSTEM.unknown_error',
+              operation:
+                  semantic.sourceOperationId ??
+                  ContentApiMetadata.getFeedOperation,
+              surface: semantic.sourceSurfaceId ?? AppUiSurfaces.homeFeed.id,
+              hasCache: false,
+              recovery: semantic.recoveryAction?.name,
+              requestId: semantic.requestId,
+              traceId: semantic.traceId,
+            );
       });
+      final handledActionTypes = <UiErrorActionType>{
+        UiErrorActionType.login,
+        UiErrorActionType.retry,
+        UiErrorActionType.resubmit,
+      };
+      final hasHandledAction =
+          <UiErrorAction?>[semantic.primaryAction, semantic.secondaryAction]
+              .whereType<UiErrorAction>()
+              .any((action) => handledActionTypes.contains(action.type));
       return AppPageErrorState(
-        semantic: runtimeErrorSemantic(
-          context,
-          error: blockingError,
-          category: UiErrorCategory.pageLoad,
-          scope: UiErrorScope.page,
-        ),
-        onAction: (action) async {
-          if (action.type == UiErrorActionType.retry ||
-              action.type == UiErrorActionType.resubmit) {
-            await ref
-                .read(discoveryFeedMapProvider.notifier)
-                .load(channelId, force: true);
-          }
-        },
+        semantic: semantic,
+        onAction: !hasHandledAction
+            ? null
+            : (action) async {
+                if (action.type == UiErrorActionType.login) {
+                  openLoginPage(
+                    context,
+                    reasonName: AuthGateReason.followingFeed.name,
+                    redirect: AppRoutePaths.home,
+                    dismissFallback: AppRoutePaths.home,
+                  );
+                  return;
+                }
+                if (action.type == UiErrorActionType.retry ||
+                    action.type == UiErrorActionType.resubmit) {
+                  await ref
+                      .read(discoveryFeedMapProvider.notifier)
+                      .load(channelId, force: true);
+                  final refreshed = ref.read(discoveryFeedProvider(channelId));
+                  final refreshedValue = refreshed.value;
+                  if (refreshedValue?.blockingError != null ||
+                      (channelId != 'following' &&
+                          (refreshedValue?.items.isEmpty ?? true))) {
+                    throw StateError(
+                      'feed recovery did not leave blocking error',
+                    );
+                  }
+                }
+              },
       );
     }
 
     if (feedPosts.isEmpty && !isFeedLoading && !hasBlockingError) {
-      // 任务 A · 空态：加载完成但无内容时给运营兜底文案 + 再试，禁止落到空白滚动视图。
-      return _HomeFeedEmptyState(
-        isDark: isDark,
-        onRetry: () => ref
-            .read(discoveryFeedMapProvider.notifier)
-            .load(channelId, force: true),
-      );
+      // 关注频道允许成功空列表；推荐频道的空首屏已在上方收敛为可重试错误。
+      return _HomeFollowingFeedEmptyState(isDark: isDark);
     }
 
     // 任务 B · 首屏 TTI：内容首帧落地时上报首屏可交互耗时（每 channel 一次）。
@@ -597,24 +635,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
     );
   }
 
-  String _resolveChannelMoodCopy() {
-    for (final channel in ContentUIConfig.homeChannels) {
-      if (channel.id == channelId) {
-        return UITextConstants.homeChannelMoodCopy(channel.moodCopyKey);
-      }
-    }
-    return '';
-  }
-
-  HomeChannelConfig? _resolveChannelConfig() {
-    for (final channel in ContentUIConfig.homeChannels) {
-      if (channel.id == channelId) {
-        return channel;
-      }
-    }
-    return null;
-  }
-
   void _showShare(
     BuildContext context,
     WidgetRef ref,
@@ -723,7 +743,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
                     contentVertical: post.contentVertical,
                     supplySource: post.supplySource,
                   );
-              AppToast.show(context, UITextConstants.notInterestedUndone);
+              AppToast.show(context, ContentText.notInterestedUndone);
             },
           );
         },
@@ -743,14 +763,14 @@ class HomeMultiFormFeed extends ConsumerWidget {
   ) async {
     final confirmed = await showAppActionSheet<bool>(
       context,
-      title: UITextConstants.profileBlockConfirmTitle,
-      message: UITextConstants.profileBlockConfirmMessage,
+      title: ContentText.profileBlockConfirmTitle,
+      message: ContentText.profileBlockConfirmMessage,
       sections: const <AppActionSheetSection<bool>>[
         AppActionSheetSection<bool>(
           items: <AppActionSheetItem<bool>>[
             AppActionSheetItem<bool>(
               value: true,
-              label: UITextConstants.blockAuthor,
+              label: ContentText.blockAuthor,
               icon: CupertinoIcons.person_crop_circle_badge_xmark,
               isDestructive: true,
             ),
@@ -943,7 +963,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
         wire: _rawDiscoveryItem(post),
         enableIdentityTemplate: enableIdentityTemplate,
       ),
-      ContentShareAction(id: 'copy_link', label: UITextConstants.copyLink),
+      ContentShareAction(id: 'copy_link', label: FoundationText.copyLink),
     );
     if (result.success) {
       await _recordShare(ref, post.id, result.actionId);
@@ -977,7 +997,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
       AppToast.show(
         context,
         toast,
-        actionLabel: onUndo == null ? null : UITextConstants.undo,
+        actionLabel: onUndo == null ? null : ContentText.undo,
         onAction: onUndo == null
             ? null
             : () {

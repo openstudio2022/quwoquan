@@ -346,6 +346,40 @@ def test_env_ready_writes_compact_failure_evidence(monkeypatch, tmp_path):
     assert "stdoutTail" not in json.dumps(evidence)
 
 
+def test_compact_preflight_evidence_preserves_reliabletask_fleet_receipt() -> None:
+    evidence = preflight_handler._compact_ready_evidence(
+        {
+            "ready": True,
+            "prepare": {"ready": True, "python": sys.executable},
+            "preflight": {
+                "ready": True,
+                "runtime": {"ready": True, "resolvedPython": sys.executable},
+                "cursorApiKey": {"source": "key_file", "present": True, "valid": True},
+                "network": {"checked": True, "ready": True},
+                "cursorStartup": {"checked": True, "ready": True},
+                "reliableTaskFleet": {
+                    "checked": True,
+                    "ready": True,
+                    "target": "beta-local",
+                    "mongo": True,
+                    "redis": True,
+                    "issues": [],
+                },
+            },
+            "cursorStartup": {"checked": True, "ready": True},
+        }
+    )
+
+    assert evidence["reliableTaskFleet"] == {
+        "checked": True,
+        "ready": True,
+        "target": "beta-local",
+        "mongo": True,
+        "redis": True,
+        "issues": [],
+    }
+
+
 def test_preflight_evidence_rejects_retired_data_local_branch(monkeypatch, tmp_path):
     data_root = tmp_path / "data"
     tasks_root = data_root / "tasks"

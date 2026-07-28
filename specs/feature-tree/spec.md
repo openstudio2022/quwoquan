@@ -42,7 +42,7 @@
 - 启动前发生已确认的根级致命异常时停止后续初始化，静默保存脱敏异常，并进入不依赖业务框架的恢复页；启动阶段不提供重复重试。
 - 运行中发生根级不可恢复异常时只允许一次受控主容器重建；成功直接替换路由进入首页，失败后不得形成恢复循环。
 - 恢复页在全部状态提供官方网页版。
-- 版本服务确认有新版后，iOS 进入 App Store，Android 进入趣我圈官网受信 APK 下载通道。只有版本服务确认后才能显示“需要更新”或“已是最新版本”。
+- 版本服务确认有新版且存在当前平台可安装通道后，Android 进入趣我圈官网受信 APK 下载通道；公众 iOS 进入趣我圈 PWA 安装指引，已登记测试设备才可使用受控 Ad Hoc 通道。只有版本服务确认后才能显示“需要更新”或“已是最新版本”。
 - 页面只表达已确认事实、恢复状态和当前动作，不显示技术原因、诊断编号、日志进度、错误码或缺乏操作价值的不确定描述。
 
 <a id="req-004"></a>
@@ -69,7 +69,7 @@
 
 - 5 类对象都能从统一分享面板分享到微信会话/朋友圈，并生成站外可点击的 HTTPS 落地链接。
 - 已安装用户在微信内（Android/鸿蒙用 wx-open-launch-app、iOS 用 Universal Link）、在浏览器内（Universal Link/App Links/scheme）点击后回流到 App 对应详情页。
-- 未安装用户被引导到应用商店，安装后首启通过延迟深链还原原始目标对象。
+- 未安装用户进入趣我圈官网；Android 可明确点击下载正式签名 APK，iOS 可添加 PWA 到主屏幕，原生安装完成后的首启再通过延迟深链还原原始目标对象。
 - 公开 Web 内容/主页可被搜索引擎索引（canonical/OG/JSON-LD/robots/sitemap），并提供安装转化入口。
 - 一键海报（含二维码与口令）可投放到不支持外链的 UGC 平台，扫码或口令识别后回流到目标对象。
 - 全链路携带 referralSource/share_id/UTM/口令归因，可在指标大盘按渠道与对象类型统计转化。
@@ -102,8 +102,8 @@
 - command 经过 aggregate owner，query 读取 named Slice；App 只访问 generated Gateway operation。
 - 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
-- alpha 使用 contract seed。
-- beta/gamma 使用 production Remote composition 与真实第一方依赖，外部 Provider 绑定 Port 对等本地替身；prod 不含 seed/Mock/Memory/Noop，并完成真实 Provider、实时 SLO、灰度和回滚验证。
+- alpha/beta/gamma/prod 均使用同一个 production Remote composition，第一方 App 可见业务数据只来自对应环境已激活的 canonical immutable release。
+- 非 Prod 外部 Provider 可绑定 Port 对等 sandbox/local substitute，Prod 完成真实 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
 - local_contract、api_integration、user_acceptance 均有真实断言和 CaseResult；禁止路径存在、动态 skip 或 Memory 假集成充当证据。
 
 <a id="req-010"></a>
@@ -114,7 +114,7 @@
 - App 只访问统一 Gateway base URL 和 generated operation，不感知服务进程、存储或内部 URL。
 - 统一存储是对象专属 AggregateStore/Reader 的生成模式，不是万能 CRUD Repository。
 - 页面必须满足主题、语义 token、多屏、多端、状态恢复、无障碍、性能和观测合同。
-- alpha/beta/gamma/prod 的测试数据、真实依赖和证据分层；prod 禁止 fixture/Mock/Memory/Noop。
+- alpha/beta/gamma/prod 的 App 可见业务对象均绑定 release/import receipt，测试 double 只存在于 local_contract 测试树；四环境 artifact 均禁止 fixture/Mock/Memory/Noop。
 
 ## 4. 用户旅程
 
@@ -157,7 +157,7 @@
 
 - 用户目标：应用能够安全运行时进入登录页、首页、新用户流程或降级 Shell；无法安全启动或继续使用时，用户获得确定、无技术暴露且始终可执行的更新、网页版或一次性重新进入动作。
 - 起点：用户从应用或外部入口发起旅程。
-- 成功终态：用户进入安全 Shell、一次性重新进入后的首页、iOS App Store、Android 官网下载或官方网页版。
+- 成功终态：用户进入安全 Shell、一次性重新进入后的首页、iOS PWA、Android 官网下载或官方网页版。
 - 失败恢复：外部通道打开失败仅显示短暂系统提示并恢复按钮；异常日志、版本服务或授权交换失败不得阻塞仍可用的恢复动作。
 - 参与领域：
   - [runtime](./runtime/spec.md)
@@ -520,8 +520,11 @@
 - GIVEN Android 或 iPhone 正常启动、发生明确启动致命异常，或在安全 Shell 后发生根级不可恢复异常。
 - WHEN 应用执行启动交接、版本确认、一次性运行时重建、更新、官网 APK 下载或网页版恢复。
 - THEN 正常或可降级故障进入安全 Shell，单纯等待超时不进入恢复页；启动致命异常进入无重试的版本检查页，运行时重建最多一次且失败后不循环。
-- THEN 版本服务确认有新版时 iOS 打开 App Store、Android 从趣我圈官方 HTTPS 通道下载已签名 APK；确认已最新或检查未完成时仍可进入官方网页版。
+- THEN 版本服务确认有新版且存在可安装通道时，Android 从趣我圈官方 HTTPS 通道下载已签名 APK。
+- THEN 公众 iOS 使用官方 PWA，已登记测试设备才可使用受控 Ad Hoc 通道。
+- THEN 确认已最新、地址不可用或检查未完成时仍可进入官方网页版。
 - THEN 页面不存在技术原因、诊断编号或日志状态；脱敏异常先保存后异步上报，上报失败不影响任何恢复动作。
+- THEN Android/iOS 安装包、原生身份、runtime probe 与发布 provenance 绑定同一 effective launch manifest；package-only 编译不得替代真实 launcher/scene、safe terminal、motion、非 `unknown` attempt 与 telemetry readback 证据。
 
 <a id="uat-004"></a>
 ### UAT-004 我的主页转发互动双向历史
@@ -553,7 +556,7 @@
 - WHEN 参与者发起“对外引流与深链回流端到端价值闭环”对应动作。
 - THEN 5 类对象都能从统一分享面板分享到微信会话/朋友圈，并生成站外可点击的 HTTPS 落地链接。
 - THEN 已安装用户在微信内（Android/鸿蒙用 wx-open-launch-app、iOS 用 Universal Link）、在浏览器内（Universal Link/App Links/scheme）点击后回流到 App 对应详情页。
-- THEN 未安装用户被引导到应用商店，安装后首启通过延迟深链还原原始目标对象。
+- THEN 未安装用户进入趣我圈官网；Android 可下载正式签名 APK，iOS 可安装 PWA，原生安装后的首启通过延迟深链还原原始目标对象。
 - THEN 公开 Web 内容/主页可被搜索引擎索引（canonical/OG/JSON-LD/robots/sitemap），并提供安装转化入口。
 - THEN 一键海报（含二维码与口令）可投放到不支持外链的 UGC 平台，扫码或口令识别后回流到目标对象。
 - THEN 全链路携带 referralSource/share_id/UTM/口令归因，可在指标大盘按渠道与对象类型统计转化。
@@ -592,8 +595,8 @@
 - THEN command 经过 aggregate owner，query 读取 named Slice；App 只访问 generated Gateway operation。
 - THEN 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - THEN 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
-- THEN alpha 使用 contract seed。
-- AND beta/gamma 使用 production Remote composition 与真实第一方依赖，外部 Provider 绑定 Port 对等本地替身；prod 不含 seed/Mock/Memory/Noop，并完成真实 Provider、实时 SLO、灰度和回滚验证。
+- THEN alpha/beta/gamma/prod 均使用同一个 production Remote composition，第一方 App 可见业务数据只来自对应环境已激活的 canonical immutable release。
+- AND 非 Prod 外部 Provider 可绑定 Port 对等 sandbox/local substitute，Prod 完成真实 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
 - THEN local_contract、api_integration、user_acceptance 均有真实断言和 CaseResult；禁止路径存在、动态 skip 或 Memory 假集成充当证据。
 
 ## 6. 开放事项
@@ -605,7 +608,7 @@
 - 优先级：`P1`
 - 准出影响：`block`
 - 影响或价值：当前只有媒体发布 Remote UAT 直接引用 `UAT-002`，尚未在同一候选版本证明登录取消/续接、micro/article 分流、照片顺序、视频转码、重复 intent、拒绝不落 Post、pending_review 不公开及作者读模型回读的完整组合。
-- 完成判定：Alpha 的 Mock/Provider/Widget 覆盖与 Beta、Gamma 的真实 HTTP、对象存储、Mongo、worker 和 App user_acceptance 使用同一 intent 集合逐项通过；文字、照片、视频三条 CaseResult 均直接引用 `UAT-002`，并证明失败恢复后最多一个 Post。
+- 完成判定：测试树内对象级 typed double/Provider/Widget 与 Alpha、Beta、Gamma、Prod 的真实 Remote HTTP、对象存储、Mongo、worker 和 App user_acceptance 使用同一 intent 集合逐项通过；文字、照片、视频三条 CaseResult 均直接引用 `UAT-002`，并证明失败恢复后最多一个 Post。
 - 依赖：[`publish-comment-reaction`](./discovery-content/publish-comment-reaction/spec.md)、[`media-processing-helper-read`](./discovery-content/media-processing-helper-read/spec.md) 与 [`onboarding-and-identity-entry`](./user-identity-profile-relationship/onboarding-and-identity-entry/spec.md) 的最低节点 OPEN。
 
 <a id="open-002"></a>
@@ -614,8 +617,11 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：当前尚缺正式 iOS App Store 产品页、Android 生产签名与官网 APK/CDN 发布、Prod 异常端点及 Android/iPhone 真机故障注入证据的共同闭合。
-- 完成判定：仓内 local_contract 继续证明启动/运行时状态机、一次性根容器重建、静默异常队列和恢复页语义。Beta、Gamma 的 Android/iPhone 真机分别产生启动致命异常与运行时不可恢复异常的录像、脱敏日志和 AppRoot `UAT-003` CaseResult。Prod 仅在正式商店、签名 APK/CDN、异常端点获批后关闭。
+- 影响或价值：当前已有 Android 原生 Gate instrumentation、iOS pre-engine recovery scene 模拟器证据和 immutable effective launch manifest 门禁，但尚缺 Alpha/Beta/Gamma Remote canonical release 的双端安装启动、Android 真机 20-run、iPhone 真机 20-run、四环境正式 Web DNS/TLS、Android/IPA 生产签名发布，以及 Prod 故障注入、telemetry/恢复 API 与媒体读回的共同闭合。
+- 完成判定：以下三层 release-bound 证据同时通过。
+  - 仓内 local_contract 继续证明启动/运行时状态机、一次性根容器重建、静默异常队列和恢复页语义。
+  - Alpha/Beta/Gamma 的双模拟器与 Android 真机读取同一 release-bound 首页、实体主页、文章、图片、视频和头像。
+  - Prod Android/iPhone 以同一签名候选完成启动、故障恢复与媒体读回；每个 runtime CaseResult 绑定内嵌 effective launch manifest 摘要、非 `unknown` attempt、motion/safe terminal 与 telemetry readback，并直接引用 `UAT-003`。
 - 依赖：[`cold-start-performance`](./runtime/runtime-client-foundation/cold-start-performance/spec.md)、[`unrecoverable-runtime-recovery`](./runtime/runtime-client-foundation/unrecoverable-runtime-recovery/spec.md) 与 [`app-release-recovery-routing`](./product-ops-growth/product-control-plane-foundation/app-release-recovery-routing/spec.md) 的正式回执。
 
 <a id="open-003"></a>
@@ -645,7 +651,7 @@
 - 优先级：`P1`
 - 准出影响：`block`
 - 影响或价值：尚未用正式域名和渠道证明五类对象卡片、微信会话/朋友圈、系统分享、海报二维码/口令、Universal Link/App Links、延迟深链、Web SEO 与 share_id/UTM 归因从站外回到 canonical 对象页的闭环。
-- 完成判定：local_contract 校验对象映射、隐私和归因契约。Beta/Gamma 验证受控 HTTPS 落地与 App 回流。Prod 使用正式域名、微信开放平台和商店安装链完成已安装/未安装矩阵，Product Ops readback 与 AppRoot `UAT-006` CaseResult 绑定同一 share_id。
+- 完成判定：local_contract 校验对象映射、隐私和归因契约。Beta/Gamma 验证受控 HTTPS 落地与 App 回流。Prod 使用正式域名、微信开放平台、Android 官网生产签名 APK 与公众 iOS PWA 完成已安装/未安装矩阵，Product Ops readback 与 AppRoot `UAT-006` CaseResult 绑定同一 share_id。
 - 依赖：[`outbound-share-distribution`](./product-ops-growth/outbound-share-distribution/spec.md) 与正式域名、微信开放平台、商店及 CDN 外部资源。
 
 <a id="open-006"></a>
@@ -672,8 +678,8 @@
 ### OPEN-008 当前全部跨对象 Journey 商用准出
 
 - 类型：`capability_gap`
-- 优先级：`P1`
+- 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前 12 Journey、28 Scenario、9 UAT 尚未由同一候选版本的三层 CaseResult 和 Alpha/Beta/Gamma/Prod 回执闭合；任何孤立 page/surface/operation/object/store/event/behavior/metric 或未删除的当前发布 capability gap 都会阻断准出。
-- 完成判定：`UAT-009` 的派生覆盖图对全部验收锚点建立 direct `spec_ref`，每条 Journey 至少跨两个真实对象并覆盖权限、错误恢复、幂等、副作用、投影收敛和运营/推荐回流。Alpha/Beta/Gamma 全部通过且只剩正式凭据、法务和 Prod 基础设施 external blocker 时可形成候选准出，所有 Prod 回执及灰度回滚完成后才删除本 OPEN 并判定 `READY`。
+- 影响或价值：当前 12 Journey、28 Scenario、9 UAT 尚未由同一候选版本的三层 CaseResult 和 Alpha/Beta/Gamma/Prod 回执闭合；四环境尚无同一 canonical release 的 tag/creator/entity/post/media activation、真实 public-slice 字节、自然启动和精确 UI readback 证据，任何 fixture/self-seed/skipped-success 都会阻断准出。
+- 完成判定：`UAT-009` 的派生覆盖图对全部验收锚点建立 direct `spec_ref`，同一 release digest 在 Alpha/Beta/Gamma/Prod 具有 import/API/media/rollback receipt；三环境双模拟器与 Android 真机、Prod Android/iPhone 双真机均完成精确对象和媒体读回，required executed 大于零且 skipped 为零。所有 Prod 回执及灰度回滚完成后才删除本 OPEN 并判定 `READY`。
 - 依赖：前七项 AppRoot OPEN、全部最低节点 block OPEN、14 类 Provider 九格、Data publish/release/import/readback 与四环境 `stackctl verify`。

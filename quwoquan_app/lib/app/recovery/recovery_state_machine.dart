@@ -56,18 +56,19 @@ final class RecoveryStateMachine {
     required String updateUrl,
     required String recoveryUrl,
   }) {
+    final hasNewerBuild = latestBuild > currentBuild;
     if (_terminalVersionConfirmed ||
         currentBuild <= 0 ||
         latestBuild <= 0 ||
-        !_isTrustedHttps(updateUrl) ||
-        !_isTrustedHttps(recoveryUrl)) {
+        !_isTrustedHttps(recoveryUrl) ||
+        (hasNewerBuild && !_isTrustedHttps(updateUrl))) {
       return false;
     }
     final runtimeContext =
         _snapshot.phase == RecoveryPhase.runtimeVersionChecking ||
         _snapshot.phase == RecoveryPhase.runtimeVersionUnavailable;
     _terminalVersionConfirmed = true;
-    _snapshot = latestBuild > currentBuild
+    _snapshot = hasNewerBuild
         ? RecoverySnapshot(
             phase: runtimeContext
                 ? RecoveryPhase.runtimeUpdateRequired
@@ -147,10 +148,7 @@ final class RecoveryStateMachine {
       return false;
     }
     final host = uri.host.toLowerCase();
-    return host == 'apps.apple.com' ||
-        host == 'quwoquan.com' ||
-        host.endsWith('.quwoquan.com') ||
-        host == 'quwoquan-env.test' ||
-        host.endsWith('.quwoquan-env.test');
+    return host == 'quwoquan.com' ||
+        host.endsWith('.quwoquan.com');
   }
 }

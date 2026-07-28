@@ -1,4 +1,5 @@
 """Closed vocabularies shared by data execution and release control flow."""
+
 from __future__ import annotations
 
 from enum import StrEnum
@@ -73,6 +74,8 @@ class ReleaseRunKind(StrEnum):
 class ReleaseRunStatus(StrEnum):
     COMPLETED = "completed"
     DRY_RUN = "dry_run"
+    PREPARED = "prepared"
+    FAILED = "failed"
 
 
 class ContentImportStatus(StrEnum):

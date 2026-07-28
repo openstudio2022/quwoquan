@@ -39,9 +39,22 @@ class AlphaAuthPublicPlaneApiIntegrationTest(unittest.TestCase):
         except urllib.error.HTTPError as error:
             return error.code, json.loads(error.read().decode("utf-8"))
 
-    def _get(self, path: str) -> tuple[int, dict[str, object]]:
-        with urllib.request.urlopen(f"{self.base_url}{path}", timeout=5) as response:
-            return response.status, json.loads(response.read().decode("utf-8"))
+    def _get(
+        self,
+        path: str,
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> tuple[int, dict[str, object]]:
+        request = urllib.request.Request(
+            f"{self.base_url}{path}",
+            headers=headers or {},
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                return response.status, json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read().decode("utf-8"))
 
     def test_homepage_search_has_alpha_mock_contract_projection(self) -> None:
         status, payload = self._get("/homepages/search?query=%E8%A5%BF%E6%B9%96&limit=1")
@@ -85,6 +98,20 @@ class AlphaAuthPublicPlaneApiIntegrationTest(unittest.TestCase):
         self.assertEqual(login_status, 200)
         self.assertIn("accessToken", login_payload)
         self.assertEqual(login_payload["identityOrigin"], "phone")
+
+    def test_authenticated_privacy_projection_does_not_block_public_feed(self) -> None:
+        unauthorized_status, unauthorized_payload = self._get("/user/settings/privacy")
+        self.assertEqual(unauthorized_status, 401)
+        self.assertEqual(unauthorized_payload["code"], "USER.AUTH.unauthorized")
+
+        status, payload = self._get(
+            "/user/settings/privacy",
+            headers={"Authorization": "Bearer alpha_access_fixture"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["blockedKeywords"], [])
+        self.assertEqual(payload["profileVisibility"], "public")
+        self.assertNotIn("mockBoundary", payload)
 
     def test_wrong_code_returns_json_error_instead_of_html_404(self) -> None:
         self._post("/auth/otp/send", {"phone": "13900000000"})

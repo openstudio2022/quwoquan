@@ -6,13 +6,149 @@ from typing import Any
 
 from core.data_issue import DataIssueCode, DataRecoveryAction
 from governance.content_supply_policy import load_content_supply_policy
+from content.source.research import network_io
 from content.source.research.plan_state import (
     _record_unavailable,
     _safe_collection_id,
     _source_unavailable_for_entity,
     _write_lane,
 )
-from content.source.research.source_quality import _collection_gate
+from content.source.research.source_quality import (
+    _collection_gate,
+    _license_allows_app_publish,
+)
+from content.source.research.text_match import _normalized_title
+from content.source.research.wiki_common import _strip_html
+
+
+def discover_commons_sourced_videos(
+    entity_id: str,
+    *,
+    entity_aliases: list[str],
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Discover a small directly-downloadable Commons video with frozen rights."""
+    pages: list[dict[str, Any]] = []
+    seen_page_ids: set[str] = set()
+    for search_term in list(dict.fromkeys([entity_id, *entity_aliases]))[:3]:
+        data = network_io.wiki_api(
+            "commons.wikimedia.org",
+            {
+                "action": "query",
+                "generator": "search",
+                "gsrsearch": f"{search_term} filetype:video",
+                "gsrnamespace": "6",
+                "gsrlimit": str(limit),
+                "prop": "imageinfo",
+                "iiprop": "url|size|mime|mediatype|extmetadata",
+                "format": "json",
+                "formatversion": "2",
+            },
+        )
+        for page in (data.get("query") or {}).get("pages") or []:
+            if not isinstance(page, dict):
+                continue
+            page_id = str(page.get("pageid") or page.get("title") or "")
+            if page_id and page_id not in seen_page_ids:
+                seen_page_ids.add(page_id)
+                pages.append(page)
+    aliases = [
+        _normalized_title(value)
+        for value in [entity_id, *entity_aliases]
+        if _normalized_title(value)
+    ]
+    entity_key = _normalized_title(entity_id)
+    qualifiers = {
+        entity_key[: -len(alias)]
+        for alias in aliases
+        if alias != entity_key and entity_key.endswith(alias) and len(entity_key) > len(alias)
+    }
+    candidates: list[dict[str, Any]] = []
+    for page in pages:
+        if not isinstance(page, dict):
+            continue
+        info = ((page.get("imageinfo") or [{}])[0] or {})
+        metadata = info.get("extmetadata") or {}
+        if not isinstance(info, dict) or not isinstance(metadata, dict):
+            continue
+        url = str(info.get("url") or "").strip()
+        source_url = str(
+            info.get("descriptionurl") or info.get("descriptionshorturl") or ""
+        ).strip()
+        title = str(page.get("title") or "").removeprefix("File:").strip()
+        description = _strip_html(
+            str(((metadata.get("ImageDescription") or {}).get("value") or ""))
+        )
+        combined_key = _normalized_title(f"{title} {description}")
+        if not any(alias in combined_key for alias in aliases):
+            continue
+        if qualifiers and not any(qualifier in combined_key for qualifier in qualifiers):
+            continue
+        license_name = _strip_html(
+            str(((metadata.get("LicenseShortName") or {}).get("value") or ""))
+        )
+        license_url = _strip_html(
+            str(((metadata.get("LicenseUrl") or {}).get("value") or ""))
+        )
+        categories = _strip_html(
+            str(((metadata.get("Categories") or {}).get("value") or ""))
+        ).lower()
+        size = int(info.get("size") or 0)
+        duration = float(info.get("duration") or 0)
+        if (
+            str(info.get("mediatype") or "") != "VIDEO"
+            or not url.startswith("https://")
+            or not source_url.startswith("https://")
+            or not _license_allows_app_publish(license_name, license_url)
+            or "license review needed" in categories
+            or size <= 0
+            or size > 512 * 1024 * 1024
+            or duration < 3
+            or duration > 180
+        ):
+            continue
+        creator = _strip_html(
+            str(
+                ((metadata.get("Artist") or {}).get("value") or "")
+                or ((metadata.get("Credit") or {}).get("value") or "")
+            )
+        )
+        if not creator or not license_url:
+            continue
+        candidates.append(
+            {
+                "sourceId": "wikimedia_commons_video",
+                "sourceKind": "tourism_video_site",
+                "ordinal": 1,
+                "title": title,
+                "relevance": description or title,
+                "platform": "Wikimedia Commons",
+                "assetUrl": url,
+                "sourcePostUrl": source_url,
+                "authorizationProofUrl": source_url,
+                "termsUrl": license_url,
+                "rightsBasis": license_name,
+                "originalCreatorName": creator,
+                "attributionText": (
+                    f"{title} — {creator} — {license_name} — {source_url}"
+                ),
+                "commercialAuthorizationStatus": "verified",
+                "publicationAdmission": "commercial_release",
+                "modelReleaseStatus": "not_required",
+                "propertyReleaseStatus": "not_required",
+                "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+                "durationSeconds": duration,
+                "sizeBytes": size,
+            }
+        )
+    candidates.sort(
+        key=lambda item: (
+            0 if entity_key in _normalized_title(str(item["title"])) else 1,
+            float(item["durationSeconds"]),
+            int(item["sizeBytes"]),
+        )
+    )
+    return candidates[:1]
 
 
 def _minimum_source_frame_count(vertical: str) -> int:
@@ -98,11 +234,16 @@ def write_video_lane(
     report: dict[str, Any],
     updated: list[dict[str, Any]],
     open_license_image_pool: list[dict[str, Any]],
+    sourced_video_pool: list[dict[str, Any]],
 ) -> None:
     minimum_frames = _minimum_source_frame_count(vertical)
+    sourced_videos = list(sourced_video_pool[:1])
     frames: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
-    for ordinal, raw in enumerate(open_license_image_pool, start=1):
+    for ordinal, raw in enumerate(
+        [] if sourced_videos else open_license_image_pool,
+        start=1,
+    ):
         url = str(raw.get("url") or "").strip()
         if not url or url in seen_urls:
             continue
@@ -126,7 +267,7 @@ def write_video_lane(
             frames.append(frame)
         if len(frames) >= minimum_frames:
             break
-    if len(frames) < minimum_frames:
+    if not sourced_videos and len(frames) < minimum_frames:
         _record_unavailable(
             report,
             entity_id=entity_id,
@@ -139,6 +280,7 @@ def write_video_lane(
         plan_dir / "video_source_plan.json",
         "video",
         {
+            "videos": sourced_videos,
             "assets": frames,
             "sourceUnavailable": _source_unavailable_for_entity(
                 report,
@@ -152,6 +294,7 @@ def write_video_lane(
             {
                 "entityId": entity_id,
                 "lane": "video",
+                "videos": len(sourced_videos),
                 "assets": len(frames),
             }
         )

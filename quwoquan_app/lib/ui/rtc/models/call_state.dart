@@ -192,16 +192,16 @@ class CallSummary {
     required bool connected,
   }) {
     if (connected && duration > Duration.zero) {
-      return '${UITextConstants.callSummaryDurationPrefix}'
+      return '${CallText.callSummaryDurationPrefix}'
           '${formatDuration(duration)}';
     }
     return switch (endReason) {
       EndReason.cancelled ||
-      EndReason.initiatorHangup => UITextConstants.callSummaryCancelled,
+      EndReason.initiatorHangup => CallText.callSummaryCancelled,
       EndReason.rejected ||
-      EndReason.busy => UITextConstants.callSummaryRejected,
-      EndReason.timeout => UITextConstants.callSummaryNoAnswer,
-      _ => UITextConstants.callSummaryMissed,
+      EndReason.busy => CallText.callSummaryRejected,
+      EndReason.timeout => CallText.callSummaryNoAnswer,
+      _ => CallText.callSummaryMissed,
     };
   }
 }

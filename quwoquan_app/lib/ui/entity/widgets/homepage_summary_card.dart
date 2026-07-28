@@ -60,7 +60,7 @@ class HomepageSummaryCard extends StatelessWidget {
                 ObjectMetaChip(label: homepageStatusLabel(summary.status)),
                 ObjectMetaChip(
                   label: ratingValue == null
-                      ? UITextConstants.homepageRatingPending
+                      ? ObjectHomepageText.homepageRatingPending
                       : UITextConstants.homepageRatingScore(ratingValue),
                   accent: ratingValue != null,
                 ),
@@ -69,7 +69,7 @@ class HomepageSummaryCard extends StatelessWidget {
             SizedBox(height: AppSpacing.containerSm),
             _HomepageSummaryMetrics(
               ratingValue:
-                  ratingValue ?? UITextConstants.homepageRatingUnavailable,
+                  ratingValue ?? ObjectHomepageText.homepageRatingUnavailable,
               ratingCount: summary.ratingCount,
               status: homepageStatusLabel(summary.status),
             ),
@@ -289,21 +289,21 @@ class _HomepageSummaryMetrics extends StatelessWidget {
         children: <Widget>[
           Expanded(
             child: _HomepageMetricItem(
-              label: UITextConstants.homepageRatingMetric,
+              label: ObjectHomepageText.homepageRatingMetric,
               value: ratingValue,
             ),
           ),
           _HomepageMetricDivider(color: dividerColor),
           Expanded(
             child: _HomepageMetricItem(
-              label: UITextConstants.homepageReviewMetric,
+              label: ObjectHomepageText.homepageReviewMetric,
               value: '$ratingCount',
             ),
           ),
           _HomepageMetricDivider(color: dividerColor),
           Expanded(
             child: _HomepageMetricItem(
-              label: UITextConstants.homepageStatusMetric,
+              label: ObjectHomepageText.homepageStatusMetric,
               value: status,
             ),
           ),

@@ -48,12 +48,12 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
         ),
         actions: [
           CupertinoDialogAction(
-            child: Text(UITextConstants.cancel),
+            child: Text(FoundationText.cancel),
             onPressed: () => Navigator.pop(dialogContext, false),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
-            child: Text(UITextConstants.confirm),
+            child: Text(FoundationText.confirm),
             onPressed: () => Navigator.pop(dialogContext, true),
           ),
         ],
@@ -117,7 +117,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
         content: Text(ChatText.exitGroupChatConfirmMessage),
         actions: [
           CupertinoDialogAction(
-            child: Text(UITextConstants.cancel),
+            child: Text(FoundationText.cancel),
             onPressed: () => Navigator.pop(dialogContext, false),
           ),
           CupertinoDialogAction(
@@ -191,7 +191,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
           content: Text(ChatText.groupNameAdminOnly),
           actions: [
             CupertinoDialogAction(
-              child: Text(UITextConstants.confirm),
+              child: Text(FoundationText.confirm),
               onPressed: () => Navigator.pop(context),
             ),
           ],
@@ -215,12 +215,12 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
         ),
         actions: [
           CupertinoDialogAction(
-            child: Text(UITextConstants.cancel),
+            child: Text(FoundationText.cancel),
             onPressed: () => Navigator.pop(ctx),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
-            child: Text(UITextConstants.confirm),
+            child: Text(FoundationText.confirm),
             onPressed: () async {
               final newName = controller.text.trim();
               Navigator.pop(ctx);
@@ -255,7 +255,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     secondaryMessage: resolved.secondaryMessage,
                     primaryAction: const UiErrorAction(
                       type: UiErrorActionType.retry,
-                      label: UITextConstants.tryAgain,
+                      label: ContentText.tryAgain,
                     ),
                     secondaryAction: resolved.secondaryAction,
                     dismissible: resolved.dismissible,
@@ -396,7 +396,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
             ),
             children: [
               if (groupHomeAsync.isLoading && groupHome == null) ...[
-                const Center(child: CupertinoActivityIndicator()),
+                AppRequestFeedback.section(),
                 SizedBox(
                   height: SettingsSemanticConstants.insetFormSectionVerticalGap,
                 ),
@@ -808,13 +808,13 @@ class _GroupCapabilityGrid extends StatelessWidget {
         enabled: _enabled('file'),
       ),
       _GroupCapabilityItem(
-        label: UITextConstants.callGroupVoice,
+        label: CallText.callGroupVoice,
         icon: CupertinoIcons.phone,
         enabled: true,
         onPressed: onVoiceCall,
       ),
       _GroupCapabilityItem(
-        label: UITextConstants.callGroupVideo,
+        label: CallText.callGroupVideo,
         icon: CupertinoIcons.video_camera,
         enabled: true,
         onPressed: onVideoCall,

@@ -16,6 +16,7 @@ from core.io import read_json, write_json
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, REPO_ROOT, execution_root
 from core.python_environment import resolve_data_agent_python
 from core.schema import assert_valid
+from content.execution.identity import parse_execution_id
 from content.execution.queue.core import _load_jobs
 
 
@@ -23,6 +24,10 @@ _FLEET_TASK_STATUSES = frozenset(
     {"ready", "processing", "retry_wait", "succeeded", "dead"}
 )
 _STACKCTL_PATH = REPO_ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
+_RECOVERY_EXECUTION_STAGES_BY_QUEUE_STAGE = {
+    QueueJobStage.AUTHOR: frozenset({"build_homepage", "post_author"}),
+    QueueJobStage.PUBLISH: frozenset({"publish"}),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,11 +148,15 @@ def _has_audited_remote_recovery(
     """Permit DLQ revival only after the controller recorded recovery evidence."""
     from content.execution.support import load_execution_state
 
+    accepted_stages = _RECOVERY_EXECUTION_STAGES_BY_QUEUE_STAGE.get(
+        stage,
+        frozenset({stage.value}),
+    )
     state = load_execution_state(execution_id)
     for action in reversed(tuple(state.recovery_actions or ())):
         if not isinstance(action, Mapping):
             continue
-        if str(action.get("stage") or "").strip() != stage.value:
+        if str(action.get("stage") or "").strip() not in accepted_stages:
             continue
         if str(action.get("recoveredAt") or "").strip():
             return True
@@ -166,6 +175,24 @@ def _object_timeout_seconds(jobs: list[object]) -> int:
     if timeout_seconds < 1:
         raise ValueError("ReliableTask object timeout must be positive")
     return timeout_seconds
+
+
+def _fleet_carrier(execution_id: str, jobs: list[object]) -> str:
+    """Bind every request job to the carrier frozen into executionId."""
+    from content.execution.queue.model import QueueJob
+
+    expected = parse_execution_id(execution_id).content_type.value
+    carriers = {
+        job.carrier.value
+        for job in jobs
+        if isinstance(job, QueueJob) and job.carrier is not None
+    }
+    if len(carriers) != 1 or carriers != {expected} or len(jobs) < 1:
+        raise ValueError(
+            f"ReliableTask fleet carrier 必须与 executionId 一致："
+            f"expected={expected}, jobs={sorted(carriers)}"
+        )
+    return expected
 
 
 def _required_quota(
@@ -223,6 +250,7 @@ def build_fleet_request(
         raise ValueError(
             f"execution 无待执行 ReliableTask {stage.value} jobs：{execution_id}"
         )
+    _fleet_carrier(execution_id, jobs)
     object_timeout_seconds = _object_timeout_seconds(jobs)
     payload: dict[str, object] = {
         "schema": "quwoquan.data_content_fleet_request",

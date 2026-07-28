@@ -45,10 +45,10 @@
 - production 缺 JWT key/issuer/audience 时启动失败且不存在默认 secret。
 
 <a id="req-004"></a>
-### REQ-004 production Remote 与 alpha Mock 物理隔离
+### REQ-004 四环境 Remote 与 test-only double 物理隔离
 
 - App 内 Mock 顶层类、fixture runtime loader、空 Remote 和 fallback 数量为 0。
-- prod/alpha dependency resolution、kernel/AOT/SBOM 与 production wiring 必须由可执行门禁直接证明。
+- alpha/beta/gamma/prod dependency resolution、kernel/AOT/SBOM 与 Remote wiring 必须由可执行门禁直接证明。
 
 <a id="req-005"></a>
 ### REQ-005 Runtime 对 deadline cancellation retry error telemetry 语义唯一
@@ -90,7 +90,6 @@
 - canonical：`quwoquan_service/runtime/auth`
 - canonical：`quwoquan_ops/environments`
 - canonical：本文件 `REQ-004`、`GWT-004` 与 `OPEN-004`
-- policy exception：`quwoquan_ops/policies/gates/mock_production_class_allowlist.yaml`
 - canonical：`quwoquan_app/packages/quwoquan_cloud_contracts`
 - canonical：`quwoquan_app/lib/cloud/runtime`
 - canonical：[`AppRoot UAT`](../../../spec.md#uat-001)
@@ -121,11 +120,11 @@
 - THEN 仅可信 principal 可通过对应 guard，拒绝结果使用 canonical failure 且不产生业务写入。
 
 <a id="gwt-004"></a>
-### GWT-004 production Remote 与 alpha Mock 物理隔离
+### GWT-004 四环境 Remote 与 test-only double 物理隔离
 
-- GIVEN 分别装配 production 与 alpha/test 运行入口。
+- GIVEN 分别装配 alpha、beta、gamma、prod 运行入口与 local_contract。
 - WHEN 构建依赖图、kernel/AOT 与 SBOM。
-- THEN production 只包含 Remote 和真实基础设施，Mock 与 fixture 仅由 alpha/test package 注入。
+- THEN 四环境 artifact 只包含 Remote 和真实基础设施，typed double 仅存在 local_contract 测试树。
 
 <a id="gwt-005"></a>
 ### GWT-005 Runtime 对 deadline cancellation retry error telemetry 语义唯一
@@ -177,12 +176,12 @@
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-004"></a>
-### OPEN-004 production Remote 与 alpha Mock 物理隔离
+### OPEN-004 四环境 Remote 与 test-only double 物理隔离
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：App 内 Mock 顶层类、fixture runtime loader、空 Remote 和 fallback 数量为 0。
+- 影响或价值：尚缺四环境 dependency/kernel/AOT/SBOM 与 UAT transitive import 证据；目标：App/runner/UAT 内 Mock 顶层类、fixture runtime loader、空 Remote 和 fallback 数量为 0。
 - 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-005"></a>

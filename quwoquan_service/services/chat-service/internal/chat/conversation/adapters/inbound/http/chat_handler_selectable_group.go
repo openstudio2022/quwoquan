@@ -15,7 +15,7 @@ func (h *ChatHandler) handleListSelectableGroupConversations(w http.ResponseWrit
 	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
 	page, err := h.memberService.ListSelectableGroupConversations(
 		r.Context(),
-		resolveUserID(r),
+		resolvePersonaID(r),
 		query,
 		source,
 		limit,
@@ -42,7 +42,7 @@ func (h *ChatHandler) handleListSelectableGroupContactMembers(w http.ResponseWri
 	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
 	page, err := h.memberService.ListSelectableGroupContactMembers(
 		r.Context(),
-		resolveUserID(r),
+		resolvePersonaID(r),
 		conversationID,
 		query,
 		limit,

@@ -14,6 +14,7 @@ import (
 	"quwoquan_service/internal/platform/reliabletaskmongo"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
+	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
 	rthealth "quwoquan_service/runtime/health"
 	rtotel "quwoquan_service/runtime/otel"
@@ -118,6 +119,9 @@ func main() {
 	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
 		log.Fatalf("chat-service config compatibility failed: %v", err)
 	}
+	controlplane.StartReleaseConfigAttestation(
+		serviceName, appEnv, configRoot, configVersion, imageVersion,
+	)
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)
@@ -676,13 +680,15 @@ func main() {
 		return circleGroupMembershipProjector.Healthy(30 * time.Second)
 	})
 
-	chatRoutes := httpadapter.NewChatHandler(
+	chatHandler := httpadapter.NewChatHandler(
 		conversationSvc,
 		messageSvc,
 		memberSvc,
 		inboxSvc,
 		userSyncService,
-	).Routes()
+	)
+	chatRoutes := chatHandler.Routes()
+	internalChatRoutes := chatHandler.InternalRoutes()
 	chatRoutes, err = runtimemessaging.WithDeadLetterRecoveryRoute(
 		chatRoutes,
 		runtimemessaging.DeadLetterRecoveryRouteConfig{
@@ -701,6 +707,7 @@ func main() {
 	rootMux.HandleFunc("/healthz", healthChecker.Handler())
 	rootMux.Handle("/metrics", rtmetrics.Handler())
 	rootMux.Handle("/media/", newDerivedMediaFileServer(localMediaRoot))
+	rootMux.Handle("/internal/chat/conversations/direct", internalChatRoutes)
 	rootMux.Handle("/metrics/runtime-media", application.NewRuntimeMediaMetricsHandler(
 		groupAvatarScheduler,
 		userSyncService,

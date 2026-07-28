@@ -8,6 +8,11 @@ quality:
   nonEmptyRateMinimum: 0.999
   duplicateExposureRateMaximum: 0.01
   homepageMaxSourceFidelity: 0.92
+  homepageMinimumBodyChars: 350
+  homepageMinimumFactCount: 4
+  homepageMinimumFactChars: 180
+  homepageMinimumSectionChars: 40
+  homepageSourceOutlineSectionChars: 120
 mediaSubject:
   representativeIndicators:
     - landscape

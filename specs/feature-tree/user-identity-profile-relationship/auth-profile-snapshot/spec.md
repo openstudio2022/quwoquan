@@ -44,6 +44,8 @@
 - LoginWithPhone / LoginOneTap / LoginAnonymous / RefreshToken / Logout 的 request/response 字段与 metadata、App DTO、服务端行为一致。
 - accessToken、refreshToken、ownerId、activeSub、accountState、identityOrigin 在 App Session 与服务端 contract 中同源。
 - ListCredentials / BindCredential / UnbindCredential 的鉴权模式、错误码与“最后一个凭证禁止解绑”约束可验证。
+- 正常冷启动在安全启动面可见后恢复既有会话；没有有效会话时以安装身份单飞调用 LoginAnonymous，并只把服务端签发的 bearer principal 用作游客业务主体。
+- 可信匿名会话不得把游客呈现为显式登录用户，不得覆盖并发完成的正式登录；离线或服务暂不可用时业务请求获得 canonical 可重试失败，不得退回裸设备 actor header 或空列表伪成功。
 
 <a id="req-002"></a>
 ### REQ-002 负责资料读取、资料更新提案、会话刷新、设备 token、恢复与安全风控的统一边界
@@ -75,6 +77,8 @@
 - THEN LoginWithPhone / LoginOneTap / LoginAnonymous / RefreshToken / Logout 的 request/response 字段与 metadata、App DTO、服务端行为一致。
 - THEN accessToken、refreshToken、ownerId、activeSub、accountState、identityOrigin 在 App Session 与服务端 contract 中同源。
 - THEN ListCredentials / BindCredential / UnbindCredential 的鉴权模式、错误码与“最后一个凭证禁止解绑”约束可验证。
+- THEN 首次启动、既有匿名会话恢复和并发业务请求只产生一个 LoginAnonymous bootstrap，后续请求由 bearer principal 提供 Persona 业务主体，而 UI 仍保持游客语义。
+- THEN bootstrap 失败可重试且不阻塞安全启动面；正式登录一旦开始或完成，迟到的匿名结果不得覆盖正式会话与返回账号凭证。
 
 ## 8. 开放事项
 

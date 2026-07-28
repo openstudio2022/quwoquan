@@ -21,8 +21,8 @@ ContentRuntimeConfigState buildProductionContentRuntimeConfigDefaults() {
 
 /// Alpha runner 的显式 content runtime 配置。
 ///
-/// production Notifier 不读取 [AppDataSourceMode]；fixture flags 只能由独立
-/// runner 通过 provider override 注入。
+/// Production Notifier 不读取环境或数据源开关；fixture flags 只能由独立 runner
+/// 通过对象级 provider override 注入。
 ContentRuntimeConfigState buildAlphaContentRuntimeConfigDefaults() {
   final production = buildProductionContentRuntimeConfigDefaults();
   return ContentRuntimeConfigState(

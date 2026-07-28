@@ -69,7 +69,10 @@ BANNED_PATHS = {
     "quwoquan_service/services/user-service/codegen_storage_manifest.yaml",
 }
 ALLOWED_OPS_ENVIRONMENT_ROOT_FILES = {
+    "commit_gate_sla_verification.json",
+    "commit_gate_timing_baseline.json",
     "data_execution_fleet.json",
+    "domain_governance.yaml",
     "local_env_port_manifest.yaml",
     "output_layout_manifest.yaml",
     "pr_gate_timing_budgets.json",

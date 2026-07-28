@@ -42,6 +42,9 @@ def _source_frames(
             creator=frame.creator,
             license=frame.license,
             basis=VideoSourceBasis.RIGHTS_CLEARED,
+            source_use_mode=frame.source_use_mode,
+            rights_audit_status=frame.rights_audit_status,
+            rights_audit_issues=frame.rights_audit_issues,
         )
         for frame in pack.source_frames
     )
@@ -79,6 +82,7 @@ def _write_source_refs(post_dir: Path, pack: VideoWritingPack) -> None:
                 "sourceAssetRef": frame.asset_ref,
                 "rightsRef": frame.rights_ref,
                 "sourceUrl": frame.source_url,
+                "sourceUseMode": frame.source_use_mode,
                 "sha256": frame.sha256,
             }
             for frame in pack.source_frames

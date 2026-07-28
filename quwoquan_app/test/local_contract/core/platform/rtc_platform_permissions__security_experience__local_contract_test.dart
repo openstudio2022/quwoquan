@@ -124,8 +124,9 @@ void main() {
       '${appRoot.path}/android/app/src/main/java/com/quwoquan/quwoquan_app/'
       'StartupDeferredPluginRegistry.java',
     ).readAsStringSync();
-    final patchScript = File(
-      '${appRoot.path}/scripts/patch_android_plugin_registrant.sh',
+    final eagerRegistry = File(
+      '${appRoot.path}/android/app/src/main/java/com/quwoquan/quwoquan_app/'
+      'StartupEagerPluginRegistry.java',
     ).readAsStringSync();
     final firebaseRuntime = File(
       '${appRoot.path}/lib/core/platform/firebase_incoming_call_runtime.dart',
@@ -156,11 +157,6 @@ void main() {
     final decodedPolicy = jsonDecode(pluginPolicy) as Map<String, Object?>;
     final eagerPlugins = (decodedPolicy['eagerRuntime'] as List).cast<String>();
     final deferredRtcPlugins = (decodedPolicy['rtc'] as List).cast<String>();
-    final deferredPatchClasses = RegExp(
-      r'startup_deferred_plugin_classes = \((.*?)\)',
-      dotAll: true,
-    ).firstMatch(patchScript)!.group(1)!;
-
     expect(
       pluginPolicy,
       contains(
@@ -212,8 +208,9 @@ void main() {
     );
     expect(deferredRegistry, isNot(contains('FlutterCallkitIncomingPlugin')));
     expect(deferredRegistry, isNot(contains('SharedPreferencesPlugin')));
-    expect(patchScript, isNot(contains('FlutterCallkitIncomingPlugin')));
-    expect(deferredPatchClasses, isNot(contains('SharedPreferencesPlugin')));
+    expect(eagerRegistry, contains('FlutterCallkitIncomingPlugin'));
+    expect(eagerRegistry, contains('SharedPreferencesPlugin'));
+    expect(eagerRegistry, isNot(contains('FlutterWebRTCPlugin')));
     expect(firebaseRuntime, contains("@pragma('vm:entry-point')"));
     expect(firebaseRuntime, contains('onBackgroundMessage'));
     expect(firebaseRuntime, contains('canUseFullScreenIntent'));

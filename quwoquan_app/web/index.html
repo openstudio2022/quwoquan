@@ -1,325 +1,94 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="zh-CN">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
+  <meta charset="utf-8">
   <base href="$FLUTTER_BASE_HREF">
-
-  <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1,viewport-fit=cover"
+  >
   <meta name="description" content="趣我圈：遇见同趣，绽放热爱。">
+  <meta name="theme-color" content="#F6F8FC">
+  <meta name="color-scheme" content="light dark">
 
-  <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="趣我圈">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
-
-  <title>趣我圈</title>
+  <link rel="icon" type="image/png" href="favicon.png">
   <link rel="manifest" href="manifest.json">
+  <title>趣我圈</title>
+  <style>
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+      background: #f6f8fc;
+      font-family:
+        -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+        "Noto Sans SC", sans-serif;
+    }
+  </style>
 </head>
 <body>
   <script>
+    // Keep only the minimal bridge required by Flutter startup telemetry.
+    // Waiting time is never promoted to a fatal startup fact on Web.
     window.__qwqStartupStartedAtMs = performance.now();
-    window.__qwqFlutterFirstFrameConfirmed = false;
-    window.__qwqStartupSafeTerminalConfirmed = false;
-    window.__qwqStartupRecoveryShown = false;
-    window.__qwqStartupWatchdog = null;
-    window.__qwqStartupForegroundRemainingMs = 6000;
-    window.__qwqStartupForegroundStartedAtMs = performance.now();
     window.__qwqStartupElapsedMs = function () {
-      return performance.now() - window.__qwqStartupStartedAtMs;
+      return Math.max(0, performance.now() - window.__qwqStartupStartedAtMs);
     };
-    window.__qwqStartupAttemptId = (
-      (window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : (
-        Date.now().toString(36) + Math.random().toString(36).slice(2)
-      )).replace(/-/g, '')
-    );
-    window.__qwqStartupNativeSequence = 0;
-    window.__qwqStartupNativeLastElapsedMs = 0;
-    window.__qwqStartupNativeTerminalRecorded = false;
-    window.__qwqStartupTerminalCommitTimer = null;
-    window.__qwqStartupJournalReady = new Promise(function (resolve) {
-      const request = indexedDB.open('qwq-startup-journal-v1', 1);
-      request.onupgradeneeded = function () {
-        if (!request.result.objectStoreNames.contains('events')) {
-          request.result.createObjectStore('events', { keyPath: 'eventId' });
-        }
-      };
-      request.onsuccess = function () {
-        window.__qwqStartupJournalDatabase = request.result;
-        resolve();
-      };
-      request.onerror = function () {
-        resolve();
-      };
-    });
-    window.__qwqPersistStartupNativeEvent = function (
-      phase, outcome, recoverySurface, failureCode, failureSource
-    ) {
-      const elapsedMs = Math.max(0, Math.round(window.__qwqStartupElapsedMs()));
-      const phaseDurationMs = Math.max(
-        0,
-        elapsedMs - window.__qwqStartupNativeLastElapsedMs
-      );
-      window.__qwqStartupNativeLastElapsedMs = Math.max(
-        window.__qwqStartupNativeLastElapsedMs,
-        elapsedMs
-      );
-      const sequence = ++window.__qwqStartupNativeSequence;
-      const event = {
-        eventId: window.__qwqStartupAttemptId + '_' + sequence,
-        attemptId: window.__qwqStartupAttemptId,
-        sequence: sequence,
-        phase: phase,
-        phaseDurationMs: phaseDurationMs,
-        elapsedMs: elapsedMs,
-        outcome: outcome,
-        occurredAt: new Date().toISOString(),
-        platform: 'web',
-        runtimeEnv: 'unknown',
-        recoverySurface: recoverySurface || '',
-        failureCode: failureCode || '',
-        failureSource: failureSource || '',
-        deadlineOrigin: 'web_bootstrap',
-      };
-      window.__qwqStartupJournalReady.then(function () {
-        const database = window.__qwqStartupJournalDatabase;
-        if (!database) {
-          return;
-        }
-        try {
-          const transaction = database.transaction('events', 'readwrite');
-          transaction.objectStore('events').put(event);
-        } catch (_) {
-          // IndexedDB 为 best effort；不可阻断首帧 watchdog。
-        }
-      });
-    };
+    window.__qwqRecordStartupEvent = function () {};
     window.__qwqReadStartupJournal = function () {
-      return window.__qwqStartupJournalReady.then(function () {
-        const database = window.__qwqStartupJournalDatabase;
-        if (!database) {
-          return JSON.stringify({ attemptId: window.__qwqStartupAttemptId, events: [] });
-        }
-        return new Promise(function (resolve) {
-          try {
-            const request = database.transaction('events', 'readonly')
-              .objectStore('events').getAll();
-            request.onsuccess = function () {
-              const events = (request.result || []).map(function (event) {
-                return JSON.stringify(event);
-              });
-              resolve(JSON.stringify({
-                attemptId: window.__qwqStartupAttemptId,
-                events: events,
-              }));
-            };
-            request.onerror = function () {
-              resolve(JSON.stringify({ attemptId: window.__qwqStartupAttemptId, events: [] }));
-            };
-          } catch (_) {
-            resolve(JSON.stringify({ attemptId: window.__qwqStartupAttemptId, events: [] }));
-          }
-        });
-      });
+      return Promise.resolve('{"attemptId":"","events":[]}');
     };
-    window.__qwqClearStartupJournal = function () {
-      window.__qwqStartupJournalReady.then(function () {
-        const database = window.__qwqStartupJournalDatabase;
-        if (!database) {
-          return;
-        }
-        try {
-          database.transaction('events', 'readwrite').objectStore('events').clear();
-        } catch (_) {
-          // 下一次启动可继续补传。
-        }
-      });
-    };
-    window.__qwqPersistStartupNativeEvent(
-      'native_pre_flutter', 'observed', '', '', ''
-    );
-    window.__qwqStartupEvents = [];
-    window.__qwqRecordStartupEvent = function (rawEvent) {
+    window.__qwqClearStartupJournal = function () {};
+    window.__qwqReadWebInstallContext = function () {
+      const query = new URLSearchParams(location.search);
+      const explicit = (query.get("platform") || "").toLowerCase();
+      const uaDataPlatform = (
+        navigator.userAgentData && navigator.userAgentData.platform || ""
+      ).toLowerCase();
+      const ua = (navigator.userAgent || "").toLowerCase();
+      const navigatorPlatform = (navigator.platform || "").toLowerCase();
+      let platform = "unknown";
+      if (explicit === "ios" || explicit === "android") {
+        platform = explicit;
+      } else if (
+        uaDataPlatform.includes("android") || ua.includes("android") ||
+        ua.includes("harmony") || ua.includes("openharmony")
+      ) {
+        platform = "android";
+      } else if (
+        uaDataPlatform.includes("ios") || /iphone|ipad|ipod/.test(ua) ||
+        (navigatorPlatform === "macintel" && navigator.maxTouchPoints > 1)
+      ) {
+        platform = "ios";
+      } else if (
+        /mac|win|linux|cros/.test(uaDataPlatform || navigatorPlatform || ua)
+      ) {
+        platform = "desktop";
+      }
+      const standalone = (
+        window.matchMedia("(display-mode: standalone)").matches ||
+        window.navigator.standalone === true
+      );
+      let dismissed = false;
       try {
-        const event = JSON.parse(rawEvent);
-        event.attemptId = event.attemptId || window.__qwqStartupAttemptId;
-        event.elapsedMs = event.elapsedMs == null
-          ? Math.round(window.__qwqStartupElapsedMs())
-          : event.elapsedMs;
-        window.__qwqStartupEvents.push(event);
-        if (event.eventName === 'flutter_first_frame') {
-          window.__qwqFlutterFirstFrameConfirmed = true;
-        }
-        if (event.eventName === 'startup_safe_terminal') {
-          window.__qwqStartupSafeTerminalConfirmed = true;
-          if (window.__qwqStartupWatchdog !== null) {
-            clearTimeout(window.__qwqStartupWatchdog);
-            window.__qwqStartupWatchdog = null;
-          }
-          if (window.__qwqStartupTerminalCommitTimer !== null) {
-            clearTimeout(window.__qwqStartupTerminalCommitTimer);
-            window.__qwqStartupTerminalCommitTimer = null;
-          }
-          // 仅 reconciliation window 内的 safe terminal 能撤销暂态 recovery；
-          // native terminal 已提交后必须由用户重试创建新 attempt。
-          const recovery = document.getElementById('qwq-startup-recovery');
-          if (!window.__qwqStartupNativeTerminalRecorded &&
-              recovery && recovery.parentNode) {
-            recovery.parentNode.removeChild(recovery);
-            window.__qwqStartupRecoveryShown = false;
-            window.__qwqStartupEvents.push({
-              eventName: 'web_startup_safe_terminal_race_dismissed',
-              attemptId: window.__qwqStartupAttemptId,
-              elapsedMs: Math.round(window.__qwqStartupElapsedMs()),
-            });
-          }
-        }
-        const report = JSON.stringify(window.__qwqStartupEvents);
-        document.documentElement.setAttribute(
-          'data-qwq-startup-report',
-          btoa(unescape(encodeURIComponent(report)))
-        );
-      } catch (_) {
-        // 启动观测不得影响 Flutter bootstrap。
-      }
+        dismissed = sessionStorage.getItem("qwq-web-install-dismissed") === "1";
+      } catch (_) {}
+      return JSON.stringify({ platform, standalone, dismissed });
     };
-    window.__qwqRecordStartupTerminal = function (eventName) {
-      window.__qwqRecordStartupEvent(JSON.stringify({
-        eventName: eventName,
-        phase: 'web_bootstrap',
-        elapsedMs: Math.round(window.__qwqStartupElapsedMs()),
-      }));
+    window.__qwqDismissWebInstall = function () {
+      try {
+        sessionStorage.setItem("qwq-web-install-dismissed", "1");
+      } catch (_) {}
     };
-    window.__qwqShowStartupRecovery = function () {
-      if (window.__qwqStartupSafeTerminalConfirmed ||
-          window.__qwqStartupRecoveryShown ||
-          document.visibilityState !== 'visible') {
-        return;
-      }
-      window.__qwqStartupRecoveryShown = true;
-      const firstFrameMissing = !window.__qwqFlutterFirstFrameConfirmed;
-      const outcome = firstFrameMissing
-        ? 'native_first_frame_timeout'
-        : 'startup_deadline';
-      const failureCode = firstFrameMissing
-        ? 'OPS.SYSTEM.startup_native_first_frame_timeout'
-        : 'OPS.SYSTEM.startup_initialization_failed';
-      window.__qwqRecordStartupTerminal(
-        firstFrameMissing
-          ? 'web_first_frame_timeout'
-          : 'web_startup_safe_terminal_timeout'
-      );
-      window.__qwqPersistStartupNativeEvent(
-        'recovery',
-        outcome,
-        'native_recovery',
-        failureCode,
-        'native_watchdog'
-      );
-      window.__qwqStartupTerminalCommitTimer = setTimeout(function () {
-        if (window.__qwqStartupSafeTerminalConfirmed ||
-            !window.__qwqStartupRecoveryShown ||
-            window.__qwqStartupNativeTerminalRecorded) {
-          return;
-        }
-        window.__qwqPersistStartupNativeEvent(
-          'terminal',
-          'recovery',
-          'native_recovery',
-          failureCode,
-          'native_watchdog'
-        );
-        window.__qwqStartupNativeTerminalRecorded = true;
-        window.__qwqStartupTerminalCommitTimer = null;
-      }, 120);
-      const recovery = document.createElement('div');
-      recovery.id = 'qwq-startup-recovery';
-      recovery.style.cssText =
-        'position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;' +
-        'align-items:center;justify-content:center;background:#0A84FF;color:white;' +
-        'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:center;padding:24px;';
-      recovery.innerHTML =
-        '<div style="font-size:22px;font-weight:600">应用启动遇到问题</div>' +
-        '<div style="margin-top:16px;font-size:15px;line-height:1.5">暂未显示应用界面，请重试。</div>' +
-        '<button type="button" style="margin-top:28px;border:0;border-radius:10px;padding:12px 26px;color:#0A84FF;background:white;font-size:16px">重试</button>';
-      recovery.querySelector('button').addEventListener('click', function () {
-        location.reload();
-      });
-      document.body.appendChild(recovery);
-    };
-    window.__qwqArmStartupWatchdog = function () {
-      if (window.__qwqStartupSafeTerminalConfirmed || document.visibilityState !== 'visible') {
-        return;
-      }
-      if (window.__qwqStartupWatchdog !== null) {
-        clearTimeout(window.__qwqStartupWatchdog);
-      }
-      const remaining = Math.max(1, window.__qwqStartupForegroundRemainingMs);
-      window.__qwqStartupWatchdog = setTimeout(window.__qwqShowStartupRecovery, remaining);
-    };
-    window.addEventListener('error', function (event) {
-      window.__qwqRecordStartupTerminal('web_bootstrap_error');
-      // 资源加载失败可能可降级；只有真正的未捕获脚本异常才提前切换恢复面。
-      if (event && event.error) {
-        window.__qwqShowStartupRecovery();
-      }
-    });
-    window.addEventListener('unhandledrejection', function () {
-      window.__qwqRecordStartupTerminal('web_unhandled_rejection');
-      window.__qwqShowStartupRecovery();
-    });
-    window.addEventListener('pagehide', function () {
-      if (!window.__qwqStartupSafeTerminalConfirmed &&
-          !window.__qwqStartupNativeTerminalRecorded) {
-        window.__qwqPersistStartupNativeEvent(
-          'terminal', 'pagehide_before_first_frame', 'native_recovery',
-          'OPS.SYSTEM.startup_initialization_failed', 'web_pagehide'
-        );
-      }
-    });
-    document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'visible') {
-        window.__qwqStartupForegroundStartedAtMs = performance.now();
-        window.__qwqArmStartupWatchdog();
-      } else if (window.__qwqStartupWatchdog !== null) {
-        const foregroundElapsed = Math.max(
-          0,
-          performance.now() - window.__qwqStartupForegroundStartedAtMs
-        );
-        window.__qwqStartupForegroundRemainingMs = Math.max(
-          1,
-          window.__qwqStartupForegroundRemainingMs - foregroundElapsed
-        );
-        clearTimeout(window.__qwqStartupWatchdog);
-        window.__qwqStartupWatchdog = null;
-      }
-    });
-    window.__qwqArmStartupWatchdog();
   </script>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

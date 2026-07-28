@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import '../../../support/cloud_services/assistant_facet_overrides.dart';
 import '../../../support/fixtures/assistant/assistant_scenario_fixtures.dart';
@@ -23,9 +22,6 @@ void main() {
     (tester) async {
       final scenarioPack = await loadAssistantScenarioPackAsync();
       final runtimeEnv = CloudRuntimeConfig.appRuntimeEnv;
-      final repositoryMode = expectedRepositoryModeForCurrentRuntimeEnv(
-        scenarioPack,
-      );
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -43,7 +39,6 @@ void main() {
       expect(find.text('找私助'), findsOneWidget);
       expect(find.byKey(TestKeys.assistantChatInputField), findsOneWidget);
 
-      expect(_modeFromWidgetTree(tester), repositoryMode);
       const scenarioId = String.fromEnvironment('ASSISTANT_SCENARIO_ID');
       final allScenarios = scenarioPack.assistantTurnScenariosFor(runtimeEnv);
       final scenarios = scenarioId.trim().isEmpty
@@ -69,13 +64,6 @@ void main() {
     },
     skip: _assistantScenarioFixtureJsonBase64.trim().isEmpty,
   );
-}
-
-AppDataSourceMode _modeFromWidgetTree(WidgetTester tester) {
-  final context = tester.element(
-    find.byType(PersonalAssistantConversationPage),
-  );
-  return ProviderScope.containerOf(context).read(appDataSourceModeProvider);
 }
 
 void _expectScreenClass(WidgetTester tester) {

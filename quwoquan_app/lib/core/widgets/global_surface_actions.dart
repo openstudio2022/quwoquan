@@ -54,7 +54,7 @@ class GlobalTopActions extends ConsumerWidget {
           ),
         if (showSearch) SizedBox(width: AppSpacing.intraGroupXs),
         GlobalAssistantEntryButton(
-          semanticLabel: UITextConstants.globalXiaoquSearchAsk,
+          semanticLabel: DiscoveryText.globalXiaoquSearchAsk,
           showLabel: false,
           surface: surface,
           foregroundColor: foregroundColor,
@@ -161,7 +161,7 @@ class GlobalSearchLauncher {
 class GlobalXiaoquSearchBar extends ConsumerWidget {
   const GlobalXiaoquSearchBar({
     super.key,
-    this.hint = UITextConstants.globalXiaoquSearchHint,
+    this.hint = DiscoveryText.globalXiaoquSearchHint,
     this.initialSearchScope = GlobalSearchScope.all,
     this.surface = AppChromeSurface.standard,
     this.showAssistantLabel = true,
@@ -255,7 +255,7 @@ class GlobalXiaoquSearchBar extends ConsumerWidget {
         ),
         SizedBox(width: AppSpacing.intraGroupXs),
         GlobalAssistantEntryButton(
-          semanticLabel: UITextConstants.globalXiaoquSearchAsk,
+          semanticLabel: DiscoveryText.globalXiaoquSearchAsk,
           showLabel: showAssistantLabel,
           surface: surface,
           onTap: () => GlobalAssistantLauncher.open(context, ref),
@@ -403,7 +403,7 @@ class GlobalAssistantEntryButton extends StatelessWidget {
               if (showLabel) ...[
                 SizedBox(height: AppSpacing.globalAssistantEntryLabelGap),
                 Text(
-                  UITextConstants.globalXiaoquSearchAsk,
+                  DiscoveryText.globalXiaoquSearchAsk,
                   maxLines: 1,
                   overflow: TextOverflow.clip,
                   style: TextStyle(

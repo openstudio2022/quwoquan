@@ -1,6 +1,6 @@
 part of 'ui_text_constants.dart';
 
-abstract final class _UITextCreation {
+abstract final class CreationText {
   static const String operationFailed = '操作失败';
   static const String momentPlaceholder = '这一刻的想法...';
   static const String drafts = '草稿箱';
@@ -91,14 +91,14 @@ abstract final class _UITextCreation {
   static const String createDraftSaved = '已保存';
   static const String createDraftSaveFailed = '保存失败，点按重试';
   static const String createActionAddContactShort =
-      UITextConstants.homeObjectActionAddContact;
+      DiscoveryText.homeObjectActionAddContact;
   static const String createActionCreateCircleShort =
-      UITextConstants.createCircle;
+      CommunityText.createCircle;
   static const String createActionInterestMatchShort = '交集配对';
   static const String createActionInterestMatchSubtitle = '发现同趣的人、圈子与地点';
   static const String createActionPublishGroupTitle = publishAction;
   static const String createActionSocialGroupTitle =
-      UITextConstants.profileTabInteraction;
+      ProfileText.profileTabInteraction;
   static const String createPageTitle = '创作';
   static const String createArticleSurfaceLongEdit = '长文编辑';
   static const String createArticleSurfaceTypography = '排版';

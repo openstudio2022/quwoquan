@@ -3,16 +3,16 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 String hubCircleStoryTypeLabel(PostBaseDto post) {
   if (post.isVideoLike || post.hasVideo) {
-    return UITextConstants.discoveryTabVideo;
+    return DiscoveryText.discoveryTabVideo;
   }
   if (post.hasImages) {
-    return UITextConstants.discoveryTabPhoto;
+    return DiscoveryText.discoveryTabPhoto;
   }
   if (post.isArticleLike) {
-    return UITextConstants.creationSubArticle;
+    return ProfileText.creationSubArticle;
   }
   if (post.type == 'micro') {
-    return UITextConstants.creationSubMicro;
+    return ProfileText.creationSubMicro;
   }
-  return UITextConstants.homeCirclesStoryTypeCreation;
+  return DiscoveryText.homeCirclesStoryTypeCreation;
 }

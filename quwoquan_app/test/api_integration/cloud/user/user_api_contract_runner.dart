@@ -27,7 +27,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../support/api_contract/local_bad_certificate_overrides.dart';
 import '../../../support/recording_cloud_operation_telemetry_sink.dart';
 
 const _apiContractEnv = String.fromEnvironment(
@@ -35,9 +34,6 @@ const _apiContractEnv = String.fromEnvironment(
   defaultValue: 'gamma',
 );
 const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
-const _allowBadCertificateForLocalApiContract = bool.fromEnvironment(
-  'API_CONTRACT_ALLOW_BAD_CERT',
-);
 const _deviceId = 'user-identity-api-contract-device';
 
 final class _MutableAccessTokenProvider implements CloudAuthTokenProvider {
@@ -70,6 +66,7 @@ late RemoteAccountLifecycleCommandWriter _accountLifecycle;
 late RemoteUserSettingsQueryReader _settingsReader;
 late RemoteUserSettingsCommandWriter _settingsCommands;
 late AuthSessionGrant _session;
+late LoginAnonymousCommand _sessionBootstrapCommand;
 var _httpClientInitialized = false;
 String? _ownerId;
 String? _personaId;
@@ -80,6 +77,9 @@ CloudOperationInvocationContext _invocationContext(String clientPageId) {
     surfaceId: surface.id,
     routeId: surface.routeId,
     clientPageId: clientPageId,
+    idempotencyKey: clientPageId == UserRequestPageIds.closeAccount
+        ? 'user-close-contract-${DateTime.now().microsecondsSinceEpoch}'
+        : null,
     actor: CloudOperationActorContext(
       accountId: _ownerId,
       personaId: _personaId,
@@ -113,13 +113,14 @@ AppUiSurface _surfaceForClientPage(String clientPageId) {
 Future<AuthSessionGrant> _loginDisposableAccount(String purpose) async {
   final subject =
       'user-identity-$purpose-${DateTime.now().microsecondsSinceEpoch}';
+  _sessionBootstrapCommand = LoginAnonymousCommand(
+    installId: 'api-contract-$subject',
+    deviceFingerprintHash: 'api-contract-$subject',
+    platform: 'web',
+    appVersion: 'api-integration',
+  );
   final session = await _accountSessions.loginAnonymous(
-    LoginAnonymousCommand(
-      installId: 'api-contract-$subject',
-      deviceFingerprintHash: 'api-contract-$subject',
-      platform: 'web',
-      appVersion: 'api-integration',
-    ),
+    _sessionBootstrapCommand,
   );
   _session = session;
   _ownerId = session.ownerId;
@@ -130,9 +131,6 @@ Future<AuthSessionGrant> _loginDisposableAccount(String purpose) async {
 
 void main() {
   setUpAll(() async {
-    installLocalApiContractBadCertificateOverride(
-      enabled: _allowBadCertificateForLocalApiContract,
-    );
     if (_apiBase.isEmpty) {
       throw StateError('L3: ${_apiContractEnv.toUpperCase()}_BASE_URL not set');
     }
@@ -175,7 +173,6 @@ void main() {
 
   tearDownAll(() {
     if (_httpClientInitialized) _httpClient.close();
-    restoreLocalApiContractBadCertificateOverride();
   });
 
   test('匿名登录签发完整 AccountSession', () {
@@ -183,6 +180,20 @@ void main() {
     expect(_session.refreshToken, isNotEmpty);
     expect(_session.ownerId, isNotEmpty);
     expect(_session.activeSub?.subAccountId, isNotEmpty);
+  });
+
+  test('相同安装身份匿名登录幂等复用 Owner 与 Persona', () async {
+    final original = _session;
+    _tokenProvider.accessToken = null;
+    final replay = await _accountSessions.loginAnonymous(
+      _sessionBootstrapCommand,
+    );
+    _tokenProvider.accessToken = original.accessToken;
+
+    expect(replay.ownerId, original.ownerId);
+    expect(replay.activeSub?.subAccountId, original.activeSub?.subAccountId);
+    expect(replay.accessToken, isNotEmpty);
+    expect(replay.refreshToken, isNotEmpty);
   });
 
   test('UserSettings notification/call roundtrip 与稳定命令回执', () async {

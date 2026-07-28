@@ -63,7 +63,7 @@ extension _SectionCreationsStateHelpers on _SectionCreationsState {
 
   Widget _buildContent(CircleState circleState, Color fgSecondary) {
     if (_isLoading) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     if (_errorSemantic != null) {
       return _buildErrorCard();
@@ -232,7 +232,7 @@ extension _SectionCreationsStateHelpers on _SectionCreationsState {
           color: fgSecondary,
         );
         final text = Text(
-          UITextConstants.circleNoCreations,
+          CommunityText.circleNoCreations,
           style: textStyle,
           maxLines: ultraCompact ? 1 : 2,
           overflow: TextOverflow.ellipsis,

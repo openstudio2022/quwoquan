@@ -5,8 +5,6 @@
          需要查询启动 Intent 的包可见性；release 包不合并本 manifest，保持纯净。 -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission"/>
-    <application
-        android:networkSecurityConfig="@xml/beta_debug_network_security_config"
-        android:usesCleartextTraffic="false">
+    <application android:usesCleartextTraffic="false">
     </application>
 </manifest>

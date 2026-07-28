@@ -40,8 +40,9 @@ def _report(
         "publishTaskCount": total,
         "objectTransactionResultCount": total,
         "commercialAcceptedCount": accepted,
-        "controlPlaneTaskThroughputPerHour": 500.0,
-        "acceptedContentThroughputPerHour": 480.0 if passed else 432.0,
+        "fleetControlPlaneThroughputPerHour": 600.0,
+        "fleetAcceptedThroughputPerHour": float(accepted * 60),
+        "endToEndAcceptedThroughputPerHour": float(accepted / 2),
         "acceptedContentThroughputStatus": (
             "MEASURED"
             if passed
@@ -58,6 +59,11 @@ def _report(
             {"jobId": f"job-{index}", "status": "succeeded", "attempts": 1}
             for index in range(total)
         ],
+        "executionCreatedAt": "2026-07-20T03:00:00Z",
+        "fleetStartedAt": "2026-07-20T04:59:00Z",
+        "canonicalFinalizedAt": "2026-07-20T05:00:00Z",
+        "fleetWallClockMilliseconds": 60_000,
+        "endToEndWallClockMilliseconds": 7_200_000,
         "completedAt": "2026-07-20T05:00:00Z",
     }
 
@@ -74,8 +80,13 @@ def test_metrics_use_only_commercially_accepted_fleet_report(
     measured = _reliabletask_accepted_throughput(tmp_path)
 
     assert measured is not None
-    assert measured["measurementMode"] == "reliabletask_commercial_accepted"
-    assert measured["objectsPerHour"] == 480.0
+    assert measured["measurementMode"] == (
+        "reliabletask_commercial_accepted_end_to_end"
+    )
+    assert measured["objectsPerHour"] == 5.0
+    assert measured["fleetAcceptedObjectsPerHour"] == 600.0
+    assert measured["elapsedSeconds"] == 7200.0
+    assert measured["fleetWallClockSeconds"] == 60.0
     assert measured["publishedObjectCount"] == 10
     assert measured["reportRef"] == (
         "evidence/reliabletask/publish_fleet_report.json"
@@ -110,6 +121,8 @@ def test_metrics_accept_quota_without_full_batch_success(tmp_path: Path) -> None
     assert measured["publishedObjectCount"] == 8
     assert measured["requiredQuota"] == 7
     assert measured["finalizedObjectCount"] == 8
+    assert measured["objectsPerHour"] == 4.0
+    assert measured["fleetAcceptedObjectsPerHour"] == 480.0
 
 
 def test_metrics_reject_accepted_below_quota(tmp_path: Path) -> None:

@@ -71,34 +71,19 @@ object_types:
     view_model: ConfigInstanceReport
     risk_level: high
     deployment_profile: audit_heavy
-    operations:
-      - operation: ListConfigInstanceReports
-        method: GET
-        path: /control-plane/platform/configs/instances
-        scopes: [ops.platform.config.read]
-        actor: account
-        principal: operator
-        auth_mode: required
-        ownership_policy: operator_scope
-      - operation: ReportConfigInstance
-        method: POST
-        path: /control-plane/platform/configs/instances/{instanceId}:report
-        scopes: [ops.platform.config.ack]
-        actor: account
-        principal: service
-        auth_mode: required
-        ownership_policy: service_instance_bound
-        idempotency: payload_digest_server_side
+    operation_refs:
+      - operation_id: ops.config_instance_report.ListConfigInstanceReports
+      - operation_id: ops.config_instance_report.ReportConfigInstance
 
-  - object_type: config_release
-    view_kind: release
-    label: 配置发布单
-    source_entity: ConfigRelease
-    view_model: ConfigRelease
+  - object_type: release_candidate
+    view_kind: snapshot
+    label: 发布候选 ACK
+    source_entity: ConfigInstanceReport
+    view_model: ReleaseManifestCandidate
     risk_level: critical
     deployment_profile: batch_heavy
     operations:
-      - operation: ListConfigReleases
+      - operation: ListReleaseCandidateAcks
         method: GET
         path: /control-plane/platform/releases
         scopes: [ops.platform.rollout.read]

@@ -3,15 +3,18 @@ package feed
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 
+	rterr "quwoquan_service/runtime/errors"
 	rtobs "quwoquan_service/runtime/observability"
 	rtrec "quwoquan_service/runtime/recommendation"
 	recpolicy "quwoquan_service/runtime/recpolicy"
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	"quwoquan_service/services/content-service/internal/content/post/application/identity"
 	"quwoquan_service/services/content-service/internal/content/post/application/intersection"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
@@ -25,6 +28,7 @@ type FeedService struct {
 	objectCardPolicy func() recpolicy.ObjectCardConfig
 	filterObserver   FeedFilterObserver
 	viewerBlocks     FeedViewerBlockReader
+	activeSupply     ActiveSupplyReader
 }
 
 func NewFeedService(engine *rtrec.Engine, reader postports.PostFeedReader, opts ...FeedServiceOption) *FeedService {
@@ -39,6 +43,19 @@ func NewFeedService(engine *rtrec.Engine, reader postports.PostFeedReader, opts 
 }
 
 type FeedServiceOption func(*FeedService)
+
+// ActiveSupplyReader reads the production data_release_state projection. It is
+// consulted only by the initial discovery/recommend route; continuation and
+// following feeds deliberately bypass this guard.
+type ActiveSupplyReader interface {
+	HasActiveSupply(ctx context.Context) (bool, error)
+}
+
+func WithActiveSupplyReader(reader ActiveSupplyReader) FeedServiceOption {
+	return func(service *FeedService) {
+		service.activeSupply = reader
+	}
+}
 
 // FeedViewerBlockReader 返回与当前 viewer 任一方向存在拉黑关系的 persona。
 // 该事实来自 user 域 PersonaBlocked 投影，客户端不得通过 header/query 自报拉黑集合。
@@ -161,6 +178,15 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		attribute.String("feed.sort", req.Sort),
 		attribute.Int("feed.limit", req.Limit))
 	defer func() { rtobs.EndSpan(span, err) }()
+	terminalClass := rtrec.FeedRequestClassBrowse
+	terminalOutcome := rtrec.FeedTerminalSuccess
+	terminalStage := rtrec.FailureStageNone
+	defer func() {
+		if err != nil {
+			terminalOutcome = rtrec.FeedTerminalFailure
+		}
+		rtrec.RecordFeedTerminal(terminalClass, terminalOutcome, terminalStage)
+	}()
 
 	limit := req.Limit
 	if limit <= 0 {
@@ -184,14 +210,32 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		requestedIdentity = ""
 		requestedType = ""
 	}
+	route := resolveFeedRoute(req)
+	requestedCursor := strings.TrimSpace(req.Cursor)
+	postReaderCursor := DecodePostReaderFeedCursor(requestedCursor)
+	usePostReaderQuery := !channelRouted &&
+		(postReaderCursor != "" || requestedType != "" || requestedIdentity != "")
+	initialRecommend := !usePostReaderQuery &&
+		route.FeedType == rtrec.FeedDiscovery &&
+		normalizeFeedSort(req.Sort) == rtrec.FeedSortRecommend &&
+		requestedCursor == ""
+	switch {
+	case route.FeedType == rtrec.FeedFollow:
+		terminalClass = rtrec.FeedRequestClassFollowing
+	case !usePostReaderQuery && requestedCursor != "":
+		terminalClass = rtrec.FeedRequestClassContinuation
+	case initialRecommend:
+		terminalClass = rtrec.FeedRequestClassInitialRecommend
+	default:
+		terminalClass = rtrec.FeedRequestClassBrowse
+	}
 	blockedPersonaIDs, blockErr := s.resolveViewerBlockedPersonaIDs(
 		ctx,
 		req.ViewerPersonaID,
 	)
 	if blockErr != nil {
-		return nil, blockErr
+		return nil, storageReadFailure("read feed viewer block facts", blockErr)
 	}
-	route := resolveFeedRoute(req)
 	blockedUsers := toLowerSet(blockedPersonaIDs)
 	blockedKeywords := toLowerSet(req.BlockedKeywords)
 	blockedKeywordEvaluated := 0
@@ -206,16 +250,25 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		}
 	}()
 
-	requestedCursor := strings.TrimSpace(req.Cursor)
-	postReaderCursor := DecodePostReaderFeedCursor(requestedCursor)
 	cursor := requestedCursor
 	nextCursor := ""
 	seenPostIDs := map[string]struct{}{}
 	// 强负反馈（dislike / 隐藏作者 / 隐藏内容类型）是产品硬规则，
 	// 必须在推荐召回和显式类型/身份查询两种具名读路径生效。
 	feedbackExclusions := s.engine.LoadFeedbackExclusions(ctx, req.UserID, req.SessionID)
-	usePostReaderQuery := !channelRouted &&
-		(postReaderCursor != "" || requestedType != "" || requestedIdentity != "")
+	if initialRecommend && s.activeSupply != nil {
+		hasActiveSupply, supplyErr := s.activeSupply.HasActiveSupply(ctx)
+		if supplyErr != nil {
+			return nil, storageReadFailure("read active content release state", supplyErr)
+		}
+		if !hasActiveSupply {
+			terminalStage = rtrec.FailureStageActiveSupplyMissing
+			return nil, requiredDependencyFailure(
+				terminalStage,
+				fmt.Errorf("no active content release is available for initial discovery feed"),
+			)
+		}
+	}
 	appendPost := func(post *postports.PostFeedItemSlice, recItem *rtrec.FeedItem) bool {
 		if post == nil {
 			return false
@@ -306,6 +359,8 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		items       []rtrec.FeedItem
 	}
 	deliveryBatches := make([]deliveryBatch, 0, 4)
+	hydrationRequested := 0
+	hydrationFound := 0
 	for attempt := 0; !usePostReaderQuery && attempt < 4 && len(views) < limit; attempt++ {
 		recResp, err := s.engine.GetFeed(ctx, rtrec.GetFeedRequest{
 			UserID:                  req.UserID,
@@ -322,7 +377,20 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			DeferDeliveryAccounting: true,
 		})
 		if err != nil {
+			if errors.Is(err, rtrec.ErrInvalidFeedCursor) {
+				return nil, contentgenerated.AppErrorFromInvalidArgument(err.Error())
+			}
+			stage := rtrec.FailureStageOf(err)
+			if stage != rtrec.FailureStageNone {
+				terminalStage = stage
+				return nil, requiredDependencyFailure(stage, err)
+			}
 			return nil, err
+		}
+		if recResp.TerminalOutcome == rtrec.FeedTerminalDegraded &&
+			terminalOutcome == rtrec.FeedTerminalSuccess {
+			terminalOutcome = rtrec.FeedTerminalDegraded
+			terminalStage = recResp.FailureStage
 		}
 		nextCursor = recResp.NextCursor
 		// N3-1：单次 $in 批量取回本轮召回条目（消除逐条 FindPublishedFeedPost
@@ -331,10 +399,12 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		for _, item := range recResp.Items {
 			recallIDs = append(recallIDs, postports.NewPostID(item.ContentID))
 		}
+		hydrationRequested += len(recallIDs)
 		postsByID, readErr := s.postReader.FindPublishedFeedPosts(ctx, recallIDs)
 		if readErr != nil {
-			return nil, readErr
+			return nil, storageReadFailure("hydrate recommended feed posts", readErr)
 		}
+		hydrationFound += len(postsByID)
 		attemptDelivery := make([]rtrec.FeedItem, 0, len(recResp.Items))
 		for _, item := range recResp.Items {
 			post, ok := postsByID[postports.NewPostID(item.ContentID)]
@@ -358,6 +428,20 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			break
 		}
 		cursor = nextCursor
+	}
+	if !usePostReaderQuery && hydrationRequested > 0 && hydrationFound == 0 {
+		terminalStage = rtrec.FailureStageHydrationFullMiss
+		return nil, requiredDependencyFailure(
+			terminalStage,
+			fmt.Errorf("none of %d recommended candidates could be hydrated", hydrationRequested),
+		)
+	}
+	if initialRecommend && len(views) == 0 {
+		terminalStage = rtrec.FailureStageExposureExhausted
+		return nil, requiredDependencyFailure(
+			terminalStage,
+			fmt.Errorf("initial recommend page has no deliverable candidates after hard filters"),
+		)
 	}
 	for _, batch := range deliveryBatches {
 		// 每次 engine 分页调用保留自己的 scorer/modelRelease 归因；模型热切换
@@ -395,7 +479,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 				),
 			)
 			if readErr != nil {
-				return nil, readErr
+				return nil, storageReadFailure("list published feed posts", readErr)
 			}
 			if len(page.Items) == 0 {
 				break
@@ -422,6 +506,10 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	var objectCards []ObjectCardView
 	if !usePostReaderQuery && route.Surface == "home" {
 		objectCards = s.resolveObjectCards(ctx, req.UserID, len(views))
+	}
+	if len(views) == 0 {
+		terminalOutcome = rtrec.FeedTerminalEmpty
+		terminalStage = rtrec.FailureStageNone
 	}
 	return &ListFeedResponse{
 		Items:          views,
@@ -450,6 +538,23 @@ func (s *FeedService) resolveViewerBlockedPersonaIDs(
 		return nil, fmt.Errorf("read feed viewer block facts: %w", err)
 	}
 	return blocked, nil
+}
+
+func requiredDependencyFailure(stage rtrec.FailureStage, cause error) *rterr.AppError {
+	typed := rtrec.NewFeedFailure(stage, cause)
+	return contentgenerated.AppErrorFromRequiredDependencyUnavailable(typed.Error()).
+		WithContextAttributes(rterr.RuntimeErrorContextAttribute{
+			Key:   "failureStage",
+			Value: string(stage),
+		})
+}
+
+func storageReadFailure(operation string, cause error) *rterr.AppError {
+	message := strings.TrimSpace(operation)
+	if cause != nil {
+		message = fmt.Sprintf("%s: %v", message, cause)
+	}
+	return contentgenerated.AppErrorFromStorageReadFailed(message)
 }
 
 func EncodePostReaderFeedCursor(postID string) string {

@@ -9,7 +9,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart'
         authenticationChallengeCommandWriterProvider,
         credentialBindingQueryProvider;
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock_identity.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import '../../../../support/fakes/test_auth_facets.dart';
 
 void main() {

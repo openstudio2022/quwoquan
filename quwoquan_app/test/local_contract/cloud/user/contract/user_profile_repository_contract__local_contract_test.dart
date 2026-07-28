@@ -8,8 +8,6 @@ import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     as contracts;
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart'
-    show AlphaProfileCommandWriter;
 import 'package:test/test.dart';
 
 import '../../../../support/cloud_services/repository_mock_reexports.dart';

@@ -1,3 +1,6 @@
+// spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/spec.md#sit-001
+// spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/immersive-media-edge-swipe-back/spec.md#gwt-001
+
 import 'dart:async';
 import 'dart:io';
 
@@ -28,13 +31,13 @@ import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
     show ActivePersonaContextViewData;
+import '../../../../support/cloud_services/behavior_repository_double.dart';
 import '../../../../support/cloud_services/content/content_mock_data.dart';
 import 'package:quwoquan_app/components/media/image/book/image_book_canvas.dart';
 import 'package:quwoquan_app/components/media/shared/pageflip/media_page_flip_book.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
@@ -47,6 +50,7 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
@@ -506,11 +510,6 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
   }
 }
 
-class _RemoteModeNotifier extends AppDataSourceModeNotifier {
-  @override
-  AppDataSourceMode build() => AppDataSourceMode.remote;
-}
-
 class _AuthenticatedViewerSession extends AuthSessionController {
   @override
   AuthSessionState build() {
@@ -801,20 +800,18 @@ MicroPostDto _textMoment({List<IntersectionReason>? intersectionReasons}) {
 Widget _wrap(
   Widget child, {
   List overrides = const [],
-  bool useRemoteMode = false,
+  bool useProductionRuntimeConfig = false,
   double? textScaleFactor,
   EdgeInsets? viewPadding,
   MockContentRepository? contentRepository,
 }) {
   final allOverrides = [
     ...mockContentFacetOverrides(contentRepository ?? MockContentRepository()),
-    if (!useRemoteMode)
+    if (!useProductionRuntimeConfig)
       contentRuntimeConfigProvider.overrideWithValue(
         buildAlphaContentRuntimeConfigDefaults(),
       ),
     ...overrides,
-    if (useRemoteMode)
-      appDataSourceModeProvider.overrideWith(_RemoteModeNotifier.new),
   ];
   return ProviderScope(
     overrides: allOverrides.cast(),
@@ -1811,9 +1808,7 @@ void main() {
     _consumeImageLoadExceptions(tester);
 
     expect(
-      find.byKey(
-        const ValueKey<String>('works-video-source-attribution'),
-      ),
+      find.byKey(const ValueKey<String>('works-video-source-attribution')),
       findsOneWidget,
     );
     expect(find.text(attributionText), findsOneWidget);
@@ -2106,8 +2101,7 @@ void main() {
       find.byWidgetPredicate(
         (widget) =>
             widget is Semantics &&
-            widget.properties.label ==
-                UITextConstants.videoPlaybackProgressLabel &&
+            widget.properties.label == MediaText.videoPlaybackProgressLabel &&
             widget.properties.value == '0:00 / 2:05',
       ),
       findsOneWidget,
@@ -2272,8 +2266,7 @@ void main() {
       find.byWidgetPredicate(
         (widget) =>
             widget is Semantics &&
-            widget.properties.label ==
-                UITextConstants.videoPlaybackProgressLabel &&
+            widget.properties.label == MediaText.videoPlaybackProgressLabel &&
             widget.properties.value == '0:00 / 2:05',
       ),
       findsOneWidget,
@@ -3282,9 +3275,9 @@ void main() {
 
     await tester.tap(find.byIcon(CupertinoIcons.ellipsis));
     await _pumpSettledFrames(tester);
-    expect(find.text(UITextConstants.viewOriginal), findsOneWidget);
+    expect(find.text(ContentText.viewOriginal), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.viewOriginal));
+    await tester.tap(find.text(ContentText.viewOriginal));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 32));
     _consumeImageLoadExceptions(tester);
@@ -3294,7 +3287,7 @@ void main() {
       tester.widget<ImageBookCanvas>(find.byType(ImageBookCanvas)).imageUrls,
       <String>[originalUrl.toString()],
     );
-    expect(find.text(UITextConstants.imageOriginalLoaded), findsOneWidget);
+    expect(find.text(MediaText.imageOriginalLoaded), findsOneWidget);
   });
 
   testWidgets('沉浸举报登录成功后续接原 post 且关闭登录走安全首页', (tester) async {
@@ -3372,10 +3365,10 @@ void main() {
 
     await tester.tap(find.byIcon(CupertinoIcons.ellipsis));
     await _pumpSettledFrames(tester);
-    await tester.ensureVisible(find.text(UITextConstants.report));
+    await tester.ensureVisible(find.text(ContentText.report));
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.report));
-    final selectedReason = find.text(UITextConstants.profileReportReasonSpam);
+    await tester.tap(find.text(ContentText.report));
+    final selectedReason = find.text(ContentText.profileReportReasonSpam);
     for (
       var attempt = 0;
       attempt < 20 && selectedReason.evaluate().isEmpty;
@@ -3440,7 +3433,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byType(CupertinoActivityIndicator), findsWidgets);
+    expect(find.byType(AppRequestFeedback), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('works-external-empty-exit')),
       findsNothing,
@@ -3452,9 +3445,12 @@ void main() {
       find.byKey(const ValueKey<String>('works-external-empty-exit')),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.contentUnavailable), findsOneWidget);
+    expect(
+      find.text(SearchText.recoveryContentUnavailableTitle),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text(UITextConstants.back));
+    await tester.tap(find.text(SearchText.recoveryReturnAction));
     await tester.pump();
     expect(dismissed, isTrue);
   });
@@ -5327,7 +5323,7 @@ void main() {
           onAssistantTap: () {},
         ),
         overrides: [analyticsProvider.overrideWithValue(analytics)],
-        useRemoteMode: true,
+        useProductionRuntimeConfig: true,
         contentRepository: repo,
       ),
     );

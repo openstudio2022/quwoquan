@@ -38,14 +38,14 @@ class MyQrCardView extends StatelessWidget {
             if (onScanPressed != null)
               Expanded(
                 child: ProfileIosActionButton(
-                  label: UITextConstants.editProfileQrScanAction,
+                  label: ProfileText.editProfileQrScanAction,
                   style: ProfileIosActionStyle.plain,
                   onPressed: onScanPressed,
                 ),
               ),
             Expanded(
               child: ProfileIosActionButton(
-                label: UITextConstants.editProfileQrShareAction,
+                label: ProfileText.editProfileQrShareAction,
                 style: ProfileIosActionStyle.plain,
                 onPressed: () => ForwardShareSheet.show(
                   context,
@@ -55,14 +55,14 @@ class MyQrCardView extends StatelessWidget {
             ),
             Expanded(
               child: ProfileIosActionButton(
-                label: UITextConstants.editProfileQrSaveAction,
+                label: ProfileText.editProfileQrSaveAction,
                 style: ProfileIosActionStyle.plain,
                 onPressed: () async {
                   await Clipboard.setData(ClipboardData(text: card.qrPayload));
                   if (context.mounted) {
                     AppToast.show(
                       context,
-                      UITextConstants.editProfileQrSaveFallbackToast,
+                      ProfileText.editProfileQrSaveFallbackToast,
                     );
                   }
                 },
@@ -112,7 +112,7 @@ class MyQrCardContent extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
-            UITextConstants.editProfileQrCardHeading,
+            ProfileText.editProfileQrCardHeading,
             style: TextStyle(
               fontSize: headingFontSize,
               fontWeight: headingWeight,
@@ -173,7 +173,7 @@ class MyQrCardContent extends StatelessWidget {
           if (!compact) ...<Widget>[
             SizedBox(height: AppSpacing.containerMd),
             Text(
-              UITextConstants.editProfileQrCardHint,
+              ProfileText.editProfileQrCardHint,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: AppTypography.iosFootnote,

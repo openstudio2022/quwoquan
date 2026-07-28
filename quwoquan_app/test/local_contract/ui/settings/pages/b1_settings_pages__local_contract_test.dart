@@ -25,7 +25,7 @@ import 'package:quwoquan_app/ui/settings/pages/settings_calls_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_notifications_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_privacy_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock_identity.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -187,7 +187,7 @@ void main() {
     await tester.pumpWidget(host(const SettingsNotificationsPage()));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.settingsEnablePush), findsOneWidget);
+    expect(find.text(SettingsText.settingsEnablePush), findsOneWidget);
     expect(find.byType(CupertinoSwitch), findsNWidgets(2));
   });
 
@@ -196,11 +196,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(UITextConstants.settingsAllowStrangerMessage),
+      find.text(SettingsText.settingsAllowStrangerMessage),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.settingsProfileVisibilityPublic),
+      find.text(SettingsText.settingsProfileVisibilityPublic),
       findsOneWidget,
     );
   });
@@ -209,25 +209,16 @@ void main() {
     await tester.pumpWidget(host(const SettingsCallsPage()));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(UITextConstants.settingsCallRingtoneDefault),
-      findsOneWidget,
-    );
-    expect(
-      find.text(UITextConstants.settingsEnableGroupCallRing),
-      findsOneWidget,
-    );
+    expect(find.text(SettingsText.settingsCallRingtoneDefault), findsOneWidget);
+    expect(find.text(SettingsText.settingsEnableGroupCallRing), findsOneWidget);
   });
 
   testWidgets('账号安全空凭证态来自 typed Slice', (tester) async {
     await tester.pumpWidget(host(const SettingsAccountSecurityPage()));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.settingsCredentialEmpty), findsOneWidget);
-    expect(
-      find.text(UITextConstants.settingsCredentialBindPhone),
-      findsOneWidget,
-    );
+    expect(find.text(SettingsText.settingsCredentialEmpty), findsOneWidget);
+    expect(find.text(SettingsText.settingsCredentialBindPhone), findsOneWidget);
   });
 
   testWidgets('账号安全页提供注销入口且确认对话完整说明删除语义（5.1.1(v)）', (tester) async {
@@ -245,7 +236,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final closeEntry = find.text(UITextConstants.settingsCloseAccountEntry);
+    final closeEntry = find.text(SettingsText.settingsCloseAccountEntry);
     await tester.scrollUntilVisible(closeEntry, 120);
     expect(closeEntry, findsOneWidget);
 
@@ -254,18 +245,18 @@ void main() {
 
     // 确认对话必须包含不可恢复警告与数据删除时限说明，取消不得触发命令。
     expect(
-      find.text(UITextConstants.settingsCloseAccountConfirmTitle),
+      find.text(SettingsText.settingsCloseAccountConfirmTitle),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.settingsCloseAccountConfirmMessage),
+      find.text(SettingsText.settingsCloseAccountConfirmMessage),
       findsOneWidget,
     );
-    await tester.tap(find.text(UITextConstants.cancel));
+    await tester.tap(find.text(FoundationText.cancel));
     await tester.pumpAndSettle();
     expect(lifecycle.closeCalls, 0);
     expect(
-      find.text(UITextConstants.settingsCloseAccountConfirmTitle),
+      find.text(SettingsText.settingsCloseAccountConfirmTitle),
       findsNothing,
     );
   });
@@ -287,7 +278,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final closeEntry = find.text(UITextConstants.settingsCloseAccountEntry);
+    final closeEntry = find.text(SettingsText.settingsCloseAccountEntry);
     await tester.scrollUntilVisible(closeEntry, 120);
     await tester.tap(closeEntry);
     await tester.pumpAndSettle();
@@ -298,17 +289,17 @@ void main() {
     expect(find.byType(SettingsAccountSecurityPage), findsOneWidget);
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
     expect(find.byType(CupertinoAlertDialog), findsOneWidget);
-    expect(find.text(UITextConstants.submitNotCompleted), findsOneWidget);
-    expect(find.text(UITextConstants.operationFailedRetry), findsOneWidget);
+    expect(find.text(ContentText.submitNotCompleted), findsOneWidget);
+    expect(find.text(ContentText.operationFailedRetry), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.cancel));
+    await tester.tap(find.text(ContentText.gotIt));
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoAlertDialog), findsNothing);
 
     await tester.tap(closeEntry);
     await tester.pumpAndSettle();
     expect(
-      find.text(UITextConstants.settingsCloseAccountConfirmTitle),
+      find.text(SettingsText.settingsCloseAccountConfirmTitle),
       findsOneWidget,
     );
   });
@@ -348,7 +339,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final closeEntry = find.text(UITextConstants.settingsCloseAccountEntry);
+    final closeEntry = find.text(SettingsText.settingsCloseAccountEntry);
     await tester.scrollUntilVisible(closeEntry, 120);
     await tester.tap(closeEntry);
     await tester.pumpAndSettle();
@@ -407,7 +398,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final closeEntry = find.text(UITextConstants.settingsCloseAccountEntry);
+    final closeEntry = find.text(SettingsText.settingsCloseAccountEntry);
     await tester.scrollUntilVisible(closeEntry, 120);
     await tester.tap(closeEntry);
     await tester.pumpAndSettle();
@@ -494,7 +485,7 @@ Future<Set<String>> _recentSearchResidualKeys() async {
 
 Finder _closeAccountConfirmAction() => find.descendant(
   of: find.byType(CupertinoAlertDialog),
-  matching: find.text(UITextConstants.settingsCloseAccountConfirmAction),
+  matching: find.text(SettingsText.settingsCloseAccountConfirmAction),
 );
 
 GoRouter _accountSecurityRouter() => GoRouter(

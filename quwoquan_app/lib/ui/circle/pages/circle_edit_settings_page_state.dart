@@ -226,20 +226,20 @@ class _CircleEditSettingsPageState
 
   String _visibilityDescription(String value) {
     return value == 'private'
-        ? UITextConstants.circleVisibilityMembersDescription
-        : UITextConstants.circleVisibilityPublicDescription;
+        ? CommunityText.circleVisibilityMembersDescription
+        : CommunityText.circleVisibilityPublicDescription;
   }
 
   String _joinPolicyDescription(String value) {
     return value == 'approval'
-        ? UITextConstants.circleJoinApprovalDescription
-        : UITextConstants.circleJoinOpenDescription;
+        ? CommunityText.circleJoinApprovalDescription
+        : CommunityText.circleJoinOpenDescription;
   }
 
   String _mediaLabel(_CircleMediaSlot slot) {
     return slot == _CircleMediaSlot.cover
-        ? UITextConstants.circleCoverLabel
-        : UITextConstants.circleAvatarLabel;
+        ? CommunityText.circleCoverLabel
+        : CommunityText.circleAvatarLabel;
   }
 
   Future<void> _showMediaActionSheet(_CircleMediaSlot slot) async {
@@ -250,19 +250,19 @@ class _CircleEditSettingsPageState
       context,
       title: _mediaLabel(slot),
       message: slot == _CircleMediaSlot.cover
-          ? UITextConstants.circleCoverHint
-          : UITextConstants.circleAvatarHint,
+          ? CommunityText.circleCoverHint
+          : CommunityText.circleAvatarHint,
       sections: [
         const AppActionSheetSection<_CircleMediaAction>(
           items: [
             AppActionSheetItem<_CircleMediaAction>(
               value: _CircleMediaAction.camera,
-              label: UITextConstants.cameraPhotoMode,
+              label: MediaText.cameraPhotoMode,
               icon: CupertinoIcons.camera,
             ),
             AppActionSheetItem<_CircleMediaAction>(
               value: _CircleMediaAction.photoLibrary,
-              label: UITextConstants.circleSelectFromPhotos,
+              label: CommunityText.circleSelectFromPhotos,
               icon: CupertinoIcons.photo_on_rectangle,
             ),
           ],
@@ -273,8 +273,8 @@ class _CircleEditSettingsPageState
               AppActionSheetItem<_CircleMediaAction>(
                 value: _CircleMediaAction.remove,
                 label: slot == _CircleMediaSlot.cover
-                    ? UITextConstants.circleRemoveCover
-                    : UITextConstants.circleRemoveAvatar,
+                    ? CommunityText.circleRemoveCover
+                    : CommunityText.circleRemoveAvatar,
                 icon: CupertinoIcons.delete,
                 isDestructive: true,
               ),
@@ -313,7 +313,7 @@ class _CircleEditSettingsPageState
     if (_isSaving) return;
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      AppToast.show(context, UITextConstants.circleNamePlaceholder);
+      AppToast.show(context, CommunityText.circleNamePlaceholder);
       return;
     }
 
@@ -357,8 +357,8 @@ class _CircleEditSettingsPageState
       AppToast.show(
         context,
         _isCreateMode
-            ? UITextConstants.circleCreateSuccess
-            : UITextConstants.circleSaveSuccess,
+            ? CommunityText.circleCreateSuccess
+            : CommunityText.circleSaveSuccess,
       );
       if (_isCreateMode) {
         Navigator.of(context).pop(createdCircleId);
@@ -368,7 +368,7 @@ class _CircleEditSettingsPageState
     } else {
       final resolved = runtimeErrorSemantic(
         context,
-        error: actionError ?? UITextConstants.loadFailed,
+        error: actionError ?? FoundationText.loadFailed,
         category: UiErrorCategory.submit,
         scope: UiErrorScope.global,
       );
@@ -380,7 +380,7 @@ class _CircleEditSettingsPageState
         secondaryMessage: resolved.secondaryMessage,
         primaryAction: const UiErrorAction(
           type: UiErrorActionType.retry,
-          label: UITextConstants.tryAgain,
+          label: ContentText.tryAgain,
         ),
         secondaryAction: resolved.secondaryAction,
         dismissible: resolved.dismissible,
@@ -430,18 +430,18 @@ class _CircleEditSettingsPageState
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
       title: _isCreateMode
-          ? UITextConstants.createCircle
-          : UITextConstants.circleEditSettings,
+          ? CommunityText.createCircle
+          : CommunityText.circleEditSettings,
       onBack: () => Navigator.of(context).maybePop(),
       trailing: CupertinoButton(
         padding: EdgeInsets.zero,
         onPressed: _isSaving ? null : _save,
         child: _isSaving
-            ? const CupertinoActivityIndicator()
+            ? AppRequestFeedback.inline()
             : Text(
                 _isCreateMode
-                    ? UITextConstants.create
-                    : UITextConstants.circleSaveChanges,
+                    ? DiscoveryText.create
+                    : CommunityText.circleSaveChanges,
                 style: TextStyle(
                   color: AppColors.primaryColor,
                   fontSize: AppTypography.sm,
@@ -473,7 +473,7 @@ class _CircleEditSettingsPageState
                 ),
                 SizedBox(height: AppSpacing.md),
                 _buildFormCard(
-                  title: UITextConstants.circleInfoSectionTitle,
+                  title: CommunityText.circleInfoSectionTitle,
                   cardBg: cardBg,
                   child: Column(
                     children: [
@@ -485,9 +485,9 @@ class _CircleEditSettingsPageState
                       ),
                       SizedBox(height: AppSpacing.md),
                       _buildField(
-                        label: UITextConstants.circleNameLabel,
+                        label: CommunityText.circleNameLabel,
                         controller: _nameController,
-                        placeholder: UITextConstants.circleNamePlaceholder,
+                        placeholder: CommunityText.circleNamePlaceholder,
                         fill: fill,
                         fg: fg,
                         fgSecondary: fgSecondary,
@@ -495,10 +495,9 @@ class _CircleEditSettingsPageState
                       ),
                       SizedBox(height: AppSpacing.md),
                       _buildField(
-                        label: UITextConstants.circleDescriptionLabel,
+                        label: CommunityText.circleDescriptionLabel,
                         controller: _descriptionController,
-                        placeholder:
-                            UITextConstants.circleDescriptionPlaceholder,
+                        placeholder: CommunityText.circleDescriptionPlaceholder,
                         fill: fill,
                         fg: fg,
                         fgSecondary: fgSecondary,
@@ -506,9 +505,9 @@ class _CircleEditSettingsPageState
                       ),
                       SizedBox(height: AppSpacing.md),
                       _buildField(
-                        label: UITextConstants.circleRulesLabel,
+                        label: CommunityText.circleRulesLabel,
                         controller: _rulesController,
-                        placeholder: UITextConstants.circleRulesPlaceholder,
+                        placeholder: CommunityText.circleRulesPlaceholder,
                         fill: fill,
                         fg: fg,
                         fgSecondary: fgSecondary,
@@ -517,10 +516,10 @@ class _CircleEditSettingsPageState
                       ),
                       SizedBox(height: AppSpacing.md),
                       _buildField(
-                        label: UITextConstants.circleWelcomeMessageLabel,
+                        label: CommunityText.circleWelcomeMessageLabel,
                         controller: _welcomeMessageController,
                         placeholder:
-                            UITextConstants.circleWelcomeMessagePlaceholder,
+                            CommunityText.circleWelcomeMessagePlaceholder,
                         fill: fill,
                         fg: fg,
                         fgSecondary: fgSecondary,
@@ -529,9 +528,9 @@ class _CircleEditSettingsPageState
                       ),
                       SizedBox(height: AppSpacing.md),
                       _buildField(
-                        label: UITextConstants.circleTagsLabel,
+                        label: CommunityText.circleTagsLabel,
                         controller: _tagsController,
-                        placeholder: UITextConstants.circleTagsPlaceholder,
+                        placeholder: CommunityText.circleTagsPlaceholder,
                         fill: fill,
                         fg: fg,
                         fgSecondary: fgSecondary,
@@ -542,13 +541,13 @@ class _CircleEditSettingsPageState
                 ),
               ] else ...[
                 _buildFormCard(
-                  title: UITextConstants.circlePermissionSectionTitle,
+                  title: CommunityText.circlePermissionSectionTitle,
                   cardBg: cardBg,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildSegmentTitle(
-                        UITextConstants.circleVisibilityLabel,
+                        CommunityText.circleVisibilityLabel,
                         fgSecondary,
                       ),
                       SizedBox(height: AppSpacing.xs),
@@ -560,13 +559,13 @@ class _CircleEditSettingsPageState
                             padding: EdgeInsets.symmetric(
                               horizontal: AppSpacing.sm,
                             ),
-                            child: Text(UITextConstants.visibilityPublic),
+                            child: Text(CreationText.visibilityPublic),
                           ),
                           'private': Padding(
                             padding: EdgeInsets.symmetric(
                               horizontal: AppSpacing.sm,
                             ),
-                            child: Text(UITextConstants.visibilityMembers),
+                            child: Text(CommunityText.visibilityMembers),
                           ),
                         },
                         onValueChanged: (value) {
@@ -585,7 +584,7 @@ class _CircleEditSettingsPageState
                       ),
                       SizedBox(height: AppSpacing.md),
                       _buildSegmentTitle(
-                        UITextConstants.circleJoinPolicyLabel,
+                        CommunityText.circleJoinPolicyLabel,
                         fgSecondary,
                       ),
                       SizedBox(height: AppSpacing.xs),
@@ -597,13 +596,13 @@ class _CircleEditSettingsPageState
                             padding: EdgeInsets.symmetric(
                               horizontal: AppSpacing.sm,
                             ),
-                            child: Text(UITextConstants.joinCircle),
+                            child: Text(CommunityText.joinCircle),
                           ),
                           'approval': Padding(
                             padding: EdgeInsets.symmetric(
                               horizontal: AppSpacing.sm,
                             ),
-                            child: Text(UITextConstants.circleJoinApproval),
+                            child: Text(CommunityText.circleJoinApproval),
                           ),
                         },
                         onValueChanged: (value) {
@@ -625,7 +624,7 @@ class _CircleEditSettingsPageState
                 ),
                 SizedBox(height: AppSpacing.md),
                 _buildFormCard(
-                  title: UITextConstants.circleSurfaceSectionTitle,
+                  title: CommunityText.circleSurfaceSectionTitle,
                   cardBg: cardBg,
                   child: Column(
                     children: [
@@ -633,8 +632,8 @@ class _CircleEditSettingsPageState
                         this,
                       )._buildSwitchTile(
                         icon: CupertinoIcons.chat_bubble_2_fill,
-                        title: UITextConstants.circleAutoSyncChatLabel,
-                        subtitle: UITextConstants.circleAutoSyncChatHint,
+                        title: CommunityText.circleAutoSyncChatLabel,
+                        subtitle: CommunityText.circleAutoSyncChatHint,
                         value: _autoSyncChat,
                         onChanged: (value) =>
                             setState(() => _autoSyncChat = value),
@@ -645,7 +644,7 @@ class _CircleEditSettingsPageState
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          UITextConstants.circleSectionDisplayLabel,
+                          CommunityText.circleSectionDisplayLabel,
                           style: TextStyle(
                             fontSize: AppTypography.sm,
                             fontWeight: AppTypography.semiBold,
@@ -667,7 +666,7 @@ class _CircleEditSettingsPageState
                                   entry.value.sectionType,
                                 ),
                                 title: _sectionTitle(entry.value.sectionType),
-                                subtitle: UITextConstants.circleSectionVisible,
+                                subtitle: CommunityText.circleSectionVisible,
                                 value: entry.value.visible,
                                 onChanged: (value) {
                                   setState(() {
@@ -704,11 +703,13 @@ class _CircleEditSettingsPageState
                   height: AppSpacing.buttonHeight,
                   alignment: Alignment.center,
                   child: _isSaving
-                      ? const CupertinoActivityIndicator(color: AppColors.white)
+                      ? AppRequestFeedback.inline(
+                          indicatorColor: AppColors.white,
+                        )
                       : Text(
                           _isCreateMode
-                              ? UITextConstants.createCircle
-                              : UITextConstants.circleSaveChanges,
+                              ? CommunityText.createCircle
+                              : CommunityText.circleSaveChanges,
                           style: TextStyle(
                             color: AppColors.white,
                             fontSize: AppTypography.base,
@@ -749,8 +750,8 @@ class _CircleEditSettingsPageState
             ),
             child: Text(
               _isCreateMode
-                  ? UITextConstants.circleInfoSectionTitle
-                  : UITextConstants.editCircle,
+                  ? CommunityText.circleInfoSectionTitle
+                  : CommunityText.editCircle,
               style: TextStyle(
                 color: _activeTab == CircleEditSettingsTab.info
                     ? fg
@@ -767,8 +768,8 @@ class _CircleEditSettingsPageState
             ),
             child: Text(
               _isCreateMode
-                  ? UITextConstants.circleEditSettings
-                  : UITextConstants.manageCenter,
+                  ? CommunityText.circleEditSettings
+                  : CommunityText.manageCenter,
               style: TextStyle(
                 color: _activeTab == CircleEditSettingsTab.settings
                     ? fg
@@ -796,7 +797,7 @@ class _CircleEditSettingsPageState
     required Color border,
   }) {
     return _buildFormCard(
-      title: UITextConstants.circleMediaSectionTitle,
+      title: CommunityText.circleMediaSectionTitle,
       cardBg: cardBg,
       child: Column(
         children: [
@@ -832,7 +833,7 @@ class _CircleEditSettingsPageState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          UITextConstants.circleCategoryLabel,
+          CommunityText.circleCategoryLabel,
           style: TextStyle(
             fontSize: AppTypography.sm,
             fontWeight: AppTypography.semiBold,

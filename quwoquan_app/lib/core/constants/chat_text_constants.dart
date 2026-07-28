@@ -39,7 +39,7 @@ abstract final class ChatText {
   static const String authGatePromptStartGroupChat = '登录后即可发起群聊';
   static const String chatListCacheFallback = '网络不太稳，先显示本机最近的聊天。';
   static const String chatListLoadFailedTitle = '聊天列表没加载出来';
-  static const String chatListLoadFailedMessage = '可能是网络问题。';
+  static const String chatListLoadFailedMessage = '聊天列表未能完成加载。';
   static const String searchContactFallback = '联系人';
   static const String searchChatDirect = '单聊';
   static const String searchChatGroup = '讨论';

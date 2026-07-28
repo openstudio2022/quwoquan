@@ -7,27 +7,33 @@ import (
 )
 
 type DataContentFleetReport struct {
-	Schema                            string                   `json:"schema"`
-	Passed                            bool                     `json:"passed"`
-	Backend                           string                   `json:"backend"`
-	Total                             int                      `json:"total"`
-	Succeeded                         int                      `json:"succeeded"`
-	StageCompletedCount               int                      `json:"stageCompletedCount"`
-	PublishTaskCount                  int                      `json:"publishTaskCount"`
-	ObjectTransactionResultCount      int                      `json:"objectTransactionResultCount"`
-	CommercialAcceptedCount           int                      `json:"commercialAcceptedCount"`
-	ControlPlaneTaskThroughputPerHour float64                  `json:"controlPlaneTaskThroughputPerHour"`
-	AcceptedContentThroughputPerHour  float64                  `json:"acceptedContentThroughputPerHour"`
-	AcceptedContentThroughputStatus   string                   `json:"acceptedContentThroughputStatus"`
-	AutomaticRecoveryRate             float64                  `json:"automaticRecoveryRate"`
-	FinalizedWithinStageBudgetRate    float64                  `json:"finalizedWithinStageBudgetRate"`
-	DuplicatePublishCount             int                      `json:"duplicatePublishCount"`
-	MissingObjectCount                int                      `json:"missingObjectCount"`
-	RequiredQuota                     int                      `json:"requiredQuota"`
-	FinalizedObjectCount              int                      `json:"finalizedObjectCount"`
-	IdempotencyKey                    string                   `json:"idempotencyKey"`
-	TaskOutcomes                      []DataContentTaskOutcome `json:"taskOutcomes"`
-	CompletedAt                       string                   `json:"completedAt"`
+	Schema                             string                   `json:"schema"`
+	Passed                             bool                     `json:"passed"`
+	Backend                            string                   `json:"backend"`
+	Total                              int                      `json:"total"`
+	Succeeded                          int                      `json:"succeeded"`
+	StageCompletedCount                int                      `json:"stageCompletedCount"`
+	PublishTaskCount                   int                      `json:"publishTaskCount"`
+	ObjectTransactionResultCount       int                      `json:"objectTransactionResultCount"`
+	CommercialAcceptedCount            int                      `json:"commercialAcceptedCount"`
+	FleetControlPlaneThroughputPerHour float64                  `json:"fleetControlPlaneThroughputPerHour"`
+	FleetAcceptedThroughputPerHour     float64                  `json:"fleetAcceptedThroughputPerHour"`
+	EndToEndAcceptedThroughputPerHour  float64                  `json:"endToEndAcceptedThroughputPerHour"`
+	AcceptedContentThroughputStatus    string                   `json:"acceptedContentThroughputStatus"`
+	AutomaticRecoveryRate              float64                  `json:"automaticRecoveryRate"`
+	FinalizedWithinStageBudgetRate     float64                  `json:"finalizedWithinStageBudgetRate"`
+	DuplicatePublishCount              int                      `json:"duplicatePublishCount"`
+	MissingObjectCount                 int                      `json:"missingObjectCount"`
+	RequiredQuota                      int                      `json:"requiredQuota"`
+	FinalizedObjectCount               int                      `json:"finalizedObjectCount"`
+	IdempotencyKey                     string                   `json:"idempotencyKey"`
+	TaskOutcomes                       []DataContentTaskOutcome `json:"taskOutcomes"`
+	ExecutionCreatedAt                 string                   `json:"executionCreatedAt"`
+	FleetStartedAt                     string                   `json:"fleetStartedAt"`
+	CanonicalFinalizedAt               *string                  `json:"canonicalFinalizedAt"`
+	FleetWallClockMilliseconds         int64                    `json:"fleetWallClockMilliseconds"`
+	EndToEndWallClockMilliseconds      int64                    `json:"endToEndWallClockMilliseconds"`
+	CompletedAt                        string                   `json:"completedAt"`
 }
 
 // DataContentTaskOutcome is the minimal service-owned completion receipt for
@@ -48,6 +54,7 @@ type DataContentTaskOutcome struct {
 // participates in the gate.
 func BuildDataContentFleetReport(
 	tasks []ReliableAsyncTask,
+	executionCreatedAt time.Time,
 	startedAt time.Time,
 	completedAt time.Time,
 	duplicatePublishCount int,
@@ -58,15 +65,17 @@ func BuildDataContentFleetReport(
 	if completedAt.Before(startedAt) {
 		completedAt = startedAt
 	}
-	elapsedHours := completedAt.Sub(startedAt).Hours()
-	if elapsedHours <= 0 {
-		elapsedHours = time.Nanosecond.Hours()
+	fleetElapsed := completedAt.Sub(startedAt)
+	fleetElapsedHours := fleetElapsed.Hours()
+	if fleetElapsedHours <= 0 {
+		fleetElapsedHours = time.Nanosecond.Hours()
 	}
 	succeeded := 0
 	stageCompleted := 0
 	publishTasks := 0
 	transactionResults := 0
 	commercialAccepted := 0
+	var canonicalFinalizedAt time.Time
 	outcomes := make([]DataContentTaskOutcome, 0, len(tasks))
 	for _, task := range tasks {
 		if task.Payload["stage"] == "publish" {
@@ -82,7 +91,15 @@ func BuildDataContentFleetReport(
 			transactionResults++
 		}
 		if task.Status == TaskStatusSucceeded && dataContentResultCommerciallyAccepted(task) {
-			commercialAccepted++
+			acceptedAt, err := time.Parse(time.RFC3339Nano, task.Result["completedAt"])
+			if err == nil &&
+				!executionCreatedAt.IsZero() &&
+				acceptedAt.After(executionCreatedAt) {
+				commercialAccepted++
+				if canonicalFinalizedAt.IsZero() || acceptedAt.After(canonicalFinalizedAt) {
+					canonicalFinalizedAt = acceptedAt
+				}
+			}
 		}
 		failureCode := ""
 		if task.LastFailure != nil {
@@ -116,28 +133,47 @@ func BuildDataContentFleetReport(
 	} else if total > 0 {
 		passed = succeeded >= requiredQuota && missingObjectCount == 0
 	}
+	fleetAcceptedThroughput := float64(commercialAccepted) / fleetElapsedHours
+	endToEndAcceptedThroughput := 0.0
+	endToEndWallClock := time.Duration(0)
+	var canonicalFinalizedAtText *string
+	if !canonicalFinalizedAt.IsZero() {
+		endToEndWallClock = canonicalFinalizedAt.Sub(executionCreatedAt)
+		endToEndHours := endToEndWallClock.Hours()
+		if endToEndHours > 0 {
+			endToEndAcceptedThroughput = float64(commercialAccepted) / endToEndHours
+		}
+		value := canonicalFinalizedAt.UTC().Format(time.RFC3339Nano)
+		canonicalFinalizedAtText = &value
+	}
 	return DataContentFleetReport{
-		Schema:                            "quwoquan.reliabletask_fleet_report",
-		Passed:                            passed,
-		Backend:                           "mongodb+redis",
-		Total:                             total,
-		Succeeded:                         succeeded,
-		StageCompletedCount:               stageCompleted,
-		PublishTaskCount:                  publishTasks,
-		ObjectTransactionResultCount:      transactionResults,
-		CommercialAcceptedCount:           commercialAccepted,
-		ControlPlaneTaskThroughputPerHour: float64(succeeded) / elapsedHours,
-		AcceptedContentThroughputPerHour:  float64(commercialAccepted) / elapsedHours,
-		AcceptedContentThroughputStatus:   acceptedStatus,
-		AutomaticRecoveryRate:             recoveryRate,
-		FinalizedWithinStageBudgetRate:    finalizedRate,
-		DuplicatePublishCount:             duplicatePublishCount,
-		MissingObjectCount:                missingObjectCount,
-		RequiredQuota:                     requiredQuota,
-		FinalizedObjectCount:              finalizedObjectCount,
-		IdempotencyKey:                    "executionId+entity+carrier+sourceRevision+stage",
-		TaskOutcomes:                      outcomes,
-		CompletedAt:                       completedAt.UTC().Format(time.RFC3339Nano),
+		Schema:                             "quwoquan.reliabletask_fleet_report",
+		Passed:                             passed,
+		Backend:                            "mongodb+redis",
+		Total:                              total,
+		Succeeded:                          succeeded,
+		StageCompletedCount:                stageCompleted,
+		PublishTaskCount:                   publishTasks,
+		ObjectTransactionResultCount:       transactionResults,
+		CommercialAcceptedCount:            commercialAccepted,
+		FleetControlPlaneThroughputPerHour: float64(succeeded) / fleetElapsedHours,
+		FleetAcceptedThroughputPerHour:     fleetAcceptedThroughput,
+		EndToEndAcceptedThroughputPerHour:  endToEndAcceptedThroughput,
+		AcceptedContentThroughputStatus:    acceptedStatus,
+		AutomaticRecoveryRate:              recoveryRate,
+		FinalizedWithinStageBudgetRate:     finalizedRate,
+		DuplicatePublishCount:              duplicatePublishCount,
+		MissingObjectCount:                 missingObjectCount,
+		RequiredQuota:                      requiredQuota,
+		FinalizedObjectCount:               finalizedObjectCount,
+		IdempotencyKey:                     "executionId+entity+carrier+sourceRevision+stage",
+		TaskOutcomes:                       outcomes,
+		ExecutionCreatedAt:                 executionCreatedAt.UTC().Format(time.RFC3339Nano),
+		FleetStartedAt:                     startedAt.UTC().Format(time.RFC3339Nano),
+		CanonicalFinalizedAt:               canonicalFinalizedAtText,
+		FleetWallClockMilliseconds:         fleetElapsed.Milliseconds(),
+		EndToEndWallClockMilliseconds:      endToEndWallClock.Milliseconds(),
+		CompletedAt:                        completedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
 

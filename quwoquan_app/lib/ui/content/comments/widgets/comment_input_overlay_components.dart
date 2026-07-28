@@ -46,7 +46,7 @@ class _ReplyIndicator extends StatelessWidget {
           SizedBox(width: AppSpacing.xs),
           Expanded(
             child: Text(
-              '${UITextConstants.replyAction} @$username',
+              '${ContentText.replyAction} @$username',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -101,7 +101,7 @@ class _ToolIcon extends StatelessWidget {
         height: AppSpacing.minInteractiveSize,
         child: Center(
           child: busy
-              ? const CupertinoActivityIndicator()
+              ? AppRequestFeedback.inline()
               : Icon(
                   icon,
                   size: AppSpacing.appChromeActionIconSize,
@@ -144,7 +144,7 @@ class _SendButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
         ),
         child: Text(
-          UITextConstants.commentSend,
+          ContentText.commentSend,
           style: TextStyle(
             fontSize: AppTypography.body,
             fontWeight: AppTypography.semiBold,

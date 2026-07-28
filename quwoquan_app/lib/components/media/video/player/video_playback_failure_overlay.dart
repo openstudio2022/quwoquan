@@ -13,19 +13,24 @@ class VideoPlaybackFailureOverlay extends StatelessWidget {
     this.thumbnailReference,
     this.retrying = false,
     this.onRetry,
+    this.onExit,
   });
 
   final MediaPlaybackFailure failure;
   final MediaDeliveryReference? thumbnailReference;
   final bool retrying;
   final VoidCallback? onRetry;
+  final VoidCallback? onExit;
 
   @override
   Widget build(BuildContext context) {
     final copy = failure.copy;
     final message = copy.message?.trim() ?? '';
     final thumbnailUrl = thumbnailReference?.url ?? '';
-    final showRetry = failure.isRetryable && onRetry != null;
+    final recoveryCopy = AppUserRecoveryContract.copyFor(
+      failure.userRecoveryGroup,
+    );
+    final action = failure.isRetryable ? onRetry : onExit;
     return Container(
       width: double.infinity,
       height: double.infinity,
@@ -51,8 +56,9 @@ class VideoPlaybackFailureOverlay extends StatelessWidget {
                 message: message.isEmpty ? null : message,
               ),
               retrying: retrying,
-              onRetry: showRetry ? onRetry : null,
+              onRetry: action,
               retryKey: const ValueKey<String>('video-player-retry'),
+              actionLabel: recoveryCopy.action.label,
             ),
           ),
         ],

@@ -5,11 +5,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
+	"time"
 
+	rthealth "quwoquan_service/runtime/health"
+	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/accountclosure"
+	mediainfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media"
 )
 
 const accountClosureSubjectHMACEnv = "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET"
@@ -74,4 +79,40 @@ func resolveAccountClosureSubjectDigestor(
 		secret = hex.EncodeToString(sum[:])
 	}
 	return accountclosure.NewHMACSubjectDigestor(secret)
+}
+
+func startAccountClosureRuntime(
+	ctx context.Context,
+	redis rtredis.Client,
+	logger *slog.Logger,
+	healthChecker *rthealth.Checker,
+	instanceID string,
+	store *accountclosure.MongoStore,
+	cache *accountclosure.RedisPersonalDataCacheCleaner,
+	search *accountclosure.SearchIndexerDeleter,
+	media *mediainfra.ObjectGateway,
+) (*accountclosure.Consumer, error) {
+	processor, err := accountclosure.NewProcessor(store, cache, search, media)
+	if err != nil {
+		return nil, err
+	}
+	consumer, err := accountclosure.NewConsumer(
+		redis,
+		processor,
+		store,
+		"content-service-"+instanceID,
+		logger,
+		accountclosure.DefaultConsumerConfig(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	if err := consumer.EnsureGroup(ctx); err != nil {
+		return nil, err
+	}
+	go consumer.Run(ctx)
+	healthChecker.Register("user-account-closed-consumer", func(context.Context) error {
+		return consumer.Healthy(15 * time.Second)
+	})
+	return consumer, nil
 }

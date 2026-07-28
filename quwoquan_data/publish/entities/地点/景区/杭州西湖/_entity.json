@@ -1,0 +1,58 @@
+{
+  "label": "杭州西湖",
+  "domain": "地点",
+  "type": "景区",
+  "executionId": "20260728--travel-homepage-golden--hangzhou-west-lake--pilot-006",
+  "entityRef": "/entity/地点/景区/杭州西湖",
+  "summary": "西湖位于中华人民共和国浙江省杭州旧城西侧，既是中国大陆首批国家重点风景名胜区与中国十大风景名胜之一，也是中国主要的观赏性淡水湖泊之一。",
+  "sourceRefs": [
+    "sources/杭州西湖__wikipedia__bfaa8cab/source.md"
+  ],
+  "sourceUrls": [
+    "https://zh.wikipedia.org/wiki/%E8%A5%BF%E6%B9%96"
+  ],
+  "primarySource": {
+    "entityName": "杭州西湖",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E8%A5%BF%E6%B9%96",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E8%A5%BF%E6%B9%96",
+    "title": "西湖",
+    "fetchedAt": "2026-07-28T01:41:54Z",
+    "snapshotHash": "sha256:984bd00219dc305ac8d0031124e92b0bb4e061b2b49e1fc3594454b16c4e7ee5",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "licensed_adaptation"
+  },
+  "textSourceRefs": [
+    "sources/杭州西湖__wikipedia__bfaa8cab/source.md"
+  ],
+  "imageSourceRefs": [
+    "sources/杭州西湖__wikipedia__bfaa8cab/source.md"
+  ],
+  "tagRefs": [
+    "Entity/地点/景区",
+    "Topic/地理/行政区/中国/浙江省/杭州市/西湖区",
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "geoTagRef": "Topic/地理/行政区/中国/浙江省/杭州市/西湖区",
+  "aliases": [
+    "西湖",
+    "西湖风景名胜区"
+  ],
+  "authorId": "builtin_travel_geo_editor",
+  "creatorProfileId": "qwq_creator_geo_editor_001",
+  "creatorArchetype": "geo_editor",
+  "creatorProfileVersion": "1.0.0",
+  "creatorDisclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  },
+  "experienceClaimMode": "editorial_synthesis",
+  "authorQualitySignals": {
+    "qualityScore": 0.9,
+    "fatigueScore": 0.2,
+    "riskTier": "low"
+  }
+}

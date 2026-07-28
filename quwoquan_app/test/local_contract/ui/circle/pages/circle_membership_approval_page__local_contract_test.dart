@@ -134,7 +134,7 @@ void main() {
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.tryAgain).first);
+    await tester.tap(find.text(SearchText.reload).first);
     await tester.pumpAndSettle();
 
     expect(

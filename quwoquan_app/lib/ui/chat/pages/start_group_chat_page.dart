@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -261,7 +262,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           base.primaryAction ??
           const UiErrorAction(
             type: UiErrorActionType.dismiss,
-            label: UITextConstants.confirm,
+            label: FoundationText.confirm,
           ),
       secondaryAction: base.secondaryAction,
       dismissible: base.dismissible,
@@ -622,7 +623,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         SizedBox(height: AppSpacing.sm),
         Row(
           children: [
-            const CupertinoActivityIndicator(),
+            AppRequestFeedback.inline(),
             SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
@@ -731,7 +732,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
             ),
             child: AppSearchField(
               controller: _searchController,
-              placeholder: UITextConstants.search,
+              placeholder: DiscoveryText.search,
               onChanged: (value) => setState(() => _query = value),
             ),
           ),
@@ -813,9 +814,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                   children: listChildren,
                 ),
                 if (_isLoading)
-                  const Positioned.fill(
-                    child: Center(child: CupertinoActivityIndicator()),
-                  ),
+                  Positioned.fill(child: AppRequestFeedback.section()),
                 if (_query.trim().isEmpty)
                   Positioned(
                     key: const ValueKey<String>('start-group-letter-index'),
@@ -875,7 +874,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                     ? null
                     : _submitSelection,
                 child: _submitting
-                    ? const CupertinoActivityIndicator()
+                    ? AppRequestFeedback.inline()
                     : Text(
                         widget.isCreateMode
                             ? ChatText.startGroupChatActionCount(

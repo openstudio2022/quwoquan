@@ -240,7 +240,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
                 message: CreatePageText.activePersonaContextNotReady,
                 primaryAction: const UiErrorAction(
                   type: UiErrorActionType.retry,
-                  label: UITextConstants.tryAgain,
+                  label: ContentText.tryAgain,
                 ),
                 dismissible: true,
               )
@@ -518,7 +518,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
         final addEnabled = state.editorKind == CreateEditorKind.text
             ? true
             : _canAddMoreImages(state);
-        const addLabel = UITextConstants.addImage;
+        const addLabel = MediaText.addImage;
         if (isVideo) {
           final videoWidth = math
               .min(tileWidth * 1.2, constraints.maxWidth)
@@ -540,7 +540,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
               ),
               SizedBox(height: spacing),
               Text(
-                UITextConstants.createVideoEditFeaturesHint,
+                CreationText.createVideoEditFeaturesHint,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: CupertinoColors.secondaryLabel.resolveFrom(context),
@@ -551,7 +551,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
               CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: onAdd,
-                child: const Text(UITextConstants.createReplaceVideoLabel),
+                child: const Text(CreationText.createReplaceVideoLabel),
               ),
             ],
           );
@@ -801,7 +801,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
                         left: AppSpacing.intraGroupXs,
                         bottom: AppSpacing.intraGroupXs,
                         child: _PreviewBadge(
-                          label: UITextConstants.createVideoBadgeEditLabel,
+                          label: CreationText.createVideoBadgeEditLabel,
                           backgroundColor: mediaScrim.withValues(
                             alpha: isDark ? 0.42 : 0.48,
                           ),
@@ -812,7 +812,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
                         left: AppSpacing.intraGroupXs,
                         top: AppSpacing.intraGroupXs,
                         child: _PreviewBadge(
-                          label: UITextConstants.createVideoKindBadgeLabel,
+                          label: CreationText.createVideoKindBadgeLabel,
                           backgroundColor: mediaScrim.withValues(
                             alpha: isDark ? 0.42 : 0.48,
                           ),

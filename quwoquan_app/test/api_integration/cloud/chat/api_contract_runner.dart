@@ -31,7 +31,6 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/chat/generated/chat_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 
-import '../../../support/api_contract/local_bad_certificate_overrides.dart';
 import '../../../support/api_contract/local_gamma_anonymous_session.dart';
 
 const _apiContractEnv = String.fromEnvironment(
@@ -39,9 +38,6 @@ const _apiContractEnv = String.fromEnvironment(
   defaultValue: 'gamma',
 );
 const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
-const _allowBadCertificateForLocalApiContract = bool.fromEnvironment(
-  'API_CONTRACT_ALLOW_BAD_CERT',
-);
 
 // ─── Shared state ───────────────────────────────────────────────────────────
 
@@ -57,12 +53,15 @@ Map<String, String> _authHeaders(String pageId) => <String, String>{
 /// 创建一个测试会话，返回 conversationId。
 Future<String> _seedConversation() async {
   final url = Uri.parse('$_apiBase/chat/conversations');
+  final idempotencyKey =
+      'chat-contract-${DateTime.now().microsecondsSinceEpoch}';
   final resp = await _client
       .post(
         url,
         headers: {
           ..._authHeaders('chat.conversation.create'),
           'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey,
         },
         body: jsonEncode({
           'type': 'group',
@@ -77,6 +76,9 @@ Future<String> _seedConversation() async {
     );
   }
   final body = jsonDecode(resp.body) as Map<String, dynamic>;
+  if (body['status'] != 'active' || body['type'] != 'group') {
+    throw Exception('_seedConversation returned non-active group: $body');
+  }
   final id = body['id'] as String;
   return id;
 }
@@ -95,6 +97,7 @@ Future<Map<String, dynamic>> _sendMessage(
         headers: {
           ..._authHeaders('chat.message.send'),
           'Content-Type': 'application/json',
+          'Idempotency-Key': 'chat-message-$clientMsgId',
         },
         body: jsonEncode({
           'type': 'text',
@@ -113,9 +116,6 @@ Future<Map<String, dynamic>> _sendMessage(
 
 void main() {
   setUpAll(() async {
-    installLocalApiContractBadCertificateOverride(
-      enabled: _allowBadCertificateForLocalApiContract,
-    );
     if (_apiBase.isEmpty) {
       throw StateError('L3: ${_apiContractEnv.toUpperCase()}_BASE_URL not set');
     }
@@ -140,7 +140,6 @@ void main() {
 
   tearDownAll(() {
     if (_apiAvailable) _client.close();
-    restoreLocalApiContractBadCertificateOverride();
   });
 
   // ── 场景 1：list_conversations_contract ───────────────────────────────────
@@ -176,8 +175,13 @@ void main() {
       );
       expect(
         body.containsKey('cursor'),
-        isTrue,
-        reason: 'response must contain cursor for pagination',
+        isFalse,
+        reason: 'response must not emit the retired cursor key',
+      );
+      expect(
+        body['nextCursor'],
+        anyOf(isNull, allOf(isA<String>(), isNotEmpty)),
+        reason: 'nextCursor is optional and non-empty when another page exists',
       );
 
       final items = body['items'] as List;
@@ -185,7 +189,7 @@ void main() {
 
       // 语义层：每条 conversation 有必要字段
       final first = items.first as Map<String, dynamic>;
-      expect(first.containsKey('_id'), isTrue);
+      expect(first.containsKey('id'), isTrue);
       expect(first.containsKey('type'), isTrue);
       expect(first.containsKey('status'), isTrue);
     });
@@ -259,6 +263,7 @@ void main() {
             headers: {
               ..._authHeaders('chat.message.recall'),
               'Content-Type': 'application/json',
+              'Idempotency-Key': 'chat-recall-$msgId',
             },
             body: '{}',
           )
@@ -274,9 +279,7 @@ void main() {
 
       final resp = await _client
           .get(
-            Uri.parse(
-              '$_apiBase/chat/conversations/$convId/messages?limit=10',
-            ),
+            Uri.parse('$_apiBase/chat/conversations/$convId/messages?limit=10'),
             headers: _authHeaders('chat.message.list'),
           )
           .timeout(const Duration(seconds: 10));
@@ -288,7 +291,7 @@ void main() {
       expect(items, isNotEmpty);
 
       final first = items.first as Map<String, dynamic>;
-      expect(first.containsKey('_id'), isTrue);
+      expect(first.containsKey('id'), isTrue);
       expect(first.containsKey('type'), isTrue);
       expect(first.containsKey('content'), isTrue);
       expect(first.containsKey('seq'), isTrue);
@@ -302,9 +305,7 @@ void main() {
       () async {
         final resp = await _client
             .get(
-              Uri.parse(
-                '$_apiBase/chat/conversations/nonexistent_conv_00000',
-              ),
+              Uri.parse('$_apiBase/chat/conversations/nonexistent_conv_00000'),
               headers: _authHeaders('chat.conversation.get'),
             )
             .timeout(const Duration(seconds: 10));
@@ -370,13 +371,15 @@ void main() {
       convId = await _seedConversation();
     });
 
-    test('添加成员 → 成员列表包含新成员', () async {
+    test('添加非互关成员被关系门禁拒绝', () async {
       final addResp = await _client
           .post(
             Uri.parse('$_apiBase/chat/conversations/$convId/members'),
             headers: {
               ..._authHeaders('chat.member.add'),
               'Content-Type': 'application/json',
+              'Idempotency-Key':
+                  'chat-member-${DateTime.now().microsecondsSinceEpoch}',
             },
             body: jsonEncode({
               'userIds': ['l3_test_member_001'],
@@ -384,20 +387,15 @@ void main() {
           )
           .timeout(const Duration(seconds: 10));
 
-      expect(addResp.statusCode, 200);
-
-      final listResp = await _client
-          .get(
-            Uri.parse(
-              '$_apiBase/chat/conversations/$convId/members?limit=50',
-            ),
-            headers: _authHeaders('chat.member.list'),
-          )
-          .timeout(const Duration(seconds: 10));
-
-      expect(listResp.statusCode, 200);
-      final body = jsonDecode(listResp.body) as Map<String, dynamic>;
-      expect(body.containsKey('items'), isTrue);
+      expect(addResp.statusCode, 403);
+      final body = jsonDecode(addResp.body) as Map<String, dynamic>;
+      expect(
+        body['code'],
+        anyOf(
+          'CHAT.USER.group_member_not_mutual',
+          'CHAT.USER.group_member_blocked',
+        ),
+      );
     });
   });
 }

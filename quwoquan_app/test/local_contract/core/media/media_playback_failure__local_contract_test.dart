@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/errors/ui_error_models.dart';
 import 'package:quwoquan_app/core/media/media_candidate_failure.dart';
 import 'package:quwoquan_app/core/media/media_load_failure_cache.dart';
 import 'package:quwoquan_app/core/media/media_playback_failure.dart';
@@ -13,8 +14,9 @@ void main() {
       );
 
       expect(failure.userScene, VideoPlaybackUserScene.temporary);
-      expect(failure.copy.title, UITextConstants.videoPlaybackTemporaryTitle);
-      expect(failure.copy.message, isNull);
+      expect(failure.userRecoveryGroup, AppUserRecoveryGroup.reloadLater);
+      expect(failure.copy.title, SearchText.recoveryReloadLaterTitle);
+      expect(failure.copy.message, SearchText.recoveryReloadLaterMessage);
       expect(failure.isRetryable, isTrue);
       expect(failure.runtimeFailure.code, failure.errorCode.code);
       expect(failure.runtimeFailure.kind, RuntimeFailureKind.unavailable);
@@ -32,10 +34,14 @@ void main() {
 
       expect(failure.kind, MediaCandidateFailureKind.http404);
       expect(failure.userScene, VideoPlaybackUserScene.unavailable);
-      expect(failure.copy.title, UITextConstants.videoPlaybackUnavailableTitle);
+      expect(
+        failure.userRecoveryGroup,
+        AppUserRecoveryGroup.contentUnavailable,
+      );
+      expect(failure.copy.title, SearchText.recoveryContentUnavailableTitle);
       expect(
         failure.copy.message,
-        UITextConstants.videoPlaybackUnavailableMessage,
+        SearchText.recoveryContentUnavailableMessage,
       );
       expect(failure.isRetryable, isFalse);
       expect(failure.shouldNegativeCache, isTrue);
@@ -50,10 +56,14 @@ void main() {
 
       expect(failure.kind, MediaCandidateFailureKind.decoderInitialization);
       expect(failure.userScene, VideoPlaybackUserScene.unsupported);
-      expect(failure.copy.title, UITextConstants.videoPlaybackUnsupportedTitle);
+      expect(
+        failure.userRecoveryGroup,
+        AppUserRecoveryGroup.contentUnavailable,
+      );
+      expect(failure.copy.title, SearchText.recoveryContentUnavailableTitle);
       expect(
         failure.copy.message,
-        UITextConstants.videoPlaybackUnsupportedMessage,
+        SearchText.recoveryContentUnavailableMessage,
       );
       expect(failure.isRetryable, isFalse);
       expect(failure.runtimeFailure.kind, RuntimeFailureKind.unsupported);
@@ -65,8 +75,9 @@ void main() {
       );
 
       expect(failure.userScene, VideoPlaybackUserScene.network);
-      expect(failure.copy.title, UITextConstants.videoPlaybackNetworkTitle);
-      expect(failure.copy.message, isNull);
+      expect(failure.userRecoveryGroup, AppUserRecoveryGroup.connectNetwork);
+      expect(failure.copy.title, SearchText.recoveryConnectNetworkTitle);
+      expect(failure.copy.message, SearchText.recoveryConnectNetworkMessage);
       expect(failure.isRetryable, isTrue);
     });
 
@@ -76,8 +87,9 @@ void main() {
       );
 
       expect(failure.userScene, VideoPlaybackUserScene.busy);
-      expect(failure.copy.title, UITextConstants.videoPlaybackTemporaryTitle);
-      expect(failure.copy.message, isNull);
+      expect(failure.userRecoveryGroup, AppUserRecoveryGroup.reloadLater);
+      expect(failure.copy.title, SearchText.recoveryReloadLaterTitle);
+      expect(failure.copy.message, SearchText.recoveryReloadLaterMessage);
       expect(failure.isRetryable, isTrue);
     });
   });

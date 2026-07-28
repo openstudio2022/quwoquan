@@ -54,7 +54,7 @@ def parse_args() -> argparse.Namespace:
         or "http://127.0.0.1:18080",
     )
     parser.add_argument(
-        "--media-base-url",
+        "--media-avatar-base-url",
         default=os.environ.get("CHAT_AVATAR_MEDIA_BASE_URL")
         or os.environ.get("MEDIA_AVATAR_CDN_BASE_URL")
         or os.environ.get("PROD_MEDIA_BASE_URL")
@@ -112,7 +112,7 @@ def report_template(args: argparse.Namespace, members: list[str]) -> dict[str, A
             "env": env_name,
             "runtimeKind": runtime_kind(env_name, args.runtime_kind),
             "gatewayBaseUrl": args.base_url.rstrip("/"),
-            "mediaBaseUrl": args.media_base_url.rstrip("/"),
+            "mediaAvatarBaseUrl": args.media_avatar_base_url.rstrip("/"),
             "commitSha": os.environ.get("GITHUB_SHA", ""),
             "githubRunId": os.environ.get("GITHUB_RUN_ID", ""),
         },
@@ -383,11 +383,11 @@ def resolve_media_url(args: argparse.Namespace, avatar_url: str) -> str:
     trimmed = avatar_url.strip()
     if trimmed.startswith(("http://", "https://")):
         return trimmed
-    media_base = args.media_base_url.strip().rstrip("/")
+    media_base = args.media_avatar_base_url.strip().rstrip("/")
     if not media_base:
         raise ProbeFailure(
             "media_load_failed",
-            "avatarUrl is relative and --media-base-url is required: " + trimmed,
+            "avatarUrl is relative and --media-avatar-base-url is required: " + trimmed,
         )
     return urllib.parse.urljoin(media_base + "/", trimmed.lstrip("/"))
 
@@ -557,7 +557,7 @@ def run_probe(args: argparse.Namespace, report: dict[str, Any], members: list[st
     initial_version = parse_version(created)
     report["conversation"]["conversationId"] = conversation_id
     report["conversation"]["initialAvatarUrl"] = initial_avatar
-    report["conversation"]["initialAvatarUrlResolved"] = resolve_media_url(args, initial_avatar) if args.media_base_url or initial_avatar.startswith(("http://", "https://")) else initial_avatar
+    report["conversation"]["initialAvatarUrlResolved"] = resolve_media_url(args, initial_avatar) if args.media_avatar_base_url or initial_avatar.startswith(("http://", "https://")) else initial_avatar
     report["conversation"]["groupAvatarVersionBefore"] = initial_version
     add_step(report, "create_conversation", "passed", conversationId=conversation_id, avatarUrl=initial_avatar)
 
@@ -573,7 +573,7 @@ def run_probe(args: argparse.Namespace, report: dict[str, Any], members: list[st
     add_avatar = str(after_add.get("avatarUrl") or "").strip()
     report["conversation"]["groupAvatarVersionAfterAdd"] = add_version
     report["conversation"]["finalAvatarUrl"] = add_avatar
-    report["conversation"]["finalAvatarUrlResolved"] = resolve_media_url(args, add_avatar) if args.media_base_url or add_avatar.startswith(("http://", "https://")) else add_avatar
+    report["conversation"]["finalAvatarUrlResolved"] = resolve_media_url(args, add_avatar) if args.media_avatar_base_url or add_avatar.startswith(("http://", "https://")) else add_avatar
     add_step(report, "add_member_avatar_update", "passed", version=add_version, avatarUrl=add_avatar)
     collect_sync_patches(args, report, conversation_id, [args.creator_id, *members, args.added_member_id], add_version)
 
@@ -591,7 +591,7 @@ def run_probe(args: argparse.Namespace, report: dict[str, Any], members: list[st
         remove_avatar = str(after_remove.get("avatarUrl") or "").strip()
         report["conversation"]["groupAvatarVersionAfterRemove"] = remove_version
         report["conversation"]["finalAvatarUrl"] = remove_avatar
-        report["conversation"]["finalAvatarUrlResolved"] = resolve_media_url(args, remove_avatar) if args.media_base_url or remove_avatar.startswith(("http://", "https://")) else remove_avatar
+        report["conversation"]["finalAvatarUrlResolved"] = resolve_media_url(args, remove_avatar) if args.media_avatar_base_url or remove_avatar.startswith(("http://", "https://")) else remove_avatar
         add_step(report, "remove_member_avatar_update", "passed", version=remove_version, avatarUrl=remove_avatar)
         current_members = [args.creator_id, *members]
         current_members = [user_id for user_id in current_members if user_id != args.removed_member_id]

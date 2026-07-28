@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""
-Ensure contracts/metadata/**/operations.yaml response_entity names resolve to
-an object fields type, shared schema, or projection read model.
-"""
+"""Ensure every ContractGraph response entity resolves to a declared contract type."""
+
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -15,101 +14,101 @@ except ImportError:
     sys.exit(2)
 
 ROOT = Path(__file__).resolve().parents[3]
-# Scope: assistant metadata bundles (F0 backlog); extend to other domains as fields.yaml catches up.
-ASSISTANT_METADATA = ROOT / "quwoquan_service" / "contracts" / "metadata" / "assistant"
+SERVICE_ROOT = ROOT / "quwoquan_service"
+CONTRACT_GRAPH = SERVICE_ROOT / "generated" / "contract_graph.json"
 
 
 def entity_names_from_fields_yaml(data: dict) -> set[str]:
-    out: set[str] = set()
-    ents = data.get("entities")
-    if isinstance(ents, dict):
-        out.update(str(k) for k in ents.keys())
-    types = data.get("types")
-    if isinstance(types, dict):
-        out.update(str(k) for k in types.keys())
+    names: set[str] = set()
+    for key in ("entities", "types"):
+        values = data.get(key)
+        if isinstance(values, dict):
+            names.update(str(name) for name in values)
     single = data.get("entity")
     if isinstance(single, str) and single.strip():
-        out.add(single.strip())
-    return out
-
-
-def object_name_from_directory(bundle_dir: Path) -> str:
-    return "".join(part[:1].upper() + part[1:] for part in bundle_dir.name.split("_") if part)
-
-
-def shared_schema_entity_names() -> set[str]:
-    names: set[str] = set()
-    for schema_path in sorted(ASSISTANT_METADATA.glob("*/schema.yaml")):
-        raw = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            continue
-        contract = raw.get("contract")
-        if isinstance(contract, str) and contract.strip():
-            names.add(
-                "".join(
-                    part[:1].upper() + part[1:]
-                    for part in contract.strip().split("_")
-                    if part
-                )
-            )
+        names.add(single.strip())
     return names
 
 
-def entity_names_from_projections(bundle_dir: Path) -> set[str]:
-    out: set[str] = set()
-    projections_dir = bundle_dir / "projections"
-    if not projections_dir.is_dir():
-        return out
-    for projection_path in sorted(projections_dir.glob("*.yaml")):
-        raw = yaml.safe_load(projection_path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            continue
-        read_model = raw.get("read_model")
-        if isinstance(read_model, str) and read_model.strip():
-            out.add(read_model.strip())
-    return out
+def contract_roots() -> list[Path]:
+    roots = [
+        *SERVICE_ROOT.glob("services/*/contracts"),
+        *SERVICE_ROOT.glob("control-plane/*/contracts"),
+    ]
+    return sorted(path for path in roots if path.is_dir())
 
 
-def referenced_entities_from_operations_yaml(data: dict) -> set[str]:
-    out: set[str] = set()
-    routes = data.get("api_routes")
-    if isinstance(routes, list):
-        for r in routes:
-            if not isinstance(r, dict):
+def declared_schema_names() -> set[str]:
+    names: set[str] = set()
+    for contracts in contract_roots():
+        for schema_path in sorted(contracts.rglob("schema.yaml")):
+            raw = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
                 continue
-            v = r.get("response_entity")
-            if isinstance(v, str) and v.strip():
-                out.add(v.strip())
-    return out
+            contract = raw.get("contract")
+            if isinstance(contract, str) and contract.strip():
+                names.add(
+                    "".join(
+                        part[:1].upper() + part[1:]
+                        for part in contract.strip().split("_")
+                        if part
+                    )
+                )
+        for fields_path in sorted(contracts.rglob("fields.yaml")):
+            raw = yaml.safe_load(fields_path.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                names.update(entity_names_from_fields_yaml(raw))
+    return names
+
+
+def load_contract_graph() -> dict:
+    try:
+        graph = json.loads(CONTRACT_GRAPH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"ContractGraph unreadable: {error}") from error
+    if not isinstance(graph, dict):
+        raise ValueError("ContractGraph root must be an object")
+    if not isinstance(graph.get("objects"), list):
+        raise ValueError("ContractGraph objects must be a list")
+    if not isinstance(graph.get("operations"), list):
+        raise ValueError("ContractGraph operations must be a list")
+    if not isinstance(graph.get("projections"), list):
+        raise ValueError("ContractGraph projections must be a list")
+    return graph
 
 
 def main() -> int:
-    failures: list[str] = []
-    if not ASSISTANT_METADATA.is_dir():
-        print(f"FAIL: missing {ASSISTANT_METADATA}", file=sys.stderr)
+    try:
+        graph = load_contract_graph()
+    except ValueError as error:
+        print(f"verify_metadata_operation_entities_vs_fields: FAIL: {error}", file=sys.stderr)
         return 1
-    shared_entities = shared_schema_entity_names()
-    for operations_path in sorted(ASSISTANT_METADATA.rglob("operations.yaml")):
-        parent = operations_path.parent
-        fields_path = parent / "fields.yaml"
-        if not fields_path.is_file():
+
+    declared = declared_schema_names()
+    declared.update(
+        str(item.get("name") or "").strip()
+        for item in graph["objects"]
+        if isinstance(item, dict) and str(item.get("name") or "").strip()
+    )
+    declared.update(
+        str(item.get("readModel") or "").strip()
+        for item in graph["projections"]
+        if isinstance(item, dict) and str(item.get("readModel") or "").strip()
+    )
+
+    failures: list[str] = []
+    for operation in graph["operations"]:
+        if not isinstance(operation, dict):
+            failures.append("ContractGraph contains a non-object operation")
             continue
-        operations_raw = yaml.safe_load(operations_path.read_text(encoding="utf-8"))
-        fld_raw = yaml.safe_load(fields_path.read_text(encoding="utf-8"))
-        if not isinstance(operations_raw, dict) or not isinstance(fld_raw, dict):
+        response_entity = str(operation.get("responseEntity") or "").strip()
+        if not response_entity or response_entity in declared:
             continue
-        # Only check object bundles that declare api_routes with entity refs.
-        need = referenced_entities_from_operations_yaml(operations_raw)
-        if not need:
-            continue
-        have = entity_names_from_fields_yaml(fld_raw)
-        have.add(object_name_from_directory(parent))
-        have.update(shared_entities)
-        have.update(entity_names_from_projections(parent))
-        missing = sorted(need - have)
-        if missing:
-            rel = operations_path.relative_to(ROOT)
-            failures.append(f"{rel}: entities missing in fields.yaml: {', '.join(missing)}")
+        operation_id = str(operation.get("id") or "<unknown-operation>")
+        source_path = str(operation.get("sourcePath") or "<unknown-source>")
+        failures.append(
+            f"{source_path}: {operation_id} response entity is undeclared: {response_entity}"
+        )
 
     if failures:
         print(
@@ -118,6 +117,11 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
+    print(
+        "verify_metadata_operation_entities_vs_fields: OK "
+        f"(objects={len(graph['objects'])}, operations={len(graph['operations'])}, "
+        f"declaredTypes={len(declared)})"
+    )
     return 0
 
 

@@ -1,6 +1,8 @@
 // ignore_for_file: unnecessary_non_null_assertion
 part of 'home_multi_form_feed.dart';
 
+const double _feedToolbarIconSize = AppSpacing.twenty;
+
 class _ActionRow extends StatelessWidget {
   const _ActionRow({
     super.key,
@@ -59,7 +61,7 @@ class _ActionRow extends StatelessWidget {
         _chip(
           context: context,
           selected: isLiked,
-          semanticsLabel: UITextConstants.like,
+          semanticsLabel: FoundationText.like,
           alignment: Alignment.centerLeft,
           child: ScaleTransition(
             scale: likeScale,
@@ -75,7 +77,7 @@ class _ActionRow extends StatelessWidget {
         ),
         _chip(
           context: context,
-          semanticsLabel: UITextConstants.share,
+          semanticsLabel: FoundationText.share,
           child: AppMediaShareIcon(
             size: _feedToolbarIconSize,
             color: actionIconColor,
@@ -86,7 +88,7 @@ class _ActionRow extends StatelessWidget {
         ),
         _chip(
           context: context,
-          semanticsLabel: UITextConstants.comment,
+          semanticsLabel: FoundationText.comment,
           child: AppMediaCommentIcon(
             size: _feedToolbarIconSize,
             color: actionIconColor,

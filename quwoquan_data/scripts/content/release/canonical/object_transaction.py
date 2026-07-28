@@ -1,4 +1,5 @@
 """Merkle 前置校验下的稳定单对象发布事务。"""
+
 from __future__ import annotations
 
 import hashlib
@@ -12,8 +13,12 @@ from typing import Any, Iterable, Mapping
 
 from core.tree_integrity import tree_integrity_stats
 from core.schema import assert_valid
-from core.release_layout import attestation_root, payload_digest, payload_file, payload_root
-from core.media_asset_url import build_release_media_manifest
+from core.release_layout import (
+    attestation_root,
+    payload_digest,
+    payload_file,
+    payload_root,
+)
 from core.source_digest import SourceDigest, SourceDigestError
 from governance.coverage.license import (
     RightsAuditStatus,
@@ -55,61 +60,52 @@ from content.release.canonical.object_transaction_contract import (
     _closure_digest,
     _verify_package,
 )
+from content.release.canonical.creator_projection import project_creator_object
+
 
 def _release_entity_tag_refs(*, publish_root: Path, entity_refs: set[str]) -> list[str]:
     refs: set[str] = set()
     for ref in sorted(entity_refs):
-        path = publish_root / "entities" / _safe_rel(ref, label="entityRef") / "tag.refs.json"
+        path = (
+            publish_root
+            / "entities"
+            / _safe_rel(ref, label="entityRef")
+            / "tag.refs.json"
+        )
         if not path.is_file():
             raise ObjectTransactionError(f"canonical entity 缺 tag.refs.json：{ref}")
         payload = _read_json(path)
         raw_refs = payload.get("tagRefs")
         if not isinstance(raw_refs, list):
-            raise ObjectTransactionError(f"canonical entity tagRefs 必须为 array：{ref}")
-        refs.update(item.strip() for item in raw_refs if isinstance(item, str) and item.strip())
+            raise ObjectTransactionError(
+                f"canonical entity tagRefs 必须为 array：{ref}"
+            )
+        refs.update(
+            item.strip() for item in raw_refs if isinstance(item, str) and item.strip()
+        )
     return sorted(refs)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+def _project_entity_creator_closure(
+    *,
+    entity: Mapping[str, Any],
+    staging: Path,
+) -> tuple[list[str], list[dict[str, object]]]:
+    creator_ref = str(entity.get("creatorProfileId") or "").strip()
+    if not creator_ref:
+        return [], []
+    creator_ref = _safe_id(creator_ref, label="creatorProfileId")
+    creator_root = project_creator_object(
+        creator_ref,
+        staging / "creator_objects" / creator_ref,
+    )
+    return [creator_ref], [
+        {
+            "creatorRef": creator_ref,
+            "packageRef": creator_root.relative_to(staging).as_posix(),
+            "treeDigest": _tree_digest(creator_root),
+        }
+    ]
 
 
 def _image_dimensions(path: Path) -> tuple[int, int, str]:
@@ -118,7 +114,11 @@ def _image_dimensions(path: Path) -> tuple[int, int, str]:
     probe = probe_image_path(path)
     if not probe.succeeded:
         raise ObjectTransactionError(f"发布图片不可解析：{path}: {probe.failure.value}")
-    if probe.width <= 0 or probe.height <= 0 or not probe.mime_type.startswith("image/"):
+    if (
+        probe.width <= 0
+        or probe.height <= 0
+        or not probe.mime_type.startswith("image/")
+    ):
         raise ObjectTransactionError(f"发布图片缺有效尺寸或 MIME：{path}")
     return probe.width, probe.height, probe.mime_type
 
@@ -140,7 +140,7 @@ def _source_assets_by_ref(execution_root: Path) -> dict[str, dict[str, Any]]:
 
     rows: dict[str, dict[str, Any]] = {}
     for index_path in sorted((execution_root / "sources").glob("*/assets/index.json")):
-        for row in (_read_json(index_path).get("assets") or []):
+        for row in _read_json(index_path).get("assets") or []:
             if not isinstance(row, dict):
                 continue
             file_name = str(row.get("fileName") or "").strip()
@@ -198,7 +198,9 @@ def build_entity_object_transaction_package(
     if execution_root.name != execution_id:
         raise ObjectTransactionError("execution root 与 executionId 不一致")
     try:
-        source_digest = SourceDigest.from_document(execution_manifest.get("sourceDigest"))
+        source_digest = SourceDigest.from_document(
+            execution_manifest.get("sourceDigest")
+        )
     except SourceDigestError as exc:
         raise ObjectTransactionError(
             f"{execution_id}: execution manifest lacks a valid frozen sourceDigest"
@@ -209,7 +211,9 @@ def build_entity_object_transaction_package(
     object_source = execution_root / "entities" / rel
     for required in ("_entity.json", "manifest.json", "page.md"):
         if not (object_source / required).is_file():
-            raise ObjectTransactionError(f"execution entity 缺 {required}: {object_source}")
+            raise ObjectTransactionError(
+                f"execution entity 缺 {required}: {object_source}"
+            )
     source_manifest = _read_json(object_source / "manifest.json")
     entity = _read_json(object_source / "_entity.json")
     canonical_ref = rel.as_posix()
@@ -244,7 +248,9 @@ def build_entity_object_transaction_package(
         raise ObjectTransactionError(f"对象事务包已存在且输入不一致：{package_root}")
 
     package_root.parent.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=f".{package_root.name}.", dir=package_root.parent))
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{package_root.name}.", dir=package_root.parent)
+    )
     try:
         object_root = staging / "object"
         (object_root / "rights_snapshots").mkdir(parents=True, exist_ok=True)
@@ -274,7 +280,9 @@ def build_entity_object_transaction_package(
             file_name = str(raw.get("fileName") or "").strip()
             asset_source = object_source / "assets" / file_name
             if not file_name or not asset_source.is_file():
-                raise ObjectTransactionError(f"manifest asset 不存在：{file_name or '<empty>'}")
+                raise ObjectTransactionError(
+                    f"manifest asset 不存在：{file_name or '<empty>'}"
+                )
             digest = _digest_file(asset_source)
             hex_digest = digest.removeprefix("sha256:")
             suffix = asset_source.suffix.lower().lstrip(".") or "bin"
@@ -302,7 +310,9 @@ def build_entity_object_transaction_package(
                 or source_asset.get("authorizationProof")
                 or ""
             ).strip()
-            license_url = str(raw.get("termsUrl") or source_asset.get("termsUrl") or "").strip()
+            license_url = str(
+                raw.get("termsUrl") or source_asset.get("termsUrl") or ""
+            ).strip()
             if license_url.startswith("http://"):
                 license_url = "https://" + license_url.removeprefix("http://")
             if not canonical_file_page.startswith("https://"):
@@ -317,7 +327,9 @@ def build_entity_object_transaction_package(
                 "sourceAsset": source_asset,
                 "manifestAsset": raw,
             }
-            snapshot_ref = Path("object/rights_snapshots") / f"{_safe_asset_id(asset_id)}.json"
+            snapshot_ref = (
+                Path("object/rights_snapshots") / f"{_safe_asset_id(asset_id)}.json"
+            )
             _write_json(staging / snapshot_ref, snapshot_payload)
             snapshot_path = staging / snapshot_ref
             fetched_at = str(
@@ -326,8 +338,15 @@ def build_entity_object_transaction_package(
                 or execution_manifest.get("createdAt")
                 or ""
             )
-            author = str(raw.get("credit") or source_asset.get("credit") or source_asset.get("creator") or "").strip()
-            license_name = str(raw.get("license") or source_asset.get("license") or "").strip()
+            author = str(
+                raw.get("credit")
+                or source_asset.get("credit")
+                or source_asset.get("creator")
+                or ""
+            ).strip()
+            license_name = str(
+                raw.get("license") or source_asset.get("license") or ""
+            ).strip()
             try:
                 rights_audit_status = parse_rights_audit_status(raw, source_asset)
             except ValueError as exc:
@@ -341,7 +360,10 @@ def build_entity_object_transaction_package(
                 or not authorization_proof.startswith("https://")
             ):
                 raise ObjectTransactionError(f"asset {asset_id} 权利字段不完整")
-            if require_rights_proof and rights_audit_status is not RightsAuditStatus.VERIFIED:
+            if (
+                require_rights_proof
+                and rights_audit_status is not RightsAuditStatus.VERIFIED
+            ):
                 raise ObjectTransactionError(f"asset {asset_id} 权利状态未经核实")
             if not require_rights_proof and not fetched_at:
                 raise ObjectTransactionError(f"asset {asset_id} 权利审计字段不完整")
@@ -366,7 +388,10 @@ def build_entity_object_transaction_package(
             rights_rows.append(
                 {
                     "assetId": asset_id,
-                    "sourceKind": str((entity.get("primarySource") or {}).get("sourceKind") or "wikipedia"),
+                    "sourceKind": str(
+                        (entity.get("primarySource") or {}).get("sourceKind")
+                        or "wikipedia"
+                    ),
                     "sourceUseMode": (
                         "licensed_adaptation"
                         if rights_audit_status is RightsAuditStatus.VERIFIED
@@ -375,9 +400,13 @@ def build_entity_object_transaction_package(
                     "canonicalFilePage": canonical_file_page,
                     "snapshotUrl": canonical_file_page,
                     "pageRevision": _digest_file(snapshot_path),
-                    "originalAssetUrl": str(source_asset.get("url") or canonical_file_page),
+                    "originalAssetUrl": str(
+                        source_asset.get("url") or canonical_file_page
+                    ),
                     "author": author,
-                    "source": str(source_asset.get("collectionPageUrl") or canonical_file_page),
+                    "source": str(
+                        source_asset.get("collectionPageUrl") or canonical_file_page
+                    ),
                     "licenseName": effective_license_name,
                     "licenseShortName": effective_license_name,
                     "licenseUrl": license_url,
@@ -426,8 +455,14 @@ def build_entity_object_transaction_package(
 
         if not cas_rows:
             raise ObjectTransactionError("entity 事务至少需要一个已授权发布资产")
-        tag_refs = sorted({str(item) for item in entity.get("tagRefs") or [] if str(item)})
-        _write_json(object_root / "creator.refs.json", {"creatorRefs": []})
+        tag_refs = sorted(
+            {str(item) for item in entity.get("tagRefs") or [] if str(item)}
+        )
+        creator_refs, creator_objects = _project_entity_creator_closure(
+            entity=entity,
+            staging=staging,
+        )
+        _write_json(object_root / "creator.refs.json", {"creatorRefs": creator_refs})
         _write_json(object_root / "tag.refs.json", {"tagRefs": tag_refs})
         _write_json(object_root / "asset.refs.json", {"assets": asset_refs})
         rights_ref = Path("rights.json")
@@ -452,7 +487,8 @@ def build_entity_object_transaction_package(
             },
         )
         closure = {
-            "creatorRefs": [],
+            "creatorRefs": creator_refs,
+            "creatorObjects": creator_objects,
             "tagRefs": tag_refs,
             "sourceCatalogRef": source_catalog_ref.as_posix(),
             "rightsRef": rights_ref.as_posix(),

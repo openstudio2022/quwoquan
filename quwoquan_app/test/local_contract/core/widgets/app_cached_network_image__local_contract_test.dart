@@ -371,7 +371,7 @@ void main() {
         );
         await tester.pump();
 
-        expect(find.text(UITextConstants.imageLoadFailed), findsOneWidget);
+        expect(find.text(ContentText.imageLoadFailed), findsOneWidget);
         expect(failedCount, 1);
         expect(analytics.events, hasLength(1));
         final event = analytics.events.single;

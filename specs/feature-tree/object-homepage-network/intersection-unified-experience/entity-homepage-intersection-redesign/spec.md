@@ -55,9 +55,9 @@
 - owner/认领/上报动作仅从右上角更多菜单触达。
 
 <a id="req-006"></a>
-### REQ-006 数据来自 entityImpactProvider（alpha contract-seed mock），无可枚举影响事实时整卡不展示，无主观营销
+### REQ-006 数据来自 Remote entityImpactProvider，无可枚举影响事实时整卡不展示，无主观营销
 
-- 打动数据来自 entityImpactProvider（alpha contract-seed mock），无可枚举影响事实时整卡不展示，无主观营销语。
+- 打动数据来自四环境同一 Remote entityImpactProvider 与 canonical release projection，无可枚举影响事实时整卡不展示，无主观营销语。
 
 <a id="req-007"></a>
 ### REQ-007 我的交集卡：标题统一为「我的交集」，与我的主页同壳，渲染 ObjectIntersectionPreviewCard（共享积木，objectBType=homepage、objectSharedReasonsProvider 单一真相源）：单列预览句（蓝色可点击锚点）+ 弱入口「查看全部」
@@ -68,7 +68,7 @@
 - 记录流：双列瀑布 + `PostPreviewCard`
 - 卡内统一为 封面 → 交集句（蓝锚点）→ 标题 → 作者 → 赞。
 - 卡内唯一交集句。
-- 数据来自 `HomepageContentPreview`（alpha mock 提供 `intersectionReasons`，云侧预留）。
+- 数据来自 Remote `HomepageContentPreview.intersectionReasons`，四环境不得由端侧 fixture 拼装。
 - 公开信息：用户侧 fallback overview 只保留口碑、位置、分类、年份、下线说明等用户语义；`统一对象键/对象页模板/来源/认领状态/灰度 cohort/主页管理` 仅能在 owner/admin 操作入口表达，不得进入公开 tab。
 
 ## 4. 契约引用

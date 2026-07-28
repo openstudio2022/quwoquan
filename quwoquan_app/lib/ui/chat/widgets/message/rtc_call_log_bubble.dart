@@ -57,8 +57,8 @@ class RtcCallLogBubble extends StatelessWidget {
     return Semantics(
       button: onRedial != null,
       label: presentation.isVideo
-          ? UITextConstants.callVideo
-          : UITextConstants.callVoice,
+          ? CallText.callVideo
+          : CallText.callVoice,
       child: CupertinoButton(
         padding: EdgeInsets.zero,
         onPressed: onRedial,
@@ -101,8 +101,8 @@ class RtcCallLogBubble extends StatelessWidget {
                   children: [
                     Text(
                       presentation.isVideo
-                          ? UITextConstants.callVideo
-                          : UITextConstants.callVoice,
+                          ? CallText.callVideo
+                          : CallText.callVoice,
                       style: TextStyle(
                         color: foreground,
                         fontSize: AppTypography.iosBody,
@@ -123,7 +123,7 @@ class RtcCallLogBubble extends StatelessWidget {
               if (onRedial != null) ...[
                 SizedBox(width: AppSpacing.intraGroupMd),
                 Text(
-                  UITextConstants.callRedial,
+                  CallText.callRedial,
                   style: TextStyle(
                     color: AppColors.primaryColor,
                     fontSize: AppTypography.iosFootnote,

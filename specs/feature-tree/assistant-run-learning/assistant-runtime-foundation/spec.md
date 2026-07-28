@@ -15,7 +15,7 @@
 - AssistantConversation/AssistantRun 对象 Store（state/receipt/outbox）与重启恢复语义
 - SkillSubscription receipts/outbox 与 cron lease 领取
 - SkillConsent 版本化事实、执行点 fail-closed 门控与事件
-- 端侧对象级 Facet、alpha mock 物理隔离、结构化错误单轨
+- 端侧对象级 Remote Facet、local_contract typed double 物理隔离、结构化错误单轨
 
 ### Out of Scope
 

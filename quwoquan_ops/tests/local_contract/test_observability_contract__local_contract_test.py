@@ -16,6 +16,10 @@ from quwoquan_ops.cli.lib.observability import (
     validate_log_payload,
     write_run_manifest,
 )
+from quwoquan_ops.cli.alpha.content_release_runtime import (
+    _materialize_observability_run,
+    _paths as alpha_content_release_paths,
+)
 from quwoquan_ops.cli.lib.common import artifact_run_dir
 from quwoquan_ops.cli.lib.local_run import resolve_local_run
 from quwoquan_ops.cli.lib.runtime_log_process import run_logged_process
@@ -193,6 +197,29 @@ def test_local_run_uses_immutable_id_and_persists_manifest(tmp_path: Path) -> No
     assert set(manifest).isdisjoint(forbidden_envelope_fields)
     assert manifest["runId"] == started.run_id
     assert manifest["target"] == "alpha-local"
+
+
+def test_alpha_content_release_materializes_manifest_before_runtime_logs(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / ".qwq_output"
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(output_root))
+    monkeypatch.delenv("QWQ_RUN_ROOT", raising=False)
+    monkeypatch.delenv("QWQ_OBSERVABILITY_RUN_ROOT", raising=False)
+
+    paths = alpha_content_release_paths(new_run=True)
+    _materialize_observability_run(paths)
+
+    manifest = json.loads(
+        (paths.observability_root / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert paths.observability_root.name == paths.run_root.name
+    assert paths.observability_root.name != "alpha-content-release-local"
+    assert manifest["env"] == "alpha"
+    assert manifest["target"] == "alpha-local"
+    assert manifest["runId"] == paths.observability_root.name
+    assert not paths.logs_root.exists()
 
 
 def test_observability_manifest_never_accepts_release_identifiers(

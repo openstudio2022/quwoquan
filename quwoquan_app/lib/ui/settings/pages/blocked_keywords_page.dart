@@ -100,13 +100,13 @@ class _BlockedKeywordsPageState extends ConsumerState<BlockedKeywordsPage> {
       final keyword = await showAppCupertinoDialog<String>(
         context: context,
         builder: (dialogContext) => CupertinoAlertDialog(
-          title: const Text(UITextConstants.blockedKeywordsAddTitle),
+          title: const Text(ContentText.blockedKeywordsAddTitle),
           content: Padding(
             padding: EdgeInsets.only(top: AppSpacing.intraGroupSm),
             child: CupertinoTextField(
               controller: controller,
               autofocus: true,
-              placeholder: UITextConstants.blockedKeywordsAddHint,
+              placeholder: ContentText.blockedKeywordsAddHint,
               textInputAction: TextInputAction.done,
               onSubmitted: (value) =>
                   Navigator.of(dialogContext).pop(value.trim()),
@@ -115,13 +115,13 @@ class _BlockedKeywordsPageState extends ConsumerState<BlockedKeywordsPage> {
           actions: <Widget>[
             CupertinoDialogAction(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text(UITextConstants.cancel),
+              child: const Text(FoundationText.cancel),
             ),
             CupertinoDialogAction(
               isDefaultAction: true,
               onPressed: () =>
                   Navigator.of(dialogContext).pop(controller.text.trim()),
-              child: const Text(UITextConstants.done),
+              child: const Text(CommunityText.done),
             ),
           ],
         ),
@@ -131,7 +131,7 @@ class _BlockedKeywordsPageState extends ConsumerState<BlockedKeywordsPage> {
       await _save(
         <String>[..._keywords, keyword],
         action: 'add_blocked_keyword',
-        successMessage: UITextConstants.blockedKeywordsAddSuccess,
+        successMessage: ContentText.blockedKeywordsAddSuccess,
       );
     } finally {
       controller.dispose();
@@ -142,19 +142,17 @@ class _BlockedKeywordsPageState extends ConsumerState<BlockedKeywordsPage> {
     final confirmed = await showAppCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
-        title: const Text(UITextConstants.blockedKeywordsRemoveConfirmTitle),
-        content: const Text(
-          UITextConstants.blockedKeywordsRemoveConfirmMessage,
-        ),
+        title: const Text(ContentText.blockedKeywordsRemoveConfirmTitle),
+        content: const Text(ContentText.blockedKeywordsRemoveConfirmMessage),
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text(UITextConstants.cancel),
+            child: const Text(FoundationText.cancel),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text(UITextConstants.blockedKeywordsRemove),
+            child: const Text(ContentText.blockedKeywordsRemove),
           ),
         ],
       ),
@@ -163,7 +161,7 @@ class _BlockedKeywordsPageState extends ConsumerState<BlockedKeywordsPage> {
     await _save(
       _keywords.where((candidate) => candidate != keyword).toList(),
       action: 'remove_blocked_keyword',
-      successMessage: UITextConstants.blockedKeywordsRemoveSuccess,
+      successMessage: ContentText.blockedKeywordsRemoveSuccess,
     );
   }
 
@@ -250,7 +248,7 @@ class _BlockedKeywordsPageState extends ConsumerState<BlockedKeywordsPage> {
     );
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
-      title: UITextConstants.blockedKeywordsTitle,
+      title: ContentText.blockedKeywordsTitle,
       onBack: () {
         if (context.canPop()) {
           context.pop();
@@ -271,7 +269,7 @@ class _BlockedKeywordsPageState extends ConsumerState<BlockedKeywordsPage> {
 
   Widget _buildAuthenticatedBody(bool isDark) {
     if (_loading && _keywords.isEmpty) {
-      return const Center(child: CupertinoActivityIndicator());
+      return AppRequestFeedback.section();
     }
     if (_rawError case final error? when _keywords.isEmpty) {
       return AppPageErrorState(
@@ -299,7 +297,7 @@ class _BlockedKeywordsPageState extends ConsumerState<BlockedKeywordsPage> {
           density: SettingsInsetSectionDensity.compact,
           child: SettingsInsetCenteredActionRow(
             isDark: isDark,
-            label: UITextConstants.blockedKeywordsAdd,
+            label: ContentText.blockedKeywordsAdd,
             onTap: _addKeyword,
           ),
         ),
@@ -342,7 +340,7 @@ class _BlockedKeywordsPageState extends ConsumerState<BlockedKeywordsPage> {
             ),
             SizedBox(height: AppSpacing.interGroupMd),
             Text(
-              UITextConstants.blockedKeywordsLoginTitle,
+              ContentText.blockedKeywordsLoginTitle,
               style: TextStyle(
                 color: AppColors.iosLabel(context),
                 fontSize: AppTypography.iosTitle3,
@@ -351,7 +349,7 @@ class _BlockedKeywordsPageState extends ConsumerState<BlockedKeywordsPage> {
             ),
             SizedBox(height: AppSpacing.intraGroupSm),
             Text(
-              UITextConstants.blockedKeywordsLoginSubtitle,
+              ContentText.blockedKeywordsLoginSubtitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.iosSecondaryLabel(context),
@@ -361,7 +359,7 @@ class _BlockedKeywordsPageState extends ConsumerState<BlockedKeywordsPage> {
             SizedBox(height: AppSpacing.interGroupLg),
             CupertinoButton.filled(
               onPressed: _requestLogin,
-              child: const Text(UITextConstants.profileLoginNow),
+              child: const Text(FoundationText.profileLoginNow),
             ),
           ],
         ),
@@ -409,7 +407,7 @@ class _BlockedKeywordRow extends StatelessWidget {
           CupertinoButton(
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
             onPressed: busy ? null : onRemove,
-            child: const Text(UITextConstants.blockedKeywordsRemove),
+            child: const Text(ContentText.blockedKeywordsRemove),
           ),
         ],
       ),
@@ -427,7 +425,7 @@ class _BlockedKeywordsEmptyState extends StatelessWidget {
       child: Column(
         children: <Widget>[
           Text(
-            UITextConstants.blockedKeywordsEmptyTitle,
+            ContentText.blockedKeywordsEmptyTitle,
             style: TextStyle(
               color: AppColors.iosLabel(context),
               fontSize: AppTypography.iosTitle3,
@@ -436,7 +434,7 @@ class _BlockedKeywordsEmptyState extends StatelessWidget {
           ),
           SizedBox(height: AppSpacing.intraGroupSm),
           Text(
-            UITextConstants.blockedKeywordsEmptySubtitle,
+            ContentText.blockedKeywordsEmptySubtitle,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.iosSecondaryLabel(context),

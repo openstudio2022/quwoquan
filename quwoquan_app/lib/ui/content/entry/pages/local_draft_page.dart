@@ -65,7 +65,7 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
       backgroundColor: pageBackground,
       navigationBar: AppNavigationBar(
         middle: Text(
-          UITextConstants.localDraftsTitle,
+          CreationText.localDraftsTitle,
           style: TextStyle(
             color: AppColors.iosLabel(context),
             fontSize: AppTypography.iosNavTitle,
@@ -83,10 +83,10 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
         child: draftsAsync.when(
           data: (snapshot) =>
               _buildLoadedState(context, snapshot, publicationIntents),
-          loading: () => const Center(child: CupertinoActivityIndicator()),
+          loading: () => AppRequestFeedback.section(),
           error: (error, _) => _LocalDraftEmptyState(
-            title: UITextConstants.noDraft,
-            subtitle: UITextConstants.localDraftEmptySubtitle,
+            title: MediaText.noDraft,
+            subtitle: CreationText.localDraftEmptySubtitle,
           ),
         ),
       ),
@@ -142,7 +142,7 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
               0,
             ),
             child: _LocalDraftNoticeBanner(
-              text: UITextConstants.localDraftsDeviceOnlyNotice,
+              text: CreationText.localDraftsDeviceOnlyNotice,
             ),
           ),
         ),
@@ -151,8 +151,8 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
             hasScrollBody: false,
             child: _LocalDraftEmptyState(
               key: TestKeys.localDraftEmptyState,
-              title: UITextConstants.noDraft,
-              subtitle: UITextConstants.localDraftEmptySubtitle,
+              title: MediaText.noDraft,
+              subtitle: CreationText.localDraftEmptySubtitle,
             ),
           )
         else
@@ -256,20 +256,20 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
       context: context,
       builder: (dialogContext) {
         return CupertinoAlertDialog(
-          title: const Text(UITextConstants.localDraftDeleteConfirmTitle),
+          title: const Text(CreationText.localDraftDeleteConfirmTitle),
           content: const Padding(
             padding: EdgeInsets.only(top: AppSpacing.sm),
-            child: Text(UITextConstants.localDraftDeleteConfirmDesc),
+            child: Text(CreationText.localDraftDeleteConfirmDesc),
           ),
           actions: [
             CupertinoDialogAction(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text(UITextConstants.cancel),
+              child: const Text(FoundationText.cancel),
             ),
             CupertinoDialogAction(
               isDestructiveAction: true,
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text(UITextConstants.localDraftDeleteAction),
+              child: const Text(CreationText.localDraftDeleteAction),
             ),
           ],
         );
@@ -310,20 +310,20 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
         context: context,
         builder: (dialogContext) {
           return CupertinoAlertDialog(
-            title: const Text(UITextConstants.localDraftUnavailableTitle),
+            title: const Text(CreationText.localDraftUnavailableTitle),
             content: Padding(
               padding: const EdgeInsets.only(top: AppSpacing.sm),
-              child: Text(UITextConstants.localDraftMissingVideoDesc),
+              child: Text(CreationText.localDraftMissingVideoDesc),
             ),
             actions: [
               CupertinoDialogAction(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text(UITextConstants.cancel),
+                child: const Text(FoundationText.cancel),
               ),
               CupertinoDialogAction(
                 isDestructiveAction: true,
                 onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text(UITextConstants.localDraftDeleteAction),
+                child: const Text(CreationText.localDraftDeleteAction),
               ),
             ],
           );
@@ -586,15 +586,15 @@ class _LocalDraftCardVisual extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final placeholderText = switch (draft.flowKind) {
-      CreateDraftFlowKind.image => UITextConstants.localDraftMissingImage,
-      CreateDraftFlowKind.video => UITextConstants.localDraftMissingVideo,
+      CreateDraftFlowKind.image => CreationText.localDraftMissingImage,
+      CreateDraftFlowKind.video => CreationText.localDraftMissingVideo,
       CreateDraftFlowKind.article => '',
     };
     final placeholder = _LocalDraftMissingMediaPlaceholder(
       isVideo: draft.flowKind == CreateDraftFlowKind.video,
       label: placeholderText,
       subtitle: mediaState.hasRecoverablePrimaryAsset
-          ? UITextConstants.createDraftPickerPreviewFallback
+          ? CreationText.createDraftPickerPreviewFallback
           : _draftTitle(draft),
     );
     return AspectRatio(
@@ -732,9 +732,9 @@ class _DraftMediaState {
 
 String _draftTypeLabel(CreateDraftFlowKind flowKind) {
   return switch (flowKind) {
-    CreateDraftFlowKind.image => UITextConstants.draftPhoto,
-    CreateDraftFlowKind.video => UITextConstants.draftVideo,
-    CreateDraftFlowKind.article => UITextConstants.draftArticle,
+    CreateDraftFlowKind.image => MediaText.draftPhoto,
+    CreateDraftFlowKind.video => MediaText.draftVideo,
+    CreateDraftFlowKind.article => MediaText.draftArticle,
   };
 }
 
@@ -751,7 +751,7 @@ String _draftSummary(CreateDraft draft) {
   if (summary.isNotEmpty) {
     return summary;
   }
-  return UITextConstants.createDraftPickerPreviewFallback;
+  return CreationText.createDraftPickerPreviewFallback;
 }
 
 String _formatDraftTime(BuildContext context, int updatedAtMs) {

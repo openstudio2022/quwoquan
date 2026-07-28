@@ -174,7 +174,8 @@ def _homepage_repair_addendum(job: QueueJob, object_dir: Path) -> str:
     return (
         "\n\n## 确定性质量门修复反馈\n"
         "上一次正文未通过确定性质量门。请在现有 page.md 基础上逐项修订，"
-        "保留已通过的底稿和图片占位符，不得从零重写：\n"
+        "保留已通过的底稿和图片占位符，不得从零重写。若当前 page.md 仍为"
+        "等待创作占位，必须先用符合冻结正文合同的完整主页正文替换该占位：\n"
         f"{rendered_issues}\n"
     )
 
@@ -293,6 +294,25 @@ def _existing_author_envelope_is_reusable(
     parts = str(job.ref or "").strip().strip("/").split("/", 3)
     if len(parts) != 4 or parts[0] != "entity" or not all(parts[1:]):
         raise ValueError(f"ReliableTask homepage ref 不合法：{job.ref!r}")
+    from core.homepage_source_failure import (
+        SOURCE_RECOVERY_FAILURE_KINDS,
+        entity_page_failure_issues,
+        entity_page_failure_kind,
+        read_entity_page_failure,
+    )
+
+    draft_dir = execution_root(job.execution_id) / content_object_dir / "4.draft"
+    source_failure = read_entity_page_failure(draft_dir)
+    if source_failure is not None:
+        failure_problems = entity_page_failure_issues(
+            source_failure,
+            entity_name=parts[3],
+        )
+        kind = entity_page_failure_kind(source_failure)
+        if not failure_problems and kind in SOURCE_RECOVERY_FAILURE_KINDS:
+            # Author already applied typed failure protocol; reuse evidence and
+            # let build_homepage checkpoint rewind source discovery.
+            return True
     from content.homepage.homepage_release import materialize_entity_page
 
     materialize_issues = materialize_entity_page(
@@ -305,6 +325,62 @@ def _existing_author_envelope_is_reusable(
         return True
     envelope_path.unlink(missing_ok=True)
     return False
+
+
+def _recover_completed_author_outcome(
+    ctx: ExecutionContext,
+    job: QueueJob,
+    *,
+    checkpoint: str,
+    prompt: str,
+    outcome: AgentRunOutcome,
+) -> AgentRunOutcome | None:
+    """Admit a timed-out run only when its durable output is fully provenance-bound."""
+    if checkpoint != "post_author" or not outcome.started:
+        return None
+    from content.execution.agent.agent_checkpoint import (
+        _managed_checkpoint_job_issues,
+    )
+    from content.post.article.draft_io import read_draft_meta
+
+    meta = read_draft_meta(ctx.execution_id, job.ref) or {}
+    if _managed_checkpoint_job_issues(
+        ctx,
+        stage=checkpoint,
+        prompt=prompt,
+    ):
+        return None
+    provenance_hashes = (
+        "promptSha256",
+        "writingPackSha256",
+        "sourceBundleSha256",
+        "draftSha256",
+    )
+    if not (
+        str(meta.get("executionId") or "") == ctx.execution_id
+        and str(meta.get("objectRef") or meta.get("ref") or "") == job.ref
+        and str(meta.get("status") or "") == "completed"
+        and str(meta.get("provider") or "") == outcome.provider.value
+        and str(meta.get("model") or "") == ctx.model
+        and bool(str(meta.get("agentRunId") or "").strip())
+        and all(
+            str(meta.get(field) or "").startswith("sha256:")
+            for field in provenance_hashes
+        )
+    ):
+        return None
+    return AgentRunOutcome.finished(
+        provider=outcome.provider,
+        run_id=str(meta["agentRunId"]),
+        agent_id=str(meta.get("agentId") or ""),
+        attempts=outcome.attempts,
+        warm_attempts=outcome.warm_attempts,
+        duration_ms=outcome.duration_ms,
+        completion_mode="durable_output_recovery",
+        stdout_tail=outcome.stdout_tail,
+        stderr_tail=outcome.stderr_tail,
+        request_id=outcome.request_id,
+    )
 
 
 def _execute_author(
@@ -341,9 +417,19 @@ def _execute_author(
         label=f"ReliableTask author {job.job_id}",
     )
     if not outcome.succeeded:
-        raise RuntimeError(
-            f"ReliableTask author Agent 失败：{outcome.failure_kind.value}: {outcome.message}"
+        recovered = _recover_completed_author_outcome(
+            ctx,
+            job,
+            checkpoint=checkpoint,
+            prompt=prompt,
+            outcome=outcome,
         )
+        if recovered is None:
+            failure_kind = outcome.failure_kind.value if outcome.failure_kind else "unknown"
+            raise RuntimeError(
+                f"ReliableTask author Agent 失败：{failure_kind}: {outcome.message}"
+            )
+        outcome = recovered
     job_outcome = ManagedAgentJobOutcome(
         outcome=outcome,
         job_index=0,

@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
@@ -99,19 +100,21 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
               if (snapshot.connectionState != ConnectionState.done) {
                 return SizedBox(
                   height: AppSpacing.avatarUserXl + AppSpacing.containerLg,
-                  child: const Center(child: CupertinoActivityIndicator()),
+                  child: AppRequestFeedback.section(),
                 );
               }
               if (snapshot.hasError) {
                 return AppSectionErrorCard(
                   margin: EdgeInsets.zero,
-                  semantic: runtimeErrorSemantic(
-                    context,
-                    error:
-                        snapshot.error ??
-                        StateError(UITextConstants.loadFailed),
-                    category: UiErrorCategory.sectionLoad,
-                    scope: UiErrorScope.section,
+                  semantic: ensureRetryUiErrorSemantic(
+                    runtimeErrorSemantic(
+                      context,
+                      error:
+                          snapshot.error ??
+                          StateError(FoundationText.loadFailed),
+                      category: UiErrorCategory.sectionLoad,
+                      scope: UiErrorScope.section,
+                    ),
                   ),
                   onAction: (action) async {
                     if (action.type == UiErrorActionType.retry ||
@@ -210,11 +213,13 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
       }
       await AppActionErrorFeedback.show(
         context,
-        semantic: runtimeErrorSemantic(
-          context,
-          error: error,
-          category: UiErrorCategory.submit,
-          scope: UiErrorScope.dialog,
+        semantic: ensureRetryUiErrorSemantic(
+          runtimeErrorSemantic(
+            context,
+            error: error,
+            category: UiErrorCategory.submit,
+            scope: UiErrorScope.dialog,
+          ),
         ),
         onAction: (action) async {
           if (action.type == UiErrorActionType.retry ||

@@ -12,7 +12,7 @@ if [[ "$DEPLOY_ENV" != "beta" && "$DEPLOY_ENV" != "gamma" ]]; then
   exit 1
 fi
 export APP_RUNTIME_ENV="${DEPLOY_ENV}"
-bash "$ROOT/quwoquan_ops/cli/shared/verify_cdn_domain_injection.sh"
+PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/quwoquan_ops/gate/verify_domain_governance.py"
 KUSTOMIZATION="quwoquan_ops/environments/${DEPLOY_ENV}"
 
 if [[ ! -d "$KUSTOMIZATION" ]]; then

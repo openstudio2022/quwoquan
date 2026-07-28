@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -70,7 +70,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(TestKeys.createMediaAddButton), findsOneWidget);
-    expect(find.text(UITextConstants.addImage), findsOneWidget);
+    expect(find.text(MediaText.addImage), findsOneWidget);
     expect(find.byKey(TestKeys.createIdentityMoment), findsNothing);
     expect(find.byKey(TestKeys.createWorkFormatVideo), findsNothing);
   });
@@ -107,7 +107,7 @@ void main() {
     expect(find.text('编辑'), findsNothing);
     expect(find.text('排版'), findsNothing);
     expect(
-      find.text(UITextConstants.createArticleSurfaceLongEdit),
+      find.text(CreationText.createArticleSurfaceLongEdit),
       findsOneWidget,
     );
     expect(find.byKey(TestKeys.createPublishButton), findsOneWidget);

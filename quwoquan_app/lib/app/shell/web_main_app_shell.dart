@@ -152,7 +152,7 @@ class _WebWelcomeBrand extends StatelessWidget {
         const _WebWelcomeVisual(),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          UITextConstants.webPcBrandName,
+          DiscoveryText.webPcBrandName,
           textAlign: TextAlign.center,
           style: TextStyle(
             color: AppColors.white,
@@ -368,7 +368,7 @@ class _WebBrandMark extends StatelessWidget {
         ),
         const SizedBox(width: AppSpacing.xs),
         Text(
-          UITextConstants.webPcBrandName,
+          DiscoveryText.webPcBrandName,
           style: TextStyle(
             color: foreground,
             fontSize: AppTypography.webPcToolbarBrand,
@@ -476,14 +476,14 @@ class _WebPrimaryActions extends StatelessWidget {
       children: [
         _WebPrimaryActionButton(
           destination: MainTabDestination.home,
-          label: UITextConstants.webPcPrimaryHome,
+          label: DiscoveryText.webPcPrimaryHome,
           icon: CupertinoIcons.house,
           selected: selected == MainTabDestination.home,
           onTap: onSelected,
         ),
         _WebPrimaryActionButton(
           destination: MainTabDestination.featured,
-          label: UITextConstants.webPcPrimaryFeatured,
+          label: DiscoveryText.webPcPrimaryFeatured,
           selected: selected == MainTabDestination.featured,
           customIcon: (color, filled) => AppPremiumMarkIcon(
             size: AppSpacing.webPcToolbarActionIconSize,
@@ -494,7 +494,7 @@ class _WebPrimaryActions extends StatelessWidget {
         ),
         _WebPrimaryActionButton(
           destination: MainTabDestination.create,
-          label: UITextConstants.webPcPrimaryCreate,
+          label: DiscoveryText.webPcPrimaryCreate,
           icon: CupertinoIcons.plus,
           selected: selected == MainTabDestination.create,
           onTap: onSelected,
@@ -520,7 +520,7 @@ class _WebPrimaryActions extends StatelessWidget {
         ),
         _WebPrimaryActionButton(
           destination: MainTabDestination.profile,
-          label: UITextConstants.webPcPrimaryProfile,
+          label: DiscoveryText.webPcPrimaryProfile,
           icon: CupertinoIcons.person_crop_circle,
           selected: selected == MainTabDestination.profile,
           onTap: onSelected,
@@ -695,22 +695,22 @@ class _WebCreateWorkspace extends ConsumerWidget {
       _CreateCardSpec(
         id: 'album',
         icon: CupertinoIcons.photo_on_rectangle,
-        title: UITextConstants.webPcCreateGalleryTitle,
-        subtitle: UITextConstants.webPcCreateGallerySubtitle,
+        title: DiscoveryText.webPcCreateGalleryTitle,
+        subtitle: DiscoveryText.webPcCreateGallerySubtitle,
         action: () => _openCreate(context, EditorStartAction.gallery),
       ),
       _CreateCardSpec(
         id: 'camera',
         icon: CupertinoIcons.camera,
-        title: UITextConstants.webPcCreateCameraTitle,
-        subtitle: UITextConstants.webPcCreateCameraSubtitle,
+        title: DiscoveryText.webPcCreateCameraTitle,
+        subtitle: DiscoveryText.webPcCreateCameraSubtitle,
         action: () => _openCreate(context, EditorStartAction.video),
       ),
       _CreateCardSpec(
         id: 'write',
         icon: CupertinoIcons.pencil_outline,
-        title: UITextConstants.webPcCreateTextTitle,
-        subtitle: UITextConstants.webPcCreateTextSubtitle,
+        title: DiscoveryText.webPcCreateTextTitle,
+        subtitle: DiscoveryText.webPcCreateTextSubtitle,
         action: () => _openCreate(context, EditorStartAction.write),
       ),
     ];
@@ -718,8 +718,8 @@ class _WebCreateWorkspace extends ConsumerWidget {
       _CreateCardSpec(
         id: 'add-contact',
         icon: CupertinoIcons.person_badge_plus,
-        title: UITextConstants.webPcCreateAddContactTitle,
-        subtitle: UITextConstants.webPcCreateAddContactSubtitle,
+        title: DiscoveryText.webPcCreateAddContactTitle,
+        subtitle: DiscoveryText.webPcCreateAddContactSubtitle,
         action: () => GlobalQuickActionSheet.openAddContact(context),
       ),
       _CreateCardSpec(
@@ -734,8 +734,8 @@ class _WebCreateWorkspace extends ConsumerWidget {
       _CreateCardSpec(
         id: 'create-circle',
         icon: CupertinoIcons.person_3,
-        title: UITextConstants.webPcCreateCircleTitle,
-        subtitle: UITextConstants.webPcCreateCircleSubtitle,
+        title: DiscoveryText.webPcCreateCircleTitle,
+        subtitle: DiscoveryText.webPcCreateCircleSubtitle,
         action: () => GlobalQuickActionSheet.openCreateCircle(context),
       ),
     ];
@@ -744,7 +744,7 @@ class _WebCreateWorkspace extends ConsumerWidget {
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
           Text(
-            UITextConstants.webPcCreateWorkspaceTitle,
+            DiscoveryText.webPcCreateWorkspaceTitle,
             style: TextStyle(
               fontSize: AppTypography.iosLargeTitle,
               fontWeight: AppTypography.black,
@@ -753,7 +753,7 @@ class _WebCreateWorkspace extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            UITextConstants.webPcCreateWorkspaceSubtitle,
+            DiscoveryText.webPcCreateWorkspaceSubtitle,
             style: TextStyle(
               fontSize: AppTypography.iosCallout,
               color: AppColors.iosSecondaryLabel(context),
@@ -762,14 +762,14 @@ class _WebCreateWorkspace extends ConsumerWidget {
           const SizedBox(height: AppSpacing.xl),
           _WebCreateGroup(
             groupKey: const ValueKey<String>('web-create-group-content'),
-            title: UITextConstants.webPcCreateContentGroupTitle,
+            title: DiscoveryText.webPcCreateContentGroupTitle,
             cards: contentActions,
             activeTabId: activeTabId,
           ),
           const SizedBox(height: AppSpacing.xl),
           _WebCreateGroup(
             groupKey: const ValueKey<String>('web-create-group-social'),
-            title: UITextConstants.webPcCreateSocialGroupTitle,
+            title: DiscoveryText.webPcCreateSocialGroupTitle,
             cards: socialActions,
             activeTabId: activeTabId,
           ),

@@ -19,7 +19,7 @@ void main() {
       expect(semantic.category, UiErrorCategory.permissionRequired);
       expect(semantic.presentation, UiErrorPresentation.gateCard);
       expect(semantic.primaryAction?.type, UiErrorActionType.openSettings);
-      expect(semantic.primaryAction?.label, UITextConstants.openSettings);
+      expect(semantic.primaryAction?.label, FoundationText.openSettings);
     });
   });
 

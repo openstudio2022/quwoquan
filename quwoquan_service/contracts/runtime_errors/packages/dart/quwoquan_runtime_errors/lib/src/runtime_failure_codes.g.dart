@@ -8,6 +8,12 @@ abstract final class RuntimeFailureCodes {
   static const String assistantSystemInternalError =
       'ASSISTANT.SYSTEM.internal_error';
   static const String appNetworkOffline = 'APP.NETWORK.offline';
+  static const String appNetworkConnectionRefused =
+      'APP.NETWORK.connection_refused';
+  static const String appNetworkNameResolutionFailed =
+      'APP.NETWORK.name_resolution_failed';
+  static const String appNetworkConnectionFailed =
+      'APP.NETWORK.connection_failed';
   static const String appNetworkSecureConnectionFailed =
       'APP.NETWORK.secure_connection_failed';
   static const String appTimeoutRequestTimeout = 'APP.TIMEOUT.request_timeout';

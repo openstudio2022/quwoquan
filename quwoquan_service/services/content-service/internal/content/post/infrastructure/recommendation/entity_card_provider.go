@@ -64,18 +64,21 @@ func (p *MongoEntityCardProvider) ObjectCards(
 	byRef := map[string]*entityCardCandidate{}
 
 	// 信号 1：实体实例亲和（行为回流经 EntityInterestPropagation 投影）。
+	// 读模型字段在 userFeatures.entityInstanceAffinities，与 recommend_feature 投影一致。
 	var featureDoc struct {
-		EntityInstanceAffinities map[string]float64 `bson:"entityInstanceAffinities"`
+		UserFeatures struct {
+			EntityInstanceAffinities map[string]float64 `bson:"entityInstanceAffinities"`
+		} `bson:"userFeatures"`
 	}
 	err := p.featureColl.FindOne(
 		ctx,
 		bson.M{"userId": strings.TrimSpace(userID)},
-		options.FindOne().SetProjection(bson.M{"entityInstanceAffinities": 1}),
+		options.FindOne().SetProjection(bson.M{"userFeatures.entityInstanceAffinities": 1}),
 	).Decode(&featureDoc)
 	if err != nil && err != mongo.ErrNoDocuments {
 		return nil, err
 	}
-	for entityRef, score := range featureDoc.EntityInstanceAffinities {
+	for entityRef, score := range featureDoc.UserFeatures.EntityInstanceAffinities {
 		if score < entityCardAffinityMinScore {
 			continue
 		}

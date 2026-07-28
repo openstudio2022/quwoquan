@@ -46,6 +46,7 @@ def test_video_lane_writes_minimum_rights_cleared_frame_plan(tmp_path):
         open_license_image_pool=[
             _frame(entity, ordinal) for ordinal in range(1, required + 2)
         ],
+        sourced_video_pool=[],
     )
 
     payload = read_json(tmp_path / "video_source_plan.json")["payload"]
@@ -53,4 +54,32 @@ def test_video_lane_writes_minimum_rights_cleared_frame_plan(tmp_path):
     assert payload["sourceUnavailable"] == []
     assert {asset["researchLane"] for asset in payload["assets"]} == {"video"}
     assert all(asset["authorizationProof"] for asset in payload["assets"])
-    assert updated == [{"entityId": entity, "lane": "video", "assets": required}]
+    assert updated == [
+        {"entityId": entity, "lane": "video", "videos": 0, "assets": required}
+    ]
+
+
+def test_video_lane_prefers_real_sourced_video_over_frame_sequence(tmp_path):
+    video = {
+        "sourceId": "wikimedia_commons_video",
+        "assetUrl": "https://upload.wikimedia.org/wikipedia/commons/test.webm",
+    }
+    report: dict[str, object] = {"sourceUnavailable": [], "videoFrames": []}
+    updated: list[dict[str, object]] = []
+
+    write_video_lane(
+        entity_id="测试实体甲",
+        entity_aliases=["测试实体甲"],
+        vertical="travel",
+        plan_dir=tmp_path,
+        force=True,
+        report=report,
+        updated=updated,
+        open_license_image_pool=[_frame("测试实体甲", 1), _frame("测试实体甲", 2)],
+        sourced_video_pool=[video],
+    )
+
+    payload = read_json(tmp_path / "video_source_plan.json")["payload"]
+    assert payload["videos"] == [video]
+    assert payload["assets"] == []
+    assert payload["sourceUnavailable"] == []

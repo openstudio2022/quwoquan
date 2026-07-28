@@ -139,7 +139,7 @@ class ParticipantTile extends StatelessWidget {
                     ),
                     SizedBox(width: AppSpacing.xs),
                     Text(
-                      UITextConstants.callTrustUnknownBadge,
+                      CallText.callTrustUnknownBadge,
                       style: TextStyle(
                         color: AppColors.white,
                         fontSize: AppTypography.xs,

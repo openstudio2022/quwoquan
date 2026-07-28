@@ -247,6 +247,26 @@ spec:
             AS lagSeconds
           GROUP BY businessHour,pageName,publicationStage,contentType,objectState,surfaceId,
           result,backgroundRetryTerminal,failReasonCode
+      - name: app-product-telemetry-article-reader-lifecycle-hourly
+        rowKind: article_reader_lifecycle
+        sql: >-
+          (eventType:article_reader_enter OR eventType:article_reader_dwell OR
+          eventType:article_reader_exit OR eventType:article_reader_error OR
+          eventType:article_reader_recovery) |
+          SELECT 'article_reader_lifecycle' AS rowKind,
+          date_trunc('hour', from_iso8601_timestamp(occurredAt)) AS businessHour,
+          cast(to_unixtime(date_trunc('hour', from_iso8601_timestamp(occurredAt))) AS bigint) AS __time__,
+          eventType,pageName,surfaceId,objectType,result,errorCode,recoveryAction,
+          count(DISTINCT concat(_batchKey, ':', _batchIndex)) AS count,
+          approx_set(sessionId) AS sessionHll,
+          histogram(try_cast(durationMs AS double),
+            array[0,50,100,250,500,800,1200,2000,3000,5000,10000,30000,60000,300000,
+            1800000]) AS durationHistogram,
+          'closed_hour' AS freshness,
+          max(ingestedAt) AS generatedThrough,
+          unix_timestamp(current_timestamp) - max(to_unixtime(from_iso8601_timestamp(ingestedAt)))
+            AS lagSeconds
+          GROUP BY businessHour,eventType,pageName,surfaceId,objectType,result,errorCode,recoveryAction
       - name: app-product-telemetry-video-preview-track-load-hourly
         rowKind: video_preview_track_load
         sql: >-
@@ -508,6 +528,35 @@ spec:
         sum(CASE WHEN result='failure' THEN 1 ELSE 0 END)
         / (count(*) + 0.001) AS failureRate
       condition: sampleCount >= 20 AND failureRate > 0.05
+      severity: warning
+    - name: product-article-reader-enter-p95-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:article_reader_enter AND result:success | SELECT
+        count(*) AS sampleCount,
+        approx_percentile(try_cast(durationMs AS double), 0.95) AS p95Ms
+      condition: sampleCount >= 100 AND p95Ms > 1200
+      severity: warning
+    - name: product-article-reader-error-rate-high
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        (eventType:article_reader_enter OR eventType:article_reader_error) | SELECT
+        sum(CASE WHEN eventType='article_reader_enter' AND result='success' THEN 1 ELSE 0 END)
+          AS enterCount,
+        sum(CASE WHEN eventType='article_reader_error' AND result='failure' THEN 1 ELSE 0 END)
+          / (sum(CASE WHEN eventType='article_reader_enter' AND result='success' THEN 1 ELSE 0 END)
+          + 0.001) AS errorRate
+      condition: enterCount >= 100 AND errorRate > 0.01
+      severity: warning
+    - name: product-article-reader-recovery-failure
+      signal: scheduledSqlQuery
+      source: app-product-telemetry-raw
+      query: >-
+        eventType:article_reader_recovery AND result:failure | SELECT
+        count(*) AS recoveryFailureCount
+      condition: recoveryFailureCount > 0
       severity: warning
     - name: product-profile-interaction-state-failure-rate-high
       signal: scheduledSqlQuery

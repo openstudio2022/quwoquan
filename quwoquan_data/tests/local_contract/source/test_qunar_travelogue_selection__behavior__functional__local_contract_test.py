@@ -27,6 +27,21 @@ def test_qunar_route_anchor_does_not_match_same_prefix_other_place() -> None:
     assert qunar_sources._qunar_entity_anchor("锦里古街", "锦里")
 
 
+def test_qunar_route_anchor_rejects_homonymous_attraction_in_another_city() -> None:
+    title_hit, route_hit = qunar_sources._qunar_row_anchor_signals(
+        {
+            "title": "潮州2天1夜平民自驾游",
+            "travelRoute": ["潮州西湖"],
+            "cityName": "潮州",
+        },
+        entity_id="杭州西湖",
+        match_terms=["杭州西湖", "西湖"],
+    )
+
+    assert not title_hit
+    assert not route_hit
+
+
 def test_qunar_travelogue_sources_prioritize_recent_entity_anchored_rows(monkeypatch) -> None:
     rows = [
         {

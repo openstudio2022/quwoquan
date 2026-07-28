@@ -122,21 +122,16 @@ class _AssistantSkillCenterPageState
                       ),
                       SizedBox(height: AppSpacing.interGroupMd),
                       skillsAsync.when(
-                        loading: () => Padding(
-                          padding: EdgeInsets.symmetric(
-                            vertical: AppSpacing.buttonHeight,
-                          ),
-                          child: const Center(
-                            child: CupertinoActivityIndicator(),
-                          ),
-                        ),
+                        loading: AppRequestFeedback.section,
                         error: (error, _) => AppSectionErrorCard(
                           margin: EdgeInsets.zero,
-                          semantic: runtimeErrorSemantic(
-                            context,
-                            error: error,
-                            category: UiErrorCategory.sectionLoad,
-                            scope: UiErrorScope.section,
+                          semantic: ensureRetryUiErrorSemantic(
+                            runtimeErrorSemantic(
+                              context,
+                              error: error,
+                              category: UiErrorCategory.sectionLoad,
+                              scope: UiErrorScope.section,
+                            ),
                           ),
                           onAction: (action) async {
                             if (action.type == UiErrorActionType.retry ||
@@ -188,7 +183,7 @@ class _AssistantSkillCenterPageState
           Positioned.fill(
             child: Container(
               color: CupertinoColors.black.withValues(alpha: 0.08),
-              child: const Center(child: CupertinoActivityIndicator()),
+              child: AppRequestFeedback.section(),
             ),
           ),
       ],
@@ -325,7 +320,7 @@ class _AssistantSkillCenterPageState
         message: AssistantText.assistantSkillSubscriptionUnavailableMessage,
         primaryAction: UiErrorAction(
           type: UiErrorActionType.dismiss,
-          label: UITextConstants.gotIt,
+          label: ContentText.gotIt,
         ),
         dismissible: true,
         presentation: UiErrorPresentation.actionDialog,

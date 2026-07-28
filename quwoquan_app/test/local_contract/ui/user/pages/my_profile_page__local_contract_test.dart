@@ -384,12 +384,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text(UITextConstants.profileLoggedOutDisplayName),
+        find.text(FoundationText.profileLoggedOutDisplayName),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.profileLoginNow), findsOneWidget);
+      expect(find.text(FoundationText.profileLoginNow), findsOneWidget);
       expect(
-        find.text(UITextConstants.profileLoggedOutTimelineHint),
+        find.text(FoundationText.profileLoggedOutTimelineHint),
         findsOneWidget,
       );
     });

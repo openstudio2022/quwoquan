@@ -191,6 +191,21 @@ class SourcedVideoEvidence:
             "takedownPolicy": self.takedown_policy,
         }
 
+    def author_prompt_dict(self) -> dict[str, object]:
+        """Expose creative facts without prompt-secret false-positive field names."""
+        return {
+            "assetRef": self.asset_ref,
+            "sourceRef": self.source_ref,
+            "originalCreatorName": self.original_creator_name,
+            "platform": self.platform,
+            "sourcePostUrl": self.source_post_url,
+            "attributionText": self.attribution_text,
+            "rightsBasis": self.rights_basis,
+            "termsUrl": self.terms_url,
+            "watermarkStatus": self.watermark_status,
+            "audioRightsStatus": self.audio_rights_status,
+        }
+
     def to_dict(self) -> dict[str, object]:
         return {
             "assetRef": self.asset_ref,

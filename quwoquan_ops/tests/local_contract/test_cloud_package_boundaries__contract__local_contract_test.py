@@ -28,11 +28,8 @@ class CloudPackageBoundariesContractTest(unittest.TestCase):
             msg=f"stdout={result.stdout}\nstderr={result.stderr}",
         )
 
-    def test_production_and_alpha_dependency_roots_are_distinct(self) -> None:
+    def test_app_has_no_aggregate_mock_package_dependency(self) -> None:
         app = yaml.safe_load((APP / "pubspec.yaml").read_text(encoding="utf-8"))
-        alpha = yaml.safe_load(
-            (APP / "runners/alpha/pubspec.yaml").read_text(encoding="utf-8")
-        )
         contracts = yaml.safe_load(
             (
                 APP / "packages/quwoquan_cloud_contracts/pubspec.yaml"
@@ -40,7 +37,9 @@ class CloudPackageBoundariesContractTest(unittest.TestCase):
         )
 
         self.assertNotIn("quwoquan_cloud_mock", app["dependencies"])
-        self.assertIn("quwoquan_cloud_mock", alpha["dependencies"])
+        self.assertNotIn("quwoquan_cloud_mock", app["dev_dependencies"])
+        self.assertFalse((APP / "packages/quwoquan_cloud_mock").exists())
+        self.assertFalse((APP / "runners/alpha/pubspec.yaml").exists())
         self.assertNotIn("quwoquan_app", contracts["dependencies"])
 
 

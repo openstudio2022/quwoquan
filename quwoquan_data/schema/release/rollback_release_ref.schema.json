@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Environment release rollback intent",
+  "type": "object",
+  "required": ["schema", "rollbackTo", "rollbackFromReleaseId", "releaseRef"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.rollback_release_ref"},
+    "rollbackTo": {"type": "string", "minLength": 1},
+    "rollbackFromReleaseId": {"type": "string", "minLength": 1},
+    "releaseRef": {"type": "string", "minLength": 1}
+  }
+}

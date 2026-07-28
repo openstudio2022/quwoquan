@@ -46,8 +46,8 @@ errors:
   dart_const: wechatAuthFailed
   go_const: ErrWechatAuthFailed
   user_message:
-    zh: 微信授权失败，请重试
-    en: WeChat authorization failed, please try again
+    zh: 授权未完成
+    en: Authorization was not completed
 - code: USER.AUTH.alipay_auth_failed
   kind: AUTH
   reason: third_party_failure
@@ -59,8 +59,8 @@ errors:
   dart_const: alipayAuthFailed
   go_const: ErrAlipayAuthFailed
   user_message:
-    zh: 支付宝授权失败，请重试
-    en: Alipay authorization failed, please try again
+    zh: 授权未完成
+    en: Authorization was not completed
 - code: USER.AUTH.qq_auth_failed
   kind: AUTH
   reason: third_party_failure
@@ -72,8 +72,8 @@ errors:
   dart_const: qqAuthFailed
   go_const: ErrQqAuthFailed
   user_message:
-    zh: QQ 授权失败，请重试
-    en: QQ authorization failed, please try again
+    zh: 授权未完成
+    en: Authorization was not completed
 - code: USER.AUTH.social_provider_cancelled
   kind: AUTH
   reason: cancelled
@@ -98,8 +98,8 @@ errors:
   dart_const: socialProviderUnavailable
   go_const: ErrSocialProviderUnavailable
   user_message:
-    zh: 第三方登录暂不可用，请使用其他方式登录
-    en: Third-party login is unavailable, please use another method
+    zh: 授权未完成
+    en: Authorization was not completed
 - code: USER.AUTH.apple_auth_failed
   kind: AUTH
   reason: third_party_failure

@@ -81,7 +81,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: https://alpha-avatar.quwoquan-env.test:17100
 - key: sys.chat-service.runtime.media.group_avatar_local_media_root
   type: string
   scope: workload

@@ -48,6 +48,7 @@ type contentHTTPHandlerInput struct {
 	policyStore               *rtrecpolicy.Store
 	postStore                 *persistence.MongoPostStore
 	postQueryReader           *persistence.MongoPostQueryReader
+	activeSupplyReader        feedapp.ActiveSupplyReader
 	viewerBlockReader         *recinfra.PersonaBlockReader
 	reactionStore             *persistence.MongoContentReactionStore
 	reactionService           *reactionapp.Service
@@ -87,6 +88,7 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 	policyStore := input.policyStore
 	store := input.postStore
 	postQueryReader := input.postQueryReader
+	activeSupplyReader := input.activeSupplyReader
 	viewerBlockReader := input.viewerBlockReader
 	reactionStore := input.reactionStore
 	reactionServiceCore := input.reactionService
@@ -130,6 +132,13 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 			func() rtrecpolicy.ObjectCardConfig { return policyStore.Current().ObjectCards },
 		))
 	}
+	if activeSupplyReader == nil {
+		log.Fatal("content-service active supply reader is not configured")
+	}
+	feedServiceOpts = append(
+		feedServiceOpts,
+		feedapp.WithActiveSupplyReader(activeSupplyReader),
+	)
 	if postQueryReader == nil {
 		log.Fatal("content-service Post query reader is not configured")
 	}

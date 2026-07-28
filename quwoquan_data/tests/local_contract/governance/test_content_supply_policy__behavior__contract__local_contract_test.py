@@ -2,6 +2,23 @@
 from __future__ import annotations
 
 from governance.content_supply_policy import load_content_supply_policy
+from governance.coverage.vertical_inventory import list_verticals
+
+
+def test_content_supply_policy__every_vertical_satisfies_the_contract__local_contract() -> None:
+    """每个上架 vertical 的 content_policy.yaml 都必须能通过 schema 装载。
+
+    历史缺陷：quality 新增 required 字段后只补了 travel，photography/campus 静默
+    失效，直到某条真实链路第一次装载该 vertical 才在运行期炸开。
+    """
+    verticals = list_verticals()
+
+    assert set(verticals) >= {"travel", "photography", "campus"}
+    for vertical in verticals:
+        policy = load_content_supply_policy(vertical)
+        assert policy.homepage_minimum_body_chars > 0, vertical
+        assert policy.homepage_minimum_section_chars > 0, vertical
+        assert policy.homepage_source_outline_section_chars > 0, vertical
 
 
 def test_content_supply_policy__carrier_requirements__contract__local_contract() -> None:
@@ -17,6 +34,12 @@ def test_content_supply_policy__carrier_requirements__contract__local_contract()
     assert policy.non_empty_rate_minimum > 0
     assert policy.duplicate_exposure_rate_maximum >= 0
     assert 0 < policy.homepage_max_source_fidelity < 1
+    assert policy.homepage_minimum_body_chars > 0
+    assert policy.homepage_minimum_fact_count > 0
+    assert policy.homepage_minimum_fact_chars > 0
+    assert policy.homepage_minimum_fact_chars < policy.homepage_minimum_body_chars
+    assert policy.homepage_minimum_section_chars < policy.homepage_minimum_body_chars
+    assert policy.homepage_source_outline_section_chars > 0
     assert policy.media_subject.prohibited_indicator(
         "Test Entity A holotype in dorsal view"
     ) == "holotype"

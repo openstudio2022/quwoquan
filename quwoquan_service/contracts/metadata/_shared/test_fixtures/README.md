@@ -16,7 +16,7 @@ contracts/metadata/_shared/test_fixtures/scenario_fixture.schema.json
 
 ## 环境约定
 
-- `alpha`：端侧通过 MockRepository 读取 fixture seed。
+- `local_contract`：测试树内对象级 typed double 可读取 fixture seed；Alpha 与其他环境 App 不得消费本目录。
 - `beta`：端侧通过 RemoteRepository 访问本地云服务；云服务测试前 reset + seed。
 - `gamma`：通过 `app_gamma_seed_manifest.json` 指向云侧 curated fixture 子集；当前 gamma 为远端精简媒体收口，alpha/beta 继续使用全量共享池。
 - `prod`：不读取测试 fixture。

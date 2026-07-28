@@ -47,16 +47,16 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.webPcCreateGalleryTitle),
+        find.text(DiscoveryText.webPcCreateGalleryTitle),
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.webPcCreateGallerySubtitle),
+        find.text(DiscoveryText.webPcCreateGallerySubtitle),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.webPcCreateCameraTitle), findsOneWidget);
+      expect(find.text(DiscoveryText.webPcCreateCameraTitle), findsOneWidget);
       expect(
-        find.text(UITextConstants.webPcCreateCameraSubtitle),
+        find.text(DiscoveryText.webPcCreateCameraSubtitle),
         findsOneWidget,
       );
       expect(
@@ -80,11 +80,11 @@ void main() {
 
       // 分组标题语义 token。
       expect(
-        find.text(UITextConstants.webPcCreateContentGroupTitle),
+        find.text(DiscoveryText.webPcCreateContentGroupTitle),
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.webPcCreateSocialGroupTitle),
+        find.text(DiscoveryText.webPcCreateSocialGroupTitle),
         findsOneWidget,
       );
       expect(find.text(ChatText.webPcCreateGroupChatTitle), findsOneWidget);

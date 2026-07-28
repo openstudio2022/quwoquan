@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PIL import Image
+import pytest
 
 from content.release.canonical.application import apply_object_transaction
 from content.release.canonical.object_transaction_audit import (
@@ -14,9 +15,11 @@ from content.release.canonical.object_transaction_audit import (
     validate_canonical_publish,
 )
 from content.release.canonical.post_transaction import (
+    ObjectTransactionError,
     build_post_object_transaction_package,
 )
 from core.source_digest import current_source_digest
+from core.schema import validate_result
 from core.tree_integrity import tree_integrity_stats
 
 
@@ -70,6 +73,13 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
         },
     )
     _write_json(
+        execution / "sources/commons/meta.json",
+        {
+            "sourceUseMode": "licensed_adaptation",
+            "researchLane": "image",
+        },
+    )
+    _write_json(
         post / "manifest.json",
         {
             "schema": "quwoquan_data.post_manifest",
@@ -99,6 +109,17 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
                     "sha256": digest,
                 }
             ],
+        },
+    )
+    _write_json(
+        post / "1.download/source_refs.json",
+        {
+            "sources": [
+                {
+                    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+                    "sourceAssetRef": "sources/commons/assets/cover.jpg",
+                }
+            ]
         },
     )
     _write_json(
@@ -176,7 +197,7 @@ def test_text_only_post_transaction_does_not_require_media_asset(tmp_path: Path)
     assert asset_refs == {"assets": []}
 
 
-def test_travel_audit_only_asset_records_unverified_rights_without_blocking(
+def test_travel_commercial_asset_blocks_unverified_rights(
     tmp_path: Path,
 ) -> None:
     execution, package, _publish, transaction_id = _fixture(tmp_path)
@@ -204,23 +225,19 @@ def test_travel_audit_only_asset_records_unverified_rights_without_blocking(
     source_asset["rightsAuditIssues"] = list(asset["rightsAuditIssues"])
     _write_json(source_index_path, source_index)
 
-    package_payload = build_post_object_transaction_package(
-        execution_root=execution,
-        object_ref=POST_REF,
-        transaction_id=transaction_id,
-        package_root=package,
-    )
-
-    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
-    row = rights["assets"][0]
-    assert row["rightsAuditStatus"] == "unverified"
-    assert row["sourceUseMode"] == "rights_audit_only"
-    assert row["authorizationProof"] == ""
-    assert row["author"] == ""
-    assert package_payload["schema"] == "quwoquan_data.object_transaction_package"
+    with pytest.raises(
+        ObjectTransactionError,
+        match="权利审计仍有未关闭问题",
+    ):
+        build_post_object_transaction_package(
+            execution_root=execution,
+            object_ref=POST_REF,
+            transaction_id=transaction_id,
+            package_root=package,
+        )
 
 
-def test_travel_audit_only_asset_uses_manifest_collection_page_as_audit_source(
+def test_travel_commercial_asset_blocks_unverified_collection_page_rights(
     tmp_path: Path,
 ) -> None:
     execution, package, _publish, transaction_id = _fixture(tmp_path)
@@ -237,6 +254,12 @@ def test_travel_audit_only_asset_uses_manifest_collection_page_as_audit_source(
     asset["rightsAuditStatus"] = "unverified"
     asset["rightsAuditIssues"] = ["imageRights: source terms not yet verified"]
     _write_json(manifest_path, manifest)
+    source_refs_path = execution / "posts" / POST_REF / "1.download/source_refs.json"
+    source_refs = json.loads(source_refs_path.read_text(encoding="utf-8"))
+    source_refs["sources"][0]["sourceUrl"] = (
+        "https://content.example.test/article/landscape"
+    )
+    _write_json(source_refs_path, source_refs)
     source_index_path = execution / "sources/commons/assets/index.json"
     source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
     source_asset = source_index["assets"][0]
@@ -252,6 +275,30 @@ def test_travel_audit_only_asset_uses_manifest_collection_page_as_audit_source(
     )
     _write_json(source_index_path, source_index)
 
+    with pytest.raises(
+        ObjectTransactionError,
+        match="权利审计仍有未关闭问题",
+    ):
+        build_post_object_transaction_package(
+            execution_root=execution,
+            object_ref=POST_REF,
+            transaction_id=transaction_id,
+            package_root=package,
+        )
+
+
+def test_canonical_source_catalog_preserves_factual_reference_only_truth(
+    tmp_path: Path,
+) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    _write_json(
+        execution / "sources/commons/meta.json",
+        {
+            "sourceUseMode": "factual_reference_only",
+            "researchLane": "image",
+        },
+    )
+
     build_post_object_transaction_package(
         execution_root=execution,
         object_ref=POST_REF,
@@ -259,9 +306,48 @@ def test_travel_audit_only_asset_uses_manifest_collection_page_as_audit_source(
         package_root=package,
     )
 
-    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
-    assert rights["assets"][0]["source"] == "https://travel.example.test/article/landscape"
-    assert rights["assets"][0]["rightsAuditStatus"] == "unverified"
+    catalog = json.loads(
+        (package / "object/source_catalog.json").read_text(encoding="utf-8")
+    )
+    assert catalog["sources"] == [
+        {
+            "sourceUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+            "sourceUseMode": "factual_reference_only",
+        }
+    ]
+    rights = json.loads(
+        (package / "object/rights.json").read_text(encoding="utf-8")
+    )
+    assert rights["assets"][0]["sourceUseMode"] == "factual_reference_only"
+    assert validate_result(rights, "release", "asset_rights_closure") == []
+
+
+def test_canonical_transaction_rejects_source_use_mode_upgrade(
+    tmp_path: Path,
+) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    _write_json(
+        execution / "sources/commons/meta.json",
+        {
+            "sourceUseMode": "factual_reference_only",
+            "researchLane": "image",
+        },
+    )
+    manifest_path = execution / "posts" / POST_REF / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["sourceUseMode"] = "licensed_adaptation"
+    _write_json(manifest_path, manifest)
+
+    with pytest.raises(
+        ObjectTransactionError,
+        match="sourceUseMode 与 source unit 真值冲突",
+    ):
+        build_post_object_transaction_package(
+            execution_root=execution,
+            object_ref=POST_REF,
+            transaction_id=transaction_id,
+            package_root=package,
+        )
 
 
 def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
@@ -293,6 +379,13 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
                     "modelReleaseStatus": "not_required",
                 }
             ]
+        },
+    )
+    _write_json(
+        execution / "sources/wiki/meta.json",
+        {
+            "sourceUseMode": "licensed_adaptation",
+            "researchLane": "video",
         },
     )
     assets = post / "assets"
@@ -355,6 +448,17 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
                         "rightsAuditIssues": [],
                 },
             ],
+        },
+    )
+    _write_json(
+        post / "1.download/source_refs.json",
+        {
+            "sources": [
+                {
+                    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Frame-1.jpg",
+                    "sourceAssetRef": frame_ref,
+                }
+            ]
         },
     )
     _write_json(

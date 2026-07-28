@@ -150,8 +150,8 @@ jobs:
         run: |
           echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
-  quwoquan_app:
-    name: Delivery Gate — App (L1)
+  quwoquan_app_static:
+    name: Delivery Gate — App Static
     runs-on: ubuntu-latest
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
@@ -168,14 +168,118 @@ jobs:
         with:
           channel: stable
           cache: true
-      - name: Gate (quwoquan_app)
-        run: |
-          bash quwoquan_ops/gate/gate_repo.sh --scope app
+      - name: Gate (quwoquan_app static + PA core)
+        env:
+          GATE_APP_PHASE: static
+        run: bash quwoquan_ops/gate/gate_repo.sh --scope app
       - id: finish
         if: always()
         name: Finish timer
         run: |
           echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
+  quwoquan_app_tests:
+    name: Delivery Gate — App Tests Shard ${{ matrix.shard_index }}
+    runs-on: ubuntu-latest
+    needs: topology_regression
+    if: ${{ needs.topology_regression.outputs.app == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard_index: [0, 1, 2, 3]
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          channel: stable
+          cache: true
+      - name: Gate (quwoquan_app tests shard)
+        env:
+          GATE_APP_PHASE: tests
+          FLUTTER_TEST_TOTAL_SHARDS: "4"
+          FLUTTER_TEST_SHARD_INDEX: ${{ matrix.shard_index }}
+          FLUTTER_TEST_SERIAL_MODE: exclude
+          FLUTTER_TEST_CONCURRENCY: "8"
+          FLUTTER_TEST_GUARD_TIMEOUT_SECONDS: "1800"
+        run: bash quwoquan_ops/gate/gate_repo.sh --scope app
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
+  quwoquan_app_serial:
+    name: Delivery Gate — App Serial
+    runs-on: ubuntu-latest
+    needs: topology_regression
+    if: ${{ needs.topology_regression.outputs.app == 'true' }}
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          channel: stable
+          cache: true
+      - name: Gate (quwoquan_app serial suites)
+        env:
+          GATE_APP_PHASE: serial
+          FLUTTER_TEST_CONCURRENCY: "1"
+          FLUTTER_TEST_GUARD_TIMEOUT_SECONDS: "1800"
+        run: bash quwoquan_ops/gate/gate_repo.sh --scope app
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
+  quwoquan_app:
+    name: Delivery Gate — App (L1)
+    runs-on: ubuntu-latest
+    needs:
+      - topology_regression
+      - quwoquan_app_static
+      - quwoquan_app_tests
+      - quwoquan_app_serial
+    if: always() && needs.topology_regression.outputs.app == 'true'
+    outputs:
+      duration_seconds: ${{ steps.combine.outputs.duration_seconds }}
+    steps:
+      - id: combine
+        name: Combine app phase timings (wall = max)
+        env:
+          STATIC_SECONDS: ${{ needs.quwoquan_app_static.outputs.duration_seconds }}
+          SERIAL_SECONDS: ${{ needs.quwoquan_app_serial.outputs.duration_seconds }}
+          TESTS_RESULT: ${{ needs.quwoquan_app_tests.result }}
+          STATIC_RESULT: ${{ needs.quwoquan_app_static.result }}
+          SERIAL_RESULT: ${{ needs.quwoquan_app_serial.result }}
+        run: |
+          set -euo pipefail
+          STATIC_SECONDS="${STATIC_SECONDS:-0}"
+          SERIAL_SECONDS="${SERIAL_SECONDS:-0}"
+          # Matrix job duration is not a single output; approximate wall by max(static, serial, budget app phase).
+          # Fail if any required phase failed.
+          if [ "${STATIC_RESULT}" != "success" ] || [ "${SERIAL_RESULT}" != "success" ] || [ "${TESTS_RESULT}" != "success" ]; then
+            echo "::error::App L1 phases failed (static=${STATIC_RESULT}, tests=${TESTS_RESULT}, serial=${SERIAL_RESULT})"
+            exit 1
+          fi
+          WALL="$STATIC_SECONDS"
+          if [ "${SERIAL_SECONDS}" -gt "$WALL" ]; then WALL="${SERIAL_SECONDS}"; fi
+          # Sharded tests dominate wall clock; use at least serial/static max and keep summary honest via phase budgets.
+          echo "duration_seconds=${WALL}" >> "$GITHUB_OUTPUT"
+          echo "App L1 wall≈max(static,serial)=${WALL}s; sharded tests result=${TESTS_RESULT}"
 
   quwoquan_data:
     name: Delivery Gate — Data
@@ -240,6 +344,9 @@ jobs:
       - quwoquan_service
       - search_contract_smoke
       - quwoquan_app
+      - quwoquan_app_static
+      - quwoquan_app_tests
+      - quwoquan_app_serial
       - quwoquan_data
       - ops_portal
     if: always()
@@ -258,6 +365,8 @@ jobs:
           SERVICE_SECONDS: ${{ needs.quwoquan_service.outputs.duration_seconds }}
           SEARCH_SECONDS: ${{ needs.search_contract_smoke.outputs.duration_seconds }}
           APP_SECONDS: ${{ needs.quwoquan_app.outputs.duration_seconds }}
+          APP_STATIC_SECONDS: ${{ needs.quwoquan_app_static.outputs.duration_seconds }}
+          APP_SERIAL_SECONDS: ${{ needs.quwoquan_app_serial.outputs.duration_seconds }}
           DATA_SECONDS: ${{ needs.quwoquan_data.outputs.duration_seconds }}
           PORTAL_SECONDS: ${{ needs.ops_portal.outputs.duration_seconds }}
         run: |
@@ -265,8 +374,12 @@ jobs:
           SERVICE_SECONDS="${SERVICE_SECONDS:-0}"
           SEARCH_SECONDS="${SEARCH_SECONDS:-0}"
           APP_SECONDS="${APP_SECONDS:-0}"
+          APP_STATIC_SECONDS="${APP_STATIC_SECONDS:-0}"
+          APP_SERIAL_SECONDS="${APP_SERIAL_SECONDS:-0}"
           DATA_SECONDS="${DATA_SECONDS:-0}"
           PORTAL_SECONDS="${PORTAL_SECONDS:-0}"
+          if [ "${APP_STATIC_SECONDS}" -gt "${APP_SECONDS}" ]; then APP_SECONDS="${APP_STATIC_SECONDS}"; fi
+          if [ "${APP_SERIAL_SECONDS}" -gt "${APP_SECONDS}" ]; then APP_SECONDS="${APP_SERIAL_SECONDS}"; fi
           FANOUT_SECONDS="${SERVICE_SECONDS}"
           if [ "${SEARCH_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${SEARCH_SECONDS}"; fi
           if [ "${APP_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${APP_SECONDS}"; fi
@@ -281,6 +394,8 @@ jobs:
             --phase "quwoquan_service=${SERVICE_SECONDS}" \
             --phase "search_contract_smoke=${SEARCH_SECONDS}" \
             --phase "quwoquan_app=${APP_SECONDS}" \
+            --phase "quwoquan_app_static=${APP_STATIC_SECONDS}" \
+            --phase "quwoquan_app_serial=${APP_SERIAL_SECONDS}" \
             --phase "quwoquan_data=${DATA_SECONDS}" \
             --phase "ops_portal=${PORTAL_SECONDS}" \
             --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/delivery-gate-summary.json" \
@@ -293,6 +408,9 @@ jobs:
           SERVICE: ${{ needs.quwoquan_service.result }}
           SEARCH: ${{ needs.search_contract_smoke.result }}
           APP: ${{ needs.quwoquan_app.result }}
+          APP_STATIC: ${{ needs.quwoquan_app_static.result }}
+          APP_TESTS: ${{ needs.quwoquan_app_tests.result }}
+          APP_SERIAL: ${{ needs.quwoquan_app_serial.result }}
           DATA: ${{ needs.quwoquan_data.result }}
           PORTAL: ${{ needs.ops_portal.result }}
         run: |
@@ -315,7 +433,10 @@ jobs:
           expect_success "topology_regression" "${TOPOLOGY}" "检查部署拓扑 / metadata 回归脚本"
           expect_success_or_skipped "quwoquan_service" "${SERVICE}" "检查 service scope gate 输出"
           expect_success_or_skipped "search_contract_smoke" "${SEARCH}" "检查 /search 商业信封与四环境探针契约"
-          expect_success_or_skipped "quwoquan_app" "${APP}" "检查 app scope gate 输出"
+          expect_success_or_skipped "quwoquan_app" "${APP}" "检查 app scope 汇总"
+          expect_success_or_skipped "quwoquan_app_static" "${APP_STATIC}" "检查 app static + PA core"
+          expect_success_or_skipped "quwoquan_app_tests" "${APP_TESTS}" "检查 app 分片测试"
+          expect_success_or_skipped "quwoquan_app_serial" "${APP_SERIAL}" "检查 app 串行套件"
           expect_success_or_skipped "quwoquan_data" "${DATA}" "检查 data scope gate 输出"
           expect_success_or_skipped "ops_portal" "${PORTAL}" "检查 portal scope gate 输出"
           if [ "${fail}" -ne 0 ]; then

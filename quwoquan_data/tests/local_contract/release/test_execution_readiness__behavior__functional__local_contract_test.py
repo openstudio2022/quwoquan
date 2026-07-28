@@ -14,6 +14,7 @@ if str(SCRIPTS) not in sys.path:
 from core.article_package import compute_document_sha256  # noqa: E402
 from core.control_types import ContentGenerator, ContentType  # noqa: E402
 from core.io import read_json  # noqa: E402
+from content.execution import post_review_closure  # noqa: E402
 from content.execution.runtime_contract import canonical_sha256  # noqa: E402
 from verify import verify_execution_readiness as gate  # noqa: E402
 
@@ -265,6 +266,11 @@ def _article_fixture(monkeypatch, tmp_path: Path) -> tuple[str, Path]:
         "load_execution_manifest",
         lambda value: {"executionId": value},
     )
+    monkeypatch.setattr(
+        post_review_closure.spec_contract,
+        "approved_quota",
+        lambda _execution_id: 1,
+    )
     _write(
         root / "_shared/execution_state.json",
         {
@@ -407,6 +413,23 @@ def _article_fixture(monkeypatch, tmp_path: Path) -> tuple[str, Path]:
             "evidenceIndexRef": "5.review/evidence_index.json",
         },
     )
+    _write(
+        root / "_shared/post_review_closure.json",
+        {
+            "schema": "quwoquan_data.post_review_closure",
+            "executionId": execution_id,
+            "carrier": "article",
+            "approvedQuota": 1,
+            "objects": [
+                {
+                    "objectRef": object_ref,
+                    "publishRef": "posts/article/攻略/测试文章/1",
+                    "disposition": "qualified",
+                    "issues": [],
+                }
+            ],
+        },
+    )
     return execution_id, object_root
 
 
@@ -417,6 +440,63 @@ def test_execution_readiness__uses_post_objects_for_article_execution__local_con
     execution_id, _object_root = _article_fixture(monkeypatch, tmp_path)
 
     assert gate.execution_readiness_issues(execution_id, require_reviewed=True) == []
+
+
+def test_commercial_readiness_ignores_discarded_but_calibration_audits_it(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    execution_id, object_root = _article_fixture(monkeypatch, tmp_path)
+    root = tmp_path / execution_id
+    discarded_root = root / "posts/article/攻略/丢弃文章/1"
+    for stage in ("1.download", "2.quality", "3.compose", "4.draft", "5.review"):
+        (discarded_root / stage).mkdir(parents=True, exist_ok=True)
+    closure_path = root / "_shared/post_review_closure.json"
+    closure = read_json(closure_path)
+    closure["objects"].append(
+        {
+            "objectRef": "测试实体乙__article_source_b",
+            "publishRef": "posts/article/攻略/丢弃文章/1",
+            "disposition": "discarded",
+            "issues": ["independent reviewer rejected the object"],
+        }
+    )
+    _write(closure_path, closure)
+
+    assert gate.execution_readiness_issues(
+        execution_id,
+        require_reviewed=True,
+        mode="commercial",
+    ) == []
+    calibration_issues = gate.execution_readiness_issues(
+        execution_id,
+        require_reviewed=True,
+        mode="calibration",
+        fail_on_no_go=True,
+    )
+
+    assert any("丢弃文章" in issue for issue in calibration_issues)
+    assert object_root.is_dir()
+
+
+def test_commercial_readiness_still_blocks_issue_on_qualified_object(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    execution_id, object_root = _article_fixture(monkeypatch, tmp_path)
+    result_path = object_root / "5.review/reviewer_result.json"
+    result = read_json(result_path)
+    result["verdict"] = "failed"
+    result["issues"] = ["commercial review regression"]
+    _write(result_path, result)
+
+    issues = gate.execution_readiness_issues(
+        execution_id,
+        require_reviewed=True,
+        mode="commercial",
+    )
+
+    assert any("independent reviewer did not pass" in issue for issue in issues)
 
 
 def test_execution_readiness__accepts_structured_image_generator__local_contract(

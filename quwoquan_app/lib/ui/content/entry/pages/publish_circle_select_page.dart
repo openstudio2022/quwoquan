@@ -141,9 +141,9 @@ class _PublishCircleSelectPageState extends State<PublishCircleSelectPage> {
   String _buildSubtitle(CreateCircleOption circle) {
     final parts = <String>[
       if (circle.memberCount != null)
-        '${formatCompactActionCount(circle.memberCount!)} ${UITextConstants.circleMembers}',
+        '${formatCompactActionCount(circle.memberCount!)} ${CommunityText.circleMembers}',
       if (circle.postCount != null)
-        '${formatCompactActionCount(circle.postCount!)} ${UITextConstants.circleWorksCountSuffix}',
+        '${formatCompactActionCount(circle.postCount!)} ${CreationText.circleWorksCountSuffix}',
       if ((circle.recommendationReason ?? '').trim().isNotEmpty)
         circle.recommendationReason!.trim(),
     ];

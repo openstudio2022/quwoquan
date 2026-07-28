@@ -19,6 +19,7 @@ import (
 	platformredis "quwoquan_service/internal/platform/redis"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
+	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
 	rthttp "quwoquan_service/runtime/http"
 	runtimemessaging "quwoquan_service/runtime/messaging"
@@ -60,6 +61,13 @@ func run() error {
 	if err := applyNotificationRuntimeConfig(runtimeConfig); err != nil {
 		return fmt.Errorf("runtime config environment adapter failed: %w", err)
 	}
+	controlplane.StartReleaseConfigAttestation(
+		serviceName,
+		appEnv,
+		strings.TrimSpace(os.Getenv("CONFIG_ROOT")),
+		strings.TrimSpace(os.Getenv("CONFIG_VERSION")),
+		strings.TrimSpace(os.Getenv("IMAGE_VERSION")),
+	)
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)

@@ -6,6 +6,12 @@ void main() {
   // 常规契约
   // ──────────────────────────────────────────────────────────────────
   group('RtcErrorCode — 常规契约', () {
+    test('parse invalid_argument → invalidArgument', () {
+      final code = RtcErrorCode.fromCode('RTC.USER.invalid_argument');
+      expect(code, RtcErrorCode.invalidArgument);
+      expect(code!.httpStatus, 400);
+    });
+
     test('parse call_not_found → callNotFound', () {
       final code = RtcErrorCode.fromCode('RTC.USER.call_not_found');
       expect(code, RtcErrorCode.callNotFound);
@@ -101,9 +107,12 @@ void main() {
       expect(code, isNull);
     });
 
-    test('enum 总数 = 18（含 media_transport_unavailable 与 account_security_*）', () {
-      expect(RtcErrorCode.values.length, 18);
-    });
+    test(
+      'enum 总数 = 19（含 invalid_argument、media_transport 与 account_security）',
+      () {
+        expect(RtcErrorCode.values.length, 19);
+      },
+    );
 
     test('关系门禁错误码已贯通端侧', () {
       expect(

@@ -156,9 +156,9 @@ void main() {
   });
 
   test('短信验证码入口与过期提示使用统一完整文案', () {
-    expect(UITextConstants.loginReturningSmsPrimary, '短信验证码登录');
-    expect(UITextConstants.loginPhoneSubmit, '验证并登录');
-    expect(UITextConstants.loginSessionExpiredHint, '登录信息已过期，请用短信验证码重新登录');
+    expect(FoundationText.loginReturningSmsPrimary, '短信验证码登录');
+    expect(FoundationText.loginPhoneSubmit, '验证并登录');
+    expect(FoundationText.loginSessionExpiredHint, '登录信息已过期，请用短信验证码重新登录');
   });
 
   test('登录原因主副标题覆盖全部 reason 且不重复', () {
@@ -295,13 +295,13 @@ void main() {
     expect(find.byType(AppAvatarImage), findsNothing);
     expect(find.byIcon(CupertinoIcons.person_fill), findsNothing);
     expect(
-      find.bySemanticsLabel(UITextConstants.loginAccountAvatarSemanticLabel),
+      find.bySemanticsLabel(FoundationText.loginAccountAvatarSemanticLabel),
       findsNothing,
     );
     expect(find.text('欢'), findsNothing);
-    expect(find.text(UITextConstants.loginMethodWechat), findsOneWidget);
-    expect(find.text(UITextConstants.loginMethodQq), findsOneWidget);
-    expect(find.text(UITextConstants.loginMethodPhone), findsOneWidget);
+    expect(find.text(FoundationText.loginMethodWechat), findsOneWidget);
+    expect(find.text(FoundationText.loginMethodQq), findsOneWidget);
+    expect(find.text(FoundationText.loginMethodPhone), findsOneWidget);
     expect(find.text('微信登录'), findsNothing);
     expect(find.text('QQ登录'), findsNothing);
     expect(find.text('其他手机号登录'), findsNothing);
@@ -316,13 +316,13 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text(UITextConstants.loginReturningDefaultName), findsNothing);
+    expect(find.text(FoundationText.loginReturningDefaultName), findsNothing);
     expect(
-      find.text(UITextConstants.loginReturningDefaultAccount),
+      find.text(FoundationText.loginReturningDefaultAccount),
       findsNothing,
     );
-    expect(find.text(UITextConstants.loginContinue), findsNothing);
-    expect(find.text(UITextConstants.loginOneTap), findsNothing);
+    expect(find.text(FoundationText.loginContinue), findsNothing);
+    expect(find.text(FoundationText.loginOneTap), findsNothing);
     expect(find.byType(PhoneNumberField), findsOneWidget);
   });
 
@@ -335,7 +335,7 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text(UITextConstants.loginOneTapPrimary), findsNothing);
+    expect(find.text(FoundationText.loginOneTapPrimary), findsNothing);
     expect(find.byType(PhoneNumberField), findsOneWidget);
     expect(find.byType(AppFormErrorCard), findsNothing);
   });
@@ -399,7 +399,7 @@ void main() {
     await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.loginSendOtp));
+    await tester.tap(find.text(FoundationText.loginSendOtp));
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(find.byType(PhoneNumberField), findsNothing);
@@ -457,7 +457,7 @@ void main() {
 
     final primaryButton = find.widgetWithText(
       CupertinoButton,
-      UITextConstants.loginSendOtp,
+      FoundationText.loginSendOtp,
     );
     expect(tester.widget<CupertinoButton>(primaryButton).onPressed, isNull);
 
@@ -681,30 +681,30 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(
-      find.text(UITextConstants.loginReturningDefaultName),
+      find.text(FoundationText.loginReturningDefaultName),
       findsOneWidget,
     );
     expect(find.text(_defaultNicknameSample), findsNothing);
     expect(find.text('138****3909'), findsOneWidget);
-    expect(find.text(UITextConstants.loginReturningHeroTitle), findsOneWidget);
+    expect(find.text(FoundationText.loginReturningHeroTitle), findsOneWidget);
     expect(
-      find.text(UITextConstants.loginReturningHeroSubtitle),
+      find.text(FoundationText.loginReturningHeroSubtitle),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.loginContinue), findsOneWidget);
-    expect(find.text(UITextConstants.loginOneTap), findsNothing);
+    expect(find.text(FoundationText.loginContinue), findsOneWidget);
+    expect(find.text(FoundationText.loginOneTap), findsNothing);
 
-    await tester.ensureVisible(find.text(UITextConstants.loginContinue));
-    await tester.tap(find.text(UITextConstants.loginContinue));
+    await tester.ensureVisible(find.text(FoundationText.loginContinue));
+    await tester.tap(find.text(FoundationText.loginContinue));
     await tester.pump();
     expect(repo.loginOneTapCalls, 0, reason: '未勾选协议不得请求服务端');
-    expect(find.text(UITextConstants.loginAgreementRequired), findsWidgets);
+    expect(find.text(FoundationText.loginAgreementRequired), findsWidgets);
     await tester.pump(const Duration(seconds: 3));
 
     await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.loginContinue));
+    await tester.tap(find.text(FoundationText.loginContinue));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
     expect(repo.refreshTokenCalls, 1, reason: '最近账号态必须通过服务端 refresh 二次登录');
@@ -724,19 +724,19 @@ void main() {
 
     // 软退出保留熟悉感与继续登录入口（凭证仍在有效期内）。
     expect(find.text('趣友A'), findsOneWidget);
-    expect(find.text(UITextConstants.loginContinue), findsOneWidget);
-    expect(find.text(UITextConstants.loginOneTap), findsNothing);
-    expect(find.text(UITextConstants.loginReturningSmsPrimary), findsNothing);
+    expect(find.text(FoundationText.loginContinue), findsOneWidget);
+    expect(find.text(FoundationText.loginOneTap), findsNothing);
+    expect(find.text(FoundationText.loginReturningSmsPrimary), findsNothing);
 
     await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.loginContinue));
+    await tester.tap(find.text(FoundationText.loginContinue));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(repo.refreshTokenCalls, 1, reason: '有效期内一键登录应走 refresh 直接恢复');
-    expect(find.text(UITextConstants.loginFailed), findsNothing);
+    expect(find.text(FoundationText.loginFailed), findsNothing);
   });
 
   testWidgets('过期摘要无可执行恢复动作：不展示返回账号，直接回退手机号', (tester) async {
@@ -751,15 +751,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('趣友B'), findsNothing);
-    expect(find.text(UITextConstants.loginReturningSmsPrimary), findsNothing);
-    expect(find.text(UITextConstants.loginOneTap), findsNothing);
+    expect(find.text(FoundationText.loginReturningSmsPrimary), findsNothing);
+    expect(find.text(FoundationText.loginOneTap), findsNothing);
     expect(
-      find.text(UITextConstants.loginReturningDefaultAccount),
+      find.text(FoundationText.loginReturningDefaultAccount),
       findsNothing,
     );
     expect(repo.refreshTokenCalls, 0);
     expect(find.byType(PhoneNumberField), findsOneWidget);
-    expect(find.text(UITextConstants.loginFailed), findsNothing);
+    expect(find.text(FoundationText.loginFailed), findsNothing);
   });
 
   testWidgets('彻底退出后无凭证和摘要：直接进入手机号验证码登录', (tester) async {
@@ -773,8 +773,8 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text(UITextConstants.loginReturningSmsPrimary), findsNothing);
-    expect(find.text(UITextConstants.loginOneTap), findsNothing);
+    expect(find.text(FoundationText.loginReturningSmsPrimary), findsNothing);
+    expect(find.text(FoundationText.loginOneTap), findsNothing);
     expect(find.text('趣友C'), findsNothing);
     expect(repo.refreshTokenCalls, 0);
     expect(find.byType(PhoneNumberField), findsOneWidget);
@@ -795,7 +795,7 @@ void main() {
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pump();
 
-    await tester.tap(find.text(UITextConstants.loginReturningSmsPrimary));
+    await tester.tap(find.text(FoundationText.loginReturningSmsPrimary));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
 
@@ -807,8 +807,8 @@ void main() {
       find.byType(CupertinoTextField).first,
     );
     expect(phoneField.controller?.text, '18013813909');
-    expect(find.text(UITextConstants.loginFailed), findsNothing);
-    await tester.tap(find.text(UITextConstants.loginSendOtp));
+    expect(find.text(FoundationText.loginFailed), findsNothing);
+    await tester.tap(find.text(FoundationText.loginSendOtp));
     await tester.pump(const Duration(milliseconds: 250));
     expect(repo.sendOtpCalls, 1);
     expect(find.byType(OtpCodeBoxes), findsOneWidget);
@@ -831,7 +831,7 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 50));
 
-    await tester.tap(find.text(UITextConstants.loginReturningSmsPrimary));
+    await tester.tap(find.text(FoundationText.loginReturningSmsPrimary));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
 
@@ -858,7 +858,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     // 主动选择「其他手机号」走空号手动输入流程（与记住号自动续登区分）。
-    final phoneEntry = find.text(UITextConstants.loginMethodPhone);
+    final phoneEntry = find.text(FoundationText.loginMethodPhone);
     await tester.ensureVisible(phoneEntry);
     await tester.tap(phoneEntry);
     await tester.pump();
@@ -903,10 +903,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('180****3901'), findsOneWidget);
-    expect(find.text(UITextConstants.loginCarrierHeroTitle), findsOneWidget);
-    expect(find.text(UITextConstants.loginCarrierHeroSubtitle), findsOneWidget);
+    expect(find.text(FoundationText.loginCarrierHeroTitle), findsOneWidget);
+    expect(find.text(FoundationText.loginCarrierHeroSubtitle), findsOneWidget);
     expect(find.textContaining('将创建趣我圈账号'), findsOneWidget);
-    expect(find.text(UITextConstants.loginOneTapPrimary), findsOneWidget);
+    expect(find.text(FoundationText.loginOneTapPrimary), findsOneWidget);
     expect(
       ops.recorded.map((event) => event.action),
       containsAll(<String>['login_page_exposed', 'login_state_resolved']),
@@ -940,8 +940,8 @@ void main() {
 
     expect(find.text('老用户'), findsNothing);
     expect(find.text('180****3902'), findsOneWidget);
-    expect(find.text(UITextConstants.loginOneTapPrimary), findsOneWidget);
-    expect(find.text(UITextConstants.loginContinue), findsNothing);
+    expect(find.text(FoundationText.loginOneTapPrimary), findsOneWidget);
+    expect(find.text(FoundationText.loginContinue), findsNothing);
   });
 
   testWidgets('one-tap 不可用时 1.2s 内降级到手机号输入，不长时间 loading', (tester) async {
@@ -957,10 +957,10 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 1300));
     expect(
-      find.text(UITextConstants.loginPhoneNumberPlaceholder),
+      find.text(FoundationText.loginPhoneNumberPlaceholder),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.loginSendOtp), findsOneWidget);
+    expect(find.text(FoundationText.loginSendOtp), findsOneWidget);
   });
 
   testWidgets('运营商 hint 返回受限账号时进入阻断面，不降级为手机号创建', (tester) async {
@@ -1013,7 +1013,7 @@ void main() {
     client.completeProbe();
     await tester.pump(const Duration(milliseconds: 50));
     expect(find.byType(PhoneNumberField), findsOneWidget);
-    expect(find.text(UITextConstants.loginOneTapPrimary), findsNothing);
+    expect(find.text(FoundationText.loginOneTapPrimary), findsNothing);
   });
 
   testWidgets('两状态布局同构：主按钮、协议、其他登录方式纵向位置一致', (tester) async {
@@ -1028,13 +1028,13 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 50));
     final returningPrimaryDy = tester
-        .getTopLeft(find.text(UITextConstants.loginContinue))
+        .getTopLeft(find.text(FoundationText.loginContinue))
         .dy;
     final returningAgreementDy = tester
-        .getTopLeft(find.textContaining(UITextConstants.userAgreement))
+        .getTopLeft(find.textContaining(FoundationText.userAgreement))
         .dy;
     final returningOtherDy = tester
-        .getTopLeft(find.text(UITextConstants.loginOtherMethods))
+        .getTopLeft(find.text(FoundationText.loginOtherMethods))
         .dy;
 
     await _pumpLogin(
@@ -1053,15 +1053,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(
-      tester.getTopLeft(find.text(UITextConstants.loginOneTapPrimary)).dy,
+      tester.getTopLeft(find.text(FoundationText.loginOneTapPrimary)).dy,
       returningPrimaryDy,
     );
     expect(
-      tester.getTopLeft(find.textContaining(UITextConstants.userAgreement)).dy,
+      tester.getTopLeft(find.textContaining(FoundationText.userAgreement)).dy,
       returningAgreementDy,
     );
     expect(
-      tester.getTopLeft(find.text(UITextConstants.loginOtherMethods)).dy,
+      tester.getTopLeft(find.text(FoundationText.loginOtherMethods)).dy,
       returningOtherDy,
     );
   });
@@ -1089,7 +1089,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
 
       final buttonRect = tester.getRect(
-        find.text(UITextConstants.loginOneTapPrimary),
+        find.text(FoundationText.loginOneTapPrimary),
       );
       final accountRect = tester.getRect(find.text('180****3901'));
       expect(buttonRect.width, lessThanOrEqualTo(430));
@@ -1116,14 +1116,14 @@ void main() {
     final alipayRect = tester.getRect(find.byIcon(SimpleIcons.alipay));
     final wechatRect = tester.getRect(find.byIcon(SimpleIcons.wechat));
     final otherTitleRect = tester.getRect(
-      find.text(UITextConstants.loginOtherMethods),
+      find.text(FoundationText.loginOtherMethods),
     );
     expect(otherTitleRect.top, greaterThan(700));
     expect(alipayRect.bottom, lessThan(900));
     expect(wechatRect.height, closeTo(alipayRect.height, 0.5));
     expect(find.byIcon(Icons.phone_iphone), findsNothing);
-    expect(find.text(UITextConstants.loginMethodPhone), findsNothing);
-    expect(find.text(UITextConstants.loginOtherMethods), findsOneWidget);
+    expect(find.text(FoundationText.loginMethodPhone), findsNothing);
+    expect(find.text(FoundationText.loginOtherMethods), findsOneWidget);
   });
 
   testWidgets('勾选协议后提交 one-tap，保存 remembered summary', (tester) async {
@@ -1149,7 +1149,7 @@ void main() {
     await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.loginOneTapPrimary));
+    await tester.tap(find.text(FoundationText.loginOneTapPrimary));
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(repo.loginOneTapCalls, 1);
@@ -1177,16 +1177,16 @@ void main() {
       '18013813909',
     );
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.loginSendOtp));
+    await tester.tap(find.text(FoundationText.loginSendOtp));
     await tester.pump();
     expect(repo.sendOtpCalls, 0, reason: '未勾选协议不得发码');
-    expect(find.text(UITextConstants.loginAgreementRequired), findsWidgets);
+    expect(find.text(FoundationText.loginAgreementRequired), findsWidgets);
     await tester.pump(const Duration(seconds: 3));
 
     await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.loginSendOtp));
+    await tester.tap(find.text(FoundationText.loginSendOtp));
     await tester.pump(const Duration(milliseconds: 250));
     expect(repo.sendOtpCalls, 1);
     expect(find.textContaining('180****3909'), findsWidgets);
@@ -1205,7 +1205,7 @@ void main() {
     expect(find.text('6'), findsOneWidget);
     await tester.pump(const Duration(milliseconds: 350));
     expect(repo.phoneLoginCalls, 0, reason: '六位验证码只完成输入，不得自动提交');
-    await tester.tap(find.text(UITextConstants.loginPhoneSubmit));
+    await tester.tap(find.text(FoundationText.loginPhoneSubmit));
     await tester.pump(const Duration(milliseconds: 350));
     expect(repo.phoneLoginCalls, 1);
     expect(store.lastRememberedMethod, AuthRememberedLoginMethod.phoneOtp);
@@ -1227,14 +1227,14 @@ void main() {
     );
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.loginSendOtp));
+    await tester.tap(find.text(FoundationText.loginSendOtp));
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(find.byType(PhoneNumberField), findsNothing);
     expect(find.byType(OtpCodeBoxes), findsOneWidget);
-    expect(find.text(UITextConstants.loginPhoneChange), findsOneWidget);
+    expect(find.text(FoundationText.loginPhoneChange), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.loginPhoneChange));
+    await tester.tap(find.text(FoundationText.loginPhoneChange));
     await tester.pump();
     expect(find.byType(PhoneNumberField), findsOneWidget);
     expect(find.byType(OtpCodeBoxes), findsNothing);
@@ -1256,11 +1256,11 @@ void main() {
     await tester.enterText(phoneField, '12345678901');
     await tester.pump();
 
-    expect(find.text(UITextConstants.loginPhoneInvalid), findsNothing);
+    expect(find.text(FoundationText.loginPhoneInvalid), findsNothing);
 
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
-    expect(find.text(UITextConstants.loginPhoneInvalid), findsOneWidget);
+    expect(find.text(FoundationText.loginPhoneInvalid), findsOneWidget);
   });
 
   testWidgets('验证码已送达后重发失败仍保留验证码步骤与用户输入', (tester) async {
@@ -1280,7 +1280,7 @@ void main() {
     await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.loginSendOtp));
+    await tester.tap(find.text(FoundationText.loginSendOtp));
     await tester.pump(const Duration(milliseconds: 250));
     await tester.enterText(find.byType(CupertinoTextField).last, '123');
     await tester.pump(const Duration(seconds: 2));
@@ -1299,7 +1299,7 @@ void main() {
           ?.text,
       '123',
     );
-    expect(find.text(UITextConstants.loginOtpSendFailed), findsOneWidget);
+    expect(find.text(FoundationText.loginOtpSendFailed), findsOneWidget);
   });
 
   testWidgets('手机号 OTP 输入首位后保持焦点，可连续输入而不需重新点按', (tester) async {
@@ -1320,7 +1320,7 @@ void main() {
     await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.loginSendOtp));
+    await tester.tap(find.text(FoundationText.loginSendOtp));
     await tester.pump(const Duration(milliseconds: 250));
 
     final otpFieldFinder = find.byType(CupertinoTextField).last;
@@ -1401,7 +1401,7 @@ void main() {
     await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.loginSendOtp));
+    await tester.tap(find.text(FoundationText.loginSendOtp));
     await tester.pump(const Duration(milliseconds: 250));
 
     final otpRect = tester.getRect(find.byType(OtpCodeBoxes));
@@ -1473,36 +1473,36 @@ void main() {
     final cases = <({LoginPhoneOtpState state, String expected})>[
       (
         state: const LoginPhoneOtpState.idle(),
-        expected: UITextConstants.loginPhoneNumberPlaceholder,
+        expected: FoundationText.loginPhoneNumberPlaceholder,
       ),
       (
         state: const LoginPhoneOtpState(
           phase: LoginPhoneOtpPhase.editing,
           phone: '180',
         ),
-        expected: UITextConstants.loginPhoneNumberPlaceholder,
+        expected: FoundationText.loginPhoneNumberPlaceholder,
       ),
       (
         state: const LoginPhoneOtpState(
           phase: LoginPhoneOtpPhase.invalid,
           phone: '12345678901',
-          message: UITextConstants.loginPhoneInvalid,
+          message: FoundationText.loginPhoneInvalid,
         ),
-        expected: UITextConstants.loginPhoneInvalid,
+        expected: FoundationText.loginPhoneInvalid,
       ),
       (
         state: const LoginPhoneOtpState(
           phase: LoginPhoneOtpPhase.valid,
           phone: '18013813909',
         ),
-        expected: UITextConstants.loginPhoneNumberPlaceholder,
+        expected: FoundationText.loginPhoneNumberPlaceholder,
       ),
       (
         state: const LoginPhoneOtpState(
           phase: LoginPhoneOtpPhase.sendingCode,
           phone: '18013813909',
         ),
-        expected: UITextConstants.loginSendOtpSubmitting,
+        expected: FoundationText.loginSendOtpSubmitting,
       ),
       (
         state: const LoginPhoneOtpState(
@@ -1542,7 +1542,7 @@ void main() {
           code: '123456',
           otpWasDelivered: true,
         ),
-        expected: UITextConstants.loginOtpSentTo.replaceFirst(
+        expected: FoundationText.loginOtpSentTo.replaceFirst(
           '%s',
           '180****3909',
         ),
@@ -1553,19 +1553,19 @@ void main() {
           phone: '18013813909',
           maskedPhone: '180****3909',
           code: '123456',
-          message: UITextConstants.loginOtpMismatch,
+          message: FoundationText.loginOtpMismatch,
           otpWasDelivered: true,
         ),
-        expected: UITextConstants.loginOtpMismatch,
+        expected: FoundationText.loginOtpMismatch,
       ),
       (
         state: const LoginPhoneOtpState(
           phase: LoginPhoneOtpPhase.codeExpired,
           phone: '18013813909',
           maskedPhone: '180****3909',
-          message: UITextConstants.loginOtpExpired,
+          message: FoundationText.loginOtpExpired,
         ),
-        expected: UITextConstants.loginOtpExpired,
+        expected: FoundationText.loginOtpExpired,
       ),
       (
         state: const LoginPhoneOtpState(
@@ -1580,9 +1580,9 @@ void main() {
         state: const LoginPhoneOtpState(
           phase: LoginPhoneOtpPhase.sendFailed,
           phone: '18013813909',
-          message: UITextConstants.loginOtpSendFailed,
+          message: FoundationText.loginOtpSendFailed,
         ),
-        expected: UITextConstants.loginOtpSendFailed,
+        expected: FoundationText.loginOtpSendFailed,
       ),
       (
         state: LoginPhoneOtpState(
@@ -1619,9 +1619,9 @@ void main() {
           phase: LoginPhoneOtpPhase.success,
           phone: '18013813909',
           maskedPhone: '180****3909',
-          message: UITextConstants.loginRedirecting,
+          message: FoundationText.loginRedirecting,
         ),
-        expected: UITextConstants.loginRedirecting,
+        expected: FoundationText.loginRedirecting,
       ),
     ];
 
@@ -1670,7 +1670,7 @@ void main() {
     ]) {
       expect(
         labelFor(phase),
-        UITextConstants.loginSwitchPhone,
+        FoundationText.loginSwitchPhone,
         reason: phase.name,
       );
       final state = LoginPhoneOtpState(
@@ -1686,7 +1686,7 @@ void main() {
     // 验证码已过期：主按钮语义=重新获取验证码（文案与行为一致）。
     expect(
       labelFor(LoginPhoneOtpPhase.codeExpired, code: ''),
-      UITextConstants.loginOtpResend,
+      FoundationText.loginOtpResend,
     );
     expect(
       const LoginPhoneOtpState(
@@ -1703,7 +1703,7 @@ void main() {
       code: '123456',
       otpWasDelivered: true,
     );
-    expect(complete.primaryLabel, UITextConstants.loginPhoneSubmit);
+    expect(complete.primaryLabel, FoundationText.loginPhoneSubmit);
     expect(complete.canLogin, isTrue);
   });
 
@@ -1729,7 +1729,7 @@ void main() {
       const LoginPhoneOtpState(
         phase: LoginPhoneOtpPhase.invalid,
         phone: '123',
-        message: UITextConstants.loginPhoneInvalid,
+        message: FoundationText.loginPhoneInvalid,
       ),
     );
     expect(find.byType(AppInlineFieldError), findsOneWidget);
@@ -1739,7 +1739,7 @@ void main() {
       const LoginPhoneOtpState(
         phase: LoginPhoneOtpPhase.sendFailed,
         phone: '18013813909',
-        message: UITextConstants.loginOtpSendFailed,
+        message: FoundationText.loginOtpSendFailed,
       ),
     );
     expect(find.byType(AppInlineFieldError), findsNothing);
@@ -1820,14 +1820,14 @@ void main() {
     await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.loginContinue));
+    await tester.tap(find.text(FoundationText.loginContinue));
     await tester.pump(const Duration(milliseconds: 50));
 
     // refresh 失败后不停在空面板、也不回到注定失败的一键登录：统一降级到短信验证码流程，
     // 保留可操作短信出口；若宿主平台没有真实可发现方式，不渲染空分隔区。
     expect(find.byType(PhoneNumberField), findsOneWidget);
-    expect(find.text(UITextConstants.loginOtherMethods), findsNothing);
-    expect(find.text(UITextConstants.loginFailed), findsNothing);
+    expect(find.text(FoundationText.loginOtherMethods), findsNothing);
+    expect(find.text(FoundationText.loginFailed), findsNothing);
     await tester.pump(const Duration(seconds: 3));
   });
 
@@ -1844,15 +1844,15 @@ void main() {
     await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.loginOneTapPrimary));
+    await tester.tap(find.text(FoundationText.loginOneTapPrimary));
     await tester.pump(const Duration(milliseconds: 50));
 
     // 降级到手机号输入，给出可继续的短信路径。
     expect(
-      find.text(UITextConstants.loginPhoneNumberPlaceholder),
+      find.text(FoundationText.loginPhoneNumberPlaceholder),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.loginSendOtp), findsOneWidget);
+    expect(find.text(FoundationText.loginSendOtp), findsOneWidget);
     final feedbackCard = tester.widget<AppFormErrorCard>(
       find.byKey(const ValueKey<String>('login-process-feedback')),
     );
@@ -1864,7 +1864,7 @@ void main() {
       ),
       findsNothing,
     );
-    expect(find.text(UITextConstants.loginReturningSmsPrimary), findsNothing);
+    expect(find.text(FoundationText.loginReturningSmsPrimary), findsNothing);
     await tester.pump(const Duration(seconds: 3));
   });
 
@@ -1883,7 +1883,7 @@ void main() {
     await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pump();
-    await tester.tap(find.text(UITextConstants.loginOneTapPrimary));
+    await tester.tap(find.text(FoundationText.loginOneTapPrimary));
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(repo.loginOneTapCalls, 2);
@@ -1996,7 +1996,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.loginSocialClientNotInstalled),
+      find.text(FoundationText.loginSocialClientNotInstalled),
       findsOneWidget,
     );
   });
@@ -2042,11 +2042,11 @@ void main() {
 
     // 内容已收紧到一屏：底部"其他登录方式"完整可见，且无可滚动余量。
     final otherRect = tester.getRect(
-      find.text(UITextConstants.loginOtherMethods),
+      find.text(FoundationText.loginOtherMethods),
     );
     expect(otherRect.bottom, lessThanOrEqualTo(852));
     final position = Scrollable.of(
-      tester.element(find.text(UITextConstants.loginContinue)),
+      tester.element(find.text(FoundationText.loginContinue)),
     ).position;
     expect(position.maxScrollExtent, 0.0, reason: '一屏可容纳则不可滚动');
   });
@@ -2067,9 +2067,9 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byType(SingleChildScrollView), findsOneWidget);
-    await tester.ensureVisible(find.text(UITextConstants.loginSendOtp));
+    await tester.ensureVisible(find.text(FoundationText.loginSendOtp));
     await tester.pump();
-    expect(find.text(UITextConstants.loginSendOtp), findsOneWidget);
+    expect(find.text(FoundationText.loginSendOtp), findsOneWidget);
   });
 }
 
@@ -2582,7 +2582,7 @@ class _FailSecondOtpSendFacets extends _RecordingAuthFacets {
       type: CloudErrorType.server,
       message: 'sms provider unavailable',
       code: UserErrorCode.otpProviderFailed.code,
-      userMessage: UITextConstants.loginOtpSendFailed,
+      userMessage: FoundationText.loginOtpSendFailed,
       runtimeFailure: testRuntimeFailure(
         code: UserErrorCode.otpProviderFailed.code,
       ),

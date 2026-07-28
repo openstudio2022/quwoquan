@@ -66,7 +66,7 @@ void main() {
     final repository = _ForwardJourneyChatRepository();
     await tester.pumpWidget(_wrap(repository));
 
-    await tester.tap(find.text(UITextConstants.editProfileQrShareAction));
+    await tester.tap(find.text(ProfileText.editProfileQrShareAction));
     await tester.pumpAndSettle();
     expect(find.text(ChatText.forwardMostContacted), findsOneWidget);
 

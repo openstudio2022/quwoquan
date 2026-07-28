@@ -29,6 +29,7 @@ type Release struct {
 	APKSHA256                   string
 	APKSizeBytes                int64
 	APKSigningCertificateSHA256 string
+	MinAndroidVersion           string
 }
 
 type Catalog struct {
@@ -176,8 +177,8 @@ func validateRelease(platform string, release Release, publicHosts []string) err
 		return fmt.Errorf("%s recovery url: %w", platform, err)
 	}
 	if platform == PlatformIOS {
-		if err := validateHTTPSURL(release.UpdateURL, []string{"apps.apple.com"}); err != nil {
-			return fmt.Errorf("ios app store url: %w", err)
+		if strings.TrimSpace(release.UpdateURL) != "" {
+			return errors.New("public ios release must not expose a native update url")
 		}
 		return nil
 	}
@@ -190,7 +191,8 @@ func validateRelease(platform string, release Release, publicHosts []string) err
 	if strings.TrimSpace(release.APKPackageName) == "" ||
 		!isSHA256(release.APKSHA256) ||
 		!isSHA256(release.APKSigningCertificateSHA256) ||
-		release.APKSizeBytes <= 0 {
+		release.APKSizeBytes <= 0 ||
+		strings.TrimSpace(release.MinAndroidVersion) == "" {
 		return errors.New("android apk release proof is incomplete")
 	}
 	return nil

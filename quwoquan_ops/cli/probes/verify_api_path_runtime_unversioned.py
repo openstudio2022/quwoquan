@@ -6,7 +6,7 @@
 
 用法:
   python3 quwoquan_ops/cli/probes/verify_api_path_runtime_unversioned.py \\
-    --base-url https://gamma-api.quwoquan-env.test:19000
+    --env gamma --target gamma-local
 
   make verify-api-path-runtime ENV=gamma
 """
@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import ssl
 import sys
 import time
 import urllib.error
@@ -25,9 +24,16 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from quwoquan_ops.cli.lib.environment_topology import (
+    ENVIRONMENT_CANONICAL_TARGET,
+    get_target,
+    load_environment_topology,
+)
 
 # 禁止在源码中写连续 "/v1/" 字面量（避免静态门禁误报）；运行时再拼装。
 _V = "v1"
@@ -35,13 +41,6 @@ _V = "v1"
 
 def _versioned(suffix: str) -> str:
     return f"/{_V}/{suffix.lstrip('/')}"
-
-
-DEFAULT_BASE_BY_ENV = {
-    "gamma": "https://gamma-api.quwoquan-env.test:19000",
-    "alpha": "https://alpha-api.quwoquan-env.test:19000",
-    "beta": "https://beta-api.quwoquan-env.test:19000",
-}
 
 
 @dataclass(frozen=True)
@@ -98,14 +97,6 @@ def default_cases() -> list[ProbeCase]:
     ]
 
 
-def _ssl_context() -> ssl.SSLContext:
-    ctx = ssl.create_default_context()
-    # gamma-local / quwoquan-env.test 使用本地 CA；缺材料时仍允许探针跑通 TLS。
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    return ctx
-
-
 def _request(
     url: str,
     *,
@@ -125,7 +116,6 @@ def _request(
             with urllib.request.urlopen(
                 req,
                 timeout=timeout,
-                context=_ssl_context() if urlparse(url).scheme == "https" else None,
             ) as resp:
                 raw = resp.read(4096)
                 return int(resp.status), raw.decode("utf-8", errors="replace")
@@ -234,34 +224,26 @@ def run_probes(
     }
 
 
-def resolve_base_url(env_name: str | None, explicit: str | None) -> str:
-    if explicit:
-        return explicit.rstrip("/")
-    if env_name:
-        env_key = f"{env_name.upper()}_BASE_URL"
-        from_env = os.environ.get(env_key, "").strip() or os.environ.get(
-            "GAMMA_BASE_URL", ""
-        ).strip()
-        if from_env:
-            return from_env.rstrip("/")
-        mapped = DEFAULT_BASE_BY_ENV.get(env_name)
-        if mapped:
-            return mapped
-    return DEFAULT_BASE_BY_ENV["gamma"]
+def resolve_base_url(env_name: str, target_name: str = "") -> str:
+    target = target_name or ENVIRONMENT_CANONICAL_TARGET[env_name]
+    target_row = get_target(load_environment_topology(), target)
+    if target_row.get("env") != env_name:
+        raise ValueError(f"target {target} does not belong to {env_name}")
+    return str(target_row["publicBases"]["api"]).rstrip("/")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
         "--env",
-        choices=sorted(DEFAULT_BASE_BY_ENV),
+        choices=sorted(ENVIRONMENT_CANONICAL_TARGET),
         default=os.environ.get("ENV", "gamma"),
-        help="用于解析默认 base-url（不强制 live 进静态门禁）",
+        help="用于解析 canonical target 的 API base",
     )
     ap.add_argument(
-        "--base-url",
+        "--target",
         default="",
-        help="覆盖默认；默认识别 topology / GAMMA_BASE_URL / gamma-api",
+        help="可选 target；必须属于 --env",
     )
     ap.add_argument(
         "--report",
@@ -276,7 +258,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    base = resolve_base_url(args.env, args.base_url or None)
+    base = resolve_base_url(args.env, args.target)
     report_path = Path(
         args.report
         or (

@@ -42,7 +42,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Alice'), findsOneWidget);
-    expect(find.text(UITextConstants.addContact), findsOneWidget);
-    expect(find.text(UITextConstants.addContactSearchNoResult), findsNothing);
+    expect(find.text(ContactText.addContact), findsOneWidget);
+    expect(find.text(ContactText.addContactSearchNoResult), findsNothing);
   });
 }

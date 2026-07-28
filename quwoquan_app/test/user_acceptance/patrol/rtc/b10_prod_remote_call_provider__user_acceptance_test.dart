@@ -68,7 +68,7 @@ Future<void> _runCaller(PatrolIntegrationTester $) async {
   if (_phase == 'android_to_ios') {
     await $.pump(const Duration(seconds: 5));
     await $(find.byType(VideoCallPage)).tap();
-    await $(find.text(UITextConstants.callHangup)).tap();
+    await $(find.text(CallText.callHangup)).tap();
   }
   await _expectCallEnded($);
 }
@@ -88,7 +88,7 @@ Future<void> _runCallee(PatrolIntegrationTester $) async {
   await $(
     find.byType(IncomingCallPage),
   ).waitUntilVisible(timeout: const Duration(seconds: 45));
-  await $(find.text(UITextConstants.callAccept)).tap();
+  await $(find.text(CallText.callAccept)).tap();
   await _grantMediaPermissions($);
   await $(
     find.byType(VideoCallPage),
@@ -133,12 +133,12 @@ Future<void> _exerciseAndroidScreenShareAndPipHangup(
   PatrolIntegrationTester $,
 ) async {
   await $(find.byType(VideoCallPage)).tap();
-  await $(find.text(UITextConstants.callShareScreen)).tap();
+  await $(find.text(CallText.callShareScreen)).tap();
   await _grantMediaPermissions($);
   await $(
-    find.text(UITextConstants.callScreenSharing),
+    find.text(CallText.callScreenSharing),
   ).waitUntilVisible(timeout: const Duration(seconds: 45));
-  await $(find.text(UITextConstants.callStopScreenSharing)).tap();
+  await $(find.text(CallText.callStopScreenSharing)).tap();
   _printMarker('QWQ_B10_REMOTE_SCREEN_SHARE_COMPLETED');
 
   await $.platform.android.pressBack();
@@ -146,7 +146,7 @@ Future<void> _exerciseAndroidScreenShareAndPipHangup(
     find.byType(PipCallOverlay),
   ).waitUntilVisible(timeout: const Duration(seconds: 30));
   await $(find.byType(PipCallOverlay)).longPress();
-  await $(find.text(UITextConstants.callHangup)).tap();
+  await $(find.text(CallText.callHangup)).tap();
   _printMarker('QWQ_B10_REMOTE_PIP_HANGUP');
 }
 

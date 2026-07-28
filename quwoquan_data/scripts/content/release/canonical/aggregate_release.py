@@ -1,4 +1,5 @@
 """Build immutable releases from exact execution publish closures."""
+
 from __future__ import annotations
 
 import shutil
@@ -7,21 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from core.control_types import ContentType
-from core.media_asset_url import build_release_media_manifest, copy_release_media_objects
-from core.release_layout import (
-    attestation_root,
-    object_closure_digest,
-    payload_digest,
-    payload_file,
-    payload_root,
-)
-from core.schema import assert_valid
-from core.source_digest import SourceDigest, SourceDigestError
-from core.tree_integrity import tree_integrity_stats
 from content.execution.identity import parse_execution_id
-from content.release.canonical.object_transaction_audit import validate_canonical_publish
-from content.release.canonical.release_attestation import ReleaseAttestation
+from content.release.canonical.object_transaction_audit import (
+    validate_canonical_publish,
+)
 from content.release.canonical.object_transaction_contract import (
     RELEASE_SCHEMA,
     ObjectTransactionError,
@@ -34,11 +24,28 @@ from content.release.canonical.object_transaction_contract import (
     _write_json,
     assert_environment_neutral,
 )
+from content.release.canonical.release_attestation import ReleaseAttestation
 from content.release.environment.consistency import scan_release_contract
 from content.release.model import ReleaseKind
-
+from core.control_types import ContentType
+from core.media_asset_url import (
+    build_release_media_manifest,
+    copy_release_media_objects,
+)
+from core.release_layout import (
+    attestation_root,
+    object_closure_digest,
+    payload_digest,
+    payload_file,
+    payload_root,
+)
+from core.release_media_binding import bind_release_object_media_assets
+from core.schema import assert_valid
+from core.source_digest import SourceDigest, SourceDigestError
 
 OBJECT_KINDS = ("creators", "entities", "posts", "tags")
+
+
 @dataclass(frozen=True, slots=True)
 class ExecutionPublishClosure:
     execution_id: str
@@ -50,9 +57,7 @@ class ExecutionPublishClosure:
 def _normalized_refs(value: object, *, label: str) -> tuple[str, ...]:
     if not isinstance(value, list):
         raise ObjectTransactionError(f"{label} must be an array")
-    refs = tuple(
-        sorted({_safe_rel(str(item), label=label).as_posix() for item in value})
-    )
+    refs = tuple(sorted({_safe_rel(str(item), label=label).as_posix() for item in value}))
     if len(refs) != len(value):
         raise ObjectTransactionError(f"{label} contains duplicate refs")
     return refs
@@ -101,9 +106,7 @@ def _execution_publish_closure(
                     f"{execution_id}: canonical post contentType does not match execution identity"
                 )
     if not entity_refs and not post_refs:
-        raise ObjectTransactionError(
-            f"{execution_id}: canonical publish has no objects bound to this execution"
-        )
+        raise ObjectTransactionError(f"{execution_id}: canonical publish has no objects bound to this execution")
     source_digests = {item.digest for item in matched_digests}
     if len(source_digests) != 1:
         raise ObjectTransactionError(f"{execution_id}: canonical object source digests drift")
@@ -197,8 +200,7 @@ def build_aggregate_release(
     """Create one immutable release from canonical objects bound to execution IDs."""
     release_id = _safe_id(release_id, label="releaseId")
     closures = tuple(
-        _execution_publish_closure(execution_id, publish_root=publish_root)
-        for execution_id in execution_ids
+        _execution_publish_closure(execution_id, publish_root=publish_root) for execution_id in execution_ids
     )
     execution_ids = sorted({closure.execution_id for closure in closures})
     if len(execution_ids) != len(closures):
@@ -209,9 +211,7 @@ def build_aggregate_release(
             key=lambda source_digest: source_digest.digest,
         )
     )
-    source_digest_documents = [
-        source_digest.to_document() for source_digest in source_digests
-    ]
+    source_digest_documents = [source_digest.to_document() for source_digest in source_digests]
     entity_refs = {ref for closure in closures for ref in closure.entity_refs}
     post_refs = {ref for closure in closures for ref in closure.post_refs}
     if not entity_refs and not post_refs:
@@ -220,9 +220,7 @@ def build_aggregate_release(
     if canonical_closure["status"] != "passed":
         raise ObjectTransactionError(
             "aggregate release canonical closure invalid: "
-            + "; ".join(
-                f"{item['code']}:{item['ref']}" for item in canonical_closure["issues"][:5]
-            )
+            + "; ".join(f"{item['code']}:{item['ref']}" for item in canonical_closure["issues"][:5])
         )
     creator_refs, tag_refs = _reference_closure(
         publish_root,
@@ -273,26 +271,50 @@ def build_aggregate_release(
                     _object_root(publish_root, kind, ref),
                     payload / "objects" / kind / ref,
                 )
+        media_manifest = build_release_media_manifest(
+            release_id=release_id,
+            post_refs=desired["posts"],
+            entity_refs=desired["entities"],
+            creator_refs=desired["creators"],
+            publish_root=publish_root,
+        )
+        if media_manifest["issues"]:
+            raise ObjectTransactionError(
+                "aggregate release media closure invalid: "
+                + "; ".join(str(issue) for issue in media_manifest["issues"][:5])
+            )
+        bind_release_object_media_assets(
+            objects_root=payload / "objects",
+            manifest=media_manifest,
+        )
         selected_merkle = object_closure_digest(staging, create=True)
-        _write_json(
-            payload / "release.json",
-            {
-                "schema": RELEASE_SCHEMA,
-                "releaseId": release_id,
-                "releaseKind": ReleaseKind.CONTENT,
-                "canonicalMerkle": selected_merkle,
-                "executionIds": execution_ids,
-                "sourceDigests": source_digest_documents,
-            },
+        release_header = {
+            "schema": RELEASE_SCHEMA,
+            "releaseId": release_id,
+            "releaseKind": ReleaseKind.CONTENT,
+            "canonicalMerkle": selected_merkle,
+            "executionIds": execution_ids,
+            "sourceDigests": source_digest_documents,
+        }
+        desired_state = {
+            "schema": "quwoquan_data.release_desired_state",
+            "releaseId": release_id,
+            "desiredRefs": desired,
+        }
+        assert_valid(
+            release_header,
+            "release",
+            "release_header",
+            label=f"release_header:{release_id}",
         )
-        _write_json(
-            payload / "desired_state.json",
-            {
-                "schema": "quwoquan_data.release_desired_state",
-                "releaseId": release_id,
-                "desiredRefs": desired,
-            },
+        assert_valid(
+            desired_state,
+            "release",
+            "release_desired_state",
+            label=f"release_desired_state:{release_id}",
         )
+        _write_json(payload / "release.json", release_header)
+        _write_json(payload / "desired_state.json", desired_state)
         _write_json(
             payload / "index/objects.json",
             {"schema": "quwoquan_data.release_object_index", **desired},
@@ -301,17 +323,6 @@ def build_aggregate_release(
             payload / "sample_bundle.json",
             {"schema": "quwoquan_data.release_sample_bundle", **desired},
         )
-        media_manifest = build_release_media_manifest(
-            release_id=release_id,
-            post_refs=desired["posts"],
-            entity_refs=desired["entities"],
-            publish_root=publish_root,
-        )
-        if media_manifest["issues"]:
-            raise ObjectTransactionError(
-                "aggregate release media closure invalid: "
-                + "; ".join(str(issue) for issue in media_manifest["issues"][:5])
-            )
         copy_release_media_objects(
             manifest=media_manifest,
             source_root=publish_root,
@@ -330,10 +341,7 @@ def build_aggregate_release(
         if consistency["status"] != "passed":
             raise ObjectTransactionError(
                 "aggregate release consistency invalid: "
-                + "; ".join(
-                    f"{item['code']}:{item['ref']}"
-                    for item in consistency["blockingIssues"][:5]
-                )
+                + "; ".join(f"{item['code']}:{item['ref']}" for item in consistency["blockingIssues"][:5])
             )
         release_attestation = ReleaseAttestation(
             release_id=release_id,

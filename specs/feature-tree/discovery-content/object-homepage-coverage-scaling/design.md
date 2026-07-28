@@ -22,11 +22,11 @@
 ## 4. 关键决策
 
 <a id="dec-001"></a>
-### DEC-001 Source Adapter 隔离并校验不可信外部输入
-- 决策：Source Adapter 隔离并校验不可信外部输入。
-- 理由：可复用实体主页与多载体内容供给、发布和环境消费闭环。
-- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
-- 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+### DEC-001 四载体共享实体目录但保持独立 execution
+- 决策：Source Adapter 隔离并校验不可信外部输入；homepage、article、image、video 从同一冻结 canonical entity catalog 独立选目标并并行运行，各自保留 immutable execution。
+- 理由：post 只需要稳定 entity identity，不需要等待 entity homepage 生成；独立 execution 才能按载体隔离来源、权利、容量与失败恢复。
+- 被否决方案：把四载体塞入同一 execution、让 post 依赖 homepage publish，或由调用方、页面、脚本复制本层状态并绕过公开契约。
+- 约束与影响：四载体必须共享 reviewed commit、source digest 与 entity catalog digest；final release 统一验证引用闭包，但单一载体失败不得篡改其他工作包。
 - 关联要求：`REQ-001`
 - 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)
 - 关联验收：`SIT-001`

@@ -40,9 +40,81 @@ void main() {
 }
 """
 DEFAULT_TEST_TIMEOUT_SECONDS = int(
-  os.environ.get("FLUTTER_TEST_GUARD_TIMEOUT_SECONDS", "2400")
+  os.environ.get("FLUTTER_TEST_GUARD_TIMEOUT_SECONDS", "1200")
 )
 RUNTIME_DEFINE_SCRIPT = APP_ROOT / "scripts" / "env" / "print_app_env_dart_defines.py"
+
+
+def _cpu_default_concurrency(*, full_local_contract: bool) -> int:
+  env = os.environ.get("FLUTTER_TEST_CONCURRENCY", "").strip()
+  if env.isdigit():
+    return max(1, min(8, int(env)))
+  try:
+    cores = os.cpu_count() or 2
+  except Exception:
+    cores = 2
+  if full_local_contract:
+    # Manual/CI full suite default; commit impacted path sets FLUTTER_TEST_CONCURRENCY=6.
+    return max(2, min(4, cores - 1))
+  return max(2, min(6, cores - 1))
+
+
+def _has_concurrency_flag(args: list[str]) -> bool:
+  for index, arg in enumerate(args):
+    if arg.startswith("--concurrency="):
+      return True
+    if arg == "--concurrency":
+      return index + 1 < len(args)
+  return False
+
+
+def _is_local_contract_target(args: list[str]) -> bool:
+  return any(
+    arg.rstrip("/") == "test/local_contract" or arg.startswith("test/local_contract/")
+    for arg in args
+  )
+
+
+def _with_concurrency(args: list[str]) -> list[str]:
+  if _has_concurrency_flag(args):
+    return args
+  concurrency = _cpu_default_concurrency(
+    full_local_contract=_is_local_contract_target(args)
+    and not any(arg.endswith("_test.dart") for arg in args),
+  )
+  return [f"--concurrency={concurrency}", *args]
+
+
+def _with_shard_flags(args: list[str]) -> list[str]:
+  total = os.environ.get("FLUTTER_TEST_TOTAL_SHARDS", "").strip()
+  index = os.environ.get("FLUTTER_TEST_SHARD_INDEX", "").strip()
+  result = list(args)
+  if total.isdigit() and not any(
+    arg.startswith("--total-shards=") or arg == "--total-shards" for arg in result
+  ):
+    result = [f"--total-shards={total}", *result]
+  if index.isdigit() and not any(
+    arg.startswith("--shard-index=") or arg == "--shard-index" for arg in result
+  ):
+    result = [f"--shard-index={index}", *result]
+  return result
+
+
+def _with_serial_tag_policy(args: list[str]) -> list[str]:
+  """CI parallel shards exclude serial-tagged suites; serial job sets include."""
+  mode = os.environ.get("FLUTTER_TEST_SERIAL_MODE", "").strip().lower()
+  has_tags = any(
+    arg == "--tags" or arg.startswith("--tags=") or arg == "--exclude-tags"
+    or arg.startswith("--exclude-tags=")
+    for arg in args
+  )
+  if has_tags or not mode:
+    return args
+  if mode == "exclude":
+    return ["--exclude-tags", "serial", *args]
+  if mode == "only":
+    return ["--tags", "serial", *args]
+  return args
 
 
 def _run_checked(cmd: list[str], *, cwd: Path = APP_ROOT) -> int:
@@ -145,15 +217,6 @@ def _run_flutter_test_with_retries(
     )
     time.sleep(wait_seconds)
   return 1
-
-
-def _needs_serial_local_contract_run(args: list[str]) -> bool:
-  if any(arg == "--concurrency=1" or arg == "--concurrency" for arg in args):
-    return False
-  return any(
-    arg.rstrip("/") == "test/local_contract" or arg.startswith("test/local_contract/")
-    for arg in args
-  )
 
 
 def _dart_define_values(args: list[str]) -> dict[str, str]:
@@ -264,8 +327,9 @@ def main(argv: list[str]) -> int:
     _prewarm_sqlite3()
     flutter_args = [arg for arg in args if arg != "--no-pub"]
     flutter_args = _with_runtime_environment_defines(flutter_args)
-    if _needs_serial_local_contract_run(flutter_args):
-      flutter_args = ["--concurrency=1", *flutter_args]
+    flutter_args = _with_serial_tag_policy(flutter_args)
+    flutter_args = _with_shard_flags(flutter_args)
+    flutter_args = _with_concurrency(flutter_args)
     cmd = ["flutter", "test", "--no-pub", *flutter_args]
     print(f"[flutter-test-guard] {' '.join(cmd)}")
     return _run_flutter_test_with_retries(cmd)

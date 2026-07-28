@@ -1,6 +1,10 @@
 // ignore_for_file: unnecessary_non_null_assertion
 part of 'home_multi_form_feed.dart';
 
+const double _feedCardVerticalPadding = AppSpacing.fourteen;
+const double _feedCardSectionGap =
+    DiscoveryFeedSpacing.homeFeedCardSectionGapCompact;
+
 class _HomeRelationPostCard extends ConsumerStatefulWidget {
   const _HomeRelationPostCard({
     required this.cardContainerKey,
@@ -764,7 +768,7 @@ class _FollowPillButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
         ),
         child: Text(
-          isFollowing ? UITextConstants.following : UITextConstants.follow,
+          isFollowing ? FoundationText.following : FoundationText.follow,
           maxLines: 1,
           overflow: TextOverflow.fade,
           softWrap: false,

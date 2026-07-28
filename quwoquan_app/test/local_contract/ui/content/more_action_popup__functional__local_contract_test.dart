@@ -23,27 +23,27 @@ void main() {
                   onReport: () => reportCalls += 1,
                 ),
               ),
-              child: const Text(UITextConstants.moreActionsTitle),
+              child: const Text(ContentText.moreActionsTitle),
             ),
           ),
         ),
       ),
     );
 
-    await tester.tap(find.text(UITextConstants.moreActionsTitle));
+    await tester.tap(find.text(ContentText.moreActionsTitle));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.copyLink), findsOneWidget);
-    expect(find.text(UITextConstants.notInterested), findsOneWidget);
-    expect(find.text(UITextConstants.blockAuthor), findsOneWidget);
-    expect(find.text(UITextConstants.blockKeywords), findsOneWidget);
-    expect(find.text(UITextConstants.report), findsOneWidget);
+    expect(find.text(FoundationText.copyLink), findsOneWidget);
+    expect(find.text(ContentText.notInterested), findsOneWidget);
+    expect(find.text(ContentText.blockAuthor), findsOneWidget);
+    expect(find.text(ContentText.blockKeywords), findsOneWidget);
+    expect(find.text(ContentText.report), findsOneWidget);
     expect(find.text('打赏'), findsNothing);
     expect(find.text('私信'), findsNothing);
     expect(find.text('字体设置'), findsNothing);
     expect(find.text('功能反馈'), findsNothing);
 
-    await tester.tap(find.text(UITextConstants.report));
+    await tester.tap(find.text(ContentText.report));
     await tester.pumpAndSettle();
     expect(reportCalls, 1);
   });
@@ -58,19 +58,19 @@ void main() {
                 context: context,
                 config: const MediaPostMoreActionConfig(),
               ),
-              child: const Text(UITextConstants.moreActionsTitle),
+              child: const Text(ContentText.moreActionsTitle),
             ),
           ),
         ),
       ),
     );
 
-    await tester.tap(find.text(UITextConstants.moreActionsTitle));
+    await tester.tap(find.text(ContentText.moreActionsTitle));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.notInterested), findsNothing);
-    expect(find.text(UITextConstants.blockAuthor), findsNothing);
-    expect(find.text(UITextConstants.blockKeywords), findsNothing);
-    expect(find.text(UITextConstants.report), findsNothing);
+    expect(find.text(ContentText.notInterested), findsNothing);
+    expect(find.text(ContentText.blockAuthor), findsNothing);
+    expect(find.text(ContentText.blockKeywords), findsNothing);
+    expect(find.text(ContentText.report), findsNothing);
   });
 }

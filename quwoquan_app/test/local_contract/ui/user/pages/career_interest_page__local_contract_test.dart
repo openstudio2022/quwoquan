@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock_tag.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/application/user/profile/profile_edit_query.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
@@ -37,7 +37,7 @@ void main() {
     await tester.tap(find.text('打开职业与兴趣'));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.careerInterestTitle), findsOneWidget);
+    expect(find.text(ProfileText.careerInterestTitle), findsOneWidget);
     await tester.tap(find.text('旅行').first);
     await tester.pump(const Duration(milliseconds: 200));
 
@@ -47,32 +47,32 @@ void main() {
 
     expect(find.byType(CupertinoAlertDialog), findsOneWidget);
     expect(
-      find.text(UITextConstants.careerInterestUnsavedTitle),
+      find.text(ProfileText.careerInterestUnsavedTitle),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.careerInterestUnsavedMessage),
+      find.text(ProfileText.careerInterestUnsavedMessage),
       findsOneWidget,
     );
     final dialog = find.byType(CupertinoAlertDialog);
     expect(
       find.descendant(
         of: dialog,
-        matching: find.text(UITextConstants.editProfileSaveAction),
+        matching: find.text(ProfileText.editProfileSaveAction),
       ),
       findsOneWidget,
     );
     expect(
       find.descendant(
         of: dialog,
-        matching: find.text(UITextConstants.careerInterestKeepEditing),
+        matching: find.text(ProfileText.careerInterestKeepEditing),
       ),
       findsOneWidget,
     );
     expect(
       find.descendant(
         of: dialog,
-        matching: find.text(UITextConstants.careerInterestDiscard),
+        matching: find.text(ProfileText.careerInterestDiscard),
       ),
       findsOneWidget,
     );
@@ -80,14 +80,14 @@ void main() {
     await tester.tap(
       find.descendant(
         of: dialog,
-        matching: find.text(UITextConstants.careerInterestKeepEditing),
+        matching: find.text(ProfileText.careerInterestKeepEditing),
       ),
     );
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
     expect(find.byType(CupertinoAlertDialog), findsNothing);
-    expect(find.text(UITextConstants.careerInterestTitle), findsOneWidget);
+    expect(find.text(ProfileText.careerInterestTitle), findsOneWidget);
   });
 
   testWidgets('销毁带摇摆标签的职业与兴趣页不会抛异常', (tester) async {
@@ -120,12 +120,12 @@ void main() {
     await tester.tap(find.byIcon(CupertinoIcons.back));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text(UITextConstants.careerInterestDiscard));
+    await tester.tap(find.text(ProfileText.careerInterestDiscard));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text(UITextConstants.careerInterestTitle), findsNothing);
+    expect(find.text(ProfileText.careerInterestTitle), findsNothing);
     expect(find.text('打开职业与兴趣'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -155,7 +155,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('旅行').first);
     await tester.pump(const Duration(milliseconds: 200));
-    await tester.tap(find.text(UITextConstants.editProfileSaveAction));
+    await tester.tap(find.text(ProfileText.editProfileSaveAction));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 

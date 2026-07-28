@@ -51,31 +51,11 @@ class _ProfileFootprintTabState extends ConsumerState<ProfileFootprintTab> {
   }
 
   UiErrorSemantic _resolveErrorSemantic(Object error) {
-    final resolved = runtimeErrorSemantic(
+    return runtimeErrorSemantic(
       context,
       error: error,
       category: UiErrorCategory.pageLoad,
       scope: UiErrorScope.page,
-    );
-    return UiErrorSemantic(
-      category: resolved.category,
-      scope: resolved.scope,
-      title: UITextConstants.myFootprintUnavailableTitle,
-      message: resolved.message,
-      secondaryMessage: resolved.secondaryMessage,
-      primaryAction:
-          resolved.primaryAction ??
-          const UiErrorAction(
-            type: UiErrorActionType.retry,
-            label: UITextConstants.tryAgain,
-          ),
-      secondaryAction: resolved.secondaryAction,
-      dismissible: resolved.dismissible,
-      sourceCode: resolved.sourceCode,
-      failureKind: resolved.failureKind,
-      recoveryAction: resolved.recoveryAction,
-      presentation: resolved.presentation,
-      tone: resolved.tone,
     );
   }
 
@@ -129,7 +109,7 @@ class _ProfileFootprintTabState extends ConsumerState<ProfileFootprintTab> {
             children: <Widget>[
               Expanded(
                 child: Text(
-                  UITextConstants.myFootprintPrivacyHint,
+                  FoundationText.myFootprintPrivacyHint,
                   style: TextStyle(
                     fontSize: AppTypography.iosCaption1,
                     color: AppColors.iosSecondaryLabel(context),
@@ -148,7 +128,7 @@ class _ProfileFootprintTabState extends ConsumerState<ProfileFootprintTab> {
                   ),
                 ),
                 child: Text(
-                  UITextConstants.searchViewAll,
+                  SearchText.searchViewAll,
                   style: TextStyle(
                     fontSize: AppTypography.iosCaption1,
                     color: AppColors.primaryColor,
@@ -167,7 +147,7 @@ class _ProfileFootprintTabState extends ConsumerState<ProfileFootprintTab> {
     if (state.isLoading && state.items.isEmpty) {
       return Padding(
         padding: EdgeInsets.symmetric(vertical: AppSpacing.interGroupXl),
-        child: const Center(child: CupertinoActivityIndicator()),
+        child: AppRequestFeedback.section(),
       );
     }
     if (state.rawError != null) {
@@ -211,8 +191,8 @@ class _ProfileFootprintTabState extends ConsumerState<ProfileFootprintTab> {
               onPressed: () =>
                   ref.read(myFootprintListProvider.notifier).loadMore(),
               child: state.isLoading
-                  ? const CupertinoActivityIndicator()
-                  : Text(UITextConstants.myFootprintLoadMore),
+                  ? AppRequestFeedback.inline()
+                  : Text(FoundationText.myFootprintLoadMore),
             ),
         ],
       ),
@@ -235,7 +215,7 @@ class _FootprintEmptyCard extends StatelessWidget {
         ),
       ),
       child: Text(
-        UITextConstants.myFootprintEmpty,
+        FoundationText.myFootprintEmpty,
         textAlign: TextAlign.center,
         style: TextStyle(
           fontSize: AppTypography.iosSubheadline,

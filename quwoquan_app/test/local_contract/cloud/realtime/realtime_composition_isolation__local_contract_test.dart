@@ -2,17 +2,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 import '../../../support/fixtures/chat/fixture_realtime_connection_delegate.dart';
 
 void main() {
-  test('runtime mode changes cannot rebuild or replace realtime delegate', () {
+  test('app lifecycle reuses the explicitly composed realtime delegate', () {
     var delegateBuildCount = 0;
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(_SwitchableModeNotifier.new),
         realtimeConnectionManagerProvider.overrideWith(
           () => RealtimeConnectionNotifier(
             delegateFactory:
@@ -43,9 +41,7 @@ void main() {
     );
     expect(delegateBuildCount, 1);
 
-    container
-        .read(appDataSourceModeProvider.notifier)
-        .setMode(AppDataSourceMode.remote);
+    notifier.onAppForeground();
 
     expect(delegateBuildCount, 1);
     expect(
@@ -53,15 +49,4 @@ void main() {
       TransportState.active,
     );
   });
-}
-
-/// Test-only switch proves realtime no longer observes the removed mode signal.
-final class _SwitchableModeNotifier extends AppDataSourceModeNotifier {
-  @override
-  AppDataSourceMode build() => AppDataSourceMode.mock;
-
-  @override
-  void setMode(AppDataSourceMode mode) {
-    state = mode;
-  }
 }

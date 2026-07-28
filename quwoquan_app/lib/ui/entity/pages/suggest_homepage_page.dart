@@ -30,32 +30,32 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
   static const List<_HomepageTypeOption> _typeOptions = <_HomepageTypeOption>[
     _HomepageTypeOption(
       id: 'sight',
-      cluePlaceholder: UITextConstants.addHomepageSightCluePlaceholder,
+      cluePlaceholder: CreationText.addHomepageSightCluePlaceholder,
       usesLocationFields: true,
     ),
     _HomepageTypeOption(
       id: 'hotel',
-      cluePlaceholder: UITextConstants.addHomepageHotelCluePlaceholder,
+      cluePlaceholder: CreationText.addHomepageHotelCluePlaceholder,
       usesLocationFields: true,
     ),
     _HomepageTypeOption(
       id: 'restaurant',
-      cluePlaceholder: UITextConstants.addHomepageRestaurantCluePlaceholder,
+      cluePlaceholder: CreationText.addHomepageRestaurantCluePlaceholder,
       usesLocationFields: true,
     ),
     _HomepageTypeOption(
       id: 'vehicle',
-      cluePlaceholder: UITextConstants.addHomepageVehicleCluePlaceholder,
+      cluePlaceholder: CreationText.addHomepageVehicleCluePlaceholder,
       usesLocationFields: false,
     ),
     _HomepageTypeOption(
       id: 'university',
-      cluePlaceholder: UITextConstants.addHomepageUniversityCluePlaceholder,
+      cluePlaceholder: CreationText.addHomepageUniversityCluePlaceholder,
       usesLocationFields: true,
     ),
     _HomepageTypeOption(
       id: 'travel_photo',
-      cluePlaceholder: UITextConstants.addHomepageTravelPhotoCluePlaceholder,
+      cluePlaceholder: CreationText.addHomepageTravelPhotoCluePlaceholder,
       usesLocationFields: true,
     ),
   ];
@@ -172,7 +172,7 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     return IosSelectionPageScaffold(
       pageKey: TestKeys.suggestHomepagePage,
-      title: UITextConstants.addHomepageTitle,
+      title: CreationText.addHomepageTitle,
       onBack: _handleCloseRequest,
       leadingStyle: IosSelectionHeaderLeadingStyle.close,
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
@@ -189,7 +189,7 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
           _buildFormSection(context),
           SizedBox(height: AppSpacing.intraGroupSm),
           Text(
-            UITextConstants.addHomepageFutureTypeHint,
+            CreationText.addHomepageFutureTypeHint,
             style: TextStyle(
               fontSize: AppTypography.iosFootnote,
               color: AppColors.iosSecondaryLabel(context),
@@ -199,7 +199,7 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
       ),
       bottomBar: IosSelectionBottomBar(
         confirmButtonKey: TestKeys.suggestHomepageSubmitButton,
-        confirmLabel: UITextConstants.addHomepageSubmit,
+        confirmLabel: CreationText.addHomepageSubmit,
         confirmEnabled: _canSubmit,
         confirmLoading: _isSubmitting,
         onConfirm: _submit,
@@ -215,7 +215,7 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _SectionTitle(title: UITextConstants.addHomepageTypeSectionTitle),
+        _SectionTitle(title: CreationText.addHomepageTypeSectionTitle),
         SizedBox(height: AppSpacing.intraGroupSm),
         DecoratedBox(
           decoration: BoxDecoration(
@@ -266,15 +266,15 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
         children: <Widget>[
           if (_selectedType.usesLocationFields) ...<Widget>[
             IosSelectionFormFieldRow(
-              label: UITextConstants.addHomepageNameLabel,
+              label: CreationText.addHomepageNameLabel,
               child: IosSelectionTextField(
                 controller: _titleController,
-                placeholder: UITextConstants.addHomepageNamePlaceholder,
+                placeholder: CreationText.addHomepageNamePlaceholder,
               ),
             ),
             _buildDivider(),
             IosSelectionFormFieldRow(
-              label: UITextConstants.addHomepageClueLabel,
+              label: CreationText.addHomepageClueLabel,
               child: IosSelectionTextField(
                 controller: _clueController,
                 placeholder: _selectedType.cluePlaceholder,
@@ -282,50 +282,50 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
             ),
             _buildDivider(),
             IosSelectionFormFieldRow(
-              label: UITextConstants.addHomepageCityLabel,
+              label: CreationText.addHomepageCityLabel,
               child: IosSelectionTextField(
                 controller: _cityController,
-                placeholder: UITextConstants.addHomepageCityPlaceholder,
+                placeholder: CreationText.addHomepageCityPlaceholder,
               ),
             ),
             _buildDivider(),
             IosSelectionFormFieldRow(
-              label: UITextConstants.addHomepageAddressLabel,
+              label: CreationText.addHomepageAddressLabel,
               child: IosSelectionTextField(
                 controller: _addressController,
-                placeholder: UITextConstants.addHomepageAddressPlaceholder,
+                placeholder: CreationText.addHomepageAddressPlaceholder,
                 maxLines: 2,
               ),
             ),
           ] else ...<Widget>[
             IosSelectionFormFieldRow(
-              label: UITextConstants.addHomepageVehicleManufacturerLabel,
+              label: CreationText.addHomepageVehicleManufacturerLabel,
               child: IosSelectionTextField(
                 controller: _vehicleManufacturerController,
                 placeholder:
-                    UITextConstants.addHomepageVehicleManufacturerPlaceholder,
+                    CreationText.addHomepageVehicleManufacturerPlaceholder,
               ),
             ),
             _buildDivider(),
             IosSelectionFormFieldRow(
-              label: UITextConstants.addHomepageVehicleSeriesLabel,
+              label: CreationText.addHomepageVehicleSeriesLabel,
               child: IosSelectionTextField(
                 controller: _vehicleSeriesController,
                 placeholder:
-                    UITextConstants.addHomepageVehicleSeriesPlaceholder,
+                    CreationText.addHomepageVehicleSeriesPlaceholder,
               ),
             ),
             _buildDivider(),
             IosSelectionFormFieldRow(
-              label: UITextConstants.addHomepageVehicleTrimLabel,
+              label: CreationText.addHomepageVehicleTrimLabel,
               child: IosSelectionTextField(
                 controller: _vehicleTrimController,
-                placeholder: UITextConstants.addHomepageVehicleTrimPlaceholder,
+                placeholder: CreationText.addHomepageVehicleTrimPlaceholder,
               ),
             ),
             _buildDivider(),
             IosSelectionFormFieldRow(
-              label: UITextConstants.addHomepageClueLabel,
+              label: CreationText.addHomepageClueLabel,
               child: IosSelectionTextField(
                 controller: _clueController,
                 placeholder: _selectedType.cluePlaceholder,
@@ -411,17 +411,17 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
     final discardChanges = await showAppCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
-        title: const Text(UITextConstants.unsavedChangesTitle),
-        content: const Text(UITextConstants.unsavedChangesMessage),
+        title: const Text(CreationText.unsavedChangesTitle),
+        content: const Text(CreationText.unsavedChangesMessage),
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text(UITextConstants.continueEditing),
+            child: const Text(CreationText.continueEditing),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text(UITextConstants.discard),
+            child: const Text(CreationText.discard),
           ),
         ],
       ),
@@ -439,8 +439,8 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
       AppToast.show(
         context,
         _selectedType.usesLocationFields
-            ? UITextConstants.addHomepageNameRequired
-            : UITextConstants.addHomepageVehicleRequired,
+            ? CreationText.addHomepageNameRequired
+            : CreationText.addHomepageVehicleRequired,
       );
       return;
     }
@@ -488,7 +488,7 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
       if (!mounted) {
         return;
       }
-      AppToast.show(context, UITextConstants.addHomepageSubmitted);
+      AppToast.show(context, CreationText.addHomepageSubmitted);
       Navigator.of(context).pop(true);
     } catch (error) {
       if (mounted) {
@@ -501,12 +501,12 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
         submitErrorSemantic = UiErrorSemantic(
           category: resolved.category,
           scope: resolved.scope,
-          title: UITextConstants.addHomepageSubmitFailedTitle,
+          title: CreationText.addHomepageSubmitFailedTitle,
           message: resolved.message,
           secondaryMessage: resolved.secondaryMessage,
           primaryAction: const UiErrorAction(
             type: UiErrorActionType.retry,
-            label: UITextConstants.tryAgain,
+            label: ContentText.tryAgain,
           ),
           secondaryAction: resolved.secondaryAction,
           dismissible: resolved.dismissible,

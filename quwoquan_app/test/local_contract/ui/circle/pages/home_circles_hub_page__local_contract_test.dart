@@ -16,7 +16,6 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -134,11 +133,6 @@ class _FakeHttpClientRequest extends Fake implements HttpClientRequest {
 }
 
 class _FakeHttpHeaders extends Fake implements HttpHeaders {}
-
-class _HubTestMockDataSourceModeNotifier extends AppDataSourceModeNotifier {
-  @override
-  AppDataSourceMode build() => AppDataSourceMode.mock;
-}
 
 class _AuthenticatedHubSession extends AuthSessionController {
   @override
@@ -407,9 +401,6 @@ Widget _buildTestApp({
   );
   return ProviderScope(
     overrides: [
-      appDataSourceModeProvider.overrideWith(
-        _HubTestMockDataSourceModeNotifier.new,
-      ),
       resolvedOwnerUserIdProvider.overrideWithValue(''),
       // 生产装配 Remote-only：local_contract 显式注入强类型 query port。
       circlesListDiscoveryFeedQueryProvider.overrideWithValue(
@@ -503,22 +494,11 @@ void main() {
   });
 
   test('生产装配 Remote-only；显式注入的 Mock 圈子发现流非空', () async {
-    final productionContainer = ProviderContainer(
-      overrides: [
-        appDataSourceModeProvider.overrideWith(
-          _HubTestMockDataSourceModeNotifier.new,
-        ),
-      ],
-    );
+    final productionContainer = ProviderContainer();
     addTearDown(productionContainer.dispose);
     expect(
-      () => productionContainer.read(circlesListDiscoveryFeedQueryProvider),
-      throwsA(
-        predicate(
-          (error) => error.toString().contains('Remote-only'),
-          '生产 composition 不得静默选择 Mock 数据源',
-        ),
-      ),
+      productionContainer.read(circlesListDiscoveryFeedQueryProvider),
+      isNot(isA<CircleDiscoveryFeedQueryTestDouble>()),
     );
 
     final queryReader = CircleDiscoveryFeedQueryTestDouble(
@@ -526,9 +506,6 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(
-          _HubTestMockDataSourceModeNotifier.new,
-        ),
         circlesListDiscoveryFeedQueryProvider.overrideWithValue(queryReader),
       ],
     );
@@ -597,7 +574,7 @@ void main() {
     );
     expect(queryReader.receivedQueries.single.limit, 20);
 
-    await tester.tap(find.text(UITextConstants.circleScenarioMine));
+    await tester.tap(find.text(DiscoveryText.circleScenarioMine));
     await _hubPumpSettled(tester);
 
     expect(queryReader.receivedQueries, hasLength(2));
@@ -606,7 +583,7 @@ void main() {
       CircleDiscoveryFeedScope.mine,
     );
 
-    await tester.tap(find.text(UITextConstants.circleScenarioRecommended));
+    await tester.tap(find.text(DiscoveryText.circleScenarioRecommended));
     await _hubPumpSettled(tester);
     expect(
       queryReader.receivedQueries,
@@ -622,7 +599,7 @@ void main() {
     await tester.pumpWidget(_buildTestApp(discoveryFeedQuery: queryReader));
     await _hubPumpSettled(tester);
 
-    await tester.tap(find.text(UITextConstants.circleScenarioMine));
+    await tester.tap(find.text(DiscoveryText.circleScenarioMine));
     await _hubPumpSettled(tester);
 
     expect(queryReader.receivedQueries, hasLength(1));
@@ -682,7 +659,7 @@ void main() {
     await _hubPumpSettled(tester);
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
-    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+    expect(find.text(SearchText.reload), findsOneWidget);
   });
 
   testWidgets('旧频道偏好不会恢复已下线垂类', (tester) async {
@@ -806,14 +783,14 @@ void main() {
       TestKeys.homeCirclesRecommendationRail,
     );
     await tester.dragUntilVisible(
-      find.text(UITextConstants.homeCirclesViewAll),
+      find.text(DiscoveryText.homeCirclesViewAll),
       horizontalCircleRail,
       const Offset(-240, 0),
       maxIteration: 20,
       duration: const Duration(milliseconds: 8),
     );
     await _hubPumpSettled(tester);
-    await tester.tap(find.text(UITextConstants.homeCirclesViewAll));
+    await tester.tap(find.text(DiscoveryText.homeCirclesViewAll));
     await _hubPumpSettled(tester);
 
     expect(find.text('circles-page'), findsOneWidget);

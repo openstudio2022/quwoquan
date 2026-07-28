@@ -25,7 +25,6 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
-import '../../../support/api_contract/local_bad_certificate_overrides.dart';
 import '../../../support/api_contract/local_gamma_anonymous_session.dart';
 
 const _apiContractEnv = String.fromEnvironment(
@@ -33,9 +32,6 @@ const _apiContractEnv = String.fromEnvironment(
   defaultValue: 'gamma',
 );
 const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
-const _allowBadCertificateForLocalApiContract = bool.fromEnvironment(
-  'API_CONTRACT_ALLOW_BAD_CERT',
-);
 
 bool _apiAvailable = false;
 late http.Client _client;
@@ -83,9 +79,6 @@ Map<String, dynamic> _json(http.Response response) =>
 
 void main() {
   setUpAll(() async {
-    installLocalApiContractBadCertificateOverride(
-      enabled: _allowBadCertificateForLocalApiContract,
-    );
     if (_apiBase.isEmpty) {
       throw StateError('L3: ${_apiContractEnv.toUpperCase()}_BASE_URL not set');
     }
@@ -110,7 +103,6 @@ void main() {
 
   tearDownAll(() {
     if (_apiAvailable) _client.close();
-    restoreLocalApiContractBadCertificateOverride();
   });
 
   // ── 场景 1：circle 本体 CRUD 生命周期 + 幂等回执 + no-op receipt ─────────

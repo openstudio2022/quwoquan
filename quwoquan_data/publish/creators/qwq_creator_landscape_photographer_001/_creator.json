@@ -1,0 +1,14 @@
+{
+  "schema": "quwoquan_data.creator_object",
+  "creatorId": "qwq_creator_landscape_photographer_001",
+  "profileRef": "profile.json",
+  "assetsRef": "assets.refs.json",
+  "worksRefsRef": "works.refs.ndjson",
+  "tagRefs": [
+    "Format/内容载体/图文/图集",
+    "Format/视觉风格/视觉调性/电影感",
+    "Topic/旅行/旅行主题/城市漫步",
+    "Topic/旅行/玩法/摄影旅拍"
+  ],
+  "entityRefs": []
+}

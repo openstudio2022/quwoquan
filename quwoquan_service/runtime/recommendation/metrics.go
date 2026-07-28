@@ -11,6 +11,12 @@ import (
 // Prometheus counters that mirror the atomic EngagementMetrics, enabling
 // Grafana dashboards and alerting without polling the JSON snapshot endpoint.
 var (
+	feedTerminalTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "recommendation",
+		Name:      "feed_terminal_total",
+		Help:      "Feed request terminal outcomes by bounded outcome and failure stage.",
+	}, []string{"request_class", "outcome", "failure_stage"})
+
 	engImpressionTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "rec",
 		Subsystem: "engagement",
@@ -321,6 +327,40 @@ func RecordPipelineResult(modelUsed string, isEmpty bool) {
 	if isEmpty {
 		GlobalEngagementMetrics.EmptyFeedResults.Add(1)
 	}
+}
+
+// RecordFeedTerminal records exactly one service-level feed terminal outcome.
+// Both labels are closed enums so request/user/content identifiers can never
+// enter the metric cardinality.
+func RecordFeedTerminal(requestClass FeedRequestClass, outcome FeedTerminalOutcome, stage FailureStage) {
+	switch requestClass {
+	case FeedRequestClassInitialRecommend,
+		FeedRequestClassContinuation,
+		FeedRequestClassFollowing,
+		FeedRequestClassBrowse:
+	default:
+		requestClass = FeedRequestClassBrowse
+	}
+	switch outcome {
+	case FeedTerminalSuccess, FeedTerminalDegraded, FeedTerminalEmpty, FeedTerminalFailure:
+	default:
+		outcome = FeedTerminalFailure
+	}
+	switch stage {
+	case FailureStageNone,
+		FailureStageRecallAllFailed,
+		FailureStageRecallPartialFailed,
+		FailureStageRecallPartialFailedEmpty,
+		FailureStageRecallEmptyOutput,
+		FailureStageScorerUnavailable,
+		FailureStageScorerEmptyOutput,
+		FailureStageActiveSupplyMissing,
+		FailureStageHydrationFullMiss,
+		FailureStageExposureExhausted:
+	default:
+		stage = FailureStageNone
+	}
+	feedTerminalTotal.WithLabelValues(string(requestClass), string(outcome), string(stage)).Inc()
 }
 
 // RecordModelTimeoutMetric increments the model timeout counter.

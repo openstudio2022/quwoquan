@@ -18,6 +18,8 @@
 .PHONY: verify-app-startup-environment-uat
 .PHONY: verify-app-startup-observability-release
 .PHONY: verify-app-experience-observability
+.PHONY: verify-app-recoverable-error-surface
+.PHONY: verify-app-dual-platform-usability-baseline
 .PHONY: verify-app-ios-hot-restart
 .PHONY: build-app-startup-environment-matrix
 .PHONY: verify-app-lib-no-test-import
@@ -37,7 +39,8 @@
 .PHONY: verify-app-assistant-search-weak-typing-ratchet
 .PHONY: verify-app-assistant-old-stack-retired
 .PHONY: verify-retired-terms-zero
-.PHONY: verify-app-ui-app-data-source-mode-ratchet
+.PHONY: verify-app-production-data-source-single-path
+.PHONY: verify-production-wiring-purity
 .PHONY: verify-app-seed-manifest
 .PHONY: fetch-app-bundled-fonts
 .PHONY: verify-app-bundled-fonts
@@ -53,6 +56,7 @@
 .PHONY: verify-env-topology verify-prod-plane-access-isolation
 .PHONY: verify-local-port-manifest
 .PHONY: verify-public-vs-upstream-url-contract
+.PHONY: verify-domain-governance
 .PHONY: verify-login-dependency-config
 .PHONY: verify-env-packaging
 .PHONY: verify-env-instance-isolation
@@ -124,7 +128,7 @@ export PYTHONPYCACHEPREFIX := $(QWQ_OUTPUT_ROOT)/env/repo/local/test-runtime/cac
 .PHONY: stackctl-repair
 .PHONY: stackctl-deploy
 
-# 客户端：UI/App/Core 不得直连 cloud/services/*/mock（过渡期见 quwoquan_ops/policies/gates/ui_mock_isolation_allowlist.yaml）
+# 客户端：production lib、pubspec、Patrol/UAT 不得直连 Mock/fixture。
 verify-app-mock-isolation:
 	@python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
 
@@ -197,21 +201,42 @@ verify-app-ios-hot-restart:
 
 verify-app-startup-environment-uat:
 	@test -n "$(STARTUP_EVIDENCE_ROOT)" || { echo "STARTUP_EVIDENCE_ROOT is required"; exit 2; }
-	@python3 quwoquan_app/scripts/runtime/verify_startup_environment_matrix.py \
+	@REPORT_PATH="$$(cd "$(STARTUP_EVIDENCE_ROOT)" && pwd)/startup-environment-matrix-report.json"; \
+	python3 quwoquan_app/scripts/runtime/verify_startup_environment_matrix.py \
 		--evidence-root "$(STARTUP_EVIDENCE_ROOT)" \
-		--require-runtime-evidence
+		--require-runtime-evidence \
+		--minimum-runtime-runs 20 \
+		--require-physical-release \
+		--report "$$REPORT_PATH" && \
+	cd quwoquan_app && flutter test \
+		test/user_acceptance/quality/performance/startup_dual_platform_matrix__user_acceptance_test.dart \
+		--dart-define=QWQ_STARTUP_MATRIX_REPORT="$$REPORT_PATH"
 
 verify-app-startup-observability-release:
 	@test -n "$(STARTUP_EVIDENCE_ROOT)" || { echo "STARTUP_EVIDENCE_ROOT is required"; exit 2; }
 	@python3 quwoquan_app/scripts/runtime/verify_startup_environment_matrix.py \
 		--evidence-root "$(STARTUP_EVIDENCE_ROOT)" \
 		--require-runtime-evidence \
+		--minimum-runtime-runs 20 \
+		--require-physical-release \
 		--require-observability
 
 verify-app-experience-observability:
 	@python3 quwoquan_app/scripts/runtime/verify_ops_event_schema_completeness.py
 	@python3 -m unittest \
 		quwoquan_ops.tests.local_contract.test_app_experience_observability__contract__local_contract_test
+
+verify-app-recoverable-error-surface:
+	@python3 quwoquan_app/scripts/runtime/verify_app_recoverable_error_surface.py
+
+verify-app-dual-platform-usability-baseline:
+	@python3 quwoquan_app/scripts/runtime/verify_dual_platform_usability_baseline.py
+	@$(MAKE) verify-app-startup-environment-pr
+	@$(MAKE) verify-app-recoverable-error-surface
+	@$(MAKE) verify-app-page-horizontal-quality
+
+run-app-dual-platform-usability-matrix:
+	@python3 quwoquan_app/scripts/device/run_dual_platform_usability_matrix.py
 
 build-app-startup-environment-matrix:
 	@test -n "$(IOS_SIMULATOR_ID)" || { echo "IOS_SIMULATOR_ID is required"; exit 2; }
@@ -231,9 +256,12 @@ verify-app-content-ui-boundaries:
 verify-app-remote-config-contract:
 	@python3 quwoquan_app/scripts/runtime/verify_app_remote_config_contract.py
 
-# UI 层 AppDataSourceMode.mock / appDataSourceModeProvider 引用棘轮（见 quwoquan_ops/policies/gates/ui_app_data_source_mode_baseline.json）
-verify-app-ui-app-data-source-mode-ratchet:
-	@python3 quwoquan_app/scripts/env/verify_ui_app_data_source_mode_ratchet.py
+verify-app-production-data-source-single-path:
+	@python3 quwoquan_app/scripts/runtime/verify_production_data_source_single_path.py
+	@python3 -m unittest \
+		quwoquan_app.test.local_contract.app.production_release_artifact__local_contract_test
+
+verify-production-wiring-purity: verify-app-mock-isolation verify-app-lib-test-only-symbols verify-app-production-data-source-single-path verify-app-cloud-package-boundaries
 
 verify-app-seed-manifest:
 	@python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py
@@ -318,6 +346,9 @@ verify-local-port-manifest:
 
 verify-public-vs-upstream-url-contract:
 	@python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
+
+verify-domain-governance:
+	@python3 quwoquan_ops/gate/verify_domain_governance.py
 
 verify-env-packaging:
 	@deploy_work_root="$$(mktemp -d "$${TMPDIR:-/tmp}/quwoquan-deploy.XXXXXX")"; \
@@ -440,7 +471,7 @@ stackctl-deploy:
 		echo "FAIL: TARGET is required. Example: make stackctl-deploy TARGET=prod-hosted SERVICE=content-service TO_IMAGE=v1 TO_CONFIG=v2 STEP=50"; \
 		exit 2; \
 	fi
-	@python3 quwoquan_ops/cli/stackctl.py deploy --target "$(TARGET)" $(if $(STAGE),--stage "$(STAGE)",) $(if $(IMAGE_VERSION),--image-version "$(IMAGE_VERSION)",) $(if $(PREVIOUS_IMAGE_VERSION),--previous-image-version "$(PREVIOUS_IMAGE_VERSION)",) $(if $(BASE_URL),--base-url "$(BASE_URL)",) $(if $(PRODUCT_OPS_BASE_URL),--product-ops-base-url "$(PRODUCT_OPS_BASE_URL)",) $(if $(MEDIA_BASE_URL),--media-base-url "$(MEDIA_BASE_URL)",) $(if $(MEDIA_ORIGIN_BASE_URL),--media-origin-base-url "$(MEDIA_ORIGIN_BASE_URL)",) $(if $(SERVICE),--service "$(SERVICE)",) $(if $(FROM_IMAGE),--from-image "$(FROM_IMAGE)",) $(if $(TO_IMAGE),--to-image "$(TO_IMAGE)",) $(if $(FROM_CONFIG),--from-config "$(FROM_CONFIG)",) $(if $(TO_CONFIG),--to-config "$(TO_CONFIG)",) $(if $(STEP),--step "$(STEP)",) $(if $(ERROR_RATE),--error-rate "$(ERROR_RATE)",) $(if $(P95_MS),--p95-ms "$(P95_MS)",) $(if $(REDIS_ERROR_RATE),--redis-error-rate "$(REDIS_ERROR_RATE)",)
+	@python3 quwoquan_ops/cli/stackctl.py deploy --target "$(TARGET)" $(if $(STAGE),--stage "$(STAGE)",) $(if $(IMAGE_VERSION),--image-version "$(IMAGE_VERSION)",) $(if $(PREVIOUS_IMAGE_VERSION),--previous-image-version "$(PREVIOUS_IMAGE_VERSION)",) $(if $(SERVICE),--service "$(SERVICE)",) $(if $(FROM_IMAGE),--from-image "$(FROM_IMAGE)",) $(if $(TO_IMAGE),--to-image "$(TO_IMAGE)",) $(if $(FROM_CONFIG),--from-config "$(FROM_CONFIG)",) $(if $(TO_CONFIG),--to-config "$(TO_CONFIG)",) $(if $(STEP),--step "$(STEP)",) $(if $(ERROR_RATE),--error-rate "$(ERROR_RATE)",) $(if $(P95_MS),--p95-ms "$(P95_MS)",) $(if $(REDIS_ERROR_RATE),--redis-error-rate "$(REDIS_ERROR_RATE)",)
 
 verify-env-instance-isolation:
 	@python3 quwoquan_service/scripts/runtime/verify_env_instance_isolation.py
@@ -454,11 +485,9 @@ test-app-beta-seed:
 beta-up:
 	@DEVICE_ID="$(DEVICE_ID)" \
 	AUTO_OPEN_OPS="$(AUTO_OPEN_OPS)" \
-	CDN_DOMAIN="$(CDN_DOMAIN)" \
 	SEED_VERIFY_MODE="$(SEED_VERIFY_MODE)" \
 	MEDIA_MODE="$(MEDIA_MODE)" \
 	LOCAL_PUBLIC_HOST="$(LOCAL_PUBLIC_HOST)" \
-	MEDIA_BASE_URL="$(MEDIA_BASE_URL)" \
 	GATEWAY_BASE_URL_OVERRIDE="$(GATEWAY_BASE_URL_OVERRIDE)" \
 	python3 quwoquan_ops/cli/stackctl.py up --target beta-local \
 		$(if $(filter 0,$(START_APP)),--skip-app,) \
@@ -482,7 +511,7 @@ verify-app-native-edge-navigation:
 	@python3 quwoquan_app/scripts/runtime/verify_native_edge_navigation.py
 
 verify-app-pageflip-back-mainline:
-	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/ui/components/pageflip/backward_sheet_partition_contract__local_contract_test.dart test/local_contract/ui/components/pageflip/pageflip_contract__local_contract_test.dart test/local_contract/quality/shared/pageflip/pageflip_diagnostics_visual__local_contract_test.dart test/local_contract/ui/components/pageflip/pageflip_widget__local_contract_test.dart
+	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/ui/components/pageflip/pageflip_contract__local_contract_test.dart test/local_contract/quality/shared/pageflip/pageflip_diagnostics_visual__local_contract_test.dart test/local_contract/ui/components/pageflip/pageflip_widget__local_contract_test.dart
 
 # 后翻路线 B 主线静态门禁（见 .cursor/rules/12-pageflip-backward-mainline.mdc）。
 verify-app-pageflip-backward-mainline:
@@ -576,7 +605,7 @@ gate:
 	@$(MAKE) verify-test-directory-layout
 	@$(MAKE) verify-test-no-fake
 	@$(MAKE) verify-test-nonfunctional-coverage
-	@$(MAKE) test-local-contract
+	# local_contract 只在 gate_repo scope 内跑一次，禁止与 test-local-contract 双跑。
 	@$(MAKE) verify-reliable-task-topology
 	@$(MAKE) verify-avatar-user-pool
 	@$(MAKE) probe-avatar-user-pool-gateway
@@ -599,10 +628,7 @@ gate-local-gamma:
 		export LOCAL_GAMMA_PRODUCT_OPS_PORT="$$LG_PRODUCT_OPS_PORT"; \
 		export LOCAL_GAMMA_MEDIA_EDGE_PORT="$$LG_MEDIA_PORT"; \
 		export LOCAL_GAMMA_USER_PORT="$$LG_USER_PORT"; \
-		export LOCAL_GAMMA_GATEWAY_BASE_URL="$${LOCAL_GAMMA_GATEWAY_BASE_URL:-http://127.0.0.1:$$LG_HTTP_PORT}"; \
-		export LOCAL_GAMMA_PRODUCT_OPS_BASE_URL="$${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-http://127.0.0.1:$$LG_PRODUCT_OPS_PORT}"; \
-		export LOCAL_GAMMA_MEDIA_BASE_URL="$${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:$$LG_MEDIA_PORT}"; \
-		if [ "$${LOCAL_GAMMA_SKIP_GATE:-0}" != "1" ]; then CDN_DOMAIN="$${CDN_DOMAIN:-cdn.beta.local}" $(MAKE) gate; fi; \
+		if [ "$${LOCAL_GAMMA_SKIP_GATE:-1}" != "1" ]; then $(MAKE) gate; fi; \
 		$(MAKE) verify-app-env-package; \
 		$(MAKE) verify-app-seed-manifest; \
 		bash quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh; \
@@ -741,7 +767,11 @@ config-slo-gate:
 	fi
 	@python3 quwoquan_ops/cli/stackctl.py verify --kind config-slo --profile baseline --error-rate "$(ERROR_RATE)" --p95-ms "$(P95_MS)" --redis-error-rate "$(REDIS_ERROR_RATE)"
 
-.PHONY: gate-smoke gate-integration gate-release test-api-contract test-api-contract-chat
+.PHONY: commit-gate gate-smoke gate-integration gate-release test-api-contract test-api-contract-chat
+
+# L0 本地入库门禁（pre-commit 同源）：并行静态 + 影响面测试，目标 ≤10m / 硬顶 15m。
+commit-gate:
+	@bash quwoquan_ops/gate/commit_gate.sh
 .PHONY: prepare-test-python verify-test-no-fake verify-test-nonfunctional-coverage verify-test-directory-layout verify-test-coverage-map
 .PHONY: verify-execution-profiles
 .PHONY: test-local-contract test-runtime-local-contract test-api-integration test-runtime-api-integration test-runtime-api-integration-gamma test-user-acceptance
@@ -928,7 +958,11 @@ test-user-acceptance:
 				--data-source remote \
 				--gateway-base-url "$${PROD_BASE_URL}" \
 				--product-ops-base-url "$${PROD_PRODUCT_OPS_BASE_URL}" \
-				--media-base-url "$${PROD_MEDIA_BASE_URL:-}" \
+				--media-avatar-base-url "$${PROD_MEDIA_AVATAR_BASE_URL}" \
+				--media-image-base-url "$${PROD_MEDIA_IMAGE_BASE_URL}" \
+				--media-video-base-url "$${PROD_MEDIA_VIDEO_BASE_URL}" \
+				--media-upload-base-url "$${PROD_MEDIA_UPLOAD_BASE_URL}" \
+				--rtc-media-connection-url "$${PROD_RTC_MEDIA_CONNECTION_URL}" \
 				--test-auth-token "$$TEST_TOKEN" \
 				$$DRY_RUN_FLAG ;; \
 		*) echo "[user_acceptance] FAIL: TARGET must be local, gamma-local or prod-hosted, got $$TARGET_NAME"; exit 2 ;; \

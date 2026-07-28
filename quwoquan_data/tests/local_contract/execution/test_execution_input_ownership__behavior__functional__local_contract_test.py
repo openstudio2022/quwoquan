@@ -95,7 +95,6 @@ def test_runtime_input_gate_uses_the_typed_execution_request_contract(tmp_path, 
         quota=1,
         topic=None,
         source_providers=(),
-        homepage_execution_id=None,
         target_names=("测试实体甲",),
     )
     (plan_root / "request.json").write_text(

@@ -97,7 +97,7 @@ class _KeywordSuggestionRow extends StatelessWidget {
         ),
       ),
       subtitle: Text(
-        UITextConstants.searchAllResults,
+        SearchText.searchAllResults,
         style: TextStyle(fontSize: AppTypography.iosFootnote, color: secondary),
       ),
       trailing: Icon(
@@ -369,10 +369,10 @@ String _formatDayLabel(DateTime value) {
   final target = DateTime(value.year, value.month, value.day);
   final difference = today.difference(target).inDays;
   if (difference <= 0) {
-    return UITextConstants.searchDateToday;
+    return SearchText.searchDateToday;
   }
   if (difference == 1) {
-    return UITextConstants.searchDateYesterday;
+    return SearchText.searchDateYesterday;
   }
   return UITextConstants.searchDateMonthDay(value.month, value.day);
 }

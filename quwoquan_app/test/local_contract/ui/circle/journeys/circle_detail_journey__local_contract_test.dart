@@ -3,14 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_shell.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 import '../typed_circle_query_test_double.dart';
 
@@ -153,7 +152,7 @@ void main() {
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleShell), findsOneWidget);
-      expect(find.text(UITextConstants.objectTabRecord), findsWidgets);
+      expect(find.text(ObjectHomepageText.objectTabRecord), findsWidgets);
     });
 
     testWidgets('旅程 A3：从详情页返回到列表页', (tester) async {
@@ -262,7 +261,7 @@ void main() {
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleShell), findsOneWidget);
-      expect(find.text(UITextConstants.objectTabRecord), findsWidgets);
+      expect(find.text(ObjectHomepageText.objectTabRecord), findsWidgets);
 
       await _settleIgnoringTabPaintErrors(tester);
 

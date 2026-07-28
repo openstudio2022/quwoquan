@@ -72,7 +72,7 @@ void main() {
 
     expect(backCalls, 1);
     expect(doneResult, isNull);
-    expect(find.text(UITextConstants.imageEditorDiscardTitle), findsNothing);
+    expect(find.text(MediaText.imageEditorDiscardTitle), findsNothing);
   });
 
   testWidgets('完成一步编辑后 back 必须确认放弃，确认后仅触发取消回调', (tester) async {
@@ -101,16 +101,16 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 200));
 
-    await tester.tap(find.text(UITextConstants.imageEditorRotate));
+    await tester.tap(find.text(MediaText.imageEditorRotate));
     await tester.pump(const Duration(milliseconds: 100));
-    expect(find.text(UITextConstants.imageEditorRotateRight90), findsOneWidget);
-    await tester.tap(find.text(UITextConstants.imageEditorRotateRight90));
+    expect(find.text(MediaText.imageEditorRotateRight90), findsOneWidget);
+    await tester.tap(find.text(MediaText.imageEditorRotateRight90));
     await tester.pump();
     expect(find.byKey(const ValueKey<String>('rotate-reset')), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.checkmark), findsOneWidget);
     await tester.tap(find.byIcon(CupertinoIcons.checkmark));
 
-    final doneFinder = find.text(UITextConstants.imageEditDone);
+    final doneFinder = find.text(MediaText.imageEditDone);
     for (var i = 0; i < 100 && doneFinder.evaluate().isEmpty; i++) {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 30)),
@@ -130,10 +130,10 @@ void main() {
     await tester.tap(find.byIcon(CupertinoIcons.back));
     await tester.pumpAndSettle();
     expect(backCalls, 0);
-    expect(find.text(UITextConstants.imageEditorDiscardTitle), findsOneWidget);
+    expect(find.text(MediaText.imageEditorDiscardTitle), findsOneWidget);
     expect(doneResult, isNull);
 
-    await tester.tap(find.text(UITextConstants.imageEditorDiscardConfirm));
+    await tester.tap(find.text(MediaText.imageEditorDiscardConfirm));
     await tester.pumpAndSettle();
     expect(backCalls, 1);
     expect(doneResult, isNull);
@@ -162,7 +162,7 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 200));
 
-    await tester.tap(find.text(UITextConstants.imageEditDone));
+    await tester.tap(find.text(MediaText.imageEditDone));
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(doneResult, file.path);
@@ -235,12 +235,12 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 200));
 
-    expect(find.text(UITextConstants.imageEditorFilter), findsOneWidget);
-    expect(find.text(UITextConstants.imageEditorCrop), findsOneWidget);
-    expect(find.text(UITextConstants.imageEditorRotate), findsOneWidget);
-    expect(find.text(UITextConstants.imageEditorProTools), findsOneWidget);
-    expect(find.text(UITextConstants.imageEditorText), findsOneWidget);
-    expect(find.text(UITextConstants.imageEditorMosaic), findsOneWidget);
+    expect(find.text(MediaText.imageEditorFilter), findsOneWidget);
+    expect(find.text(MediaText.imageEditorCrop), findsOneWidget);
+    expect(find.text(MediaText.imageEditorRotate), findsOneWidget);
+    expect(find.text(MediaText.imageEditorProTools), findsOneWidget);
+    expect(find.text(MediaText.imageEditorText), findsOneWidget);
+    expect(find.text(MediaText.imageEditorMosaic), findsOneWidget);
   });
 
   testWidgets('专业工具箱包含曲线/白平衡真实入口且无占位文案', (tester) async {
@@ -265,21 +265,21 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 200));
 
-    await tester.tap(find.text(UITextConstants.imageEditorProTools));
+    await tester.tap(find.text(MediaText.imageEditorProTools));
     await tester.pump(const Duration(milliseconds: 200));
 
-    expect(find.text(UITextConstants.imageEditorProCurve), findsOneWidget);
+    expect(find.text(MediaText.imageEditorProCurve), findsOneWidget);
     expect(
-      find.text(UITextConstants.imageEditorProWhiteBalance),
+      find.text(MediaText.imageEditorProWhiteBalance),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.imageEditorProTabOverall), findsOneWidget);
-    expect(find.text(UITextConstants.imageEditorProBwLevels), findsOneWidget);
+    expect(find.text(MediaText.imageEditorProTabOverall), findsOneWidget);
+    expect(find.text(MediaText.imageEditorProBwLevels), findsOneWidget);
     // 曲线面板真实可进入。
-    await tester.tap(find.text(UITextConstants.imageEditorProCurve));
+    await tester.tap(find.text(MediaText.imageEditorProCurve));
     await tester.pump(const Duration(milliseconds: 300));
     expect(
-      find.text(UITextConstants.imageEditorProCurveChannelRgb),
+      find.text(MediaText.imageEditorProCurveChannelRgb),
       findsOneWidget,
     );
   });

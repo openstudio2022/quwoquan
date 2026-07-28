@@ -15,19 +15,19 @@ void main() {
     await tester.pumpWidget(_buildVideoPage());
     await tester.pump();
 
-    expect(find.text(UITextConstants.callLockControls), findsOneWidget);
-    expect(find.text(UITextConstants.callHangup), findsOneWidget);
+    expect(find.text(CallText.callLockControls), findsOneWidget);
+    expect(find.text(CallText.callHangup), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.callLockControls));
+    await tester.tap(find.text(CallText.callLockControls));
     await tester.pump();
 
-    expect(find.text(UITextConstants.callUnlockControls), findsOneWidget);
-    expect(find.text(UITextConstants.callHangup), findsNothing);
-    expect(find.text(UITextConstants.callInvite), findsNothing);
+    expect(find.text(CallText.callUnlockControls), findsOneWidget);
+    expect(find.text(CallText.callHangup), findsNothing);
+    expect(find.text(CallText.callInvite), findsNothing);
 
-    await tester.tap(find.text(UITextConstants.callUnlockControls));
+    await tester.tap(find.text(CallText.callUnlockControls));
     await tester.pump();
-    expect(find.text(UITextConstants.callHangup), findsOneWidget);
+    expect(find.text(CallText.callHangup), findsOneWidget);
   });
 
   testWidgets('视频页显示共享状态、停止动作与超过六人的 +N', (tester) async {
@@ -40,16 +40,16 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text(UITextConstants.callScreenSharing), findsOneWidget);
+    expect(find.text(CallText.callScreenSharing), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('video-call-screen-share-surface')),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.callScreenShareConnecting),
+      find.text(CallText.callScreenShareConnecting),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.callStopScreenSharing), findsWidgets);
+    expect(find.text(CallText.callStopScreenSharing), findsWidgets);
     expect(
       find.text(UITextConstants.callAdditionalParticipants(2)),
       findsOneWidget,

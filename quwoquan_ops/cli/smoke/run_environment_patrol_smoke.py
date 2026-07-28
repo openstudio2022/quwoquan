@@ -34,19 +34,18 @@ from quwoquan_ops.ci.device_matrix.evidence import (
     write_json,
 )
 from quwoquan_ops.ci.device_matrix.android import resolve_android_debug_bridge
-from quwoquan_ops.cli.lib.dev_up import (
-    ANDROID_LOCAL_DEBUG_CA_ENV,
-    ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV,
-    local_target_android_debug_ca_cert,
-)
-from quwoquan_ops.cli.lib.local_target_tls import (
-    LocalTargetTlsError,
-    install_ios_simulator_root_ca,
-)
 from quwoquan_ops.cli.lib.local_runtime_reservation import (
     acquire_local_runtime_use_lock,
 )
+from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
+    acquire_consumer_lease,
+    release_consumer_lease,
+)
 from quwoquan_ops.cli.lib.patrol_cli import resolve_patrol_cli
+from quwoquan_ops.cli.lib.environment_topology import (
+    get_target,
+    load_environment_topology,
+)
 from quwoquan_ops.cli.lib.flutter_android_device_proxy import (
     ANDROID_DEVICE_INVENTORY_ENV,
     REAL_FLUTTER_ENV,
@@ -61,6 +60,26 @@ DEFAULT_REPORT = REPO_ROOT / ".qwq_output" / "env" / "repo" / "runs" / "device-m
 DEFAULT_TARGET = (
     "test/user_acceptance/patrol/environment/"
     "video_playback_canary__user_acceptance_test.dart"
+)
+CORE_READBACK_TARGET = (
+    "test/user_acceptance/patrol/environment/"
+    "app_core_readback__user_acceptance_test.dart"
+)
+RELEASE_APP_UAT_DEFINES = (
+    ("data_release_id", "DATA_RELEASE_ID"),
+    ("data_release_homepage_id", "DATA_RELEASE_HOMEPAGE_ID"),
+    ("data_release_homepage_title", "DATA_RELEASE_HOMEPAGE_TITLE"),
+    ("data_release_article_work_id", "DATA_RELEASE_ARTICLE_WORK_ID"),
+    ("data_release_article_title", "DATA_RELEASE_ARTICLE_TITLE"),
+    ("data_release_image_work_id", "DATA_RELEASE_IMAGE_WORK_ID"),
+    ("data_release_image_title", "DATA_RELEASE_IMAGE_TITLE"),
+    ("data_release_creator_name", "DATA_RELEASE_CREATOR_NAME"),
+    ("data_release_tag_label", "DATA_RELEASE_TAG_LABEL"),
+    ("data_release_video_attribution", "DATA_RELEASE_VIDEO_ATTRIBUTION"),
+)
+BASIC_VIABILITY_TARGET = (
+    "test/user_acceptance/patrol/environment/"
+    "basic_viability__user_acceptance_test.dart"
 )
 ACCOUNT_CLOSURE_TARGET = (
     "test/user_acceptance/patrol/settings/"
@@ -89,11 +108,12 @@ LOCAL_ENVIRONMENT_ALIAS_TARGETS = {
 }
 RUNTIME_ANONYMOUS_SESSION_MODES = {
     "local-beta": "beta_local_anonymous_runtime",
+    "beta-local": "beta_local_anonymous_runtime",
     "local-gamma": "gamma_local_anonymous_runtime",
+    "gamma-local": "gamma_local_anonymous_runtime",
     "local-prod-sim": "prod_sim_anonymous_runtime",
+    "prod-sim": "prod_sim_anonymous_runtime",
 }
-PUBLIC_TEST_SUFFIX = ".quwoquan-env.test"
-LOCALHOST_SUFFIX = ".localhost"
 FORBIDDEN_PROD_PLAYBACK_CANARY_TOKENS = frozenset(
     {"fixture", "mock", "seed", "test"}
 )
@@ -161,11 +181,6 @@ def _runtime_env_for_alias(alias: str) -> str:
     return "alpha"
 
 
-def _data_source_for_runtime(runtime_env: str) -> str:
-    del runtime_env
-    return "remote"
-
-
 def _evidence_class_for_runtime(runtime_env: str) -> str:
     del runtime_env
     return "user_acceptance_remote"
@@ -207,7 +222,14 @@ def _uses_public_video_canary_anonymous_session(
 
 def _requires_video_playback_canary(args: argparse.Namespace) -> bool:
     target = str(getattr(args, "target", "") or "").replace("\\", "/")
-    return target.endswith(DEFAULT_TARGET)
+    return any(
+        target.endswith(candidate)
+        for candidate in (
+            DEFAULT_TARGET,
+            CORE_READBACK_TARGET,
+            BASIC_VIABILITY_TARGET,
+        )
+    )
 
 
 def _requires_account_closure(args: argparse.Namespace) -> bool:
@@ -270,51 +292,6 @@ def _is_local_target(env_name: str) -> bool:
     return _local_target_for_environment_alias(env_name) in LOCAL_TARGETS
 
 
-def _device_uses_local_loopback(device: dict[str, Any]) -> bool:
-    target = str(device.get("targetPlatform", "")).strip().lower()
-    if target.startswith("android"):
-        return True
-    return target == "ios" and bool(device.get("emulator", False))
-
-
-def _rewrite_local_loopback_base(url: str) -> str:
-    parsed = urllib.parse.urlparse(url.strip())
-    if not parsed.scheme or not parsed.hostname:
-        return url
-    host = parsed.hostname
-    if host == "127.0.0.1":
-        host = "localhost"
-    elif host.endswith(PUBLIC_TEST_SUFFIX):
-        host = host[: -len(PUBLIC_TEST_SUFFIX)] + LOCALHOST_SUFFIX
-    elif host == "localhost" or host.endswith(LOCALHOST_SUFFIX):
-        host = host
-    else:
-        return url
-    if parsed.port:
-        netloc = f"{host}:{parsed.port}"
-    else:
-        netloc = host
-    return urllib.parse.urlunparse(parsed._replace(netloc=netloc))
-
-
-def _rewrite_android_loopback_base(url: str) -> str:
-    """Android 的原生播放器仅保证解析精确 `localhost`，不依赖 `*.localhost` DNS。"""
-
-    parsed = urllib.parse.urlparse(url.strip())
-    if not parsed.scheme or not parsed.hostname:
-        return url
-    host = parsed.hostname.lower()
-    if not (
-        host == "127.0.0.1"
-        or host == "localhost"
-        or host.endswith(LOCALHOST_SUFFIX)
-        or host.endswith(PUBLIC_TEST_SUFFIX)
-    ):
-        return url
-    netloc = f"localhost:{parsed.port}" if parsed.port else "localhost"
-    return urllib.parse.urlunparse(parsed._replace(netloc=netloc))
-
-
 def _resolved_media_base_urls(args: argparse.Namespace) -> dict[str, str]:
     """解析四类显式注入的媒体 authority；禁止单一 media base 回退。"""
     return {
@@ -337,26 +314,41 @@ def _effective_base_urls_for_device(
     args: argparse.Namespace,
     device: dict[str, Any],
 ) -> dict[str, str]:
+    # 本地 target 也必须保留 topology 投影的 canonical public authority。
+    # Android/iOS 由 DNS-01 公共证书和本地连接投影到运行栈；把 URL 改成
+    # localhost 会破坏证书 hostname 校验，并重新引入已退役的私有 CA 路径。
+    del device
     gateway_base_url = args.gateway_base_url.strip()
     product_ops_base_url = args.product_ops_base_url.strip()
     rtc_media_connection_url = args.rtc_media_connection_url.strip()
     media_urls = _resolved_media_base_urls(args)
-    if _is_local_target(args.env_name) and _device_uses_local_loopback(device):
-        target_platform = str(device.get("targetPlatform", "")).strip().lower()
-        rewrite_base = (
-            _rewrite_android_loopback_base
-            if target_platform.startswith("android")
-            else _rewrite_local_loopback_base
+    target_name = _local_target_for_environment_alias(args.env_name)
+    public_bases = get_target(
+        load_environment_topology(),
+        target_name,
+    )["publicBases"]
+    supplied_by_role = {
+        "api": gateway_base_url,
+        "productOps": product_ops_base_url,
+        "rtc": rtc_media_connection_url,
+        "mediaAvatar": media_urls["mediaAvatarBaseUrl"],
+        "mediaImage": media_urls["mediaImageBaseUrl"],
+        "mediaVideo": media_urls["mediaVideoBaseUrl"],
+        "mediaUpload": media_urls["mediaUploadBaseUrl"],
+    }
+    mismatched = [
+        role
+        for role, supplied in supplied_by_role.items()
+        if supplied.rstrip("/") != str(public_bases[role]).rstrip("/")
+    ]
+    if mismatched:
+        raise ValueError(
+            "runtime URL arguments must equal canonical topology projection: "
+            + ", ".join(sorted(mismatched))
         )
-        gateway_base_url = rewrite_base(gateway_base_url)
-        product_ops_base_url = rewrite_base(product_ops_base_url)
-        rtc_media_connection_url = rewrite_base(rtc_media_connection_url)
-        media_urls = {
-            key: rewrite_base(value) if value else value
-            for key, value in media_urls.items()
-        }
     return {
         "gatewayBaseUrl": gateway_base_url,
+        "legalBaseUrl": str(public_bases["legal"]),
         "productOpsBaseUrl": product_ops_base_url,
         "rtcMediaConnectionUrl": rtc_media_connection_url,
         **media_urls,
@@ -390,37 +382,19 @@ def _validate_video_playback_canary_work_id(
     return work_id
 
 
-def _local_debug_ca_path(env_name: str) -> Path:
-    return local_target_android_debug_ca_cert(
-        _local_target_for_environment_alias(env_name)
-    )
-
-
-def _install_simulator_trust_roots(
-    env_name: str,
-    simulator_udid: str,
-) -> dict[str, Any]:
-    return install_ios_simulator_root_ca(
-        _local_target_for_environment_alias(env_name),
-        simulator_udid,
-    )
-
-
 def _device_command_env(args: argparse.Namespace, device: dict[str, Any]) -> dict[str, str]:
     env = dict(os.environ)
-    cert_path = _local_debug_ca_path(args.env_name)
+    runtime_env = args.runtime_env.strip() or _runtime_env_for_alias(args.env_name)
+    env["QWQ_APP_RUNTIME_ENV"] = runtime_env
     target = str(device.get("targetPlatform", "")).strip().lower()
-    if target == "ios" and bool(device.get("emulator", False)) and _is_local_target(
-        args.env_name
-    ):
+    if target.startswith("android"):
         device_id = str(device.get("id", "")).strip()
         if not device_id:
             raise RuntimeError(
-                "GATE_BLOCK: local iOS Simulator Patrol requires an explicit device id "
-                "for the Xcode CA-trust build phase"
+                "GATE_BLOCK: Android Patrol requires an explicit device id"
             )
-        env["QWQ_IOS_SIMULATOR_UDID"] = device_id
-    if target.startswith("android"):
+        env["QWQ_RUN_DEVICE_ID"] = device_id
+        env["ANDROID_SERIAL"] = device_id
         adb = resolve_android_debug_bridge()
         if adb:
             adb_directory = str(Path(adb).parent)
@@ -432,9 +406,6 @@ def _device_command_env(args: argparse.Namespace, device: dict[str, Any]) -> dic
                     if existing_path
                     else adb_directory
                 )
-        if cert_path is not None:
-            env[ANDROID_LOCAL_DEBUG_CA_ENV] = str(cert_path)
-            env[ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV] = "1"
         real_flutter = shutil.which("flutter", path=env.get("PATH", ""))
         if real_flutter is None:
             raise RuntimeError(
@@ -456,7 +427,26 @@ def _device_command_env(args: argparse.Namespace, device: dict[str, Any]) -> dic
             ensure_ascii=False,
             separators=(",", ":"),
         )
+    elif (
+        target == "ios"
+        and bool(device.get("emulator", False))
+        and _is_local_target(args.env_name)
+    ):
+        device_id = str(device.get("id", "")).strip()
+        if not device_id:
+            raise RuntimeError(
+                "GATE_BLOCK: local iOS Simulator Patrol requires an explicit device id"
+            )
+        env["QWQ_IOS_SIMULATOR_UDID"] = device_id
     return env
+
+
+def _local_tls_trust_evidence(*, dry_run: bool) -> dict[str, str]:
+    """Describe the public-CA boundary without mutating device trust state."""
+
+    if dry_run:
+        return {"status": "skipped", "reason": "not-required"}
+    return {"status": "system-public-ca", "reason": "dns-01"}
 
 
 def _prepare_android_local_port_reverse(
@@ -520,6 +510,56 @@ def _prepare_android_local_port_reverse(
         "deviceId": device_id,
         "mappings": mappings,
     }
+
+
+def _acquire_android_patrol_consumer_lease(
+    args: argparse.Namespace,
+    device: dict[str, Any],
+    android_port_reverse: dict[str, Any],
+    command_env: dict[str, str],
+) -> tuple[str, str, str] | None:
+    """Bind one Android Patrol build to the active local runtime ports."""
+
+    target_platform = str(device.get("targetPlatform", "")).strip().lower()
+    if not (
+        _is_local_target(args.env_name) and target_platform.startswith("android")
+    ):
+        return None
+    device_id = str(device.get("id", "")).strip()
+    mappings = android_port_reverse.get("mappings")
+    if not device_id or not isinstance(mappings, list):
+        raise RuntimeError(
+            "GATE_BLOCK: Android Patrol must install local port reverse before "
+            "acquiring its runtime consumer lease",
+        )
+    ports = sorted(
+        {
+            int(mapping.get("devicePort") or 0)
+            for mapping in mappings
+            if isinstance(mapping, dict) and int(mapping.get("devicePort") or 0) > 0
+        }
+    )
+    if not ports:
+        raise RuntimeError(
+            "GATE_BLOCK: Android Patrol local runtime consumer lease has no ports",
+        )
+    target_name = _local_target_for_environment_alias(args.env_name)
+    consumer = f"environment-patrol-{os.getpid()}-{sanitize_device_id(device_id)}"
+    acquire_consumer_lease(
+        target=target_name,
+        device=device_id,
+        consumer=consumer,
+        package_name="com.quwoquan.quwoquan_app",
+        ports=ports,
+    )
+    command_env.update(
+        {
+            "QWQ_RUN_CONSUMER_ID": consumer,
+            "QWQ_CONSUMER_LEASE_ACQUIRED": "1",
+            "QWQ_ANDROID_LOCAL_PORTS": ",".join(str(port) for port in ports),
+        }
+    )
+    return target_name, device_id, consumer
 
 
 def _reset_release_uat_device_state(
@@ -651,7 +691,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--runtime-env", default="")
     parser.add_argument("--api-contract-env", default="")
-    parser.add_argument("--data-source", choices=("mock", "remote"), default="")
     parser.add_argument("--gateway-base-url", default="")
     parser.add_argument("--product-ops-base-url", default="")
     parser.add_argument("--media-avatar-base-url", default="")
@@ -663,6 +702,12 @@ def parse_args() -> argparse.Namespace:
         "--video-playback-canary-work-id",
         default=os.environ.get("VIDEO_PLAYBACK_CANARY_WORK_ID", "").strip(),
     )
+    for destination, define_name in RELEASE_APP_UAT_DEFINES:
+        parser.add_argument(
+            f"--{destination.replace('_', '-')}",
+            dest=destination,
+            default=os.environ.get(define_name, "").strip(),
+        )
     parser.add_argument(
         "--patrol-install-id",
         default=os.environ.get("QWQ_PATROL_INSTALL_ID", "").strip(),
@@ -1247,7 +1292,6 @@ def discover_devices(platform: str, device_ids: list[str]) -> list[dict[str, Any
 
 def _prepare_execution_session(args: argparse.Namespace) -> str:
     runtime_env = args.runtime_env.strip() or _runtime_env_for_alias(args.env_name)
-    data_source = args.data_source.strip() or _data_source_for_runtime(runtime_env)
     _validate_account_closure_execution(args, runtime_env)
     if bool(getattr(args, "unauthenticated_auth_entry", False)):
         supplied = (
@@ -1259,10 +1303,6 @@ def _prepare_execution_session(args: argparse.Namespace) -> str:
         if any(str(value).strip() for value in supplied):
             raise ValueError(
                 "unauthenticated auth-entry Patrol cannot preload a session"
-            )
-        if data_source != "remote":
-            raise ValueError(
-                "unauthenticated auth-entry Patrol requires Remote composition"
             )
         return "unauthenticated_auth_entry"
     if _uses_public_video_canary_anonymous_session(args):
@@ -1343,7 +1383,6 @@ def patrol_command(
 ) -> list[str]:
     runtime_env = args.runtime_env.strip() or _runtime_env_for_alias(args.env_name)
     api_contract_env = args.api_contract_env.strip() or runtime_env
-    data_source = args.data_source.strip() or _data_source_for_runtime(runtime_env)
     base_urls = _effective_base_urls_for_device(args, device)
     gateway_base_url = base_urls["gatewayBaseUrl"]
     product_ops_base_url = base_urls["productOpsBaseUrl"]
@@ -1352,6 +1391,7 @@ def patrol_command(
     media_video_base_url = base_urls["mediaVideoBaseUrl"]
     media_upload_base_url = base_urls["mediaUploadBaseUrl"]
     rtc_media_connection_url = base_urls["rtcMediaConnectionUrl"]
+    legal_base_url = base_urls["legalBaseUrl"]
     video_playback_canary_work_id = str(
         getattr(args, "video_playback_canary_work_id", "") or ""
     ).strip()
@@ -1378,9 +1418,9 @@ def patrol_command(
             else "false"
         ),
         f"--dart-define=APP_RUNTIME_ENV={runtime_env}",
-        f"--dart-define=APP_DATA_SOURCE={data_source}",
         f"--dart-define=API_CONTRACT_ENV={api_contract_env}",
         f"--dart-define=CLOUD_GATEWAY_BASE_URL={gateway_base_url}",
+        f"--dart-define=APP_LEGAL_BASE_URL={legal_base_url}",
         f"--dart-define=API_CONTRACT_BASE_URL={gateway_base_url}",
         f"--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL={product_ops_base_url}",
         f"--dart-define=RTC_MEDIA_CONNECTION_URL={rtc_media_connection_url}",
@@ -1428,6 +1468,23 @@ def patrol_command(
     release_uat_cases_b64 = str(getattr(args, "release_uat_cases_b64", "") or "")
     if release_uat_cases_b64:
         command.append(f"--dart-define=QWQ_RELEASE_HOMEPAGE_UAT_CASES_B64={release_uat_cases_b64}")
+    if Path(args.target).name == Path(CORE_READBACK_TARGET).name:
+        release_defines = {
+            define_name: str(getattr(args, destination, "") or "").strip()
+            for destination, define_name in RELEASE_APP_UAT_DEFINES
+        }
+        missing = sorted(
+            name for name, value in release_defines.items() if not value
+        )
+        if missing:
+            raise ValueError(
+                "app core readback requires one immutable release envelope: "
+                + ", ".join(missing)
+            )
+        command.extend(
+            f"--dart-define={name}={value}"
+            for name, value in release_defines.items()
+        )
     return command
 
 
@@ -1544,7 +1601,6 @@ def main() -> int:
 
     runtime_env = args.runtime_env.strip() or _runtime_env_for_alias(args.env_name)
     api_contract_env = args.api_contract_env.strip() or runtime_env
-    data_source = args.data_source.strip() or _data_source_for_runtime(runtime_env)
     report: dict[str, Any] = {
         "suiteId": "environment_page_smoke",
         "status": "failed",
@@ -1554,7 +1610,7 @@ def main() -> int:
         "rolloutStage": getattr(args, "rollout_stage", ""),
         "runtimeEnv": runtime_env,
         "apiContractEnv": api_contract_env,
-        "dataSource": data_source,
+        "composition": "production_remote",
         "evidenceClass": _evidence_class_for_runtime(runtime_env),
         "target": args.target,
         "platform": args.platform,
@@ -1698,42 +1754,7 @@ def main() -> int:
             and str(device.get("targetPlatform", "")).lower() == "ios"
         ):
             ensure_patrol_ios_products_bridge()
-        tls_trust = {"status": "skipped", "reason": "not-required"}
-        if (
-            not args.dry_run
-            and
-            _is_local_target(args.env_name)
-            and str(device.get("targetPlatform", "")).lower() == "ios"
-            and bool(device.get("emulator", False))
-        ):
-            try:
-                tls_trust = _install_simulator_trust_roots(
-                    args.env_name,
-                    str(device.get("id", "")),
-                )
-            except LocalTargetTlsError as exc:
-                tls_trust = {
-                    "status": "failed",
-                    "reason": str(exc),
-                }
-                report["runs"].append(
-                    {
-                        "device": device,
-                        "exitCode": 2,
-                        "timedOut": False,
-                        "durationMs": 0,
-                        "outputSummary": str(exc),
-                        "preflightFailed": True,
-                        "evidence": {
-                            "runDirectory": repo_relative(run_dir),
-                            "deviceManifestPath": device_manifest_path,
-                            "localTlsTrust": tls_trust,
-                        },
-                    }
-                )
-                failed = True
-                gate_blocked = True
-                continue
+        tls_trust = _local_tls_trust_evidence(dry_run=args.dry_run)
         android_port_reverse = {"status": "skipped", "reason": "not-required"}
         if (
             not args.dry_run
@@ -1804,6 +1825,14 @@ def main() -> int:
             dart_define_file=secret_define_path,
         )
         command_env = _device_command_env(args, device)
+        consumer_lease: tuple[str, str, str] | None = None
+        if not args.dry_run:
+            consumer_lease = _acquire_android_patrol_consumer_lease(
+                args,
+                device,
+                android_port_reverse,
+                command_env,
+            )
         command_path = write_json(
             run_dir / "command.json",
             {
@@ -1811,10 +1840,7 @@ def main() -> int:
                 "target": args.target,
                 "deviceId": device["id"],
                 "command": _redact_command(command),
-                "environment": {
-                    "QWQ_ANDROID_LOCAL_ENV_CA_PATH": command_env.get(ANDROID_LOCAL_DEBUG_CA_ENV, ""),
-                    "QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED": command_env.get(ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV, ""),
-                },
+                "environment": {},
                 "androidPortReverse": android_port_reverse,
                 "releaseUatStateReset": release_uat_state_reset,
             },
@@ -1857,6 +1883,12 @@ def main() -> int:
                     ),
                 )
             finally:
+                if consumer_lease is not None:
+                    release_consumer_lease(
+                        target=consumer_lease[0],
+                        device=consumer_lease[1],
+                        consumer=consumer_lease[2],
+                    )
                 if secret_define_path is not None:
                     secret_define_path.unlink(missing_ok=True)
         after_screenshot = (

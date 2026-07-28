@@ -92,7 +92,7 @@ class _CreateDraftPickerSheetState extends State<CreateDraftPickerSheet> {
                 height: AppSpacing.modalHeaderHeight,
                 child: Center(
                   child: Text(
-                    UITextConstants.createDraftPickerEmptyTitle,
+                    CreationText.createDraftPickerEmptyTitle,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: AppTypography.iosBody,
@@ -118,7 +118,7 @@ class _CreateDraftPickerSheetState extends State<CreateDraftPickerSheet> {
                   itemBuilder: (context, index) {
                     final draft = _drafts[index];
                     final preview = draft.previewText.trim().isEmpty
-                        ? UITextConstants.createDraftPickerPreviewFallback
+                        ? CreationText.createDraftPickerPreviewFallback
                         : draft.previewText.trim();
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -194,7 +194,7 @@ class _CreateDraftPickerSheetState extends State<CreateDraftPickerSheet> {
               ),
               onPressed: widget.onDismiss,
               child: Text(
-                UITextConstants.cancel,
+                FoundationText.cancel,
                 style: TextStyle(
                   fontSize: AppTypography.iosBody,
                   fontWeight: AppTypography.medium,

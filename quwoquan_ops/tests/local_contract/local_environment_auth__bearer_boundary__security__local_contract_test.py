@@ -52,7 +52,7 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
             mock.patch.object(local_environment_auth.subprocess, "run", return_value=completed) as run,
         ):
             session = local_environment_auth.open_local_acceptance_session(
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
                 environment="gamma",
                 target_name="gamma-local",
             )
@@ -80,7 +80,7 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
             return_value=opener,
         ):
             payload = local_environment_auth.request_local_environment_json(
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
                 path="/content/feed?type=premium&limit=5",
                 session=session,
             )
@@ -106,7 +106,7 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
             return_value=opener,
         ):
             payload = local_environment_auth.request_local_environment_json(
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
                 path="/chat/conversations",
                 session=session,
                 method="POST",
@@ -125,7 +125,7 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
 
         with self.assertRaisesRegex(ValueError, "cannot override Authorization"):
             local_environment_auth.request_local_environment_json(
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
                 path="/chat/inbox",
                 session=session,
                 headers={"Authorization": "Bearer attacker-controlled"},
@@ -290,7 +290,7 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
             mock.patch.object(local_environment_auth.subprocess, "run", return_value=completed) as run,
         ):
             session = local_environment_auth.open_local_acceptance_session(
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
                 environment="gamma",
                 target_name="gamma-local",
                 subject="premium-pool-seed-run-001",
@@ -329,7 +329,7 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
             mock.patch.object(local_environment_auth.subprocess, "run", return_value=completed) as run,
         ):
             session = local_environment_auth.open_local_acceptance_session(
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
                 environment="gamma",
                 target_name="gamma-local",
                 subject="filter-catalog-publisher",
@@ -347,7 +347,7 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
     def test_run_scoped_subject_rejects_noncanonical_identity(self) -> None:
         with self.assertRaisesRegex(ValueError, "subject is invalid"):
             local_environment_auth.open_local_acceptance_session(
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
                 environment="gamma",
                 target_name="gamma-local",
                 subject="../../shared-actor",
@@ -356,7 +356,7 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
     def test_non_loopback_transport_is_rejected_before_a_request(self) -> None:
         with self.assertRaisesRegex(ValueError, "loopback"):
             local_environment_auth.open_local_acceptance_session(
-                "https://gamma-api.quwoquan-env.test:19000",
+                "https://api.gamma.quwoquan.com:19000",
                 environment="gamma",
                 target_name="gamma-local",
                 resolve_host="10.0.0.1",
@@ -379,7 +379,7 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
         ):
             with self.assertRaisesRegex(RuntimeError, "invalid JSON"):
                 local_environment_auth.open_local_acceptance_session(
-                    "https://gamma-api.quwoquan-env.test:19000",
+                    "https://api.gamma.quwoquan.com:19000",
                     environment="gamma",
                     target_name="gamma-local",
                 )

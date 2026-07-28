@@ -103,7 +103,6 @@ class PatrolCliResolutionTest(unittest.TestCase):
         args = SimpleNamespace(
             runtime_env="prod",
             api_contract_env="prod",
-            data_source="remote",
             gateway_base_url="https://api.example.test",
             product_ops_base_url="https://ops.example.test",
             media_base_url="",
@@ -129,7 +128,7 @@ class PatrolCliResolutionTest(unittest.TestCase):
 
         self.assertEqual(command[0], "/tmp/patrol")
         self.assertIn("--dart-define=APP_RUNTIME_ENV=prod", command)
-        self.assertIn("--dart-define=APP_DATA_SOURCE=remote", command)
+        self.assertNotIn("APP_DATA_SOURCE", "\n".join(command))
         self.assertIn(
             "--dart-define-from-file=/tmp/patrol-secrets.json",
             command,

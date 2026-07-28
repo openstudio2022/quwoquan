@@ -70,5 +70,6 @@ dependencies {
     compileOnly files(vendoredAndroidArtifact('android-144.7559.01.aar'))
     compileOnly files(vendoredAndroidArtifact('audioswitch-89582c47c9a04c62f90aa5e57251af4800a62c9a.aar'))
     implementation 'androidx.annotation:annotation:1.1.0'
+    implementation 'androidx.fragment:fragment:1.8.5'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
 }

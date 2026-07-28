@@ -9,6 +9,7 @@ import 'package:quwoquan_app/core/platform/native_bridge.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
 import 'package:quwoquan_app/core/platform/push_endpoint_gateway.dart';
+import 'package:quwoquan_app/core/platform/web_install_context.dart';
 
 /// Current platform (assembly/observability only — do NOT branch on this in
 /// business code; consume [platformCapabilitiesProvider] instead).
@@ -30,6 +31,11 @@ final platformCapabilitiesProvider = Provider<PlatformCapabilities>(
 /// on the target platform itself.
 final platformTelemetryNameProvider = Provider<String>(
   (ref) => platformWireName(ref.watch(platformTargetProvider)),
+);
+
+/// Web 安装推荐只读取非唯一化的平台能力信号，不参与版本判断。
+final webInstallContextProvider = Provider<WebInstallContext>(
+  (ref) => readWebInstallContext(),
 );
 
 /// Local file/path access behind the anti-corruption boundary.

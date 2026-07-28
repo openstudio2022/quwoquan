@@ -171,6 +171,7 @@ EXECUTION_SHARED_AUTHORITATIVE_ENTRIES = frozenset({
     "run_journal.md",
     "base_draft_ledger.json",
     "execution_reducer_gate.json",
+    "post_review_closure.json",
     "content_plan_source_diagnostics.json",
     "source_unavailable_targets.json",
     "reasoned_rejects.json",

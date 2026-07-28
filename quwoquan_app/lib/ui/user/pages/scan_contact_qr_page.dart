@@ -112,7 +112,7 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
     }
     if (raw.isEmpty) {
       if (mounted) {
-        AppToast.show(context, UITextConstants.scanQrNoCodeFound);
+        AppToast.show(context, ContactText.scanQrNoCodeFound);
       }
       return;
     }
@@ -123,7 +123,7 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
     final parsed = QrPayloadParser.parse(raw);
     if (parsed == null || !parsed.isValid) {
       if (mounted) {
-        AppToast.show(context, UITextConstants.scanQrInvalidCode);
+        AppToast.show(context, ContactText.scanQrInvalidCode);
       }
       return;
     }
@@ -211,7 +211,7 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
                   Padding(
                     padding: EdgeInsets.only(bottom: AppSpacing.containerXl),
                     child: Text(
-                      UITextConstants.scanQrHint,
+                      ContactText.scanQrHint,
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: AppTypography.iosFootnote,
@@ -229,13 +229,13 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
                       children: <Widget>[
                         _CircleAction(
                           icon: CupertinoIcons.qrcode,
-                          label: UITextConstants.editProfileQrCardTitle,
+                          label: ProfileText.editProfileQrCardTitle,
                           onTap: () => context.push(AppRoutePaths.myQrCode),
                         ),
                         if (_canUseGallery)
                           _CircleAction(
                             icon: CupertinoIcons.photo,
-                            label: UITextConstants.scanQrAlbum,
+                            label: ContactText.scanQrAlbum,
                             onTap: () => unawaited(_pickFromGallery()),
                           ),
                       ],
@@ -406,7 +406,7 @@ class _CameraUnavailable extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.containerMd),
             Text(
-              UITextConstants.scanQrCameraUnavailableTitle,
+              ContactText.scanQrCameraUnavailableTitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: AppTypography.iosTitle3,
@@ -416,7 +416,7 @@ class _CameraUnavailable extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.intraGroupSm),
             Text(
-              UITextConstants.scanQrCameraUnavailableBody,
+              ContactText.scanQrCameraUnavailableBody,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: AppTypography.iosCallout,

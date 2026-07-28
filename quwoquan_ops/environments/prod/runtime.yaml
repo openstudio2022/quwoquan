@@ -2,17 +2,18 @@
   "schema": "environment-runtime",
   "environment": "prod",
   "dataReleaseTarget": "prod-hosted",
-  "publicBases": {
-    "api": "https://api.quwoquan.com",
-    "realtime": "wss://realtime.quwoquan.com",
-    "rtc": "wss://rtc.quwoquan.com",
-    "productOps": "https://ops.quwoquan.com",
-    "publicWeb": "https://quwoquan.com",
-    "appDownload": "https://cdn.quwoquan.com",
-    "mediaAvatar": "https://cdn.quwoquan.com",
-    "mediaImage": "https://cdn.quwoquan.com",
-    "mediaVideo": "https://cdn.quwoquan.com",
-    "mediaUpload": "https://upload.quwoquan.com"
+  "urlRoles": {
+    "api": {"exposure": "public", "scheme": "https", "host": "api.quwoquan.com", "portRole": null, "pathBase": "/", "tlsProfile": "public-ca-prod", "consumers": ["app.gateway", "data.release-verifier", "ops.health"]},
+    "realtime": {"exposure": "public", "scheme": "wss", "host": "api.quwoquan.com", "portRole": null, "pathBase": "/", "tlsProfile": "public-ca-prod", "consumers": ["app.realtime", "ops.health"]},
+    "rtc": {"exposure": "public", "scheme": "wss", "host": "rtc.quwoquan.com", "portRole": null, "pathBase": "/", "tlsProfile": "public-ca-prod", "consumers": ["app.rtc", "ops.health"]},
+    "productOps": {"exposure": "public", "scheme": "https", "host": "ops.quwoquan.com", "portRole": null, "pathBase": "/", "tlsProfile": "public-ca-prod", "consumers": ["app.recovery", "ops.release"]},
+    "publicWeb": {"exposure": "public", "scheme": "https", "host": "quwoquan.com", "portRole": null, "pathBase": "/", "tlsProfile": "public-ca-prod", "consumers": ["app.public-links", "web.release", "native.app-links"]},
+    "appDownload": {"exposure": "public", "scheme": "https", "host": "cdn.quwoquan.com", "portRole": null, "pathBase": "/app/download", "tlsProfile": "public-ca-prod", "consumers": ["app.recovery", "web.download"]},
+    "legal": {"exposure": "public", "scheme": "https", "host": "quwoquan.com", "portRole": null, "pathBase": "/legal", "tlsProfile": "public-ca-prod", "consumers": ["app.legal", "web.legal"]},
+    "mediaAvatar": {"exposure": "public", "scheme": "https", "host": "cdn.quwoquan.com", "portRole": null, "pathBase": "/media/avatar", "tlsProfile": "public-ca-prod", "consumers": ["app.media", "data.release", "service.chat"]},
+    "mediaImage": {"exposure": "public", "scheme": "https", "host": "cdn.quwoquan.com", "portRole": null, "pathBase": "/media/image", "tlsProfile": "public-ca-prod", "consumers": ["app.media", "data.release", "service.content"]},
+    "mediaVideo": {"exposure": "public", "scheme": "https", "host": "cdn.quwoquan.com", "portRole": null, "pathBase": "/media/video", "tlsProfile": "public-ca-prod", "consumers": ["app.media", "data.release", "service.content"]},
+    "mediaUpload": {"exposure": "public", "scheme": "https", "host": "upload.quwoquan.com", "portRole": null, "pathBase": "/", "tlsProfile": "public-ca-prod", "consumers": ["app.media-upload", "service.upload-issuer"]}
   },
   "subnets": {
     "edge": "10.60.10.0/24",
@@ -29,7 +30,6 @@
   "artifactPolicy": {
     "app": {
       "runtimeEnv": "prod",
-      "dataSource": "remote",
       "allowSeeds": false,
       "allowLocalHosts": false,
       "allowProdHosts": true,
@@ -42,23 +42,6 @@
       "distribution": "store-release"
     }
   },
-  "hostAllowlist": [
-    "api.quwoquan.com",
-    "realtime.quwoquan.com",
-    "rtc.quwoquan.com",
-    "ops.quwoquan.com",
-    "cdn.quwoquan.com",
-    "upload.quwoquan.com",
-    "quwoquan.com"
-  ],
-  "forbiddenHostTokens": [
-    ".test",
-    ".example",
-    "127.0.0.1",
-    "10.0.2.2",
-    "192.168.",
-    "118.31.239.122"
-  ],
   "rolloutStagePolicy": {
     "mode": "prod-rollout",
     "allowedStages": [
@@ -73,17 +56,19 @@
       "backend": "local",
       "localResourceGroup": "workstation-commercial-runtime",
       "portProfile": "prod-sim",
-      "publicBases": {
-        "api": "https://prod-api.quwoquan-env.test:20000",
-        "realtime": "wss://prod-api.quwoquan-env.test:20000",
-        "rtc": "wss://prod-rtc.quwoquan-env.test:20000",
-        "productOps": "https://prod-product-ops.quwoquan-env.test:20010",
-        "publicWeb": "https://prod-api.quwoquan-env.test:20000",
-        "appDownload": "https://prod-image.quwoquan-env.test:20100",
-        "mediaAvatar": "https://prod-avatar.quwoquan-env.test:20100",
-        "mediaImage": "https://prod-image.quwoquan-env.test:20100",
-        "mediaVideo": "https://prod-video.quwoquan-env.test:20100",
-        "mediaUpload": "https://prod-upload.quwoquan-env.test:20100"
+      "baseRoleSet": "environment",
+      "urlOverrides": {
+        "api": {"host": "api.sim.quwoquan.com", "portRole": "api-edge", "tlsProfile": "acme-dns01-sim"},
+        "realtime": {"host": "api.sim.quwoquan.com", "portRole": "api-edge", "tlsProfile": "acme-dns01-sim"},
+        "rtc": {"host": "rtc.sim.quwoquan.com", "portRole": "api-edge", "tlsProfile": "acme-dns01-sim"},
+        "productOps": {"host": "ops.sim.quwoquan.com", "portRole": "product-ops-edge", "tlsProfile": "acme-dns01-sim"},
+        "publicWeb": {"host": "sim.quwoquan.com", "portRole": "api-edge", "tlsProfile": "acme-dns01-sim"},
+        "appDownload": {"host": "cdn.sim.quwoquan.com", "portRole": "media-edge", "tlsProfile": "acme-dns01-sim"},
+        "legal": {"host": "sim.quwoquan.com", "portRole": "api-edge", "tlsProfile": "acme-dns01-sim"},
+        "mediaAvatar": {"host": "cdn.sim.quwoquan.com", "portRole": "media-edge", "tlsProfile": "acme-dns01-sim"},
+        "mediaImage": {"host": "cdn.sim.quwoquan.com", "portRole": "media-edge", "tlsProfile": "acme-dns01-sim"},
+        "mediaVideo": {"host": "cdn.sim.quwoquan.com", "portRole": "media-edge", "tlsProfile": "acme-dns01-sim"},
+        "mediaUpload": {"host": "upload.sim.quwoquan.com", "portRole": "media-edge", "tlsProfile": "acme-dns01-sim"}
       },
       "origins": {
         "mediaOrigin": "http://127.0.0.1:20110",
@@ -99,19 +84,8 @@
       "env": "prod",
       "backend": "ssh-hosted",
       "portProfile": null,
+      "baseRoleSet": "environment",
       "sharedClusterNote": "gray-initial and full share the same physical cluster because of current cost constraints; gamma is local-only and has no remote target",
-      "publicBases": {
-        "api": "https://api.quwoquan.com",
-        "realtime": "wss://realtime.quwoquan.com",
-        "rtc": "wss://rtc.quwoquan.com",
-        "productOps": "https://ops.quwoquan.com",
-        "publicWeb": "https://quwoquan.com",
-        "appDownload": "https://cdn.quwoquan.com",
-        "mediaAvatar": "https://cdn.quwoquan.com",
-        "mediaImage": "https://cdn.quwoquan.com",
-        "mediaVideo": "https://cdn.quwoquan.com",
-        "mediaUpload": "https://upload.quwoquan.com"
-      },
       "playbackCanary": {
         "source": "published-release",
         "workIdEnv": "VIDEO_PLAYBACK_CANARY_WORK_ID",
@@ -120,8 +94,8 @@
       "dataRelease": {
         "mode": "hosted-import",
         "mongoUriEnv": "QWQ_PROD_DATA_RELEASE_MONGO_URI",
-        "mediaRootEnv": "QWQ_PROD_DATA_RELEASE_MEDIA_ROOT",
-        "mediaPublicBaseKey": "mediaImage"
+        "userPostgresDsnEnv": "QWQ_PROD_DATA_RELEASE_USER_POSTGRES_DSN",
+        "mediaRootEnv": "QWQ_PROD_DATA_RELEASE_MEDIA_ROOT"
       }
     }
   }

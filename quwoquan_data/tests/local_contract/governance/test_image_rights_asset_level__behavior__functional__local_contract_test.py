@@ -10,7 +10,10 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from governance.coverage.license import audit_image_rights as validate_image_rights  # noqa: E402
+from governance.coverage.license import (  # noqa: E402
+    audit_image_rights as validate_image_rights,
+    rights_proof_required,
+)
 
 
 def test_discovery_platform_is_not_blocked_by_source_name_when_asset_rights_are_complete():
@@ -29,6 +32,10 @@ def test_discovery_platform_is_not_blocked_by_source_name_when_asset_rights_are_
         vertical="travel",
     )
     assert issues == []
+
+
+def test_travel_rights_policy_is_fail_closed_for_commercial_publish():
+    assert rights_proof_required("travel") is True
 
 
 def test_attribution_no_watermark_payload_passes_with_complete_pinterest_evidence():

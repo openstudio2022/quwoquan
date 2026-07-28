@@ -81,7 +81,7 @@ class _CirclesGlobalHeader extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  UITextConstants.circlesRecommendedTitle,
+                  CommunityText.circlesRecommendedTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -98,7 +98,7 @@ class _CirclesGlobalHeader extends StatelessWidget {
                 padding: EdgeInsets.zero,
                 minimumSize: Size.zero,
                 child: Text(
-                  UITextConstants.seeMore,
+                  CommunityText.seeMore,
                   style: TextStyle(
                     fontSize: AppTypography.sm,
                     color: AppColors.primaryColor,
@@ -117,13 +117,13 @@ class _CirclesGlobalHeader extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.containerSm,
                 ),
-                child: Text(UITextConstants.circleScenarioRecommended),
+                child: Text(DiscoveryText.circleScenarioRecommended),
               ),
               _HomeCirclesModuleTab.mine: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.containerSm,
                 ),
-                child: Text(UITextConstants.circleScenarioMine),
+                child: Text(DiscoveryText.circleScenarioMine),
               ),
             },
             onValueChanged: (value) {
@@ -400,7 +400,7 @@ class _HomeCircleRailCard extends StatelessWidget {
                       ),
                       SizedBox(height: AppSpacing.intraGroupXs / 2),
                       Text(
-                        '${circle.memberCount} ${UITextConstants.circleMembers}',
+                        '${circle.memberCount} ${CommunityText.circleMembers}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: metaStyle,
@@ -480,7 +480,7 @@ class _HomeCircleViewAllCard extends StatelessWidget {
                       ),
                       SizedBox(height: AppSpacing.intraGroupXs),
                       Text(
-                        UITextConstants.homeCirclesViewAll,
+                        DiscoveryText.homeCirclesViewAll,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: AppTypography.sm,
@@ -570,7 +570,7 @@ class _CirclesHubTopBar extends StatelessWidget {
                       onPressed: onSearchTap,
                       child: IgnorePointer(
                         child: AppSearchField(
-                          placeholder: UITextConstants.circlesSearchHint,
+                          placeholder: CommunityText.circlesSearchHint,
                           backgroundColor: fieldBackground,
                           elevated: false,
                         ),

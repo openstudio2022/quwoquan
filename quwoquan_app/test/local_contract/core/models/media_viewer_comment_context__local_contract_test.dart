@@ -1,10 +1,33 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 
 void main() {
   group('MediaViewerCommentContext 单一方言', () {
-    test('buildDeepLinkQuery：一级评论目标只产出 targetCommentId', () {
-      final query = MediaViewerCommentContext.buildDeepLinkQuery(
+    Map<String, String> workBrowserQuery({
+      required String entrySource,
+      String? targetCommentId,
+      String? targetParentCommentId,
+      String? targetReplyId,
+      String? replyToCommentId,
+    }) {
+      return Uri.parse(
+        AppRoutePaths.workBrowser(
+          workId: 'post_1',
+          openComments: 'true',
+          commentEntrySource: entrySource,
+          targetCommentId: targetCommentId,
+          targetParentCommentId: targetParentCommentId,
+          targetReplyId: targetReplyId,
+          replyToCommentId: replyToCommentId,
+        ),
+      ).queryParameters;
+    }
+
+    test('generated workBrowser route：一级评论目标只产出 targetCommentId', () {
+      final query = workBrowserQuery(
         entrySource: MediaViewerCommentContext.entrySourceProfileInteraction,
         targetCommentId: 'comment_top_1',
       );
@@ -24,36 +47,39 @@ void main() {
       expect(query.containsKey('targetKind'), isFalse);
     });
 
-    test('buildDeepLinkQuery：二级回复目标产出 targetParentCommentId+targetReplyId', () {
-      final query = MediaViewerCommentContext.buildDeepLinkQuery(
-        entrySource: MediaViewerCommentContext.entrySourceProfileComments,
-        targetParentCommentId: 'parent_1',
-        targetReplyId: 'reply_9',
-        replyToCommentId: 'reply_9',
-      );
+    test(
+      'generated workBrowser route：二级回复目标产出 targetParentCommentId+targetReplyId',
+      () {
+        final query = workBrowserQuery(
+          entrySource: MediaViewerCommentContext.entrySourceProfileComments,
+          targetParentCommentId: 'parent_1',
+          targetReplyId: 'reply_9',
+          replyToCommentId: 'reply_9',
+        );
 
-      expect(query, <String, String>{
-        MediaViewerCommentContext.queryOpenComments: 'true',
-        MediaViewerCommentContext.queryEntrySource: 'profile-comments',
-        MediaViewerCommentContext.queryTargetParentCommentId: 'parent_1',
-        MediaViewerCommentContext.queryTargetReplyId: 'reply_9',
-        MediaViewerCommentContext.queryReplyToCommentId: 'reply_9',
-      });
-      expect(
-        query.containsKey(MediaViewerCommentContext.queryTargetCommentId),
-        isFalse,
-      );
-    });
+        expect(query, <String, String>{
+          MediaViewerCommentContext.queryOpenComments: 'true',
+          MediaViewerCommentContext.queryEntrySource: 'profile-comments',
+          MediaViewerCommentContext.queryTargetParentCommentId: 'parent_1',
+          MediaViewerCommentContext.queryTargetReplyId: 'reply_9',
+          MediaViewerCommentContext.queryReplyToCommentId: 'reply_9',
+        });
+        expect(
+          query.containsKey(MediaViewerCommentContext.queryTargetCommentId),
+          isFalse,
+        );
+      },
+    );
 
     test('两个入口同方言：相同逻辑目标 → 相同 target* 键值（仅 entrySource 区分）', () {
       // 我的互动 tab：回复目标 = (parent_1, reply_9)
-      final interactionQuery = MediaViewerCommentContext.buildDeepLinkQuery(
+      final interactionQuery = workBrowserQuery(
         entrySource: MediaViewerCommentContext.entrySourceProfileInteraction,
         targetParentCommentId: 'parent_1',
         targetReplyId: 'reply_9',
       );
       // 我的评论页：同一回复目标，附带回复态。
-      final commentsQuery = MediaViewerCommentContext.buildDeepLinkQuery(
+      final commentsQuery = workBrowserQuery(
         entrySource: MediaViewerCommentContext.entrySourceProfileComments,
         targetParentCommentId: 'parent_1',
         targetReplyId: 'reply_9',
@@ -70,7 +96,7 @@ void main() {
 
     test('fromQueryParameters：解析一级评论 canonical 方言', () {
       final context = MediaViewerCommentContext.fromQueryParameters(
-        MediaViewerCommentContext.buildDeepLinkQuery(
+        workBrowserQuery(
           entrySource: MediaViewerCommentContext.entrySourceProfileInteraction,
           targetCommentId: 'comment_top_1',
         ),
@@ -87,7 +113,7 @@ void main() {
 
     test('fromQueryParameters：解析二级回复 canonical 方言', () {
       final context = MediaViewerCommentContext.fromQueryParameters(
-        MediaViewerCommentContext.buildDeepLinkQuery(
+        workBrowserQuery(
           entrySource: MediaViewerCommentContext.entrySourceProfileComments,
           targetParentCommentId: 'parent_1',
           targetReplyId: 'reply_9',
@@ -111,23 +137,19 @@ void main() {
         MediaViewerCommentContext.entrySourceProfileComments,
       ]) {
         final context = MediaViewerCommentContext.fromQueryParameters(
-          MediaViewerCommentContext.buildDeepLinkQuery(
-            entrySource: source,
-            targetCommentId: 'comment_x',
-          ),
+          workBrowserQuery(entrySource: source, targetCommentId: 'comment_x'),
         );
         expect(context.usesProfileInteractionMode, isTrue, reason: source);
       }
     });
 
     test('非个人页 / 未知入口不落 profileInteraction mode', () {
-      final context = MediaViewerCommentContext.fromQueryParameters(
-        const <String, String>{
-          'openComments': 'true',
-          'commentEntrySource': 'feed-card',
-          'targetCommentId': 'comment_x',
-        },
-      );
+      final context =
+          MediaViewerCommentContext.fromQueryParameters(const <String, String>{
+            'openComments': 'true',
+            'commentEntrySource': 'feed-card',
+            'targetCommentId': 'comment_x',
+          });
       expect(context.usesProfileInteractionMode, isFalse);
     });
 
@@ -143,6 +165,35 @@ void main() {
       expect(context.replyToCommentId, isNull);
       expect(context.shouldOpen, isFalse);
       expect(context.usesProfileInteractionMode, isFalse);
+    });
+
+    test('Router 将 metadata 声明的 workBrowser query 交给 typed context', () {
+      final routerSource = File(
+        'lib/app/navigation/app_router.dart',
+      ).readAsStringSync();
+      expect(
+        routerSource,
+        contains('MediaViewerCommentContext.fromQueryParameters('),
+      );
+      expect(
+        routerSource,
+        contains('commentContext: commentContext'),
+        reason:
+            'the workBrowser Router branch must pass its parsed context to the '
+            'direct-entry page and preloaded immersive viewer.',
+      );
+    });
+
+    test('comment deep links use the generated workBrowser builder', () {
+      for (final path in <String>[
+        'lib/ui/user/utils/profile_comment_detail_route.dart',
+        'lib/cloud/services/notification/app_message_navigation.dart',
+      ]) {
+        final source = File(path).readAsStringSync();
+        expect(source, contains('AppRoutePaths.workBrowser('));
+        expect(source, isNot(contains('Uri.parse(')));
+        expect(source, isNot(contains('.replace(')));
+      }
     });
   });
 }

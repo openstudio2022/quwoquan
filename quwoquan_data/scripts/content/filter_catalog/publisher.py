@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 import json
 from pathlib import Path
-import socket
 import ssl
 from typing import Protocol
 from urllib import error, request
@@ -18,10 +17,6 @@ from content.filter_catalog.environment_import import (
 from content.filter_catalog.codec import canonical_json_bytes
 from content.filter_catalog.contract import CatalogContractError
 from core.runtime_policy import active_runtime_policy
-
-
-_LOCAL_TLS_HOST_SUFFIX = ".quwoquan-env.test"
-_LOCAL_TLS_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
 class FilterCatalogPublishAction(StrEnum):
@@ -54,9 +49,6 @@ class FilterCatalogPublishError(CatalogContractError):
 
 
 class UrllibFilterCatalogHttpTransport:
-    def __init__(self, *, insecure_local_tls: bool) -> None:
-        self._insecure_local_tls = insecure_local_tls
-
     def request_json(
         self,
         *,
@@ -65,20 +57,8 @@ class UrllibFilterCatalogHttpTransport:
         headers: dict[str, str],
         body: bytes | None,
     ) -> FilterCatalogHttpResponse:
-        parsed = urlsplit(url)
-        host = (parsed.hostname or "").lower()
         request_timeout_seconds = active_runtime_policy().api_request_timeout_seconds
-        context = (
-            ssl._create_unverified_context()
-            if self._insecure_local_tls
-            else ssl.create_default_context()
-        )
-        original_getaddrinfo = socket.getaddrinfo
-        resolve_local_public_host = (
-            self._insecure_local_tls and host.endswith(_LOCAL_TLS_HOST_SUFFIX)
-        )
-        if resolve_local_public_host:
-            socket.getaddrinfo = _loopback_getaddrinfo(original_getaddrinfo)
+        context = ssl.create_default_context()
         try:
             response_request = request.Request(
                 url,
@@ -87,21 +67,11 @@ class UrllibFilterCatalogHttpTransport:
                 method=method,
             )
             try:
-                if resolve_local_public_host:
-                    opener = request.build_opener(
-                        request.ProxyHandler({}),
-                        request.HTTPSHandler(context=context),
-                    )
-                    response = opener.open(
-                        response_request,
-                        timeout=request_timeout_seconds,
-                    )
-                else:
-                    response = request.urlopen(
-                        response_request,
-                        timeout=request_timeout_seconds,
-                        context=context,
-                    )
+                response = request.urlopen(
+                    response_request,
+                    timeout=request_timeout_seconds,
+                    context=context,
+                )
                 with response:
                     return FilterCatalogHttpResponse(
                         status=response.status,
@@ -113,8 +83,6 @@ class UrllibFilterCatalogHttpTransport:
             raise FilterCatalogPublishError(
                 f"FilterCatalogRelease publish request unavailable: {exc.reason}"
             ) from exc
-        finally:
-            socket.getaddrinfo = original_getaddrinfo
 
 
 def publish_filter_catalog(
@@ -126,7 +94,6 @@ def publish_filter_catalog(
     bearer_token: str | None = None,
     rollback_release_id: str = "",
     allow_gray_activation: bool = False,
-    insecure_local_tls: bool = False,
     transport: FilterCatalogHttpTransport | None = None,
 ) -> dict[str, object]:
     """执行可重放 Stage/Activate/Rollback 或只读 active release 复核。"""
@@ -134,10 +101,7 @@ def publish_filter_catalog(
         repo_root=repo_root,
         environment=environment,
     )
-    normalized_base_url = _normalize_base_url(
-        base_url,
-        insecure_local_tls=insecure_local_tls,
-    )
+    normalized_base_url = _normalize_base_url(base_url)
     _validate_action(
         environment_input=environment_input,
         action=action,
@@ -145,10 +109,51 @@ def publish_filter_catalog(
         rollback_release_id=rollback_release_id,
         allow_gray_activation=allow_gray_activation,
     )
-    client = transport or UrllibFilterCatalogHttpTransport(
-        insecure_local_tls=insecure_local_tls,
-    )
+    client = transport or UrllibFilterCatalogHttpTransport()
     receipts: list[dict[str, object]] = []
+
+    if action is FilterCatalogPublishAction.stage_and_activate:
+        # active digest 已匹配时不再 stage，避免无意义 Idempotency-Key 冲突与重复写入。
+        try:
+            active_response = _read_active(
+                client=client,
+                base_url=normalized_base_url,
+                path=environment_input.operation_paths["read"],
+            )
+            _assert_active_snapshot(
+                active_response,
+                environment_input=environment_input,
+            )
+            active = _active_evidence(active_response)
+            requested_catalog = {
+                "releaseId": environment_input.release_id,
+                "canonicalDigest": environment_input.canonical_digest,
+                "categoryCount": environment_input.category_count,
+                "presetCount": environment_input.preset_count,
+            }
+            return {
+                "schema": "quwoquan_data.filter_catalog_publish_receipt",
+                "passed": True,
+                "environment": environment_input.environment,
+                "action": action.value,
+                "manifestRef": environment_input.manifest_ref,
+                "canonicalArtifactRef": environment_input.canonical_artifact_ref,
+                "requestedCatalog": requested_catalog,
+                "releaseId": active["releaseId"],
+                "canonicalDigest": active["canonicalDigest"],
+                "categoryCount": active["categoryCount"],
+                "presetCount": active["presetCount"],
+                "receipts": [
+                    {
+                        "operation": "verify",
+                        "shortCircuited": True,
+                        "reason": "active_catalog_digest_matches",
+                    }
+                ],
+                "active": active,
+            }
+        except FilterCatalogPublishError:
+            pass
 
     if action in {
         FilterCatalogPublishAction.stage,
@@ -293,12 +298,12 @@ def _validate_action(
         )
 
 
-def _normalize_base_url(value: str, *, insecure_local_tls: bool) -> str:
+def _normalize_base_url(value: str) -> str:
     normalized = value.strip()
     parsed = urlsplit(normalized)
     host = (parsed.hostname or "").lower()
     if (
-        parsed.scheme not in {"http", "https"}
+        parsed.scheme != "https"
         or not host
         or parsed.username
         or parsed.password
@@ -307,16 +312,7 @@ def _normalize_base_url(value: str, *, insecure_local_tls: bool) -> str:
         or parsed.path not in {"", "/"}
     ):
         raise FilterCatalogPublishError(
-            "FilterCatalogRelease publish base URL must be an absolute origin"
-        )
-    is_local_host = host in _LOCAL_TLS_HOSTS or host.endswith(_LOCAL_TLS_HOST_SUFFIX)
-    if parsed.scheme == "http" and not is_local_host:
-        raise FilterCatalogPublishError(
-            "FilterCatalogRelease publish requires HTTPS outside local targets"
-        )
-    if insecure_local_tls and not is_local_host:
-        raise FilterCatalogPublishError(
-            "insecure local TLS is restricted to declared local environment hosts"
+            "FilterCatalogRelease publish base URL must be an absolute HTTPS origin"
         )
     return normalized.rstrip("/")
 
@@ -519,12 +515,3 @@ def _error_code(body: dict[str, object]) -> str:
         if isinstance(nested_code, str):
             return nested_code
     return ""
-
-
-def _loopback_getaddrinfo(original: object):
-    def getaddrinfo(host: object, *args: object, **kwargs: object):
-        if isinstance(host, str) and host.endswith(_LOCAL_TLS_HOST_SUFFIX):
-            host = "127.0.0.1"
-        return original(host, *args, **kwargs)  # type: ignore[operator]
-
-    return getaddrinfo

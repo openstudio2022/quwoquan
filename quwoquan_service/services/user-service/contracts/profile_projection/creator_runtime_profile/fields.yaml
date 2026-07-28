@@ -81,8 +81,28 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
-- name: avatarObjectKey
-  source: avatarObjectKey
+- name: avatarAssetId
+  source: avatarAssetId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: avatarVersion
+  source: avatarVersion
+  type: int
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: projection
+- name: avatarPublicSliceKey
+  source: avatarPublicSliceKey
   type: string
   constraints:
   - NOT_NULL

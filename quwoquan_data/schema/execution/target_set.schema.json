@@ -19,6 +19,10 @@
     },
     "selectionPolicy": { "const": "frozen" },
     "sourceRef": { "type": "string", "minLength": 1 },
+    "entityCatalogDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
     "targetCount": { "type": "integer", "minimum": 1 },
     "targetRefs": {
       "type": "array",

@@ -104,7 +104,7 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: quwoquan
+  default: quwoquan_user
 - key: sys.user-service.mongodb.uri
   type: string
   scope: workload

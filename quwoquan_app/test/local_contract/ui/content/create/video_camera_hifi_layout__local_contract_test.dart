@@ -127,7 +127,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
       ImageEditorFilterPreset(
         id: 'original',
         categoryId: ImageEditorFilterRepository.cameraPhotoCategoryId,
-        name: UITextConstants.imageEditOriginal,
+        name: MediaText.imageEditOriginal,
         sort: 1,
         enabled: true,
         defaultStrength: 0,
@@ -136,7 +136,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
       ImageEditorFilterPreset(
         id: 'cool',
         categoryId: ImageEditorFilterRepository.cameraPhotoCategoryId,
-        name: UITextConstants.imageEditCameraCool,
+        name: MediaText.imageEditCameraCool,
         sort: 2,
         enabled: true,
         defaultStrength: 80,

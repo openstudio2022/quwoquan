@@ -23,9 +23,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.cameraPhotoModeTitle), findsOneWidget);
-    expect(find.text(UITextConstants.cameraVideoMode), findsNothing);
-    expect(find.text(UITextConstants.cameraFilter), findsOneWidget);
+    expect(find.text(MediaText.cameraPhotoModeTitle), findsOneWidget);
+    expect(find.text(MediaText.cameraVideoMode), findsNothing);
+    expect(find.text(MediaText.cameraFilter), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('camera-capture-action')),
       findsOneWidget,
@@ -50,10 +50,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.cameraUnavailableTitle), findsOneWidget);
-    expect(find.text(UITextConstants.cameraUnavailable), findsOneWidget);
+    expect(find.text(MediaText.cameraUnavailableTitle), findsOneWidget);
+    expect(find.text(MediaText.cameraUnavailable), findsOneWidget);
     expect(
-      find.text(UITextConstants.cameraUnavailableRecovery),
+      find.text(MediaText.cameraUnavailableRecovery),
       findsOneWidget,
     );
     expect(
@@ -64,12 +64,12 @@ void main() {
       find.byKey(const ValueKey<String>('camera-rotate-action')),
       findsNothing,
     );
-    final titleFinder = find.text(UITextConstants.cameraUnavailableTitle);
+    final titleFinder = find.text(MediaText.cameraUnavailableTitle);
     final titleContext = tester.element(titleFinder);
     expect(MediaQuery.of(titleContext).platformBrightness, Brightness.dark);
     expect(CupertinoTheme.of(titleContext).brightness, Brightness.dark);
-    expect(find.text(UITextConstants.back), findsOneWidget);
-    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+    expect(find.text(ContentText.back), findsOneWidget);
+    expect(find.text(ContentText.tryAgain), findsOneWidget);
   });
 
   testWidgets('图片拍摄确认态不展示录像切换和右上角相机切换', (tester) async {
@@ -86,14 +86,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.cameraPhotoModeTitle), findsOneWidget);
-    expect(find.text(UITextConstants.cameraVideoMode), findsNothing);
+    expect(find.text(MediaText.cameraPhotoModeTitle), findsOneWidget);
+    expect(find.text(MediaText.cameraVideoMode), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('camera-rotate-action')),
       findsNothing,
     );
-    expect(find.text(UITextConstants.cameraRetakePhoto), findsOneWidget);
-    expect(find.text(UITextConstants.cameraUsePhoto), findsOneWidget);
+    expect(find.text(MediaText.cameraRetakePhoto), findsOneWidget);
+    expect(find.text(MediaText.cameraUsePhoto), findsOneWidget);
   });
 
   testWidgets('拍照后确认态支持重新拍摄', (tester) async {
@@ -110,14 +110,14 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text(UITextConstants.cameraRetakePhoto), findsOneWidget);
-    expect(find.text(UITextConstants.cameraUsePhoto), findsOneWidget);
+    expect(find.text(MediaText.cameraRetakePhoto), findsOneWidget);
+    expect(find.text(MediaText.cameraUsePhoto), findsOneWidget);
 
-    await tester.tap(find.text(UITextConstants.cameraRetakePhoto));
+    await tester.tap(find.text(MediaText.cameraRetakePhoto));
     await tester.pump();
 
-    expect(find.text(UITextConstants.cameraRetakePhoto), findsNothing);
-    expect(find.text(UITextConstants.cameraUsePhoto), findsNothing);
+    expect(find.text(MediaText.cameraRetakePhoto), findsNothing);
+    expect(find.text(MediaText.cameraUsePhoto), findsNothing);
   });
 
   testWidgets('滤镜条支持展开选择且快门保持居中', (tester) async {
@@ -234,7 +234,7 @@ void main() {
       find.byKey(const ValueKey<String>('camera-capture-action')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.cameraUsePhoto));
+    await tester.tap(find.text(MediaText.cameraUsePhoto));
     await tester.pumpAndSettle();
 
     expect(result?.path, '/tmp/edited.jpg');
@@ -281,7 +281,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
       ImageEditorFilterPreset(
         id: 'original',
         categoryId: ImageEditorFilterRepository.cameraPhotoCategoryId,
-        name: UITextConstants.imageEditOriginal,
+        name: MediaText.imageEditOriginal,
         sort: 1,
         enabled: true,
         defaultStrength: 0,
@@ -290,7 +290,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
       ImageEditorFilterPreset(
         id: 'cool',
         categoryId: ImageEditorFilterRepository.cameraPhotoCategoryId,
-        name: UITextConstants.imageEditCameraCool,
+        name: MediaText.imageEditCameraCool,
         sort: 2,
         enabled: true,
         defaultStrength: 80,

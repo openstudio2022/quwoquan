@@ -21,7 +21,7 @@ from governance.content_supply_policy import (
     VideoDeliveryPolicy,
     load_content_supply_policy,
 )
-from governance.coverage.license import RightsAuditStatus
+from governance.coverage.license import RightsAuditStatus, rights_proof_required
 from content.execution.identity import parse_execution_id
 
 
@@ -39,6 +39,9 @@ class VideoSourceFrame:
     creator: str
     license: str
     basis: VideoSourceBasis
+    source_use_mode: str
+    rights_audit_status: RightsAuditStatus
+    rights_audit_issues: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +67,8 @@ class VideoRenderRequest:
 def _validate_request(
     request: VideoRenderRequest,
     policy: VideoDeliveryPolicy,
+    *,
+    require_rights_proof: bool,
 ) -> int:
     if not request.source_frames:
         raise ValueError("video render requires at least one source frame")
@@ -85,6 +90,31 @@ def _validate_request(
             )
         ):
             raise ValueError(f"video source frame rights evidence is incomplete: {frame.path}")
+        if frame.source_use_mode not in {
+            "licensed_adaptation",
+            "factual_reference_only",
+        }:
+            raise ValueError(
+                f"video source frame sourceUseMode is invalid: {frame.path}"
+            )
+        if not isinstance(frame.rights_audit_status, RightsAuditStatus):
+            raise ValueError(
+                f"video source frame rightsAuditStatus is invalid: {frame.path}"
+            )
+        if (
+            frame.rights_audit_status is RightsAuditStatus.UNVERIFIED
+            and not frame.rights_audit_issues
+        ):
+            raise ValueError(
+                f"unverified video source frame must record rightsAuditIssues: {frame.path}"
+            )
+        if require_rights_proof and (
+            frame.rights_audit_status is not RightsAuditStatus.VERIFIED
+            or frame.rights_audit_issues
+        ):
+            raise ValueError(
+                f"commercial video source frame rights are not verified: {frame.path}"
+            )
     minimum_segments = policy.minimum_segment_count
     segment_count = max(len(request.source_frames), minimum_segments)
     duration_seconds = segment_count * policy.segment_duration_seconds
@@ -171,7 +201,11 @@ def render_video_work_package(request: VideoRenderRequest) -> Path:
                 "sourced video package validation failed: " + "; ".join(issues)
             )
         return package
-    segment_count = _validate_request(request, policy)
+    segment_count = _validate_request(
+        request,
+        policy,
+        require_rights_proof=rights_proof_required(identity.vertical),
+    )
     assets_dir = request.output_dir / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
     video_path = assets_dir / "video.mp4"
@@ -223,6 +257,9 @@ def render_video_work_package(request: VideoRenderRequest) -> Path:
                 "creator": frame.creator,
                 "license": frame.license,
                 "basis": frame.basis.value,
+                "sourceUseMode": frame.source_use_mode,
+                "rightsAuditStatus": frame.rights_audit_status.value,
+                "rightsAuditIssues": list(frame.rights_audit_issues),
                 "sha256": _sha256(frame.path),
             }
             for frame in request.source_frames
@@ -251,6 +288,23 @@ def render_video_work_package(request: VideoRenderRequest) -> Path:
     )
     source_asset_refs = [frame.asset_ref for frame in request.source_frames]
     rights_refs = [frame.rights_ref for frame in request.source_frames]
+    rights_audit_issues = list(
+        dict.fromkeys(
+            issue
+            for frame in request.source_frames
+            for issue in frame.rights_audit_issues
+            if issue
+        )
+    )
+    rights_audit_status = (
+        RightsAuditStatus.VERIFIED
+        if all(
+            frame.rights_audit_status is RightsAuditStatus.VERIFIED
+            and not frame.rights_audit_issues
+            for frame in request.source_frames
+        )
+        else RightsAuditStatus.UNVERIFIED
+    )
     manifest = {
         "schema": "quwoquan_data.post_manifest",
         "vertical": identity.vertical,
@@ -292,8 +346,8 @@ def render_video_work_package(request: VideoRenderRequest) -> Path:
                 "provenanceRef": "provenance.json",
                 "sourceAssetRefs": source_asset_refs,
                 "rightsRefs": rights_refs,
-                "rightsAuditStatus": RightsAuditStatus.VERIFIED.value,
-                "rightsAuditIssues": [],
+                "rightsAuditStatus": rights_audit_status.value,
+                "rightsAuditIssues": rights_audit_issues,
                 "coverStrategy": "manual",
             },
             {
@@ -309,8 +363,8 @@ def render_video_work_package(request: VideoRenderRequest) -> Path:
                 "caption": request.caption,
                 "sourceAssetRefs": source_asset_refs,
                 "rightsRefs": rights_refs,
-                "rightsAuditStatus": RightsAuditStatus.VERIFIED.value,
-                "rightsAuditIssues": [],
+                "rightsAuditStatus": rights_audit_status.value,
+                "rightsAuditIssues": rights_audit_issues,
             },
         ],
         "videoBindings": [{"assetId": asset_id, "role": "shortVideo"}],
@@ -338,9 +392,11 @@ def validate_video_work_package(package_dir: Path) -> list[str]:
     if not isinstance(manifest, dict):
         return ["video manifest must be an object"]
     try:
-        policy = load_content_supply_policy(
-            parse_execution_id(str(manifest.get("executionId") or "")).vertical
-        ).video_delivery
+        vertical = parse_execution_id(
+            str(manifest.get("executionId") or "")
+        ).vertical
+        policy = load_content_supply_policy(vertical).video_delivery
+        require_rights_proof = rights_proof_required(vertical)
     except (TypeError, ValueError) as exc:
         return [f"video manifest execution identity is invalid: {exc}"]
     issues = validate_result(manifest, "content", "post_manifest")
@@ -375,6 +431,16 @@ def validate_video_work_package(package_dir: Path) -> list[str]:
             and not media_asset.get("rightsAuditIssues")
         ):
             issues.append("unverified video asset must record rightsAuditIssues")
+        elif require_rights_proof and (
+            status != RightsAuditStatus.VERIFIED.value
+            or bool(media_asset.get("rightsAuditIssues"))
+        ):
+            issues.append("commercial video asset rights must be verified without issues")
+        elif (
+            status == RightsAuditStatus.VERIFIED.value
+            and media_asset.get("rightsAuditIssues")
+        ):
+            issues.append("verified video asset must not record rightsAuditIssues")
     file_fields = {
         "fileName": "sha256",
         "posterFileName": "posterSha256",

@@ -227,9 +227,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text(UITextConstants.circlePostPinAction), findsOneWidget);
+      expect(find.text(CommunityText.circlePostPinAction), findsOneWidget);
 
-      await tester.tap(find.text(UITextConstants.circlePostPinAction));
+      await tester.tap(find.text(CommunityText.circlePostPinAction));
       await tester.pumpAndSettle();
       expect(placementWriter.lastPin?.placementId, 'fixture-placement-photo-1');
       expect(placementWriter.lastPin?.enabled, isTrue);
@@ -463,7 +463,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(SectionStorage), findsOneWidget);
-      expect(find.text(UITextConstants.noData), findsOneWidget);
+      expect(find.text(CommunityText.noData), findsOneWidget);
     });
   });
 }

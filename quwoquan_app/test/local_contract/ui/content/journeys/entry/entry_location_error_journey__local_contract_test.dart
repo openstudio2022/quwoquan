@@ -78,17 +78,17 @@ void main() {
     // pageLoad 类别（首屏无内容）统一走全屏 AppPageErrorState，
     // 标题/说明为通用文案，而非领域专用的 locationUpstreamTimeout 内联文案。
     expect(
-      find.text(UITextConstants.pageLoadFailedTitle),
+      find.text(SearchText.recoveryReloadLaterTitle),
       findsOneWidget,
       reason: '云端超时首屏失败应展示统一全屏页态标题',
     );
     expect(
-      find.text(UITextConstants.pageLoadFailedMessage),
+      find.text(SearchText.recoveryReloadLaterMessage),
       findsOneWidget,
       reason: 'pageLoad 类别 timeout 走统一页态说明文案，不泄漏领域技术文案',
     );
     expect(
-      find.widgetWithText(CupertinoButton, UITextConstants.tryAgain),
+      find.widgetWithText(CupertinoButton, SearchText.reload),
       findsOneWidget,
       reason: '应展示统一页态重试主操作',
     );

@@ -6,16 +6,12 @@ extension _SearchNetworkResultsPageStateViewHelpers
     if (_degradeSignals.isEmpty) {
       return null;
     }
-    const friendlyMessage = UITextConstants.searchPartialGroupFailed;
     return AppTransientErrorNotice(
-      semantic: UiErrorSemantic(
-        category: UiErrorCategory.sectionLoad,
+      semantic: AppUserRecoveryContract.semanticFor(
+        group: AppUserRecoveryGroup.reloadLater,
+        category: UiErrorCategory.backgroundAction,
         scope: UiErrorScope.section,
-        title: friendlyMessage,
-        message: friendlyMessage,
-        copyKey: 'searchPartialGroupFailed',
         presentation: UiErrorPresentation.transientNotice,
-        tone: UiErrorTone.caution,
       ),
     );
   }
@@ -32,7 +28,7 @@ extension _SearchNetworkResultsPageStateViewHelpers
           isDark: isDark,
           title: citations[i].title,
           supportingText:
-              citations[i].snippet ?? UITextConstants.searchOpenRelatedClue,
+              citations[i].snippet ?? SearchText.searchOpenRelatedClue,
           coverUrl: citations[i].coverUrl ?? '',
           eyebrowText:
               citations[i].badgeLabel ??
@@ -113,10 +109,10 @@ extension _SearchNetworkResultsPageStateViewHelpers
           targetId: item.postId,
           coverUrl: item.coverUrl ?? '',
           categoryLabel: isVideo
-              ? UITextConstants.searchCategoryVideo
+              ? SearchText.searchCategoryVideo
               : (isArticle
-                    ? UITextConstants.searchCategoryArticle
-                    : UITextConstants.searchCategoryImage),
+                    ? SearchText.searchCategoryArticle
+                    : SearchText.searchCategoryImage),
           categoryIcon: isVideo
               ? CupertinoIcons.play_rectangle_fill
               : (isArticle
@@ -139,7 +135,7 @@ extension _SearchNetworkResultsPageStateViewHelpers
           targetType: _IntersectionTargetType.circle,
           targetId: card.circleId,
           coverUrl: card.coverUrl,
-          categoryLabel: UITextConstants.searchCategoryCircle,
+          categoryLabel: SearchText.searchCategoryCircle,
           categoryIcon: CupertinoIcons.person_3_fill,
           title: hit.title,
           reasonIcon: CupertinoIcons.person_2_fill,
@@ -156,7 +152,7 @@ extension _SearchNetworkResultsPageStateViewHelpers
           targetType: _IntersectionTargetType.user,
           targetId: user?.userId ?? hit.objectId,
           coverUrl: '',
-          categoryLabel: UITextConstants.searchCategoryUser,
+          categoryLabel: SearchText.searchCategoryUser,
           categoryIcon: CupertinoIcons.person_fill,
           title: user?.displayName ?? hit.title,
           reasonIcon: CupertinoIcons.person_2_fill,
@@ -181,12 +177,12 @@ extension _SearchNetworkResultsPageStateViewHelpers
     return _EntityTopResultModel(
       homepageId: hit.objectId,
       title: hit.title,
-      badge: UITextConstants.searchCategoryLocation,
-      subtitle: hit.subtitle ?? UITextConstants.searchLocationHomepage,
+      badge: SearchText.searchCategoryLocation,
+      subtitle: hit.subtitle ?? SearchText.searchLocationHomepage,
       connectionReason: primaryText.isNotEmpty ? primaryText : null,
       description: hit.snippet ?? '',
       meta: '',
-      actionLabel: UITextConstants.searchVisitHomepage,
+      actionLabel: SearchText.searchVisitHomepage,
     );
   }
 

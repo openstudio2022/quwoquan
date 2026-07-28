@@ -70,7 +70,6 @@ def _download_research_lane_issues(
     from content.source.source_inputs import (
         curated_images_for_entity,
         curated_sources_for_entity,
-        source_plan_rights_issues,
     )
     from core.image_rules import relevance_issue
     from core.source_catalog import platform_category
@@ -145,20 +144,18 @@ def _download_research_lane_issues(
                     f"homepage source {source.get('source_id')}: "
                     f"entity homepage cannot use author/guide/review source category {category}"
                 )
-        if enforce_rights:
-            for issue in source_plan_rights_issues(
-                    ctx.execution_id,
-                    eid,
-                    etype,
-                    require_explicit=True,
-                    research_lane="homepage",
-            ):
-                add(
-                    DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
-                    f"homepage: {issue}",
-                    stage=DataIssueStage.IMAGE_RIGHTS,
-                    recovery=DataRecoveryAction.REPLACE_MEDIA,
-                )
+        if enforce_rights and requirements.min_homepage_media > 0:
+            for image in images:
+                for issue in validate_image_rights(
+                    image,
+                    vertical=ctx.spec.vertical,
+                ):
+                    add(
+                        DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
+                        f"homepage image {image.get('url') or '?'}: {issue}",
+                        stage=DataIssueStage.IMAGE_RIGHTS,
+                        recovery=DataRecoveryAction.REPLACE_MEDIA,
+                    )
         # Page-owned media is enumerated here, then every candidate receives a
         # typed disposition in the download funnel. One excluded image must not
         # invalidate an otherwise readable primary encyclopedia source.
@@ -253,20 +250,6 @@ def _download_research_lane_issues(
                 "article sources must be independent from homepage lane; duplicate urls="
                 + ", ".join(sorted(duplicate_urls)[:3])
             )
-        if enforce_rights:
-            for issue in source_plan_rights_issues(
-                    ctx.execution_id,
-                    eid,
-                    etype,
-                    require_explicit=True,
-                    research_lane="article",
-            ):
-                add(
-                    DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
-                    f"article: {issue}",
-                    stage=DataIssueStage.IMAGE_RIGHTS,
-                    recovery=DataRecoveryAction.REPLACE_MEDIA,
-                )
         return issues
     if lane == "image":
         images = [

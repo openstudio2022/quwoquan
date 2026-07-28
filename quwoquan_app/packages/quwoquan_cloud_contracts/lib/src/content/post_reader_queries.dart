@@ -29,6 +29,31 @@ final class ContentAuthorPostsQuery {
   final int limit;
 }
 
+/// 首页发现流查询；归因 ID 仅回显服务端上一页下发值。
+final class ContentDiscoveryFeedQuery {
+  ContentDiscoveryFeedQuery({
+    this.identity,
+    this.type,
+    this.sort,
+    this.cursor,
+    this.channelId,
+    this.sessionId,
+    this.feedRequestId,
+    this.limit = 20,
+    Iterable<String> blockedKeywords = const <String>[],
+  }) : blockedKeywords = List<String>.unmodifiable(blockedKeywords);
+
+  final String? identity;
+  final String? type;
+  final String? sort;
+  final String? cursor;
+  final String? channelId;
+  final String? sessionId;
+  final String? feedRequestId;
+  final int limit;
+  final List<String> blockedKeywords;
+}
+
 CloudOperationRequestPayload encodeContentPostDetailQuery(
   ContentPostDetailQuery query,
 ) {
@@ -55,6 +80,38 @@ CloudOperationRequestPayload encodeContentAuthorPostsQuery(
         'visibility': visibility,
       if (_optionalText(query.cursor) case final cursor?) 'cursor': cursor,
       'limit': '${query.limit}',
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeContentDiscoveryFeedQuery(
+  ContentDiscoveryFeedQuery query,
+) {
+  _validatePageLimit(query.limit);
+  final blockedKeywords = query.blockedKeywords
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .toList(growable: false);
+  return CloudOperationRequestPayload(
+    queryParameters: <String, String>{
+      if (_optionalText(query.identity) case final identity?)
+        'identity': identity,
+      if (_optionalText(query.type) case final type?) 'type': type,
+      if (_optionalText(query.sort) case final sort?) 'sort': sort,
+      if (_optionalText(query.cursor) case final cursor?) 'cursor': cursor,
+      if (_optionalText(query.channelId) case final channelId?)
+        'channelId': channelId,
+      if (_optionalText(query.sessionId) case final sessionId?)
+        'sessionId': sessionId,
+      if (_optionalText(query.feedRequestId) case final feedRequestId?)
+        'feedRequestId': feedRequestId,
+      'limit': '${query.limit}',
+    },
+    headers: <String, String>{
+      if (blockedKeywords.isNotEmpty)
+        'X-Blocked-Keywords': blockedKeywords
+            .map(Uri.encodeQueryComponent)
+            .join(','),
     },
   );
 }
@@ -123,6 +180,40 @@ ContentAuthorPostPageSlice decodeContentAuthorPostPageSlice(Object? response) {
     ),
     nextCursor: _optionalText(root['nextCursor']),
     totalCount: _optionalInt(root['totalCount']),
+  );
+}
+
+ContentDiscoveryFeedPageSlice decodeContentDiscoveryFeedPageSlice(
+  Object? response,
+) {
+  final root = _expectObject(response, 'Content discovery feed response');
+  final items = _expectList(root['items'], 'Content discovery feed items');
+  final rawCards = root['objectCards'];
+  final cards = rawCards == null
+      ? const <ContentPostStructuredObject>[]
+      : _expectList(rawCards, 'Content discovery feed objectCards')
+            .map((item) {
+              final decoded = _decodeStructuredValue(item, 'objectCards');
+              if (decoded is! ContentPostStructuredObject) {
+                throw const FormatException(
+                  'Content discovery feed objectCards item must be an object',
+                );
+              }
+              return decoded;
+            })
+            .toList(growable: false);
+  return ContentDiscoveryFeedPageSlice(
+    items: items.map(
+      (item) => _decodeContentPostProjection(
+        _expectObject(item, 'Content discovery feed item'),
+      ),
+    ),
+    objectCards: cards,
+    nextCursor: _optionalText(root['nextCursor']),
+    feedRequestId: _optionalText(root['feedRequestId']),
+    rankingVersion: _optionalText(root['rankingVersion']),
+    reasonVersion: _optionalText(root['reasonVersion']),
+    hasMore: _optionalBool(root['hasMore']),
   );
 }
 

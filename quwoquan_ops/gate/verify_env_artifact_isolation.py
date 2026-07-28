@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -33,12 +35,30 @@ EXCLUDED_BASENAMES = frozenset(
     }
 )
 
+HOST_REFERENCE = re.compile(
+    r"(?<![A-Za-z0-9_.-])"
+    r"(?:https?://|wss?://)?"
+    r"([A-Za-z0-9](?:[A-Za-z0-9-]{0,62})"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}))+)(?::\d+)?"
+)
+
 
 def _display(path: Path) -> str:
     try:
         return path.relative_to(ROOT).as_posix()
     except ValueError:
         return path.as_posix()
+
+
+def _normalized_host(value: str) -> str:
+    candidate = value.strip().casefold()
+    if "://" in candidate:
+        return (urlparse(candidate).hostname or "").casefold()
+    return candidate.split(":", 1)[0]
+
+
+def _referenced_hosts(text: str) -> set[str]:
+    return {match.group(1).casefold() for match in HOST_REFERENCE.finditer(text)}
 
 
 def artifact_files(env_name: str, *, target_name: str) -> list[Path]:
@@ -87,11 +107,18 @@ def main() -> int:
     manifest = load_environment_topology()
     issues: list[str] = []
     env_allowed_tokens = {
-        env: set(environment_url_values(manifest, env)).union(
+        env: {
+            host
+            for host in (
+                _normalized_host(value)
+                for value in environment_url_values(manifest, env)
+            )
+            if host
+        }.union(
             {
-                str(item).strip()
+                _normalized_host(str(item))
                 for item in manifest["environments"][env].get("hostAllowlist", [])
-                if str(item).strip()
+                if _normalized_host(str(item))
             }
         )
         for env in ENVIRONMENTS
@@ -111,13 +138,14 @@ def main() -> int:
         current_allowed_tokens = env_allowed_tokens.get(env_name, set())
         for path in files:
             text = path.read_text(encoding="utf-8", errors="replace")
+            referenced_hosts = _referenced_hosts(text)
             for other_env, tokens in env_allowed_tokens.items():
                 if other_env == env_name:
                     continue
                 for token in tokens:
                     if not token or token in current_allowed_tokens:
                         continue
-                    if token in text:
+                    if token in referenced_hosts:
                         issues.append(
                             f"{_display(path)} leaks {other_env} host token {token}"
                         )

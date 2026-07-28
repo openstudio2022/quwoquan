@@ -19,9 +19,14 @@
       "properties": {
         "nonEmptyRateMinimum": { "type": "number", "minimum": 0, "maximum": 1 },
         "duplicateExposureRateMaximum": { "type": "number", "minimum": 0, "maximum": 1 },
-        "homepageMaxSourceFidelity": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+        "homepageMaxSourceFidelity": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "homepageMinimumBodyChars": { "type": "integer", "minimum": 1 },
+        "homepageMinimumFactCount": { "type": "integer", "minimum": 1 },
+        "homepageMinimumFactChars": { "type": "integer", "minimum": 1 },
+        "homepageMinimumSectionChars": { "type": "integer", "minimum": 1 },
+        "homepageSourceOutlineSectionChars": { "type": "integer", "minimum": 1 }
       },
-      "required": ["nonEmptyRateMinimum", "duplicateExposureRateMaximum", "homepageMaxSourceFidelity"],
+      "required": ["nonEmptyRateMinimum", "duplicateExposureRateMaximum", "homepageMaxSourceFidelity", "homepageMinimumBodyChars", "homepageMinimumFactCount", "homepageMinimumFactChars", "homepageMinimumSectionChars", "homepageSourceOutlineSectionChars"],
       "additionalProperties": false
     },
     "mediaSubject": {

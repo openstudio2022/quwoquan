@@ -14,7 +14,7 @@ class SettingsAboutPage extends ConsumerWidget {
     final isDark = ref.watch(isDarkProvider);
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
-      title: UITextConstants.settingsAboutQuwoquan,
+      title: SettingsText.settingsAboutQuwoquan,
       onBack: () {
         if (context.canPop()) {
           context.pop();
@@ -30,7 +30,7 @@ class SettingsAboutPage extends ConsumerWidget {
             builder: (context, snapshot) {
               final version =
                   snapshot.data?.version ??
-                  UITextConstants.settingsAboutDefaultVersion;
+                  SettingsText.settingsAboutDefaultVersion;
               return ListView(
                 padding: EdgeInsets.only(
                   left:
@@ -48,16 +48,16 @@ class SettingsAboutPage extends ConsumerWidget {
                       children: <Widget>[
                         SettingsInsetFormRow(
                           isDark: isDark,
-                          label: UITextConstants.loginBrandName,
+                          label: FoundationText.loginBrandName,
                           trailing: SettingsInsetTrailingText(
                             isDark: isDark,
-                            value: UITextConstants.settingsAppOfficialName,
+                            value: SettingsText.settingsAppOfficialName,
                           ),
                         ),
                         SettingsInsetFormSectionDivider(isDark: isDark),
                         SettingsInsetFormRow(
                           isDark: isDark,
-                          label: UITextConstants.settingsVersion,
+                          label: SettingsText.settingsVersion,
                           trailing: SettingsInsetTrailingText(
                             isDark: isDark,
                             value: UITextConstants.settingsVersionValue(
@@ -76,7 +76,7 @@ class SettingsAboutPage extends ConsumerWidget {
                       children: <Widget>[
                         SettingsInsetFormRow(
                           isDark: isDark,
-                          label: UITextConstants.userAgreement,
+                          label: FoundationText.userAgreement,
                           trailing: SettingsInsetChevron(isDark: isDark),
                           onTap: () {
                             context.push(AppRoutePaths.legalUserAgreement);
@@ -85,7 +85,7 @@ class SettingsAboutPage extends ConsumerWidget {
                         SettingsInsetFormSectionDivider(isDark: isDark),
                         SettingsInsetFormRow(
                           isDark: isDark,
-                          label: UITextConstants.privacyPolicy,
+                          label: FoundationText.privacyPolicy,
                           trailing: SettingsInsetChevron(isDark: isDark),
                           onTap: () {
                             context.push(AppRoutePaths.legalPrivacyPolicy);
@@ -94,7 +94,7 @@ class SettingsAboutPage extends ConsumerWidget {
                         SettingsInsetFormSectionDivider(isDark: isDark),
                         SettingsInsetFormRow(
                           isDark: isDark,
-                          label: UITextConstants.permissionsStatement,
+                          label: FoundationText.permissionsStatement,
                           trailing: SettingsInsetChevron(isDark: isDark),
                           onTap: () {
                             context.push(AppRoutePaths.legalPermissions);
@@ -103,7 +103,7 @@ class SettingsAboutPage extends ConsumerWidget {
                         SettingsInsetFormSectionDivider(isDark: isDark),
                         SettingsInsetFormRow(
                           isDark: isDark,
-                          label: UITextConstants.thirdPartySdkList,
+                          label: FoundationText.thirdPartySdkList,
                           trailing: SettingsInsetChevron(isDark: isDark),
                           onTap: () {
                             context.push(AppRoutePaths.legalThirdPartySdkList);

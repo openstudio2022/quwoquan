@@ -206,7 +206,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
             inlineScroll: widget.inlineScroll,
           )
         : _loading
-        ? Center(child: CupertinoActivityIndicator())
+        ? AppRequestFeedback.section()
         : _loadError != null
         ? AppSectionErrorCard(
             semantic: runtimeErrorSemantic(
@@ -471,11 +471,11 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
   String _emptyStateTitle(InteractionSubTab subTab) {
     switch (subTab) {
       case InteractionSubTab.likes:
-        return UITextConstants.profileInteractionEmptyLikes;
+        return ProfileText.profileInteractionEmptyLikes;
       case InteractionSubTab.comments:
-        return UITextConstants.profileInteractionEmptyComments;
+        return ProfileText.profileInteractionEmptyComments;
       case InteractionSubTab.shares:
-        return UITextConstants.profileInteractionEmptyShares;
+        return ProfileText.profileInteractionEmptyShares;
     }
   }
 

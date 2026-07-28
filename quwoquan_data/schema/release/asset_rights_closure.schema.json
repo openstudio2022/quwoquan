@@ -94,6 +94,7 @@
         "sourceUseMode": {
           "enum": [
             "licensed_adaptation",
+            "factual_reference_only",
             "self_generated_original",
             "rights_audit_only"
           ]
@@ -220,7 +221,11 @@
           "then": {
             "properties": {
               "sourceUseMode": {
-                "enum": ["licensed_adaptation", "self_generated_original"]
+                "enum": [
+                  "licensed_adaptation",
+                  "factual_reference_only",
+                  "self_generated_original"
+                ]
               },
               "author": { "minLength": 1 },
               "licenseName": { "minLength": 1 },

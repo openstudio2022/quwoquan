@@ -21,7 +21,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         CloudOperationCancellationSignal,
         EntityWishlistState,
         HomepageReviewListQuery;
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 import '../../../../support/recording_app_telemetry_recorder.dart';
 
@@ -156,7 +156,7 @@ void main() {
     // And：从详情页治理菜单进入认领页，提交最小合法材料后返回详情。
     await tester.tap(find.byKey(const ValueKey<String>('object-chrome-more')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(UITextConstants.homepageClaimAction));
+    await tester.tap(find.text(ObjectHomepageText.homepageClaimAction));
     await tester.pumpAndSettle();
     expect(find.byType(HomepageClaimPage), findsOneWidget);
 
@@ -164,7 +164,7 @@ void main() {
       find.byType(CupertinoTextField).first,
       '13800000000',
     );
-    await tester.tap(find.text(UITextConstants.homepageClaimSubmit));
+    await tester.tap(find.text(ObjectHomepageText.homepageClaimSubmit));
     await tester.pumpAndSettle();
 
     expect(homepage.claimCreateCalls, 1);

@@ -32,8 +32,8 @@ class ShareEmptyState extends StatelessWidget {
           SizedBox(height: AppSpacing.md),
           Text(
             isReceived
-                ? UITextConstants.profileShareReceivedEmptyTitle
-                : UITextConstants.profileShareInitiatedEmptyTitle,
+                ? ProfileText.profileShareReceivedEmptyTitle
+                : ProfileText.profileShareInitiatedEmptyTitle,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: AppTypography.iosBody,
@@ -46,8 +46,8 @@ class ShareEmptyState extends StatelessWidget {
           SizedBox(height: AppSpacing.xs),
           Text(
             isReceived
-                ? UITextConstants.profileShareReceivedEmptyDescription
-                : UITextConstants.profileShareInitiatedEmptyDescription,
+                ? ProfileText.profileShareReceivedEmptyDescription
+                : ProfileText.profileShareInitiatedEmptyDescription,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: AppTypography.iosFootnote,
@@ -66,8 +66,8 @@ class ShareEmptyState extends StatelessWidget {
             onPressed: onAction,
             child: Text(
               isReceived
-                  ? UITextConstants.profileShareReceivedEmptyAction
-                  : UITextConstants.profileShareInitiatedEmptyAction,
+                  ? ProfileText.profileShareReceivedEmptyAction
+                  : ProfileText.profileShareInitiatedEmptyAction,
               style: TextStyle(
                 fontSize: AppTypography.iosSubheadline,
                 color: AppColors.white,

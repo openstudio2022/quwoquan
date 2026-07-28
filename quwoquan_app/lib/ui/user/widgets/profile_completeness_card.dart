@@ -90,7 +90,7 @@ class ProfileCompletenessCard extends StatelessWidget {
         .map(_labelForMissingItem)
         .where((label) => label.isNotEmpty);
     if (labels.isEmpty) {
-      return UITextConstants.profileCompletenessSubtitle;
+      return ProfileText.profileCompletenessSubtitle;
     }
     return labels.join(' · ');
   }
@@ -98,13 +98,13 @@ class ProfileCompletenessCard extends StatelessWidget {
   static String _labelForMissingItem(String item) {
     switch (item) {
       case 'avatar':
-        return UITextConstants.profileCompletenessAvatar;
+        return ProfileText.profileCompletenessAvatar;
       case 'tags':
-        return UITextConstants.profileCompletenessTags;
+        return ProfileText.profileCompletenessTags;
       case 'circles':
-        return UITextConstants.profileCompletenessCircles;
+        return ProfileText.profileCompletenessCircles;
       case 'entities':
-        return UITextConstants.profileCompletenessEntities;
+        return ProfileText.profileCompletenessEntities;
       default:
         return item;
     }

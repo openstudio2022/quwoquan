@@ -200,15 +200,24 @@ func run() error {
 	if countErr != nil {
 		return fmt.Errorf("count data content outboxes: %w", countErr)
 	}
+	executionCreatedAt, executionCreatedErr := reliabletask.ResolveDataContentExecutionCreatedAt(
+		cfg.EvidenceRoot,
+		request.ExecutionID,
+	)
+	if executionCreatedErr != nil {
+		return fmt.Errorf("resolve data content execution creation time: %w", executionCreatedErr)
+	}
 	finalizedObjectCount, finalizedErr := reliabletask.CountFinalizedDataContentObjects(
 		cfg.EvidenceRoot,
 		request.ExecutionID,
+		request.Jobs,
 	)
 	if finalizedErr != nil {
 		return fmt.Errorf("count finalized data content objects: %w", finalizedErr)
 	}
 	report := reliabletask.BuildDataContentFleetReport(
 		tasks,
+		executionCreatedAt,
 		startedAt,
 		completedAt,
 		max(0, int(outboxCount)-len(request.Jobs)),
@@ -222,15 +231,15 @@ func run() error {
 	if runErr != nil {
 		return runErr
 	}
-	for _, task := range tasks {
-		if task.Status != reliabletask.TaskStatusSucceeded {
-			return fmt.Errorf(
-				"data content task %s ended as %s: %#v",
-				task.Payload["jobId"],
-				task.Status,
-				task.LastFailure,
-			)
-		}
+	// 批次按配额准出：候选池已过采，未达标对象由 Data 侧记为 discarded 而不重试，
+	// 因此单个 dead task 不再让整个 fleet 进程失败。批次是否合格只由配额门裁定。
+	if !report.Passed {
+		log.Printf(
+			"data content batch below quota: succeeded=%d/%d requiredQuota=%d",
+			report.Succeeded,
+			report.Total,
+			report.RequiredQuota,
+		)
 	}
 	if request.RequireCommercial && !report.Passed {
 		return fmt.Errorf(

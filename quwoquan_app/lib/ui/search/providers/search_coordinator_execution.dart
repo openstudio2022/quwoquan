@@ -67,7 +67,7 @@ extension SearchCoordinatorExecution on SearchCoordinator {
                 _positiveCount(item.memberCount, item.weeklyActiveCount),
                 item.description?.trim().isNotEmpty == true
                     ? item.description!.trim()
-                    : UITextConstants.searchHomeDiscoverCirclesTitle,
+                    : SearchText.searchHomeDiscoverCirclesTitle,
               ),
               coverUrl: item.coverUrl,
               query: item.name,

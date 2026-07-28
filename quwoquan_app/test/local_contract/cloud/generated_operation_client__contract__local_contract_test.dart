@@ -141,6 +141,7 @@ void main() {
         'query': '西湖',
         'mode': 'result',
         'objectTypes': <String>['article'],
+        'ids': <String>[],
         'limit': 10,
       });
       expect(result.hits.single.objectId, 'post-1');

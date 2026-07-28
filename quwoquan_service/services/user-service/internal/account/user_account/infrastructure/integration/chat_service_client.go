@@ -10,12 +10,14 @@ import (
 	"strings"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 )
 
 type ChatServiceClient struct {
-	baseURL string
-	client  *http.Client
+	baseURL       string
+	client        *http.Client
+	authorization rtauth.DelegatedPersonaAuthorizationProvider
 }
 
 func NewChatServiceClient(baseURL string, client *http.Client) *ChatServiceClient {
@@ -24,6 +26,22 @@ func NewChatServiceClient(baseURL string, client *http.Client) *ChatServiceClien
 		client = &http.Client{Timeout: 3 * time.Second}
 	}
 	return &ChatServiceClient{baseURL: baseURL, client: client}
+}
+
+// NewAuthorizedChatServiceClient creates the production boundary for direct
+// conversation queries. The delegated persona binds the requested member to a
+// verified user-service principal; raw identity headers are not authorization.
+func NewAuthorizedChatServiceClient(
+	baseURL string,
+	client *http.Client,
+	authorization rtauth.DelegatedPersonaAuthorizationProvider,
+) (*ChatServiceClient, error) {
+	if authorization == nil {
+		return nil, fmt.Errorf("delegated chat authorization is required")
+	}
+	resolver := NewChatServiceClient(baseURL, client)
+	resolver.authorization = authorization
+	return resolver, nil
 }
 
 func (c *ChatServiceClient) CreateOrReuseDirect(ctx context.Context, creatorID, peerID string) (string, error) {
@@ -48,8 +66,9 @@ func (c *ChatServiceClient) CreateOrReuseDirect(ctx context.Context, creatorID, 
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Internal-Service", "user-service")
-	req.Header.Set("X-Client-User-Id", creatorID)
+	if err := c.authorizeRequest(ctx, req, creatorID); err != nil {
+		return "", err
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -87,8 +106,9 @@ func (c *ChatServiceClient) HasDirectBetween(ctx context.Context, subAccountA, s
 	if err != nil {
 		return false, err
 	}
-	req.Header.Set("X-Internal-Service", "user-service")
-	req.Header.Set("X-Client-User-Id", subAccountA)
+	if err := c.authorizeRequest(ctx, req, subAccountA); err != nil {
+		return false, err
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -108,6 +128,22 @@ func (c *ChatServiceClient) HasDirectBetween(ctx context.Context, subAccountA, s
 		return false, err
 	}
 	return result.Exists, nil
+}
+
+func (c *ChatServiceClient) authorizeRequest(
+	ctx context.Context,
+	request *http.Request,
+	personaID string,
+) error {
+	if c == nil || c.authorization == nil {
+		return fmt.Errorf("chat service delegated authorization unavailable")
+	}
+	header, err := c.authorization.AuthorizationHeaderForPersona(ctx, personaID)
+	if err != nil {
+		return fmt.Errorf("authorize direct conversation request: %w", err)
+	}
+	request.Header.Set("Authorization", header)
+	return nil
 }
 
 var _ application.ConversationGateway = (*ChatServiceClient)(nil)

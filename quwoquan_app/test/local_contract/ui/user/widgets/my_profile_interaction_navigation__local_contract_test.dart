@@ -143,32 +143,32 @@ void main() {
     await tapProfilePrimaryTab(tester, '互动');
     await _pumpFrames(tester);
 
-    expect(find.text(UITextConstants.interactionSubAll), findsNothing);
+    expect(find.text(ProfileText.interactionSubAll), findsNothing);
     await revealProfileSummaryWidget(
       tester,
-      find.text(UITextConstants.interactionSubShares),
+      find.text(ProfileText.interactionSubShares),
     );
-    await tester.tap(find.text(UITextConstants.interactionSubShares));
+    await tester.tap(find.text(ProfileText.interactionSubShares));
     await _pumpFrames(tester, count: 4);
     expect(
-      find.text(UITextConstants.profileInteractionDirectionReceived),
+      find.text(ProfileText.profileInteractionDirectionReceived),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.profileInteractionDirectionSent),
+      find.text(ProfileText.profileInteractionDirectionSent),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.profileShareReceivedEmptyTitle),
+      find.text(ProfileText.profileShareReceivedEmptyTitle),
       findsOneWidget,
     );
 
     await tester.tap(
-      find.text(UITextConstants.profileInteractionDirectionSent),
+      find.text(ProfileText.profileInteractionDirectionSent),
     );
     await _pumpFrames(tester, count: 4);
     expect(
-      find.text(UITextConstants.profileShareInitiatedEmptyTitle),
+      find.text(ProfileText.profileShareInitiatedEmptyTitle),
       findsOneWidget,
     );
     expect(find.text('互动明细'), findsNothing);

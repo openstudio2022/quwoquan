@@ -2,7 +2,6 @@ package persistence
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -31,7 +30,7 @@ func NewCreatorRuntimeProfileReader(database *mongo.Database) *CreatorRuntimePro
 	}
 }
 
-func (r *CreatorRuntimeProfileReader) FindActiveByIdentity(
+func (r *CreatorRuntimeProfileReader) FindActiveByPublicIdentity(
 	ctx context.Context,
 	identity string,
 ) (*model.CreatorRuntimeProfile, bool, error) {
@@ -39,26 +38,28 @@ func (r *CreatorRuntimeProfileReader) FindActiveByIdentity(
 	if identity == "" || r == nil || r.collection == nil {
 		return nil, false, nil
 	}
-	if profile, found, err := r.findByCreatorID(ctx, identity); err != nil {
+	profiles, err := r.findProfiles(
+		ctx,
+		bson.M{
+			"status": creatorRuntimeActive,
+			"$or": bson.A{
+				bson.M{"creatorId": identity},
+				bson.M{"subAccountId": identity},
+			},
+		},
+		2,
+	)
+	if err != nil {
 		return nil, false, err
-	} else if found && profile.Status == creatorRuntimeActive {
-		return profile, true, nil
 	}
-	for _, field := range []string{"subAccountId", "handle"} {
-		profiles, err := r.findProfiles(
-			ctx,
-			bson.M{field: identity, "status": creatorRuntimeActive},
-			2,
+	if len(profiles) > 1 {
+		return nil, false, fmt.Errorf(
+			"active creator public identity %q 不唯一",
+			identity,
 		)
-		if err != nil {
-			return nil, false, err
-		}
-		if len(profiles) > 1 {
-			return nil, false, fmt.Errorf("active creator %s %q 不唯一", field, identity)
-		}
-		if len(profiles) == 1 {
-			return &profiles[0], true, nil
-		}
+	}
+	if len(profiles) == 1 {
+		return &profiles[0], true, nil
 	}
 	return nil, false, nil
 }
@@ -67,26 +68,11 @@ func (r *CreatorRuntimeProfileReader) ListActiveWorks(
 	ctx context.Context,
 	identity string,
 ) ([]model.CreatorWorkRef, bool, error) {
-	profile, found, err := r.FindActiveByIdentity(ctx, identity)
+	profile, found, err := r.FindActiveByPublicIdentity(ctx, identity)
 	if err != nil || !found {
 		return nil, found, err
 	}
 	return append([]model.CreatorWorkRef(nil), profile.Works...), true, nil
-}
-
-func (r *CreatorRuntimeProfileReader) findByCreatorID(
-	ctx context.Context,
-	creatorID string,
-) (*model.CreatorRuntimeProfile, bool, error) {
-	var profile model.CreatorRuntimeProfile
-	err := r.collection.FindOne(ctx, bson.M{"creatorId": creatorID}).Decode(&profile)
-	if errors.Is(err, mongo.ErrNoDocuments) {
-		return nil, false, nil
-	}
-	if err != nil {
-		return nil, false, err
-	}
-	return &profile, true, nil
 }
 
 func (r *CreatorRuntimeProfileReader) findProfiles(

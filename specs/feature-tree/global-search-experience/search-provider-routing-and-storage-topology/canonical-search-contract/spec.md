@@ -65,7 +65,7 @@
 <a id="gwt-002"></a>
 ### GWT-002 App result 只消费 canonical 响应（RemoteSearchRepository + RetrieveRequest 映射 + 错误响应）
 
-- GIVEN appDataSourceModeProvider=remote 时 searchRepositoryProvider 返回 RemoteSearchRepository。
+- GIVEN alpha/beta/gamma/prod composition 中 searchRepositoryProvider 只返回 RemoteSearchRepository；搜索 typed double 仅存在测试树。
 - GIVEN RetrieveRequest.fromSearchRequest() 单源映射 targets 并剔除 chat 本地命名空间对象。
 - WHEN result 阶段 POST /search（CloudHttpClient + codegen path），解析 RetrieveResponse。
 - THEN App 透传 rankReasons/rankPosition/coverWidth/coverHeight/connectionState/intersectionReason/relatedTerms，不再消费分域搜索接口。

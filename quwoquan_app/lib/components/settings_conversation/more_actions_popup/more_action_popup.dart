@@ -97,14 +97,14 @@ class _MediaPostMoreActionSheetState
         _ScrollAction(
           id: 'copyLink',
           icon: CupertinoIcons.link,
-          label: UITextConstants.copyLink,
+          label: FoundationText.copyLink,
           onTap: widget.config.onCopyLink!,
         ),
       if (widget.config.showShareAction && widget.config.onShare != null)
         _ScrollAction(
           id: 'share',
           icon: CupertinoIcons.share,
-          label: UITextConstants.share,
+          label: FoundationText.share,
           onTap: widget.config.onShare!,
         ),
       if (widget.config.showViewOriginalAction &&
@@ -112,13 +112,13 @@ class _MediaPostMoreActionSheetState
         _ScrollAction(
           id: 'viewOriginal',
           icon: CupertinoIcons.photo,
-          label: UITextConstants.viewOriginal,
+          label: ContentText.viewOriginal,
           onTap: widget.config.onViewOriginal!,
         ),
       _ScrollAction(
         id: 'themeMode',
         icon: isDark ? CupertinoIcons.sun_max : CupertinoIcons.moon,
-        label: isDark ? UITextConstants.lightMode : UITextConstants.darkMode,
+        label: isDark ? ContentText.lightMode : ContentText.darkMode,
         onTap: widget.config.onThemeToggle ?? _toggleTheme,
       ),
     ];
@@ -131,7 +131,7 @@ class _MediaPostMoreActionSheetState
         _BottomAction(
           id: _contentFilterActionId,
           icon: CupertinoIcons.line_horizontal_3_decrease,
-          label: UITextConstants.contentFilterTitle,
+          label: ContentText.contentFilterTitle,
           description: _contentFilterSummaryFor(
             options: widget.config.filterOptions,
             selectedIds: _selectedFilterIds,
@@ -141,7 +141,7 @@ class _MediaPostMoreActionSheetState
         _BottomAction(
           id: _readingSettingsActionId,
           icon: CupertinoIcons.book,
-          label: UITextConstants.readingSettingsTitle,
+          label: ContentText.readingSettingsTitle,
           description: _readingSettingSummaryFor(
             options: widget.config.readingOptions,
             selectedId: _selectedReadingOptionId,
@@ -151,32 +151,32 @@ class _MediaPostMoreActionSheetState
         _BottomAction(
           id: 'notInterested',
           icon: CupertinoIcons.eye_slash,
-          label: UITextConstants.notInterested,
-          description: UITextConstants.notInterestedDescription,
+          label: ContentText.notInterested,
+          description: ContentText.notInterestedDescription,
           onTap: widget.config.onNotInterested,
         ),
       if (widget.config.onBlockUser != null)
         _BottomAction(
           id: 'blockUser',
           icon: CupertinoIcons.person_badge_minus,
-          label: UITextConstants.blockAuthor,
-          description: UITextConstants.blockAuthorDescription,
+          label: ContentText.blockAuthor,
+          description: ContentText.blockAuthorDescription,
           onTap: widget.config.onBlockUser,
         ),
       if (widget.config.onBlockWords != null)
         _BottomAction(
           id: 'blockWords',
           icon: CupertinoIcons.slider_horizontal_3,
-          label: UITextConstants.blockKeywords,
-          description: UITextConstants.blockKeywordsDescription,
+          label: ContentText.blockKeywords,
+          description: ContentText.blockKeywordsDescription,
           onTap: widget.config.onBlockWords,
         ),
       if (widget.config.onReport != null)
         _BottomAction(
           id: 'report',
           icon: CupertinoIcons.flag,
-          label: UITextConstants.report,
-          description: UITextConstants.reportDescription,
+          label: ContentText.report,
+          description: ContentText.reportDescription,
           onTap: widget.config.onReport,
         ),
     ];
@@ -209,7 +209,7 @@ class _MediaPostMoreActionSheetState
     required Set<String> selectedIds,
   }) {
     if (options.isEmpty || selectedIds.isEmpty) {
-      return UITextConstants.allWorks;
+      return ContentText.allWorks;
     }
     final selected = options
         .where((option) => selectedIds.contains(option.id))
@@ -217,7 +217,7 @@ class _MediaPostMoreActionSheetState
     if (selected.isEmpty ||
         selected.any((option) => option.id == 'all') ||
         selected.length == options.length - 1) {
-      return UITextConstants.allWorks;
+      return ContentText.allWorks;
     }
     return selected.map((option) => option.label).join(' / ');
   }
@@ -341,7 +341,7 @@ class _MediaPostMoreActionSheetState
             children: [
               ConversationSheetHeader(
                 isDark: resolvedIsDark,
-                title: UITextConstants.moreActionsTitle,
+                title: ContentText.moreActionsTitle,
               ),
               if (_showContentFilterPanel) ...[
                 _InlineContentFilterSection(
@@ -394,8 +394,8 @@ class _MediaPostMoreActionSheetState
               ConversationSheetCancelBar(
                 isDark: resolvedIsDark,
                 label: (_showContentFilterPanel || _showReadingSettingsPanel)
-                    ? UITextConstants.back
-                    : UITextConstants.cancel,
+                    ? ContentText.back
+                    : FoundationText.cancel,
                 onTap: () {
                   if (_showContentFilterPanel || _showReadingSettingsPanel) {
                     setState(() {
@@ -531,7 +531,7 @@ class _InlineContentFilterSection extends StatelessWidget {
       children: [
         const ConversationSheetHeader(
           isDark: isDark,
-          title: UITextConstants.contentFilterTitle,
+          title: ContentText.contentFilterTitle,
         ),
         ConversationSheetListCard(
           isDark: isDark,
@@ -572,7 +572,7 @@ class _InlineContentFilterSection extends StatelessWidget {
         SizedBox(height: SettingsSemanticConstants.conversationSheetSectionGap),
         ConversationSheetCancelBar(
           isDark: isDark,
-          label: UITextConstants.done,
+          label: CommunityText.done,
           onTap: onDone,
         ),
       ],
@@ -601,7 +601,7 @@ class _InlineReadingSettingsSection extends StatelessWidget {
       children: [
         const ConversationSheetHeader(
           isDark: isDark,
-          title: UITextConstants.readingSettingsTitle,
+          title: ContentText.readingSettingsTitle,
         ),
         ConversationSheetListCard(
           isDark: isDark,

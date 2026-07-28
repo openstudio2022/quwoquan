@@ -307,7 +307,10 @@ def _seed_v3_creator_only_release(*, broken_profile_ref: bool = False) -> None:
         {
             "schema": "quwoquan_data.release_media_manifest",
             "releaseId": RELEASE,
+            "sourceOwner": "qwq_data",
             "assets": [],
+            "issues": [],
+            "counts": {"assets": 0, "issues": 0},
         },
     )
     write_json(

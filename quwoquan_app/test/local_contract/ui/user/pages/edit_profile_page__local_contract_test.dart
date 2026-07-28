@@ -120,6 +120,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
-    expect(find.text(UITextConstants.tryAgain), findsWidgets);
+    expect(find.text(SearchText.reload), findsWidgets);
   });
 }

@@ -55,12 +55,12 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.text(UITextConstants.imageEditorFilter));
+    await tester.tap(find.text(MediaText.imageEditorFilter));
     for (var i = 0; i < 12; i++) {
       await tester.pump(const Duration(milliseconds: 80));
       if (find.byType(ImageEditorOperationPanel).evaluate().isNotEmpty &&
           find
-              .text(UITextConstants.imageEditorFilterRecommended)
+              .text(MediaText.imageEditorFilterRecommended)
               .evaluate()
               .isNotEmpty) {
         break;

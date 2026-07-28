@@ -43,14 +43,20 @@ final class LoginWithWechatCommand {
     required String deviceId,
     required String platform,
     this.appVersion,
+    required String agreementVersion,
+    required String privacyVersion,
   }) : wechatCode = _required(wechatCode, 'wechatCode'),
        deviceId = _required(deviceId, 'deviceId'),
-       platform = _required(platform, 'platform');
+       platform = _required(platform, 'platform'),
+       agreementVersion = _required(agreementVersion, 'agreementVersion'),
+       privacyVersion = _required(privacyVersion, 'privacyVersion');
 
   final String wechatCode;
   final String deviceId;
   final String platform;
   final String? appVersion;
+  final String agreementVersion;
+  final String privacyVersion;
 }
 
 final class LoginWithAlipayCommand {
@@ -59,14 +65,20 @@ final class LoginWithAlipayCommand {
     required String deviceId,
     required String platform,
     this.appVersion,
+    required String agreementVersion,
+    required String privacyVersion,
   }) : alipayAuthCode = _required(alipayAuthCode, 'alipayAuthCode'),
        deviceId = _required(deviceId, 'deviceId'),
-       platform = _required(platform, 'platform');
+       platform = _required(platform, 'platform'),
+       agreementVersion = _required(agreementVersion, 'agreementVersion'),
+       privacyVersion = _required(privacyVersion, 'privacyVersion');
 
   final String alipayAuthCode;
   final String deviceId;
   final String platform;
   final String? appVersion;
+  final String agreementVersion;
+  final String privacyVersion;
 }
 
 final class LoginWithQqCommand {
@@ -75,14 +87,20 @@ final class LoginWithQqCommand {
     required String deviceId,
     required String platform,
     this.appVersion,
+    required String agreementVersion,
+    required String privacyVersion,
   }) : qqAuthCode = _required(qqAuthCode, 'qqAuthCode'),
        deviceId = _required(deviceId, 'deviceId'),
-       platform = _required(platform, 'platform');
+       platform = _required(platform, 'platform'),
+       agreementVersion = _required(agreementVersion, 'agreementVersion'),
+       privacyVersion = _required(privacyVersion, 'privacyVersion');
 
   final String qqAuthCode;
   final String deviceId;
   final String platform;
   final String? appVersion;
+  final String agreementVersion;
+  final String privacyVersion;
 }
 
 final class LoginOneTapCommand {
@@ -201,6 +219,34 @@ final class AuthSessionGrant {
   final AccountHintSnapshot? accountHint;
 }
 
+enum FederatedLoginStatus { authenticated, phoneBindingRequired }
+
+/// 社交登录的单轨判别结果。首次社交身份需要绑定手机号时不得携带 session。
+final class FederatedLoginOutcome {
+  const FederatedLoginOutcome.authenticated(AuthSessionGrant session)
+    : status = FederatedLoginStatus.authenticated,
+      session = session,
+      bindingTicket = null,
+      provider = null,
+      expiresInSeconds = 0;
+
+  const FederatedLoginOutcome.phoneBindingRequired({
+    required String bindingTicket,
+    required String provider,
+    required int expiresInSeconds,
+  }) : status = FederatedLoginStatus.phoneBindingRequired,
+       session = null,
+       bindingTicket = bindingTicket,
+       provider = provider,
+       expiresInSeconds = expiresInSeconds;
+
+  final FederatedLoginStatus status;
+  final AuthSessionGrant? session;
+  final String? bindingTicket;
+  final String? provider;
+  final int expiresInSeconds;
+}
+
 final class TokenRefreshGrant {
   const TokenRefreshGrant({
     required this.accessToken,
@@ -223,11 +269,15 @@ final class LogoutAck {
 abstract interface class AccountSessionLoginCommandWriter {
   Future<AuthSessionGrant> loginWithPhone(LoginWithPhoneCommand command);
 
-  Future<AuthSessionGrant> loginWithWechat(LoginWithWechatCommand command);
+  Future<FederatedLoginOutcome> loginWithWechat(
+    LoginWithWechatCommand command,
+  );
 
-  Future<AuthSessionGrant> loginWithAlipay(LoginWithAlipayCommand command);
+  Future<FederatedLoginOutcome> loginWithAlipay(
+    LoginWithAlipayCommand command,
+  );
 
-  Future<AuthSessionGrant> loginWithQq(LoginWithQqCommand command);
+  Future<FederatedLoginOutcome> loginWithQq(LoginWithQqCommand command);
 
   Future<AuthSessionGrant> loginOneTap(LoginOneTapCommand command);
 
@@ -272,6 +322,8 @@ CloudOperationRequestPayload encodeLoginWithWechatCommand(
     'deviceId': command.deviceId,
     'platform': command.platform,
     if (command.appVersion != null) 'appVersion': command.appVersion,
+    'agreementVersion': command.agreementVersion,
+    'privacyVersion': command.privacyVersion,
   },
 );
 
@@ -283,6 +335,8 @@ CloudOperationRequestPayload encodeLoginWithAlipayCommand(
     'deviceId': command.deviceId,
     'platform': command.platform,
     if (command.appVersion != null) 'appVersion': command.appVersion,
+    'agreementVersion': command.agreementVersion,
+    'privacyVersion': command.privacyVersion,
   },
 );
 
@@ -294,6 +348,8 @@ CloudOperationRequestPayload encodeLoginWithQqCommand(
     'deviceId': command.deviceId,
     'platform': command.platform,
     if (command.appVersion != null) 'appVersion': command.appVersion,
+    'agreementVersion': command.agreementVersion,
+    'privacyVersion': command.privacyVersion,
   },
 );
 
@@ -351,6 +407,41 @@ AuthSessionGrant decodeAuthSessionGrant(Object? value) {
     activeSub: _activePersona(map['activeSub']),
     accountHint: _accountHint(map['accountHint']),
   );
+}
+
+FederatedLoginOutcome decodeFederatedLoginOutcome(Object? value) {
+  final map = _object(value, 'FederatedLoginOutcome');
+  final rawStatus = _string(map, 'status');
+  switch (rawStatus) {
+    case 'authenticated':
+      if (map['bindingTicket'] != null) {
+        throw const FormatException(
+          'authenticated federated outcome must not include bindingTicket',
+        );
+      }
+      return FederatedLoginOutcome.authenticated(
+        decodeAuthSessionGrant(map['session']),
+      );
+    case 'phoneBindingRequired':
+      if (map['session'] != null) {
+        throw const FormatException(
+          'phoneBindingRequired outcome must not include session',
+        );
+      }
+      final expiresInSeconds = _intOr(map, 'expiresInSeconds', 0);
+      if (expiresInSeconds <= 0) {
+        throw const FormatException(
+          'phoneBindingRequired.expiresInSeconds must be positive',
+        );
+      }
+      return FederatedLoginOutcome.phoneBindingRequired(
+        bindingTicket: _string(map, 'bindingTicket'),
+        provider: _string(map, 'provider'),
+        expiresInSeconds: expiresInSeconds,
+      );
+    default:
+      throw FormatException('unsupported federated login status: $rawStatus');
+  }
 }
 
 TokenRefreshGrant decodeTokenRefreshGrant(Object? value) {

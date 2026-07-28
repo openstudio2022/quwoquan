@@ -71,7 +71,7 @@ final class _ProfileUpdateProposalReviewSheetState
       }
       if (!mounted) return;
       _track('apply', result: 'succeeded');
-      AppToast.show(context, UITextConstants.editProfileProposalApplied);
+      AppToast.show(context, ProfileText.editProfileProposalApplied);
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
@@ -103,7 +103,7 @@ final class _ProfileUpdateProposalReviewSheetState
           );
       if (!mounted) return;
       _track('reject', result: 'succeeded');
-      AppToast.show(context, UITextConstants.editProfileProposalRejected);
+      AppToast.show(context, ProfileText.editProfileProposalRejected);
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
@@ -137,7 +137,7 @@ final class _ProfileUpdateProposalReviewSheetState
           );
       if (!mounted) return;
       _track('rollback', result: 'succeeded');
-      AppToast.show(context, UITextConstants.editProfileProposalRolledBack);
+      AppToast.show(context, ProfileText.editProfileProposalRolledBack);
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
@@ -189,7 +189,7 @@ final class _ProfileUpdateProposalReviewSheetState
                 ),
                 children: <Widget>[
                   Text(
-                    UITextConstants.editProfileProposalTitle,
+                    ProfileText.editProfileProposalTitle,
                     style: TextStyle(
                       fontSize: AppTypography.iosTitle2,
                       fontWeight: AppTypography.semiBold,
@@ -206,7 +206,7 @@ final class _ProfileUpdateProposalReviewSheetState
                   ),
                   SizedBox(height: AppSpacing.interGroupMd),
                   Text(
-                    UITextConstants.editProfileProposalReviewBasis,
+                    ProfileText.editProfileProposalReviewBasis,
                     style: TextStyle(
                       fontSize: AppTypography.iosBody,
                       fontWeight: FontWeight.w600,
@@ -220,7 +220,7 @@ final class _ProfileUpdateProposalReviewSheetState
                   ),
                   SizedBox(height: AppSpacing.interGroupMd),
                   Text(
-                    UITextConstants.editProfileProposalChanges,
+                    ProfileText.editProfileProposalChanges,
                     style: TextStyle(
                       fontSize: AppTypography.iosBody,
                       fontWeight: FontWeight.w600,
@@ -264,8 +264,8 @@ final class _ProfileUpdateProposalReviewSheetState
                       label:
                           widget.proposal.status ==
                               ProfileUpdateProposalStatus.applying
-                          ? UITextConstants.editProfileProposalResumeApply
-                          : UITextConstants.editProfileProposalApprove,
+                          ? ProfileText.editProfileProposalResumeApply
+                          : ProfileText.editProfileProposalApprove,
                       style: ProfileIosActionStyle.filled,
                       onPressed: _busy ? null : _approve,
                     ),
@@ -273,7 +273,7 @@ final class _ProfileUpdateProposalReviewSheetState
                       SizedBox(height: AppSpacing.containerSm),
                       ProfileIosActionButton(
                         key: const ValueKey<String>('profile-proposal-reject'),
-                        label: UITextConstants.editProfileProposalReject,
+                        label: ProfileText.editProfileProposalReject,
                         style: ProfileIosActionStyle.outlined,
                         onPressed: _busy ? null : _reject,
                       ),
@@ -282,7 +282,7 @@ final class _ProfileUpdateProposalReviewSheetState
                   if (canRollback)
                     ProfileIosActionButton(
                       key: const ValueKey<String>('profile-proposal-rollback'),
-                      label: UITextConstants.editProfileProposalRollback,
+                      label: ProfileText.editProfileProposalRollback,
                       style: ProfileIosActionStyle.outlined,
                       onPressed: _busy ? null : _rollback,
                     ),
@@ -299,17 +299,17 @@ final class _ProfileUpdateProposalReviewSheetState
 List<Widget> _reviewBasisRows(ProfileUpdateProposalView proposal) {
   return <Widget>[
     ProfileIosGroupedCell(
-      title: UITextConstants.editProfileProposalReason,
+      title: ProfileText.editProfileProposalReason,
       subtitle: proposal.reason,
       showChevron: false,
     ),
     ProfileIosGroupedCell(
-      title: UITextConstants.editProfileProposalEvidence,
+      title: ProfileText.editProfileProposalEvidence,
       subtitle: proposal.evidenceRefs.join('\n'),
       showChevron: false,
     ),
     ProfileIosGroupedCell(
-      title: UITextConstants.editProfileProposalImpactScope,
+      title: ProfileText.editProfileProposalImpactScope,
       subtitle: proposal.impactScope.map(_profileChangeFieldLabel).join(', '),
       showChevron: false,
     ),
@@ -327,42 +327,42 @@ List<Widget> _changeRows(ProfileChangeSet changes) {
         showChevron: false,
         trailing: Text(
           text.isEmpty && allowEmpty
-              ? UITextConstants.editProfileProposalEmptyValue
+              ? ProfileText.editProfileProposalEmptyValue
               : text,
         ),
       ),
     );
   }
 
-  add(UITextConstants.editProfileNicknameLabel, changes.displayName);
-  add(UITextConstants.editProfileBioLabel, changes.bio, allowEmpty: true);
-  add(UITextConstants.editProfileAvatarLabel, changes.avatarMediaAssetId);
-  add(UITextConstants.editProfileCoverLabel, changes.backgroundMediaAssetId);
-  add(UITextConstants.editProfileProposalPrivateField, changes.isPrivate);
+  add(ProfileText.editProfileNicknameLabel, changes.displayName);
+  add(ProfileText.editProfileBioLabel, changes.bio, allowEmpty: true);
+  add(ProfileText.editProfileAvatarLabel, changes.avatarMediaAssetId);
+  add(ProfileText.editProfileCoverLabel, changes.backgroundMediaAssetId);
+  add(ProfileText.editProfileProposalPrivateField, changes.isPrivate);
   add(
-    UITextConstants.editProfileProposalIsolationField,
+    ProfileText.editProfileProposalIsolationField,
     changes.isolationLevel,
   );
-  add(UITextConstants.editProfileProposalPurposeField, changes.purposeHint);
+  add(ProfileText.editProfileProposalPurposeField, changes.purposeHint);
   return rows;
 }
 
 String _profileChangeFieldLabel(String field) => switch (field) {
-  'displayName' => UITextConstants.editProfileNicknameLabel,
-  'bio' => UITextConstants.editProfileBioLabel,
-  'avatarMediaAssetId' => UITextConstants.editProfileAvatarLabel,
-  'backgroundMediaAssetId' => UITextConstants.editProfileCoverLabel,
-  'isPrivate' => UITextConstants.editProfileProposalPrivateField,
-  'isolationLevel' => UITextConstants.editProfileProposalIsolationField,
-  'purposeHint' => UITextConstants.editProfileProposalPurposeField,
-  _ => UITextConstants.editProfileProposalImpactScope,
+  'displayName' => ProfileText.editProfileNicknameLabel,
+  'bio' => ProfileText.editProfileBioLabel,
+  'avatarMediaAssetId' => ProfileText.editProfileAvatarLabel,
+  'backgroundMediaAssetId' => ProfileText.editProfileCoverLabel,
+  'isPrivate' => ProfileText.editProfileProposalPrivateField,
+  'isolationLevel' => ProfileText.editProfileProposalIsolationField,
+  'purposeHint' => ProfileText.editProfileProposalPurposeField,
+  _ => ProfileText.editProfileProposalImpactScope,
 };
 
 String _sourceLabel(ProfileUpdateProposalSource source) => switch (source) {
   ProfileUpdateProposalSource.assistant =>
-    UITextConstants.editProfileProposalSourceAssistant,
+    ProfileText.editProfileProposalSourceAssistant,
   ProfileUpdateProposalSource.external =>
-    UITextConstants.editProfileProposalSourceExternal,
+    ProfileText.editProfileProposalSourceExternal,
   ProfileUpdateProposalSource.persona =>
-    UITextConstants.editProfileProposalSourcePersona,
+    ProfileText.editProfileProposalSourcePersona,
 };

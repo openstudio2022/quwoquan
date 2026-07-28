@@ -17,9 +17,23 @@ from content.filter_catalog.publisher import (
     FilterCatalogPublishError,
     publish_filter_catalog,
 )
+from quwoquan_ops.cli.lib.environment_topology import (
+    ENVIRONMENT_CANONICAL_TARGET,
+    get_target,
+    load_environment_topology,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
+
+
+def _api_base(environment: str) -> str:
+    return str(
+        get_target(
+            load_environment_topology(),
+            ENVIRONMENT_CANONICAL_TARGET[environment],
+        )["publicBases"]["api"]
+    )
 
 
 @dataclass(frozen=True)
@@ -128,69 +142,34 @@ class _UrllibResponse:
         return b'{"releaseId":"filter-catalog-20260720-001"}'
 
 
-def test_local_public_tls_publish_bypasses_proxy_and_resolves_loopback():
+def test_public_tls_publish_uses_system_trust_context():
     response = _UrllibResponse()
-    fake_getaddrinfo = mock.Mock(return_value=[("loopback",)])
-    proxy_handler = object()
-    https_handler = object()
-    opener = mock.Mock()
-    observed_resolutions: list[object] = []
-
-    def open_request(*args: object, **kwargs: object) -> _UrllibResponse:
-        observed_resolutions.extend(
-            publisher.socket.getaddrinfo(
-                "beta-api.quwoquan-env.test",
-                18000,
-            )
-        )
-        return response
-
-    opener.open.side_effect = open_request
+    system_context = object()
     with (
-        mock.patch.object(publisher.socket, "getaddrinfo", fake_getaddrinfo),
         mock.patch.object(
             publisher.ssl,
-            "_create_unverified_context",
-            return_value=object(),
-        ),
+            "create_default_context",
+            return_value=system_context,
+        ) as create_default_context,
         mock.patch.object(
             publisher.request,
-            "ProxyHandler",
-            return_value=proxy_handler,
-        ),
-        mock.patch.object(
-            publisher.request,
-            "HTTPSHandler",
-            return_value=https_handler,
-        ),
-        mock.patch.object(
-            publisher.request,
-            "build_opener",
-            return_value=opener,
-        ) as build_opener,
-        mock.patch.object(publisher.request, "urlopen") as urlopen,
+            "urlopen",
+            return_value=response,
+        ) as urlopen,
     ):
-        result = publisher.UrllibFilterCatalogHttpTransport(
-            insecure_local_tls=True,
-        ).request_json(
+        result = publisher.UrllibFilterCatalogHttpTransport().request_json(
             method="GET",
-            url=(
-                "https://beta-api.quwoquan-env.test:18000/"
-                "content/filter-catalog"
-            ),
+            url="https://api.example.invalid/content/filter-catalog",
             headers={},
             body=None,
         )
-        assert publisher.socket.getaddrinfo is fake_getaddrinfo
 
     assert result == FilterCatalogHttpResponse(
         status=200,
         body={"releaseId": "filter-catalog-20260720-001"},
     )
-    assert observed_resolutions == [("loopback",)]
-    fake_getaddrinfo.assert_any_call("127.0.0.1", 18000)
-    build_opener.assert_called_once_with(proxy_handler, https_handler)
-    urlopen.assert_not_called()
+    create_default_context.assert_called_once_with()
+    assert urlopen.call_args.kwargs["context"] is system_context
 
 
 def test_gamma_publish_uses_metadata_paths_idempotency_and_canonical_payload():
@@ -199,7 +178,7 @@ def test_gamma_publish_uses_metadata_paths_idempotency_and_canonical_payload():
     receipt = publish_filter_catalog(
         repo_root=REPO_ROOT,
         environment="gamma",
-        base_url="https://gamma-api.quwoquan-env.test:19000",
+        base_url=_api_base("gamma"),
         action=FilterCatalogPublishAction.stage_and_activate,
         bearer_token="local-service-principal-token",
         transport=transport,
@@ -247,7 +226,7 @@ def test_prod_activation_requires_explicit_gray_approval():
         publish_filter_catalog(
             repo_root=REPO_ROOT,
             environment="prod",
-            base_url="https://api.quwoquan.com",
+            base_url=_api_base("prod"),
             action=FilterCatalogPublishAction.activate,
             bearer_token="prod-service-principal-token",
             transport=transport,
@@ -261,7 +240,7 @@ def test_verify_is_public_and_rollback_uses_explicit_target_release():
     receipt = publish_filter_catalog(
         repo_root=REPO_ROOT,
         environment="beta",
-        base_url="https://beta-api.quwoquan-env.test:18000",
+        base_url=_api_base("beta"),
         action=FilterCatalogPublishAction.verify,
         transport=verify_transport,
     )
@@ -276,7 +255,7 @@ def test_verify_is_public_and_rollback_uses_explicit_target_release():
     rollback_receipt = publish_filter_catalog(
         repo_root=REPO_ROOT,
         environment="gamma",
-        base_url="https://gamma-api.quwoquan-env.test:19000",
+        base_url=_api_base("gamma"),
         action=FilterCatalogPublishAction.rollback,
         bearer_token="local-service-principal-token",
         rollback_release_id="filter-catalog-previous",

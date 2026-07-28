@@ -284,6 +284,7 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/衢江区
     aliases:
     - 石室山
+    - 烂柯山
     selectionPriority: 1
   - name: 天脊龙门
     canonicalName: 天脊龙门

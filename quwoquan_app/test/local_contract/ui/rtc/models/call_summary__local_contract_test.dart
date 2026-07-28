@@ -39,7 +39,7 @@ void main() {
           endReason: EndReason.completed,
           connected: true,
         ),
-        '${UITextConstants.callSummaryDurationPrefix}02:30',
+        '${CallText.callSummaryDurationPrefix}02:30',
       );
     });
 
@@ -54,7 +54,7 @@ void main() {
             endReason: reason,
             connected: false,
           ),
-          UITextConstants.callSummaryCancelled,
+          CallText.callSummaryCancelled,
           reason: reason.name,
         );
       }
@@ -68,7 +68,7 @@ void main() {
             endReason: reason,
             connected: false,
           ),
-          UITextConstants.callSummaryRejected,
+          CallText.callSummaryRejected,
           reason: reason.name,
         );
       }
@@ -81,7 +81,7 @@ void main() {
           endReason: EndReason.timeout,
           connected: false,
         ),
-        UITextConstants.callSummaryNoAnswer,
+        CallText.callSummaryNoAnswer,
       );
     });
 
@@ -92,7 +92,7 @@ void main() {
           endReason: EndReason.timeout,
           connected: true,
         ),
-        UITextConstants.callSummaryNoAnswer,
+        CallText.callSummaryNoAnswer,
       );
     });
   });

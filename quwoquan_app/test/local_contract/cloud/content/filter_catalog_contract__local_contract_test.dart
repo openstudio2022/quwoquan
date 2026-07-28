@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/application/content/filter_catalog/filter_catalog_coordinator.dart';
 import 'package:quwoquan_app/infrastructure/local/content/filter_catalog/verified_filter_catalog_store.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../support/cloud_services/repository_mock_reexports.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

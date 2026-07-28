@@ -38,35 +38,35 @@ const List<String> kLocalParamOrder = <String>[
 String localParamLabel(String key) {
   switch (key) {
     case kLocalParamLightSense:
-      return UITextConstants.imageEditorProLightSense;
+      return MediaText.imageEditorProLightSense;
     case kLocalParamBrightness:
-      return UITextConstants.imageEditorProBrightness;
+      return MediaText.imageEditorProBrightness;
     case kLocalParamExposure:
-      return UITextConstants.imageEditorProExposure;
+      return MediaText.imageEditorProExposure;
     case kLocalParamContrast:
-      return UITextConstants.imageEditorProContrast;
+      return MediaText.imageEditorProContrast;
     case kLocalParamSaturation:
-      return UITextConstants.imageEditorProSaturation;
+      return MediaText.imageEditorProSaturation;
     case kLocalParamVibrance:
-      return UITextConstants.imageEditorProNaturalSaturation;
+      return MediaText.imageEditorProNaturalSaturation;
     case kLocalParamTexture:
-      return UITextConstants.imageEditorProTexture;
+      return MediaText.imageEditorProTexture;
     case kLocalParamSharpen:
-      return UITextConstants.imageEditorProSharpen;
+      return MediaText.imageEditorProSharpen;
     case kLocalParamStructure:
-      return UITextConstants.imageEditorProStructure;
+      return MediaText.imageEditorProStructure;
     case kLocalParamHighlight:
-      return UITextConstants.imageEditorProHighlight;
+      return MediaText.imageEditorProHighlight;
     case kLocalParamShadow:
-      return UITextConstants.imageEditorProShadow;
+      return MediaText.imageEditorProShadow;
     case kLocalParamTemperature:
-      return UITextConstants.imageEditorProColorTemp;
+      return MediaText.imageEditorProColorTemp;
     case kLocalParamTint:
-      return UITextConstants.imageEditorProTone;
+      return MediaText.imageEditorProTone;
     case kLocalParamGrain:
-      return UITextConstants.imageEditorProGrain;
+      return MediaText.imageEditorProGrain;
     case kLocalParamFade:
-      return UITextConstants.imageEditorProFade;
+      return MediaText.imageEditorProFade;
     default:
       return key;
   }
@@ -77,13 +77,13 @@ String localParamLetter(String key) {
     case kLocalParamLightSense:
       return '光';
     case kLocalParamBrightness:
-      return UITextConstants.imageEditorProAnchorLetterBrightness;
+      return MediaText.imageEditorProAnchorLetterBrightness;
     case kLocalParamExposure:
       return '曝';
     case kLocalParamContrast:
-      return UITextConstants.imageEditorProAnchorLetterContrast;
+      return MediaText.imageEditorProAnchorLetterContrast;
     case kLocalParamSaturation:
-      return UITextConstants.imageEditorProAnchorLetterSaturation;
+      return MediaText.imageEditorProAnchorLetterSaturation;
     case kLocalParamVibrance:
       return '自';
     case kLocalParamTexture:
@@ -91,7 +91,7 @@ String localParamLetter(String key) {
     case kLocalParamSharpen:
       return '锐';
     case kLocalParamStructure:
-      return UITextConstants.imageEditorProAnchorLetterStructure;
+      return MediaText.imageEditorProAnchorLetterStructure;
     case kLocalParamHighlight:
       return '高';
     case kLocalParamShadow:

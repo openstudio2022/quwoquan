@@ -12,8 +12,9 @@
     "publishTaskCount",
     "objectTransactionResultCount",
     "commercialAcceptedCount",
-    "controlPlaneTaskThroughputPerHour",
-    "acceptedContentThroughputPerHour",
+    "fleetControlPlaneThroughputPerHour",
+    "fleetAcceptedThroughputPerHour",
+    "endToEndAcceptedThroughputPerHour",
     "acceptedContentThroughputStatus",
     "automaticRecoveryRate",
     "finalizedWithinStageBudgetRate",
@@ -23,6 +24,11 @@
     "finalizedObjectCount",
     "idempotencyKey",
     "taskOutcomes",
+    "executionCreatedAt",
+    "fleetStartedAt",
+    "canonicalFinalizedAt",
+    "fleetWallClockMilliseconds",
+    "endToEndWallClockMilliseconds",
     "completedAt"
   ],
   "additionalProperties": false,
@@ -57,11 +63,15 @@
       "type": "integer",
       "minimum": 0
     },
-    "controlPlaneTaskThroughputPerHour": {
+    "fleetControlPlaneThroughputPerHour": {
       "type": "number",
       "minimum": 0
     },
-    "acceptedContentThroughputPerHour": {
+    "fleetAcceptedThroughputPerHour": {
+      "type": "number",
+      "minimum": 0
+    },
+    "endToEndAcceptedThroughputPerHour": {
       "type": "number",
       "minimum": 0
     },
@@ -141,9 +151,29 @@
         }
       }
     },
+    "executionCreatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "fleetStartedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "canonicalFinalizedAt": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "fleetWallClockMilliseconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "endToEndWallClockMilliseconds": {
+      "type": "integer",
+      "minimum": 0
+    },
     "completedAt": {
       "type": "string",
-      "minLength": 1
+      "format": "date-time"
     },
     "schema": {
       "const": "quwoquan.reliabletask_fleet_report"

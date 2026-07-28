@@ -1,7 +1,7 @@
 /// 首页推荐 feed 与交集（intersection）展示文案。
 ///
-/// 从 [UITextConstants] 拆出的内聚常量类（R03 文件行数预算收口）：覆盖首页推荐
-/// feed 空态 / 实时刷新 pill / 负反馈即时确认、我的交集收件箱、交集生命周期弱标、
+/// 从 [UITextConstants] 拆出的内聚常量类（R03 文件行数预算收口）：覆盖首页关注
+/// feed 空态、推荐 feed 实时刷新 pill / 负反馈即时确认、我的交集收件箱、交集生命周期弱标、
 /// 维度短标签、共同点 chip、交集 spotlight 与影响明细样本文案。
 /// 真相源仍为服务端枚举 / 投影，端侧仅做展示，不自造结论。
 class DiscoveryFeedText {
@@ -11,9 +11,10 @@ class DiscoveryFeedText {
   static const String feedNegativeFeedbackAuthorReduced = '将减少该作者的内容';
   static const String feedNegativeFeedbackContentReduced = '将减少相似内容';
 
-  // 首页推荐空态：运营兜底文案 + 再试入口（不编造内容）。
-  static const String homeFeedEmptyTitle = '暂时没有新的内容';
-  static const String homeFeedEmptyDescription = '稍后再来看看，或下拉刷新试试。';
+  // 首页关注流成功空态：只陈述尚无关注动态，不冒充推荐结果或错误。
+  static const String followingFeedEmptyTitle = '还没有关注动态';
+  static const String followingFeedEmptyDescription =
+      '关注感兴趣的人后，他们发布的新内容会出现在这里。';
 
   // 首页推荐实时更新入口（顶部 pill）：点击触发用户主动刷新，不自动插入/跳位。
   static const String feedRealtimeUpdateHint = '有新内容，点击刷新';

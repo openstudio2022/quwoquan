@@ -15,7 +15,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
   /// async 三态：加载时保留稳定反馈；失败时必须呈现可恢复状态，不能伪装成
   /// 「暂无打动事实」。data 由 [AuthorImpactCard] 决定（other 无事实收起，
   /// mine 空态展示鼓励发布文案）。
-  Widget _buildAuthorImpactCard(bool isDark) {
+  Widget _buildAuthorImpactCard(bool isDark, {required bool suppressFailure}) {
     final isMine = widget.mode == ProfileMode.mine;
     final request = (
       subAccountId: widget.userId,
@@ -25,44 +25,36 @@ extension _ProfileShellBuilders on _ProfileShellState {
     return impact.when(
       data: (summary) =>
           AuthorImpactCard(summary: summary, isDark: isDark, isMine: isMine),
-      loading: () => const Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.containerLg),
-        child: Center(child: CupertinoActivityIndicator()),
+      loading: () => Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.containerLg),
+        child: AppRequestFeedback.section(),
       ),
       error: (error, _) {
+        if (suppressFailure) {
+          return const SizedBox.shrink();
+        }
         final resolved = runtimeErrorSemantic(
           context,
           error: error,
-          category: UiErrorCategory.pageLoad,
-          scope: UiErrorScope.page,
+          category: UiErrorCategory.sectionLoad,
+          scope: UiErrorScope.section,
         );
         return AppSectionErrorState(
-          semantic: UiErrorSemantic(
-            category: resolved.category,
-            scope: resolved.scope,
-            title: isMine
-                ? UITextConstants.profileImpactUnavailableTitle
-                : UITextConstants.profileImpactUnavailableTitleOther,
-            message: resolved.message,
-            secondaryMessage: resolved.secondaryMessage,
-            primaryAction:
-                resolved.primaryAction ??
-                const UiErrorAction(
-                  type: UiErrorActionType.retry,
-                  label: UITextConstants.tryAgain,
-                ),
-            secondaryAction: resolved.secondaryAction,
-            dismissible: resolved.dismissible,
-            sourceCode: resolved.sourceCode,
-            failureKind: resolved.failureKind,
-            recoveryAction: resolved.recoveryAction,
-            presentation: resolved.presentation,
-            tone: resolved.tone,
-          ),
+          semantic: resolved,
           onAction: (action) async {
             if (action.type == UiErrorActionType.retry ||
                 action.type == UiErrorActionType.resubmit) {
               ref.invalidate(authorImpactProvider(request));
+            } else if (action.type == UiErrorActionType.login) {
+              await requireLogin(
+                ref,
+                context,
+                AuthGateReason.generic,
+                redirect: GoRouterState.of(context).uri.toString(),
+                dismissFallback: AppRoutePaths.home,
+              );
+            } else if (action.type == UiErrorActionType.dismiss) {
+              _leaveProfile(context);
             }
           },
         );
@@ -94,7 +86,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
           .capability;
       if (capability != null && !capability.canOpenConversation) {
         if (capability.hasPendingGreeting) {
-          AppToast.show(context, UITextConstants.profileGreetingPendingHint);
+          AppToast.show(context, ProfileText.profileGreetingPendingHint);
           return;
         }
         if (capability.canGreet) {
@@ -198,13 +190,13 @@ extension _ProfileShellBuilders on _ProfileShellState {
     final message = await showCupertinoDialog<String?>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
-        title: const Text(UITextConstants.profileGreetComposerTitle),
+        title: const Text(ProfileText.profileGreetComposerTitle),
         content: Padding(
           padding: EdgeInsets.only(top: AppSpacing.interGroupSm),
           child: CupertinoTextField(
             key: TestKeys.profileGreetingComposerField,
             controller: controller,
-            placeholder: UITextConstants.profileGreetComposerPlaceholder,
+            placeholder: ProfileText.profileGreetComposerPlaceholder,
             maxLength: 100,
             autofocus: true,
           ),
@@ -212,12 +204,12 @@ extension _ProfileShellBuilders on _ProfileShellState {
         actions: <CupertinoDialogAction>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(null),
-            child: const Text(UITextConstants.cancel),
+            child: const Text(FoundationText.cancel),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
             onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: const Text(UITextConstants.profileGreetSend),
+            child: const Text(ProfileText.profileGreetSend),
           ),
         ],
       ),
@@ -327,6 +319,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
     required String? bio,
     required ProfileState state,
     required ProfileNotifier notifier,
+    required bool suppressImpactFailure,
   }) {
     final summarySurface =
         SettingsSemanticConstants.conversationSheetCardSurface(isDark);
@@ -476,7 +469,10 @@ extension _ProfileShellBuilders on _ProfileShellState {
           ] else ...[
             _buildIntersectionCard(),
           ],
-          _buildAuthorImpactCard(isDark),
+          _buildAuthorImpactCard(
+            isDark,
+            suppressFailure: suppressImpactFailure,
+          ),
           SizedBox(height: AppSpacing.interGroupSm),
         ],
       ),
@@ -599,7 +595,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
                         ),
                         SizedBox(width: AppSpacing.intraGroupXs),
                         Text(
-                          UITextConstants.profileUploadCover,
+                          ProfileText.profileUploadCover,
                           style: TextStyle(
                             fontSize: AppTypography.iosFootnote,
                             color: AppColors.iosSecondaryLabel(context),

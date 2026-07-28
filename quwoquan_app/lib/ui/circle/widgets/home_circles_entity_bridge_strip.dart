@@ -34,21 +34,21 @@ class HomeCirclesEntityBridgeStrip extends StatelessWidget {
   static const List<_HomeCirclesEntityBridgeItem> _items =
       <_HomeCirclesEntityBridgeItem>[
         _HomeCirclesEntityBridgeItem(
-          title: UITextConstants.homepageTypeUniversity,
-          hint: UITextConstants.homepageTypeUniversityHint,
-          query: UITextConstants.homepageTypeUniversity,
+          title: CreationText.homepageTypeUniversity,
+          hint: CreationText.homepageTypeUniversityHint,
+          query: CreationText.homepageTypeUniversity,
           icon: CupertinoIcons.building_2_fill,
         ),
         _HomeCirclesEntityBridgeItem(
-          title: UITextConstants.homepageTypeTravelPhoto,
-          hint: UITextConstants.homepageTypeTravelPhotoHint,
-          query: UITextConstants.homepageTypeTravelPhoto,
+          title: CreationText.homepageTypeTravelPhoto,
+          hint: CreationText.homepageTypeTravelPhotoHint,
+          query: CreationText.homepageTypeTravelPhoto,
           icon: CupertinoIcons.photo_fill_on_rectangle_fill,
         ),
         _HomeCirclesEntityBridgeItem(
-          title: UITextConstants.homepageTypeHotel,
-          hint: UITextConstants.homepageTypeHotelHint,
-          query: UITextConstants.homepageTypeHotel,
+          title: CreationText.homepageTypeHotel,
+          hint: CreationText.homepageTypeHotelHint,
+          query: CreationText.homepageTypeHotel,
           icon: CupertinoIcons.bed_double_fill,
         ),
       ];
@@ -132,7 +132,7 @@ class HomeCirclesEntityBridgeStrip extends StatelessWidget {
           Row(
             children: [
               Text(
-                UITextConstants.circlesEntitySectionTitle,
+                CommunityText.circlesEntitySectionTitle,
                 style: TextStyle(
                   fontSize: AppTypography.iosFootnote,
                   fontWeight: AppTypography.medium,
@@ -143,7 +143,7 @@ class HomeCirclesEntityBridgeStrip extends StatelessWidget {
               SizedBox(width: AppSpacing.intraGroupSm),
               Flexible(
                 child: Text(
-                  UITextConstants.circlesEntitySectionHint,
+                  CommunityText.circlesEntitySectionHint,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.end,

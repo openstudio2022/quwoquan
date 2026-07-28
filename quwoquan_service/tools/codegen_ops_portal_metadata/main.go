@@ -15,40 +15,18 @@ import (
 )
 
 type portalShellFile struct {
-	Version               int                        `yaml:"version,omitempty" json:"version,omitempty"`
-	PortalID              string                     `yaml:"portal_id" json:"portal_id"`
-	Title                 string                     `yaml:"title" json:"title"`
-	DefaultEnvironment    string                     `yaml:"default_environment" json:"default_environment"`
-	SupportedEnvironments []string                   `yaml:"supported_environments" json:"supported_environments"`
-	DefaultDomain         string                     `yaml:"default_domain" json:"default_domain"`
-	Domains               []namedIconItem            `yaml:"domains" json:"domains"`
-	GlobalSearch          globalSearch               `yaml:"global_search" json:"global_search"`
-	NotificationChannels  []string                   `yaml:"notification_channels" json:"notification_channels"`
-	WorkbenchViews        []namedLabelItem           `yaml:"workbench_views" json:"workbench_views"`
-	ContextSwitchers      []string                   `yaml:"context_switchers" json:"context_switchers"`
-	DashboardDefaults     map[string]dashboardConfig `yaml:"dashboard_defaults" json:"dashboard_defaults"`
+	Version               int             `yaml:"version,omitempty" json:"version,omitempty"`
+	PortalID              string          `yaml:"portal_id" json:"portal_id"`
+	Title                 string          `yaml:"title" json:"title"`
+	DefaultEnvironment    string          `yaml:"default_environment" json:"default_environment"`
+	SupportedEnvironments []string        `yaml:"supported_environments" json:"supported_environments"`
+	Domains               []namedIconItem `yaml:"domains" json:"domains"`
 }
 
 type namedIconItem struct {
 	ID    string `yaml:"id" json:"id"`
 	Label string `yaml:"label" json:"label"`
 	Icon  string `yaml:"icon" json:"icon"`
-}
-
-type namedLabelItem struct {
-	ID    string `yaml:"id" json:"id"`
-	Label string `yaml:"label" json:"label"`
-}
-
-type globalSearch struct {
-	Enabled     bool     `yaml:"enabled" json:"enabled"`
-	Placeholder string   `yaml:"placeholder" json:"placeholder"`
-	ObjectTypes []string `yaml:"object_types" json:"object_types"`
-}
-
-type dashboardConfig struct {
-	KPIs   []string `yaml:"kpis" json:"kpis"`
-	Charts []string `yaml:"charts" json:"charts"`
 }
 
 type portalMenuFile struct {

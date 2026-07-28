@@ -22,7 +22,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.cameraPhotoModeTitle), findsOneWidget);
+    expect(find.text(MediaText.cameraPhotoModeTitle), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('camera-mode-switcher')),
       findsOneWidget,
@@ -39,7 +39,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('camera-mode-video')));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.cameraVideoModeTitle), findsOneWidget);
+    expect(find.text(MediaText.cameraVideoModeTitle), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('camera-record-action')),
       findsOneWidget,
@@ -48,7 +48,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('camera-mode-photo')));
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.cameraPhotoModeTitle), findsOneWidget);
+    expect(find.text(MediaText.cameraPhotoModeTitle), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('camera-capture-action')),
       findsOneWidget,
@@ -80,7 +80,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
       ImageEditorFilterPreset(
         id: 'original',
         categoryId: ImageEditorFilterRepository.cameraPhotoCategoryId,
-        name: UITextConstants.imageEditOriginal,
+        name: MediaText.imageEditOriginal,
         sort: 1,
         enabled: true,
         defaultStrength: 0,

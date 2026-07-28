@@ -38,7 +38,6 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
 
-import '../../../support/api_contract/local_bad_certificate_overrides.dart';
 import '../../../support/api_contract/local_gamma_anonymous_session.dart';
 
 // dart-define 注入；本地执行时通过 make test-api-contract 传入。
@@ -48,9 +47,6 @@ const _apiContractEnv = String.fromEnvironment(
 );
 const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
 const _localGammaT3Scope = String.fromEnvironment('LOCAL_GAMMA_T3_SCOPE');
-const _allowBadCertificateForLocalApiContract = bool.fromEnvironment(
-  'API_CONTRACT_ALLOW_BAD_CERT',
-);
 
 // ─── Shared client ─────────────────────────────────────────────────────────
 
@@ -115,9 +111,6 @@ Map<String, Object> _behaviorEvent(
 void main() {
   // ── 环境可达性探测：不可达则直接 fail ───────────────────────────────
   setUpAll(() async {
-    installLocalApiContractBadCertificateOverride(
-      enabled: _allowBadCertificateForLocalApiContract,
-    );
     if (_apiBase.isEmpty) {
       throw StateError('L3: ${_apiContractEnv.toUpperCase()}_BASE_URL not set');
     }
@@ -142,7 +135,6 @@ void main() {
 
   tearDownAll(() {
     if (_apiAvailable) _client.close();
-    restoreLocalApiContractBadCertificateOverride();
   });
 
   // ── 场景 1：feed_cursor_pagination_end_to_end ──────────────────────────────
@@ -258,6 +250,35 @@ void main() {
             reason: 'aspectRatio must stay null when dimensions are absent',
           );
         }
+      }
+    });
+
+    test('视频书查询返回可播放的 VideoPostDto', () async {
+      if (!_apiAvailable) {
+        return markTestSkipped('$_apiContractEnv unavailable');
+      }
+      final url = Uri.parse(
+        '$_apiBase/content/feed'
+        '?identity=work&type=video&sort=recommend&limit=20',
+      );
+      final resp = await _client
+          .get(url, headers: _authHeaders('content.feed.video'))
+          .timeout(const Duration(seconds: 10));
+
+      expect(resp.statusCode, 200);
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      final items = (body['items'] as List)
+          .map(
+            (item) =>
+                contentPostDtoFromReadModelMap(item as Map<String, dynamic>),
+          )
+          .toList(growable: false);
+      expect(items, isNotEmpty, reason: 'video book feed must not be empty');
+      expect(items, everyElement(isA<VideoPostDto>()));
+      for (final item in items.whereType<VideoPostDto>()) {
+        expect(item.identity, 'work');
+        expect(item.type, 'video');
+        expect(item.videoUrl, isNotEmpty);
       }
     });
   });

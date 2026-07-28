@@ -234,6 +234,7 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 		report := reliabletask.BuildDataContentFleetReport(
 			taskRows,
 			startedAt,
+			startedAt,
 			time.Now().UTC(),
 			int(outboxes)-total,
 			total-len(taskRows),
@@ -241,7 +242,7 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 			0,
 		)
 		if report.CommercialAcceptedCount != 0 ||
-			report.AcceptedContentThroughputPerHour != 0 ||
+			report.EndToEndAcceptedThroughputPerHour != 0 ||
 			report.AcceptedContentThroughputStatus != "GATE_BLOCK_NO_COMMERCIAL_BATCH" {
 			t.Fatalf(
 				"control-plane fixture was misreported as commercial throughput: %#v",
@@ -456,6 +457,7 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 	report := reliabletask.BuildDataContentFleetReport(
 		[]reliabletask.ReliableAsyncTask{task},
 		task.CreatedAt,
+		task.CreatedAt,
 		task.UpdatedAt,
 		0,
 		0,
@@ -464,7 +466,7 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 	)
 	if !report.Passed ||
 		report.CommercialAcceptedCount != 1 ||
-		report.AcceptedContentThroughputPerHour <= 0 ||
+		report.EndToEndAcceptedThroughputPerHour <= 0 ||
 		report.AcceptedContentThroughputStatus != "MEASURED" {
 		t.Fatalf("real accepted throughput was not measured: %#v", report)
 	}
@@ -610,7 +612,7 @@ func TestProductionDataContentWorkerUsesReliableTaskFleet(t *testing.T) {
 	if !report.Passed ||
 		report.CommercialAcceptedCount != 1 ||
 		report.RequiredQuota != 1 ||
-		report.AcceptedContentThroughputPerHour <= 0 {
+		report.EndToEndAcceptedThroughputPerHour <= 0 {
 		t.Fatalf("production fleet report is not commercially accepted: %#v", report)
 	}
 	if _, err := os.Stat(filepath.Join(

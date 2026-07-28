@@ -197,12 +197,12 @@ extension _CreatePageStateChromeHelpers on _CreatePageState {
 
   Widget _buildPublishActionLabel(Color onAccentLabel) {
     if (_isPublishing && _publicationCancellationSignal == null) {
-      return CupertinoActivityIndicator(color: onAccentLabel);
+      return AppRequestFeedback.inline(indicatorColor: onAccentLabel);
     }
     final cancellation = _publicationCancellationSignal;
     final progress = _publishUploadProgress;
     final label = cancellation == null || progress == null
-        ? UITextConstants.mediaPickerNextStep
+        ? MediaText.mediaPickerNextStep
         : cancellation.isCancelled
         ? CreatePageText.uploadCancelling
         : '${(progress * 100).round()}% · ${CreatePageText.cancelUpload}';

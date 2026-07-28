@@ -7,6 +7,7 @@ coverage file or invents a static readiness state.
 """
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -260,8 +261,18 @@ def _catalog_issues(
     return issues
 
 
-def finalize_execution_qualification(execution_id: str) -> QualificationReport:
-    """Validate object-local source catalogs and persist a typed execution closure."""
+def finalize_execution_qualification(
+    execution_id: str,
+    *,
+    publishable_names: Collection[str],
+) -> QualificationReport:
+    """Validate object-local source catalogs and persist a typed execution closure.
+
+    ``publishable_names`` 是本批次真正要 canonical publish 的对象集合。候选池经过采后
+    必然包含被配额门丢弃的对象，它们缺来源目录属于预期事实：这些缺口仍全量写入报告
+    留档，但只有准出集合内的来源缺陷才阻断发布。准出数量本身由 build_validate 的
+    配额门裁定，这里不重复判定，避免配额出现第二真相源。
+    """
     normalized = validate_execution_id(execution_id)
     request_path = qualification_request_path(normalized)
     if not request_path.is_file():
@@ -332,11 +343,24 @@ def finalize_execution_qualification(execution_id: str) -> QualificationReport:
                 "primarySource": primary_projection,
             }
         )
+    publishable = {str(name).strip() for name in publishable_names if str(name).strip()}
+    if not publishable:
+        raise ValueError(
+            "source qualification requires at least one publishable object; "
+            "build_validate must approve the quota before publish"
+        )
+    unknown = publishable - {target.name for target in targets}
+    if unknown:
+        raise ValueError(
+            "publishable objects fall outside the immutable execution targets: "
+            + ", ".join(sorted(unknown))
+        )
+    blocking = tuple(issue for issue in issues if issue.ref in publishable)
     payload = {
         "executionId": normalized,
         "policyRevision": HOMEPAGE_SOURCE_POLICY_REVISION,
         "verifiedAt": now_iso(),
-        "passed": not issues,
+        "passed": not blocking,
         "targets": target_rows,
         "issues": [issue.as_dict() for issue in issues],
     }
@@ -348,7 +372,7 @@ def finalize_execution_qualification(execution_id: str) -> QualificationReport:
     )
     path = qualification_result_path(normalized)
     write_json(path, payload)
-    return QualificationReport(normalized, not issues, tuple(issues), path)
+    return QualificationReport(normalized, not blocking, blocking, path)
 
 
 __all__ = [

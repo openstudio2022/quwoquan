@@ -56,7 +56,7 @@ def test_source_reject_memory_ignores_soft_fetch_policy_failures():
         }
     )
 
-def test_download_reject_memory_ignores_registry_fetchable_homepage_baike_soft_failures():
+def test_download_reject_memory_records_nonfetchable_homepage_baike_failures():
     task = "20260711--travel-homepage-reject-memory--test-region-a--pilot-001"
     build_execution_fixture(task)
     entity = "沙湖旅游景区"
@@ -82,9 +82,9 @@ def test_download_reject_memory_ignores_registry_fetchable_homepage_baike_soft_f
 
     memory = _download_reject_memory(task, entity, entity_type="地点/景区")
 
-    assert not any("baike.baidu.com" in value for value in memory["sourceUrls"])
+    assert any("baike.baidu.com" in value for value in memory["sourceUrls"])
 
-def test_homepage_candidate_gate_allows_registry_fetchable_baike_sources():
+def test_homepage_candidate_gate_blocks_nonfetchable_baike_without_snapshot():
     baidu = _source(
         source_id="home_baidu_baike",
         platform="百度百科",
@@ -96,7 +96,8 @@ def test_homepage_candidate_gate_allows_registry_fetchable_baike_sources():
     baidu_verdict = _candidate_gate(
         baidu, entity_id="喀纳斯景区", lane="homepage", vertical="travel"
     )
-    assert baidu_verdict["passed"]
+    assert not baidu_verdict["passed"]
+    assert "registry-fetchable" in "\n".join(baidu_verdict["issues"])
 
     bare_official = _source(
         source_id="home_official_bare",
@@ -327,6 +328,26 @@ def test_source_candidate_gate_rejects_weak_entity_match():
     assert not verdict["passed"]
     assert any("matchConfidence" in issue for issue in verdict["issues"])
 
+def test_source_candidate_gate_rejects_non_https_url_before_freeze():
+    source = _source(
+        source_id="article_http_legacy_link",
+        platform="新华网",
+        url="http://news.example.com/legacy",
+        category="media_article",
+        discovery_provider="trusted_external_links",
+        match_confidence=0.9,
+        source_role="base",
+    )
+    verdict = _candidate_gate(
+        source,
+        entity_id="杭州西湖",
+        lane="article",
+        vertical="travel",
+    )
+    assert not verdict["passed"]
+    assert "url must use https" in verdict["issues"]
+
+
 def test_wiki_title_skips_empty_exact_page_and_uses_search_page_with_extract():
     original = network_io_mod.wiki_api
 
@@ -456,6 +477,43 @@ def test_wiki_title_for_entity_accepts_alias_with_admin_disambiguation():
                 entity_aliases=("金沙湖", "金沙湖公园"),
             )
             == "金沙湖 (测试省)"
+        )
+    finally:
+        network_io_mod.wiki_api = original
+
+
+def test_wiki_title_for_entity_accepts_exact_registered_alias_outside_canonical_name():
+    original = network_io_mod.wiki_api
+
+    def fake_wiki_api(_host: str, params: dict) -> dict:
+        if params.get("prop") == "extracts" and params.get("titles") == "大明山 (测试省)":
+            return {
+                "query": {
+                    "pages": {
+                        "1": {
+                            "pageid": 1,
+                            "title": "大明山 (测试省)",
+                            "extract": "大明山位于测试省测试市，是一处山地景观。",
+                        }
+                    }
+                }
+            }
+        if params.get("list") == "search" and params.get("srsearch") in {
+            "临安大明山",
+            "大明山（测试省）",
+        }:
+            return {"query": {"search": [{"title": "大明山 (测试省)"}]}}
+        return {"query": {"pages": {"-1": {"missing": ""}}}}
+
+    network_io_mod.wiki_api = fake_wiki_api
+    try:
+        assert (
+            _wiki_title_for_entity(
+                "zh.wikipedia.org",
+                "临安大明山",
+                entity_aliases=("大明山（测试省）",),
+            )
+            == "大明山 (测试省)"
         )
     finally:
         network_io_mod.wiki_api = original

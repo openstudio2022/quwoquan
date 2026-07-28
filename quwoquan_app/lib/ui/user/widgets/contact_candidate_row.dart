@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -37,7 +38,10 @@ class ContactCandidateRow extends StatelessWidget {
         ),
         child: Row(
           children: <Widget>[
-            _Avatar(url: candidate.avatarUrl ?? '', name: candidate.displayName),
+            _Avatar(
+              url: candidate.avatarUrl ?? '',
+              name: candidate.displayName,
+            ),
             SizedBox(width: AppSpacing.containerSm),
             Expanded(
               child: Column(
@@ -150,21 +154,24 @@ class _AddActionButton extends StatelessWidget {
     final accent = AppColors.iosAccent(context);
     final isAdded = addState == ContactAddState.added;
     final label = switch (addState) {
-      ContactAddState.added => UITextConstants.contactAlreadyAdded,
-      ContactAddState.canFollowBack => UITextConstants.contactAddBack,
-      _ => UITextConstants.addContact,
+      ContactAddState.added => ContactText.contactAlreadyAdded,
+      ContactAddState.canFollowBack => ContactText.contactAddBack,
+      _ => ContactText.addContact,
     };
     return CupertinoButton(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.containerMd,
         vertical: AppSpacing.intraGroupXs,
       ),
-      minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.buttonHeightSm),
+      minimumSize: Size(
+        AppSpacing.minInteractiveSize,
+        AppSpacing.buttonHeightSm,
+      ),
       borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
       color: isAdded ? null : accent,
       onPressed: isAdded || pending ? null : onAdd,
       child: pending
-          ? const CupertinoActivityIndicator()
+          ? AppRequestFeedback.inline()
           : Text(
               label,
               style: TextStyle(

@@ -179,7 +179,7 @@ class _MyIntersectionInboxPageState
     return resolveIntersectionDetailErrorSemantic(
       context,
       error: error,
-      title: UITextConstants.objectIntersectionsUnavailableTitle,
+      title: ObjectHomepageText.objectIntersectionsUnavailableTitle,
     );
   }
 
@@ -261,7 +261,7 @@ class _MyIntersectionInboxPageState
     bool isDark,
   ) {
     if (state.isLoading && state.items.isEmpty) {
-      return const <Widget>[Center(child: CupertinoActivityIndicator())];
+      return <Widget>[AppRequestFeedback.section()];
     }
     if (state.rawError != null) {
       return <Widget>[
@@ -345,7 +345,7 @@ class _MyIntersectionInboxPageState
         AppActionSheetSection<String>(
           items: <AppActionSheetItem<String>>[
             AppActionSheetItem<String>(
-              label: UITextConstants.notInterested,
+              label: ContentText.notInterested,
               value: intersectionFeedbackKindNotInterested,
               icon: CupertinoIcons.hand_thumbsdown,
               isDestructive: true,
@@ -486,13 +486,13 @@ class _IntersectionNavSwitch extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         _IntersectionNavSwitchItem(
-          label: UITextConstants.profileTabIntersection,
+          label: ProfileText.profileTabIntersection,
           selected: selected == _IntersectionDetailTab.intersections,
           onTap: () => onSelected(_IntersectionDetailTab.intersections),
         ),
         SizedBox(width: AppSpacing.lg),
         _IntersectionNavSwitchItem(
-          label: UITextConstants.profileTabImpact,
+          label: ProfileText.profileTabImpact,
           selected: selected == _IntersectionDetailTab.impact,
           onTap: () => onSelected(_IntersectionDetailTab.impact),
         ),

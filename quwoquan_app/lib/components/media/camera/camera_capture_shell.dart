@@ -77,7 +77,7 @@ class CameraTopBar extends StatelessWidget {
             CameraRoundIconButton(
               key: const ValueKey<String>('camera-back-action'),
               icon: CupertinoIcons.chevron_back,
-              label: UITextConstants.back,
+              label: ContentText.back,
               onTap: onBack,
             ),
             Expanded(
@@ -335,8 +335,8 @@ class CameraRecordButton extends StatelessWidget {
         : CameraShellMetrics.primaryButtonInnerSize;
     return Semantics(
       label: recording
-          ? UITextConstants.cameraVideoStop
-          : UITextConstants.cameraVideoRecord,
+          ? MediaText.cameraVideoStop
+          : MediaText.cameraVideoRecord,
       button: true,
       child: GestureDetector(
         key: const ValueKey<String>('camera-record-action'),

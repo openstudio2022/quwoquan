@@ -9190,6 +9190,82 @@
       }
     },
     {
+      "actorRequirement": "none",
+      "aggregateOwner": "",
+      "authMode": "optional",
+      "canonicalOperationId": "content.post.GetFeed",
+      "clientContract": {
+        "dartImport": "../content/post_reader_queries.dart",
+        "requestEncoder": "encodeContentDiscoveryFeedQuery",
+        "requestType": "ContentDiscoveryFeedQuery",
+        "responseDecoder": "decodeContentDiscoveryFeedPageSlice",
+        "responseType": "ContentDiscoveryFeedPageSlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.unauthorized",
+        "CONTENT.USER.invalid_argument",
+        "CONTENT.USER.rate_limited",
+        "CONTENT.SYSTEM.storage_read_failed",
+        "CONTENT.SYSTEM.required_dependency_unavailable",
+        "CONTENT.MIDDLEWARE.upstream_timeout",
+        "CONTENT.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "getFeed",
+      "facet": "FeedQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetFeed",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "content.post",
+      "ownershipPolicy": "public_discovery_feed",
+      "pathTemplate": "/content/feed",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBodyKind": "",
+      "requestEntity": "",
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "Post",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "content/content/post/operations.yaml",
+      "surfaceIds": [
+        "homeFeed"
+      ],
+      "telemetry": {
+        "attributes": [
+          "identity",
+          "type",
+          "sort",
+          "outcome"
+        ],
+        "metric": "content_feed_get",
+        "trace": true
+      }
+    },
+    {
       "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
@@ -13888,8 +13964,8 @@
         "dartImport": "../user/account_session_contracts.dart",
         "requestEncoder": "encodeLoginWithAlipayCommand",
         "requestType": "LoginWithAlipayCommand",
-        "responseDecoder": "decodeAuthSessionGrant",
-        "responseType": "AuthSessionGrant"
+        "responseDecoder": "decodeFederatedLoginOutcome",
+        "responseType": "FederatedLoginOutcome"
       },
       "commercial": {
         "blockReason": "prod Alipay credentials and real-device SDK evidence are not injected",
@@ -13905,6 +13981,7 @@
         "USER.AUTH.alipay_auth_failed",
         "USER.AUTH.social_provider_cancelled",
         "USER.AUTH.social_provider_unavailable",
+        "USER.AUTH.consent_required",
         "USER.AUTH.credential_conflict",
         "USER.AUTH.account_suspended",
         "USER.AUTH.account_deleted",
@@ -14047,8 +14124,8 @@
         "dartImport": "../user/account_session_contracts.dart",
         "requestEncoder": "encodeLoginWithQqCommand",
         "requestType": "LoginWithQqCommand",
-        "responseDecoder": "decodeAuthSessionGrant",
-        "responseType": "AuthSessionGrant"
+        "responseDecoder": "decodeFederatedLoginOutcome",
+        "responseType": "FederatedLoginOutcome"
       },
       "commercial": {
         "blockReason": "prod QQ credentials and real-device SDK evidence are not injected",
@@ -14064,6 +14141,7 @@
         "USER.AUTH.qq_auth_failed",
         "USER.AUTH.social_provider_cancelled",
         "USER.AUTH.social_provider_unavailable",
+        "USER.AUTH.consent_required",
         "USER.AUTH.credential_conflict",
         "USER.AUTH.account_suspended",
         "USER.AUTH.account_deleted",
@@ -14127,8 +14205,8 @@
         "dartImport": "../user/account_session_contracts.dart",
         "requestEncoder": "encodeLoginWithWechatCommand",
         "requestType": "LoginWithWechatCommand",
-        "responseDecoder": "decodeAuthSessionGrant",
-        "responseType": "AuthSessionGrant"
+        "responseDecoder": "decodeFederatedLoginOutcome",
+        "responseType": "FederatedLoginOutcome"
       },
       "commercial": {
         "blockReason": "prod WeChat credentials and real-device SDK evidence are not injected",
@@ -14144,6 +14222,7 @@
         "USER.AUTH.wechat_auth_failed",
         "USER.AUTH.social_provider_cancelled",
         "USER.AUTH.social_provider_unavailable",
+        "USER.AUTH.consent_required",
         "USER.AUTH.credential_conflict",
         "USER.AUTH.account_suspended",
         "USER.AUTH.account_deleted",
@@ -18932,13 +19011,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "40da80f66892cbbefc5a01e0c5335fd066c2554f76295ac2563277464827057f"
+    "sha256": "9f270c944ac92f25a45373863ca71f1ebe1abca0269e3ee4868936d736343b0a"
   },
   "contractGraph": {
     "compilerHash": "sha256:e62c2129a8940fd8d5e68e1899761ddc9cd787c0a038d5f687ba0cfc6a0b24be",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "ee18fd9d9078525728eabf12f330b47c3b8c4c4e5612872926bbb2998462274b",
-    "sourceDigestSetSha256": "0ec4eb95970c42d3496d396666cf7fc5a7b12941d7e8f222a739f7654bba7f85"
+    "sha256": "79dc1080dedab230f7fe84f882e9e902fb5ab310728a7ceede92aeb2737a75c8",
+    "sourceDigestSetSha256": "6ca03f84ab1ba9e63437422086c51acf7d16c1f7b5513119d34f55e44d893229"
   },
   "generator": "app-cloud-handoff"
 }

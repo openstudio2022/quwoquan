@@ -7,6 +7,40 @@ contentPerEntity:
 quality:
   nonEmptyRateMinimum: 0.999
   duplicateExposureRateMaximum: 0.01
+  homepageMaxSourceFidelity: 0.92
+  homepageMinimumBodyChars: 350
+  homepageMinimumFactCount: 4
+  homepageMinimumFactChars: 180
+  homepageMinimumSectionChars: 40
+  homepageSourceOutlineSectionChars: 120
+mediaSubject:
+  representativeIndicators:
+    - campus
+    - university
+    - college
+    - school
+    - classroom
+    - library
+    - dormitory
+    - 校园
+    - 校区
+    - 校门
+    - 教学楼
+    - 图书馆
+    - 宿舍
+    - 操场
+    - 实验室
+  prohibitedIndicators:
+    - screenshot
+    - watermark
+    - id photo
+    - transcript
+    - 截图
+    - 水印
+    - 证件照
+    - 身份证
+    - 成绩单
+    - 学生证
 videoDelivery:
   container: mp4
   codec: h264

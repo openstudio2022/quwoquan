@@ -1,11 +1,11 @@
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-010
+
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../../../../support/pageflip/pageflip.dart';
-import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_uv_mesh.dart';
-import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_sheet_partition.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/modes/article_reader_mode_strategy.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/modes/single_page_mode_strategy.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/article_reader_flip_pipeline.dart';
@@ -326,6 +326,9 @@ void main() {
         final backwardSoftLayerSource = _readAppSource(
           'lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck_soft_layers.dart',
         );
+        final pageSurfacesSource = _readAppSource(
+          'lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck_page_surfaces.dart',
+        );
         final currentUnderlay = backwardDynamicSource.indexOf(
           'pageIndex: scene.bottomPageIndex!',
         );
@@ -358,6 +361,31 @@ void main() {
           contains('kind: ArticlePageSurfaceKind.back'),
           reason:
               'BACK verso slice must consume the semantic back surface of the flipping previous leaf.',
+        );
+        expect(
+          pageSurfacesSource,
+          contains('paperTexture: _deck.paperTexture'),
+          reason:
+              'recto/front reader surfaces must receive the deck paper texture.',
+        );
+        expect(
+          pageSurfacesSource,
+          contains('case ArticlePageSurfaceKind.back:'),
+          reason:
+              'the semantic BACK face must be built through the back surface path.',
+        );
+        expect(
+          pageSurfacesSource,
+          contains('resolveArticlePaperPalette(context, _deck.paperTexture!)'),
+          reason:
+              'the BACK surface palette must consume the same deck paper texture.',
+        );
+        expect(
+          pageSurfacesSource,
+          contains('_buildMirroredReaderPage(context, pageIndex, pageSize)'),
+          reason:
+              'the semantic BACK surface must render the same textured reader page, '
+              'mirrored only as a material face.',
         );
         expect(
           versoProbeSource,
@@ -542,23 +570,6 @@ void main() {
           reason:
               'previous-back must not be narrowed by a synthetic vertical guard; '
               'only StPageFlip F/E geometry owns the back band.',
-        );
-        final canonicalFaceSource = _readAppSource(
-          'lib/ui/content/article_reader/pageflip/layers/backward_sheet_partition.dart',
-        );
-        expect(
-          canonicalFaceSource,
-          isNot(contains('!linesAreParallel(')),
-          reason:
-              'F/E near-parallel states must still clip the E-F strip instead '
-              'of falling into a separate geometry branch.',
-        );
-        expect(
-          canonicalFaceSource,
-          isNot(contains('return foldSidePolygon')),
-          reason:
-              'BACK backface must never fall back to the unbounded fold side; '
-              'that is the large-back regression from the visual reports.',
         );
         expect(
           hostSource,
@@ -820,89 +831,6 @@ void main() {
         reason:
             '`softLayerViewportDirection` 必须对齐 StPageFlip convertToGlobal，'
             'BACK 不能强行走 forward 投影。',
-      );
-    });
-
-    test(
-      'BACK canonical faces remain alive when fold/free-edge are parallel',
-      () {
-        const pageSize = Size(400, 600);
-        final faces = resolveBackwardCanonicalSheetFaces(
-          const BackwardCanonicalSheetInput(
-            pageSize: pageSize,
-            sheetLocalPolygon: <Offset>[
-              Offset.zero,
-              Offset(400, 0),
-              Offset(400, 600),
-              Offset(0, 600),
-            ],
-            sheetAreaPolygon: <Offset>[
-              Offset.zero,
-              Offset(400, 0),
-              Offset(400, 600),
-              Offset(0, 600),
-            ],
-            sheetLocalFoldLine: (Offset(160, 0), Offset(160, 600)),
-            sheetLocalFreeEdgeLine: (Offset(100, 0), Offset(100, 600)),
-            currentResidualPagePolygon: <Offset>[],
-          ),
-        );
-
-        expect(
-          faces.previousFrontRectoLocalPolygon,
-          hasLength(greaterThanOrEqualTo(3)),
-        );
-        expect(
-          faces.previousBackVersoLocalPolygon,
-          hasLength(greaterThanOrEqualTo(3)),
-        );
-        final bounds = polygonBounds(faces.previousFrontRectoLocalPolygon);
-        expect(bounds, isNotNull);
-        expect(bounds!.left, greaterThanOrEqualTo(0));
-        expect(bounds.right, lessThanOrEqualTo(pageSize.width));
-        expect(
-          bounds.width,
-          lessThan(pageSize.width * 0.65),
-          reason:
-              'parallel F/E must form a narrow fold strip, not the whole fold side.',
-        );
-        expect(
-          bounds.width,
-          greaterThan(pageSize.width * 0.10),
-          reason:
-              'parallel F/E must not collapse to the near-invisible 5px band.',
-        );
-      },
-    );
-
-    test('BACK canonical faces are empty without a free edge boundary', () {
-      const pageSize = Size(400, 600);
-      final faces = resolveBackwardCanonicalSheetFaces(
-        const BackwardCanonicalSheetInput(
-          pageSize: pageSize,
-          sheetLocalPolygon: <Offset>[
-            Offset.zero,
-            Offset(400, 0),
-            Offset(400, 600),
-            Offset(0, 600),
-          ],
-          sheetAreaPolygon: <Offset>[
-            Offset.zero,
-            Offset(400, 0),
-            Offset(400, 600),
-            Offset(0, 600),
-          ],
-          sheetLocalFoldLine: (Offset(160, 0), Offset(160, 600)),
-          sheetLocalFreeEdgeLine: null,
-          currentResidualPagePolygon: <Offset>[],
-        ),
-      );
-
-      expect(
-        faces.previousBackVersoLocalPolygon,
-        isEmpty,
-        reason:
-            'BACK backface must not display the unbounded fold side when E/free-edge is unavailable.',
       );
     });
 

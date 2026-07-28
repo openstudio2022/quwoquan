@@ -9,8 +9,7 @@
 /// ```
 /// flutter test test/api_integration/cloud/rtc/rtc_api_contract_runner.dart \
 ///   --dart-define=API_CONTRACT_ENV=gamma \
-///   --dart-define=API_CONTRACT_BASE_URL=https://gamma-api.quwoquan-env.test:19000 \
-///   --dart-define=API_CONTRACT_ALLOW_BAD_CERT=true
+///   --dart-define=API_CONTRACT_BASE_URL=<topology publicBases.api>
 /// ```
 library;
 
@@ -36,7 +35,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../support/api_contract/local_bad_certificate_overrides.dart';
 import '../../../support/recording_cloud_operation_telemetry_sink.dart';
 
 const _apiContractEnv = String.fromEnvironment(
@@ -44,9 +42,6 @@ const _apiContractEnv = String.fromEnvironment(
   defaultValue: 'gamma',
 );
 const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
-const _allowBadCertificateForLocalApiContract = bool.fromEnvironment(
-  'API_CONTRACT_ALLOW_BAD_CERT',
-);
 
 late _GammaRtcActor _caller;
 late _GammaRtcActor _callee;
@@ -62,10 +57,6 @@ void main() {
     if (_apiBase.trim().isEmpty) {
       throw StateError('L3: ${_apiContractEnv.toUpperCase()}_BASE_URL not set');
     }
-
-    installLocalApiContractBadCertificateOverride(
-      enabled: _allowBadCertificateForLocalApiContract,
-    );
     final runId = DateTime.now().toUtc().microsecondsSinceEpoch.toString();
     _caller = await _GammaRtcActor.signIn(
       label: 'caller',
@@ -99,7 +90,6 @@ void main() {
     await _caller.close();
     await _callee.close();
     await _intruder.close();
-    restoreLocalApiContractBadCertificateOverride();
   });
 
   test(

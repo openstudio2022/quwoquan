@@ -238,18 +238,16 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   String _hintText() {
     if (!_effectiveConfig.canUserComment) {
       final loggedIn = ref.read(authSessionControllerProvider).isAuthenticated;
-      return loggedIn
-          ? UITextConstants.commentClosed
-          : UITextConstants.needLogin;
+      return loggedIn ? FoundationText.commentClosed : FoundationText.needLogin;
     }
     final replyTo = widget.replyTo;
     if (replyTo != null) {
-      return UITextConstants.commentReplyToTemplate.replaceFirst(
+      return ContentText.commentReplyToTemplate.replaceFirst(
         '%s',
         replyTo.authorDisplayNameSnapshot ?? replyTo.authorId,
       );
     }
-    return UITextConstants.commentPlaceholder;
+    return FoundationText.commentPlaceholder;
   }
 
   void _insertText(String text) {
@@ -356,7 +354,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
             mentionCount: _selectedMentions.length,
           );
     }
-    _insertText('${UITextConstants.commentMention}$displayName ');
+    _insertText('${ContentText.commentMention}$displayName ');
     if (_showEmojiPanel || _showMentionPanel) {
       setState(() {
         _showEmojiPanel = false;
@@ -370,7 +368,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     if (_attachmentMediaIds.length >= _effectiveConfig.maxImageAttachments) {
       AppToast.show(
         context,
-        UITextConstants.commentAttachmentLimitReachedTemplate.replaceFirst(
+        ContentText.commentAttachmentLimitReachedTemplate.replaceFirst(
           '%s',
           '${_effectiveConfig.maxImageAttachments}',
         ),
@@ -453,13 +451,13 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     final content = _controller.text.trim();
     if (content.isEmpty || _isSubmitting) return;
     if (content.length > _effectiveConfig.maxLength) {
-      AppToast.show(context, UITextConstants.commentTooLong);
+      AppToast.show(context, FoundationText.commentTooLong);
       return;
     }
     if (_attachmentMediaIds.length > _effectiveConfig.maxImageAttachments) {
       AppToast.show(
         context,
-        UITextConstants.commentAttachmentLimitReachedTemplate.replaceFirst(
+        ContentText.commentAttachmentLimitReachedTemplate.replaceFirst(
           '%s',
           '${_effectiveConfig.maxImageAttachments}',
         ),
@@ -778,7 +776,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
             icon: CupertinoIcons.photo,
             isDark: isDark,
             busy: _isUploadingAttachment,
-            semanticLabel: UITextConstants.commentAttachImage,
+            semanticLabel: ContentText.commentAttachImage,
             onTap: _isUploadingAttachment ? null : _addImageAttachment,
           ),
           SizedBox(width: AppSpacing.md),
@@ -787,7 +785,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
             icon: CupertinoIcons.at,
             isDark: isDark,
             active: _showMentionPanel,
-            semanticLabel: UITextConstants.commentMention,
+            semanticLabel: ContentText.commentMention,
             onTap: _toggleMentionPanel,
           ),
           SizedBox(width: AppSpacing.md),
@@ -853,18 +851,18 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
         maxHeight: AppSpacing.commentComposerMaxHeight,
       ),
       child: _mentionCandidatesLoading
-          ? const Center(child: CupertinoActivityIndicator())
+          ? AppRequestFeedback.section()
           : _mentionCandidatesError != null
           ? Center(
               child: CupertinoButton(
                 onPressed: _loadFollowingMentionCandidates,
-                child: Text(UITextConstants.commentMentionPickerRetry),
+                child: Text(ContentText.commentMentionPickerRetry),
               ),
             )
           : _mentionCandidates.isEmpty
           ? Center(
               child: Text(
-                UITextConstants.commentMentionPickerEmpty,
+                ContentText.commentMentionPickerEmpty,
                 style: TextStyle(fontSize: AppTypography.sm, color: secondary),
               ),
             )
@@ -876,7 +874,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
               ),
               children: <Widget>[
                 Text(
-                  UITextConstants.commentMentionPickerTitle,
+                  ContentText.commentMentionPickerTitle,
                   style: TextStyle(
                     fontSize: AppTypography.sm,
                     fontWeight: AppTypography.medium,

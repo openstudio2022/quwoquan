@@ -496,25 +496,21 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
       contentFeatureFlagProvider('enable_article_book_reader'),
     );
     final article = _articleViewFor(post);
-    ref
-        .read(articleReaderObservabilityProvider)
-        .trackReaderOpen(
-          postId: post.id,
-          durationMs: DateTime.now().difference(_viewerOpenedAt).inMilliseconds,
-          source: widget.source,
-          template: article.template.name,
-          fontPreset: article.fontPreset.name,
-          pageCount: article.pages.length.clamp(1, 99),
-          bookReaderEnabled: bookReaderEnabled,
-        );
+    _articleReaderObservability.trackReaderOpen(
+      postId: post.id,
+      durationMs: DateTime.now().difference(_viewerOpenedAt).inMilliseconds,
+      source: widget.source,
+      template: article.template.name,
+      fontPreset: article.fontPreset.name,
+      pageCount: article.pages.length.clamp(1, 99),
+      bookReaderEnabled: bookReaderEnabled,
+    );
     if (!bookReaderEnabled) {
-      ref
-          .read(articleReaderObservabilityProvider)
-          .trackReaderFallback(
-            postId: post.id,
-            reason: 'feature_flag_disabled',
-            bookReaderEnabled: false,
-          );
+      _articleReaderObservability.trackReaderFallback(
+        postId: post.id,
+        reason: 'feature_flag_disabled',
+        bookReaderEnabled: false,
+      );
     }
     _trackDocumentStructureFallback(
       post: post,
@@ -535,14 +531,12 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     final bookReaderEnabled = ref.read(
       contentFeatureFlagProvider('enable_article_book_reader'),
     );
-    ref
-        .read(articleReaderObservabilityProvider)
-        .trackReaderFallback(
-          postId: post.id,
-          reason:
-              'document_structure:${WorksImmersiveViewerObservability.documentSourceName(article.documentSource)}:hydrated=$hydrated',
-          bookReaderEnabled: bookReaderEnabled,
-        );
+    _articleReaderObservability.trackReaderFallback(
+      postId: post.id,
+      reason:
+          'document_structure:${WorksImmersiveViewerObservability.documentSourceName(article.documentSource)}:hydrated=$hydrated',
+      bookReaderEnabled: bookReaderEnabled,
+    );
   }
 
   Future<void> _maybeHydrateArticleDetail(
@@ -558,6 +552,14 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     if (force) {
       _failedArticleHydrationIds.remove(post.id);
       _failedArticleHydrationErrorsById.remove(post.id);
+      final recovery = _articleHydrationErrorSemantic(post);
+      _articleReaderObservability.trackReaderRecovery(
+        postId: post.id,
+        recoveryAction: recovery.recoveryAction?.name ?? 'retry',
+        result: 'started',
+        durationMs: 0,
+        errorCode: recovery.sourceCode,
+      );
     }
     _hydratingArticleIds.add(post.id);
     final startedAt = DateTime.now();
@@ -584,15 +586,21 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
         article: hydratedArticle,
         hydrated: true,
       );
-      ref
-          .read(articleReaderObservabilityProvider)
-          .trackHydration(
-            postId: post.id,
-            durationMs: DateTime.now().difference(startedAt).inMilliseconds,
-            result: 'success',
-            trigger: 'get_post',
-            hadStructuredPayload: false,
-          );
+      _articleReaderObservability.trackHydration(
+        postId: post.id,
+        durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+        result: 'success',
+        trigger: 'get_post',
+        hadStructuredPayload: false,
+      );
+      if (force) {
+        _articleReaderObservability.trackReaderRecovery(
+          postId: post.id,
+          recoveryAction: 'retry',
+          result: 'success',
+          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+        );
+      }
     } catch (error) {
       if (mounted) {
         _setMountedState(() {
@@ -603,15 +611,32 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
         _failedArticleHydrationIds.add(post.id);
         _failedArticleHydrationErrorsById[post.id] = error;
       }
-      ref
-          .read(articleReaderObservabilityProvider)
-          .trackHydration(
-            postId: post.id,
-            durationMs: DateTime.now().difference(startedAt).inMilliseconds,
-            result: 'error',
-            trigger: 'get_post',
-            hadStructuredPayload: false,
-          );
+      _articleReaderObservability.trackHydration(
+        postId: post.id,
+        durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+        result: 'error',
+        trigger: 'get_post',
+        hadStructuredPayload: false,
+      );
+      final semantic = _articleHydrationErrorSemantic(post);
+      final durationMs = DateTime.now().difference(startedAt).inMilliseconds;
+      final recoveryAction = semantic.recoveryAction?.name ?? 'surface';
+      final errorCode = semantic.sourceCode ?? 'CONTENT.SYSTEM.internal_error';
+      _articleReaderObservability.trackReaderError(
+        postId: post.id,
+        errorCode: errorCode,
+        recoveryAction: recoveryAction,
+        durationMs: durationMs,
+      );
+      if (force) {
+        _articleReaderObservability.trackReaderRecovery(
+          postId: post.id,
+          recoveryAction: recoveryAction,
+          result: 'failure',
+          durationMs: durationMs,
+          errorCode: errorCode,
+        );
+      }
     } finally {
       _hydratingArticleIds.remove(post.id);
     }
@@ -644,29 +669,25 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     ArticleReaderFallbackReason reason, {
     required bool bookReaderEnabled,
   }) {
-    ref
-        .read(articleReaderObservabilityProvider)
-        .trackReaderFallback(
-          postId: post.id,
-          reason: _fallbackReasonName(reason),
-          bookReaderEnabled: bookReaderEnabled,
-        );
+    _articleReaderObservability.trackReaderFallback(
+      postId: post.id,
+      reason: _fallbackReasonName(reason),
+      bookReaderEnabled: bookReaderEnabled,
+    );
   }
 
   void _trackArticlePageFlipCommit(
     PostBaseDto post,
     ArticleReaderPageFlipCommit event,
   ) {
-    ref
-        .read(articleReaderObservabilityProvider)
-        .trackPageFlipCommit(
-          postId: post.id,
-          durationMs: event.durationMs,
-          mechanism: event.mechanism,
-          direction: event.direction,
-          fromPage: event.fromPage,
-          toPage: event.toPage,
-        );
+    _articleReaderObservability.trackPageFlipCommit(
+      postId: post.id,
+      durationMs: event.durationMs,
+      mechanism: event.mechanism,
+      direction: event.direction,
+      fromPage: event.fromPage,
+      toPage: event.toPage,
+    );
   }
 
   void _trackImagePageflipMotion(
@@ -703,14 +724,12 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     PostBaseDto post,
     ArticleReaderPageCurlAbort event,
   ) {
-    ref
-        .read(articleReaderObservabilityProvider)
-        .trackPageCurlAbort(
-          postId: post.id,
-          corner: event.corner,
-          progress: event.progress,
-          direction: event.direction,
-        );
+    _articleReaderObservability.trackPageCurlAbort(
+      postId: post.id,
+      corner: event.corner,
+      progress: event.progress,
+      direction: event.direction,
+    );
   }
 
   void _flushDwell(PostBaseDto post, {bool trackSkip = false}) {
@@ -721,8 +740,8 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
         _activeTrackedPost?.id != post.id) {
       return;
     }
-    final durationSec =
-        DateTime.now().difference(enterTime).inMilliseconds / 1000.0;
+    final durationMs = DateTime.now().difference(enterTime).inMilliseconds;
+    final durationSec = durationMs / 1000.0;
     _contentBehaviorTracker.trackDwell(
       post.id,
       durationSeconds: durationSec,
@@ -756,6 +775,17 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     _pageEnterTime = null;
     _activeTrackedPost = null;
     _activeTrackingAttribution = null;
+
+    if (_isArticleLikePost(post)) {
+      _articleReaderObservability.trackReaderDwell(
+        postId: post.id,
+        durationMs: durationMs,
+      );
+      _articleReaderObservability.trackReaderExit(
+        postId: post.id,
+        durationMs: durationMs,
+      );
+    }
 
     if (_mapPostContentType(post) == ContentType.video) {
       final evidence = _activeVideoBinding?.session

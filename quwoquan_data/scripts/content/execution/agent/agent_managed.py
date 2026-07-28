@@ -22,8 +22,13 @@ def _reconcile_completed_publish_state(ctx: ExecutionContext) -> bool:
     if _is_homepage_only_execution(ctx):
         from content.execution.qualification import finalize_execution_qualification
 
+        from content.execution.controller.publish import _publishable_homepage_names
+
         try:
-            qualification = finalize_execution_qualification(ctx.execution_id)
+            qualification = finalize_execution_qualification(
+                ctx.execution_id,
+                publishable_names=_publishable_homepage_names(ctx),
+            )
         except (OSError, TypeError, ValueError) as exc:
             qualification_issues = [str(exc)]
         else:

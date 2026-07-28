@@ -6,17 +6,11 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_memb
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
-import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/pages/call_participant_picker_page.dart';
 
 import '../../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
-
-class _MockAppDataSourceModeNotifier extends AppDataSourceModeNotifier {
-  @override
-  AppDataSourceMode build() => AppDataSourceMode.mock;
-}
 
 class _PickerChatRepository extends MockChatRepository {
   static final ChatInboxDto _inbox002 = chatInboxFixture(
@@ -216,9 +210,6 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            appDataSourceModeProvider.overrideWith(
-              _MockAppDataSourceModeNotifier.new,
-            ),
             chatRepositoryCompositionProvider.overrideWithValue(
               _PickerChatRepository(),
             ),
@@ -236,8 +227,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text(UITextConstants.callSourceMutualFollow), findsNothing);
-      expect(find.text(UITextConstants.callSourceOtherGroups), findsNothing);
+      expect(find.text(CallText.callSourceMutualFollow), findsNothing);
+      expect(find.text(CallText.callSourceOtherGroups), findsNothing);
       expect(
         find.text(UITextConstants.callParticipantLimit(31)),
         findsOneWidget,
@@ -253,9 +244,6 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            appDataSourceModeProvider.overrideWith(
-              _MockAppDataSourceModeNotifier.new,
-            ),
             chatRepositoryCompositionProvider.overrideWithValue(
               _PickerChatRepository(),
             ),
@@ -274,7 +262,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('当前会话'), findsOneWidget);
-      expect(find.text(UITextConstants.callSourceMutualFollow), findsOneWidget);
+      expect(find.text(CallText.callSourceMutualFollow), findsOneWidget);
       expect(find.text('其他群'), findsOneWidget);
     });
 
@@ -283,9 +271,6 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            appDataSourceModeProvider.overrideWith(
-              _MockAppDataSourceModeNotifier.new,
-            ),
             chatRepositoryCompositionProvider.overrideWithValue(
               _PickerChatRepository(),
             ),
@@ -319,9 +304,6 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            appDataSourceModeProvider.overrideWith(
-              _MockAppDataSourceModeNotifier.new,
-            ),
             chatRepositoryCompositionProvider.overrideWithValue(
               _PickerChatRepository(),
             ),
@@ -359,9 +341,6 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            appDataSourceModeProvider.overrideWith(
-              _MockAppDataSourceModeNotifier.new,
-            ),
             chatRepositoryCompositionProvider.overrideWithValue(
               _PickerChatRepository(),
             ),
@@ -379,7 +358,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.callSourceMutualFollow));
+      await tester.tap(find.text(CallText.callSourceMutualFollow));
       await tester.pumpAndSettle();
 
       expect(find.text('联系人小雨'), findsOneWidget);
@@ -393,9 +372,6 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            appDataSourceModeProvider.overrideWith(
-              _MockAppDataSourceModeNotifier.new,
-            ),
             chatRepositoryCompositionProvider.overrideWithValue(
               _PickerChatRepository(),
             ),
@@ -421,9 +397,6 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            appDataSourceModeProvider.overrideWith(
-              _MockAppDataSourceModeNotifier.new,
-            ),
             chatRepositoryCompositionProvider.overrideWithValue(
               _FailingPickerChatRepository(),
             ),
@@ -442,7 +415,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(AppPageErrorState), findsOneWidget);
-      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+      expect(find.text(SearchText.reload), findsOneWidget);
     });
   });
 }

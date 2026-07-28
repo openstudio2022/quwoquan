@@ -155,12 +155,42 @@ def _qunar_entity_anchor(value: str, entity_id: str) -> bool:
             return True
     return False
 
+def _qunar_city_conflicts_entity(
+    row: dict[str, Any],
+    *,
+    entity_id: str,
+    match_terms: list[str],
+) -> bool:
+    """Reject homonymous attractions whose explicit Qunar city differs."""
+    city_key = _normalized_title(_strip_html(str(row.get("cityName") or "")))
+    entity_key = _normalized_title(entity_id)
+    if not city_key or not entity_key:
+        return False
+    qualifiers: set[str] = set()
+    for term in _dedupe_terms(match_terms, limit=12):
+        term_key = _normalized_title(term)
+        if term_key and term_key != entity_key and entity_key.endswith(term_key):
+            qualifier = entity_key[: -len(term_key)]
+            if len(qualifier) >= 2:
+                qualifiers.add(qualifier)
+    return bool(qualifiers) and not any(
+        city_key in qualifier or qualifier in city_key
+        for qualifier in qualifiers
+    )
+
+
 def _qunar_row_anchor_signals(
     row: dict[str, Any],
     *,
     entity_id: str,
     match_terms: list[str],
 ) -> tuple[bool, bool]:
+    if _qunar_city_conflicts_entity(
+        row,
+        entity_id=entity_id,
+        match_terms=match_terms,
+    ):
+        return False, False
     title = _strip_html(str(row.get("title") or ""))
     route = [str(item) for item in (row.get("travelRoute") or []) if str(item).strip()]
     anchor_terms = _dedupe_terms([entity_id, *match_terms], limit=12)

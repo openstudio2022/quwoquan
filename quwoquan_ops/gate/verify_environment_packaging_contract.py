@@ -425,8 +425,8 @@ def main() -> int:
             issues.append(f"{_display(report_path)} env mismatch")
         if report.get("runtimeEnv") != policy.get("runtimeEnv"):
             issues.append(f"{_display(report_path)} runtimeEnv mismatch")
-        if report.get("dataSource") != policy.get("dataSource"):
-            issues.append(f"{_display(report_path)} dataSource mismatch")
+        if report.get("composition") != "production_remote":
+            issues.append(f"{_display(report_path)} composition mismatch")
         for issue in validate_provenance(report, app_dir):
             issues.append(f"{_display(report_path)} {issue}")
         for issue in package_output_boundary_issues(app_dir, package_root):

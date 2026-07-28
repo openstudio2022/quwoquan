@@ -27,8 +27,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.cameraVideoModeTitle), findsOneWidget);
-    expect(find.text(UITextConstants.cameraPhotoModeTitle), findsNothing);
+    expect(find.text(MediaText.cameraVideoModeTitle), findsOneWidget);
+    expect(find.text(MediaText.cameraPhotoModeTitle), findsNothing);
     // 视频专用蓝色录像按钮，不出现白色快门。
     expect(
       find.byKey(const ValueKey<String>('camera-record-action')),
@@ -62,10 +62,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.cameraUnavailableTitle), findsOneWidget);
-    expect(find.text(UITextConstants.cameraUnavailable), findsOneWidget);
+    expect(find.text(MediaText.cameraUnavailableTitle), findsOneWidget);
+    expect(find.text(MediaText.cameraUnavailable), findsOneWidget);
     expect(
-      find.text(UITextConstants.cameraUnavailableRecovery),
+      find.text(MediaText.cameraUnavailableRecovery),
       findsOneWidget,
     );
     expect(
@@ -76,7 +76,7 @@ void main() {
       find.byKey(const ValueKey<String>('camera-rotate-action')),
       findsNothing,
     );
-    final titleFinder = find.text(UITextConstants.cameraUnavailableTitle);
+    final titleFinder = find.text(MediaText.cameraUnavailableTitle);
     final titleContext = tester.element(titleFinder);
     expect(MediaQuery.of(titleContext).platformBrightness, Brightness.dark);
     expect(CupertinoTheme.of(titleContext).brightness, Brightness.dark);
@@ -128,8 +128,8 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.cameraVideoRetake), findsOneWidget);
-    expect(find.text(UITextConstants.cameraVideoNext), findsOneWidget);
+    expect(find.text(MediaText.cameraVideoRetake), findsOneWidget);
+    expect(find.text(MediaText.cameraVideoNext), findsOneWidget);
     final retakeContainer = tester.widget<Container>(
       find
           .descendant(
@@ -205,7 +205,7 @@ void main() {
     );
     await tester.pump();
     await tester.pumpAndSettle();
-    expect(find.text(UITextConstants.cameraVideoNext), findsOneWidget);
+    expect(find.text(MediaText.cameraVideoNext), findsOneWidget);
   });
 
   testWidgets('录制过短提示且不进入预览确认', (tester) async {
@@ -238,10 +238,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(UITextConstants.cameraVideoRecordTooShort),
+      find.text(MediaText.cameraVideoRecordTooShort),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.cameraVideoNext), findsNothing);
+    expect(find.text(MediaText.cameraVideoNext), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('camera-record-action')),
       findsOneWidget,
@@ -282,11 +282,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(UITextConstants.cameraVideoPreviewUnavailable),
+      find.text(MediaText.cameraVideoPreviewUnavailable),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.cameraVideoPreviewUnavailableHint),
+      find.text(MediaText.cameraVideoPreviewUnavailableHint),
       findsOneWidget,
     );
     final retakeDecoration = _buttonDecoration(
@@ -339,10 +339,10 @@ void main() {
 
     expect(find.byIcon(CupertinoIcons.delete), findsNothing);
     final discardText = tester.widget<Text>(
-      find.text(UITextConstants.cameraVideoDiscardConfirm),
+      find.text(MediaText.cameraVideoDiscardConfirm),
     );
     final textContext = tester.element(
-      find.text(UITextConstants.cameraVideoDiscardConfirm),
+      find.text(MediaText.cameraVideoDiscardConfirm),
     );
     expect(discardText.style?.color, AppColors.iosAccent(textContext));
   });
@@ -406,7 +406,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
       ImageEditorFilterPreset(
         id: 'original',
         categoryId: ImageEditorFilterRepository.cameraPhotoCategoryId,
-        name: UITextConstants.imageEditOriginal,
+        name: MediaText.imageEditOriginal,
         sort: 1,
         enabled: true,
         defaultStrength: 0,
@@ -415,7 +415,7 @@ class _FakeFilterRepository extends ImageEditorFilterRepository {
       ImageEditorFilterPreset(
         id: 'cool',
         categoryId: ImageEditorFilterRepository.cameraPhotoCategoryId,
-        name: UITextConstants.imageEditCameraCool,
+        name: MediaText.imageEditCameraCool,
         sort: 2,
         enabled: true,
         defaultStrength: 80,

@@ -8,6 +8,10 @@ void main() {
         () => CloudRuntimeConfig.validateRuntimePackage(
           runtimeEnv: 'gamma',
           gatewayBaseUrl: 'https://api.example.test',
+          realtimeConnectionUrl: 'wss://api.example.test',
+          publicWebBaseUrl: 'https://example.test',
+          appDownloadBaseUrl: 'https://cdn.example.test/download',
+          legalBaseUrl: 'https://example.test/legal',
           mediaAvatarCdnBaseUrl: 'https://avatar.example.test',
           mediaImageCdnBaseUrl: 'https://image.example.test',
           mediaVideoCdnBaseUrl: 'https://video.example.test',
@@ -23,6 +27,10 @@ void main() {
         () => CloudRuntimeConfig.validateRuntimePackage(
           runtimeEnv: 'staging',
           gatewayBaseUrl: '',
+          realtimeConnectionUrl: 'wss://api.example.test',
+          publicWebBaseUrl: 'https://example.test',
+          appDownloadBaseUrl: 'https://cdn.example.test/download',
+          legalBaseUrl: 'https://example.test/legal',
           mediaAvatarCdnBaseUrl: 'https://avatar.example.test',
           mediaImageCdnBaseUrl: 'https://image.example.test',
           mediaVideoCdnBaseUrl: 'https://video.example.test',
@@ -47,6 +55,10 @@ void main() {
         () => CloudRuntimeConfig.validateRuntimePackage(
           runtimeEnv: 'beta',
           gatewayBaseUrl: 'http://api.example.test',
+          realtimeConnectionUrl: 'wss://api.example.test',
+          publicWebBaseUrl: 'https://example.test',
+          appDownloadBaseUrl: 'https://cdn.example.test/download',
+          legalBaseUrl: 'https://example.test/legal',
           mediaAvatarCdnBaseUrl: 'https://avatar.example.test?size=small',
           mediaImageCdnBaseUrl: 'https://image.example.test',
           mediaVideoCdnBaseUrl: 'https://video.example.test',
@@ -62,6 +74,10 @@ void main() {
         () => CloudRuntimeConfig.validateRuntimePackage(
           runtimeEnv: 'beta',
           gatewayBaseUrl: 'https://api.example.test',
+          realtimeConnectionUrl: 'wss://api.example.test',
+          publicWebBaseUrl: 'https://example.test',
+          appDownloadBaseUrl: 'https://cdn.example.test/download',
+          legalBaseUrl: 'https://example.test/legal',
           mediaAvatarCdnBaseUrl: 'https://avatar.example.test',
           mediaImageCdnBaseUrl: 'https://image.example.test',
           mediaVideoCdnBaseUrl: 'https://video.example.test',

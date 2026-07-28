@@ -3,11 +3,10 @@ package generated
 
 import (
 	"errors"
-
 	rerrors "quwoquan_service/runtime/errors"
 )
 
-// PlatformOps ConfigLayer error sentinels and helpers.
+// PlatformOps contract error sentinels and helpers.
 //
 //nolint:gochecknoglobals
 var (

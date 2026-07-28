@@ -278,7 +278,7 @@ class _WorksIntersectionDetailSheet extends StatelessWidget {
                   ),
                   onPressed: onAskAssistant,
                   child: Text(
-                    UITextConstants.objectIntersectionCtaAskAssistant,
+                    ObjectHomepageText.objectIntersectionCtaAskAssistant,
                     style: TextStyle(
                       fontSize: AppTypography.base,
                       fontWeight: AppTypography.semiBold,

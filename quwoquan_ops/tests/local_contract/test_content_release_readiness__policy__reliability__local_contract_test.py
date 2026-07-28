@@ -98,6 +98,18 @@ def test_alpha_content_release_runtime__uses_import_health_scope__local_contract
     assert stackctl._current_runtime_health_scope("alpha-local") == "content-import"
 
 
+def test_prod_hosted_content_service_has_a_real_import_scope_probe__local_contract() -> None:
+    checks = stackctl._content_data_plane_health_checks("prod-hosted")
+
+    assert checks == [
+        {
+            "name": "content-service-public",
+            "scope": "content-import",
+            "url": "https://api.quwoquan.com/healthz",
+        }
+    ]
+
+
 def test_baseline_verify__does_not_read_disposable_release_output__local_contract() -> None:
     commands = stackctl._selected_verify_commands(
         "all",

@@ -106,6 +106,9 @@ func (s *PgPersonaStore) FindByUserHandle(
 		`SELECT `+personaNullableSafeCols+` FROM personas WHERE user_handle = $1`,
 		userHandle,
 	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
 	return persona, mapPersonaPersistenceError(err)
 }
 
@@ -118,6 +121,9 @@ func (s *PgPersonaStore) FindBySubAccountID(
 		`SELECT `+personaNullableSafeCols+` FROM personas WHERE sub_account_id = $1`,
 		subAccountID,
 	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
 	return persona, mapPersonaPersistenceError(err)
 }
 

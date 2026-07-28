@@ -1,0 +1,39 @@
+kind: aggregate_root
+description: 运行实例对当前候选 ReleaseManifest 与有效配置摘要的受信 ACK；它引用 ConfigSnapshot 的 desiredHash，但不修改只读配置快照。
+identity:
+  fields:
+  - instanceId
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- name: desiredSnapshot
+  kind: reference
+  target_object: ops.ConfigSnapshot
+  cardinality: N:1
+  consistency: eventual
+  access: named_reader
+  on_delete: retain
+  reference_fields:
+  - environment
+  - service
+capabilities:
+- queryable
+- auditable
+- idempotent_commands
+taggable: false
+vector_enabled: false
+business_rules:
+- 只有已验证的 service principal 可上报，principal 必须绑定 service@environment，instanceId 必须位于该 service namespace。
+- releaseManifestDigest 必须等于控制面当前候选清单摘要；desiredHash 由 ConfigSnapshot 读取并覆盖调用方值。
+- ACK 的 effectiveHash 等于 desiredHash 才可记为 inSync；调用方不能直接上报 inSync 伪造一致。
+- 发布门只读取 hosted orchestrator 的期望实例集合；缺实例、摘要漂移、过期 ACK 或错误 service principal 均阻断。
+lifecycle:
+  initial: reported
+  states:
+  - reported
+  transitions: []
+  optimistic_concurrency: store_commit
+  idempotency: payload_digest_server_side

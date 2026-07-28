@@ -517,6 +517,7 @@ surfaces:
     path_template: /
     description: 首页推荐与关注内容流
     operation_ids:
+      - GetFeed
       - CreateReport
       - LikePost
       - UnlikePost

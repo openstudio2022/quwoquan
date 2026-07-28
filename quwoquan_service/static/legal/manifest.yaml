@@ -16,7 +16,6 @@ releasePolicy:
   artifactRoot: QWQ_DEPLOY_WORK_ROOT/<target>/packages/legal-static
   stableUrlResolution: manifest.currentVersion
   immutableVersionUrl: true
-  prodCanonicalBaseUrl: https://quwoquan.com/legal
   prodRequiresGammaProbe: true
   prodPlaceholderPolicy: deny
 externalResourceAllowlist:

@@ -44,11 +44,11 @@ enum SearchScope {
   };
 
   String get label => switch (this) {
-    SearchScope.all => UITextConstants.searchAllTab,
-    SearchScope.content => UITextConstants.searchScopeContent,
-    SearchScope.socialRelation => UITextConstants.searchScopeSocialRelation,
-    SearchScope.messages => UITextConstants.searchScopeMessages,
-    SearchScope.circles => UITextConstants.searchScopeDiscussions,
+    SearchScope.all => SearchText.searchAllTab,
+    SearchScope.content => SearchText.searchScopeContent,
+    SearchScope.socialRelation => SearchText.searchScopeSocialRelation,
+    SearchScope.messages => SearchText.searchScopeMessages,
+    SearchScope.circles => SearchText.searchScopeDiscussions,
   };
 
   static SearchScope fromWire(String? raw) {
@@ -82,10 +82,10 @@ enum SearchObjectTarget {
   };
 
   String get label => switch (this) {
-    SearchObjectTarget.contacts => UITextConstants.searchTargetContacts,
-    SearchObjectTarget.directChats => UITextConstants.searchTargetDirectChats,
-    SearchObjectTarget.groupChats => UITextConstants.searchTargetGroupChats,
-    SearchObjectTarget.circles => UITextConstants.searchScopeDiscussions,
+    SearchObjectTarget.contacts => SearchText.searchTargetContacts,
+    SearchObjectTarget.directChats => SearchText.searchTargetDirectChats,
+    SearchObjectTarget.groupChats => SearchText.searchTargetGroupChats,
+    SearchObjectTarget.circles => SearchText.searchScopeDiscussions,
   };
 
   static SearchObjectTarget? fromWire(String raw) {
@@ -118,10 +118,10 @@ enum SearchContentTypeFilter {
   };
 
   String get label => switch (this) {
-    SearchContentTypeFilter.article => UITextConstants.searchContentTypeArticle,
-    SearchContentTypeFilter.image => UITextConstants.searchCategoryImage,
-    SearchContentTypeFilter.video => UITextConstants.searchCategoryVideo,
-    SearchContentTypeFilter.micro => UITextConstants.searchContentTypeMicro,
+    SearchContentTypeFilter.article => SearchText.searchContentTypeArticle,
+    SearchContentTypeFilter.image => SearchText.searchCategoryImage,
+    SearchContentTypeFilter.video => SearchText.searchCategoryVideo,
+    SearchContentTypeFilter.micro => SearchText.searchContentTypeMicro,
   };
 
   String get identity => switch (this) {

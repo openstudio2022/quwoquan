@@ -98,7 +98,7 @@ extension _CircleEditSettingsPageStateHelpers on _CircleEditSettingsPageState {
                         Text(
                           _nameController.text.trim().isEmpty
                               ? (_isCreateMode
-                                    ? UITextConstants.createCircle
+                                    ? CommunityText.createCircle
                                     : _seedCircle.name)
                               : _nameController.text.trim(),
                           maxLines: 1,
@@ -113,11 +113,11 @@ extension _CircleEditSettingsPageStateHelpers on _CircleEditSettingsPageState {
                         Text(
                           _isCreateMode
                               ? (_activeTab == CircleEditSettingsTab.info
-                                    ? UITextConstants.createCircle
-                                    : UITextConstants.circleEditSettings)
+                                    ? CommunityText.createCircle
+                                    : CommunityText.circleEditSettings)
                               : (_activeTab == CircleEditSettingsTab.info
-                                    ? UITextConstants.editCircle
-                                    : UITextConstants.manageCenter),
+                                    ? CommunityText.editCircle
+                                    : CommunityText.manageCenter),
                           style: TextStyle(
                             color: AppColors.white.withValues(alpha: 0.86),
                             fontSize: AppTypography.sm,
@@ -144,7 +144,7 @@ extension _CircleEditSettingsPageStateHelpers on _CircleEditSettingsPageState {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSegmentTitle(UITextConstants.circleCoverLabel, fgSecondary),
+        _buildSegmentTitle(CommunityText.circleCoverLabel, fgSecondary),
         SizedBox(height: AppSpacing.sm),
         Container(
           decoration: BoxDecoration(
@@ -195,7 +195,7 @@ extension _CircleEditSettingsPageStateHelpers on _CircleEditSettingsPageState {
                   children: [
                     Expanded(
                       child: Text(
-                        UITextConstants.circleCoverHint,
+                        CommunityText.circleCoverHint,
                         style: TextStyle(
                           fontSize: AppTypography.sm,
                           color: fgSecondary,
@@ -217,8 +217,8 @@ extension _CircleEditSettingsPageStateHelpers on _CircleEditSettingsPageState {
                           _showMediaActionSheet(_CircleMediaSlot.cover),
                       child: Text(
                         _hasCoverSource
-                            ? UITextConstants.videoChangeCover
-                            : UITextConstants.addCover,
+                            ? MediaText.videoChangeCover
+                            : CreationText.addCover,
                         style: TextStyle(
                           fontSize: AppTypography.sm,
                           fontWeight: AppTypography.semiBold,
@@ -245,7 +245,7 @@ extension _CircleEditSettingsPageStateHelpers on _CircleEditSettingsPageState {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSegmentTitle(UITextConstants.circleAvatarLabel, fgSecondary),
+        _buildSegmentTitle(CommunityText.circleAvatarLabel, fgSecondary),
         SizedBox(height: AppSpacing.sm),
         Container(
           padding: EdgeInsets.all(AppSpacing.containerSm),
@@ -292,7 +292,7 @@ extension _CircleEditSettingsPageStateHelpers on _CircleEditSettingsPageState {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      UITextConstants.circleAvatarTitle,
+                      CommunityText.circleAvatarTitle,
                       style: TextStyle(
                         fontSize: AppTypography.base,
                         fontWeight: AppTypography.semiBold,
@@ -301,7 +301,7 @@ extension _CircleEditSettingsPageStateHelpers on _CircleEditSettingsPageState {
                     ),
                     SizedBox(height: AppSpacing.intraGroupXs),
                     Text(
-                      UITextConstants.circleAvatarHint,
+                      CommunityText.circleAvatarHint,
                       style: TextStyle(
                         fontSize: AppTypography.sm,
                         color: fgSecondary,
@@ -324,8 +324,8 @@ extension _CircleEditSettingsPageStateHelpers on _CircleEditSettingsPageState {
                 onPressed: () => _showMediaActionSheet(_CircleMediaSlot.avatar),
                 child: Text(
                   _hasAvatarSource
-                      ? UITextConstants.circleChangeAvatar
-                      : UITextConstants.circleAddAvatar,
+                      ? CommunityText.circleChangeAvatar
+                      : CommunityText.circleAddAvatar,
                   style: TextStyle(
                     fontSize: AppTypography.sm,
                     fontWeight: AppTypography.semiBold,

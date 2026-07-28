@@ -140,8 +140,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(CupertinoAlertDialog), findsOneWidget);
-      expect(find.text(UITextConstants.cancel), findsOneWidget);
-      expect(find.text(UITextConstants.confirm), findsOneWidget);
+      expect(find.text(FoundationText.cancel), findsOneWidget);
+      expect(find.text(FoundationText.confirm), findsOneWidget);
     });
 
     testWidgets('取消弹窗后页面继续存在', (tester) async {
@@ -153,7 +153,7 @@ void main() {
       await tester.tap(find.byType(CupertinoListTile).first);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.cancel));
+      await tester.tap(find.text(FoundationText.cancel));
       await tester.pumpAndSettle();
 
       expect(find.byType(TransferOwnershipPage), findsOneWidget);

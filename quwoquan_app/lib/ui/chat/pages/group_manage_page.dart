@@ -49,7 +49,7 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
         secondaryMessage: resolved.secondaryMessage,
         primaryAction: const UiErrorAction(
           type: UiErrorActionType.retry,
-          label: UITextConstants.tryAgain,
+          label: ContentText.tryAgain,
         ),
         secondaryAction: resolved.secondaryAction,
         dismissible: resolved.dismissible,
@@ -83,12 +83,12 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
         ),
         actions: [
           CupertinoDialogAction(
-            child: Text(UITextConstants.cancel),
+            child: Text(FoundationText.cancel),
             onPressed: () => Navigator.pop(dialogContext),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
-            child: Text(UITextConstants.confirm),
+            child: Text(FoundationText.confirm),
             onPressed: () async {
               Navigator.pop(dialogContext);
               await _onConfirmDissolve();

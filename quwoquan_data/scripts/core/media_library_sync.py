@@ -1,30 +1,37 @@
-"""Canonical media/objects CAS → 环境媒体根增量同步（sha256 校验）。
+"""Canonical media payload → 环境媒体根增量同步（sha256 校验）。
 
-source_root 是 canonical publish 根，唯一 CAS 布局：
+显式 private CAS 运维命令的 source_root 是 canonical publish 根：
   media/objects/sha256/{aa}/{bb}/{fullhash}.{ext}
 
-环境媒体根（gamma-local: `env/gamma/local/gamma-local/cache/media`；prod-hosted: host bind 的
-受管媒体目录，边缘 root=/srv/media）以同一相对布局承载对象文件，
-media edge 直接 file_server 提供 `<base>/media/objects/...`。
+release ship/import 的 source_root 是 immutable release payload 根，只读取 manifest 选中的
+avatar/image/video public slice；private CAS key 不进入 release 或环境公开目录。
 
 同步语义（fail closed）：
-- 源对象文件名 stem 必须等于内容 sha256，否则记 issue 且不搬运；
-- 目标已存在且内容 sha256 与文件名一致 → skip（增量）；
+- private CAS 源对象文件名 stem 必须等于内容 sha256；
+- public slice 源对象内容必须等于 manifest 中对应 MediaAsset.sha256；
+- 目标已存在且内容 sha256 一致 → skip（增量）；
 - 目标存在但内容不一致 → 重新拷贝并记 repaired；
 - 拷贝走临时文件 + rename（同目录原子替换），拷贝后再校验一次。
 """
 from __future__ import annotations
 
 import hashlib
+import re
 import shutil
 from pathlib import Path
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, Mapping
 
 from core.paths import REPO_ROOT, now_iso
 
 MEDIA_SYNC_SCHEMA_VERSION = "quwoquan_data.media_library_sync"
 _CAS_RELATIVE_ROOT = Path("media") / "objects" / "sha256"
+_PUBLIC_SLICE_PREFIXES = (
+    "media/avatar/s/",
+    "media/image/s/",
+    "media/video/s/",
+)
+_SHA256_RE = re.compile(r"^sha256:([0-9a-f]{64})$")
 
 
 def _file_sha256(path: Path) -> str:
@@ -52,16 +59,22 @@ def sync_media_library(
     *,
     verify_existing: bool = True,
     object_keys: Iterable[str] | None = None,
+    object_digests: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    """把 CAS 库对象增量同步进环境媒体根，返回可归档的同步报告。
+    """把受摘要约束的媒体对象增量同步进环境媒体根。
 
     ``object_keys`` is the required release closure for ship/import.  The
-    unscoped form remains available only to the explicit media-library command.
+    unscoped form remains available only to the explicit private CAS command.
+    Immutable releases use ``object_digests`` so public slice filenames never
+    need to encode or expose their private CAS identity.
     """
     source_root = Path(source_root)
     dest_root = Path(dest_root)
     cas_root = source_root / _CAS_RELATIVE_ROOT
+    if object_keys is not None and object_digests is not None:
+        raise ValueError("object_keys and object_digests are mutually exclusive")
     selected_keys = tuple(object_keys) if object_keys is not None else None
+    selected_digests = dict(object_digests) if object_digests is not None else None
     report: dict[str, Any] = {
         "schema": MEDIA_SYNC_SCHEMA_VERSION,
         "sourceRoot": _portable_path(source_root),
@@ -72,18 +85,46 @@ def sync_media_library(
         "failed": 0,
         "bytesCopied": 0,
         "objects": 0,
-        "scope": "selected" if selected_keys is not None else "all",
+        "scope": (
+            "public-slices"
+            if selected_digests is not None
+            else ("selected" if selected_keys is not None else "all")
+        ),
         "requestedObjects": 0,
         "issues": [],
         "syncedAt": now_iso(),
     }
-    if selected_keys == ():
+    if selected_keys == () or selected_digests == {}:
         return report
-    if not cas_root.is_dir():
+    if selected_digests is None and not cas_root.is_dir():
         report["issues"].append(f"source CAS root missing: {cas_root}")
         return report
 
-    if selected_keys is None:
+    expected_by_source: dict[Path, str] = {}
+    if selected_digests is not None:
+        selected: set[Path] = set()
+        for raw_key, raw_digest in selected_digests.items():
+            key = str(raw_key or "").strip()
+            digest_match = _SHA256_RE.fullmatch(str(raw_digest or "").strip())
+            candidate = Path(key)
+            if (
+                not key
+                or candidate.is_absolute()
+                or ".." in candidate.parts
+                or not key.startswith(_PUBLIC_SLICE_PREFIXES)
+                or digest_match is None
+            ):
+                report["issues"].append(f"unsafe selected public media slice: {key}")
+                continue
+            source_file = source_root / candidate
+            if not source_file.is_file() or source_file.name.endswith(".sync-tmp"):
+                report["issues"].append(f"selected public media slice missing: {key}")
+                continue
+            selected.add(source_file)
+            expected_by_source[source_file] = digest_match.group(1)
+        report["requestedObjects"] = len(selected)
+        source_files = sorted(selected)
+    elif selected_keys is None:
         source_files = [
             path for path in sorted(cas_root.rglob("*"))
             if path.is_file() and not path.name.endswith(".sync-tmp")
@@ -112,7 +153,10 @@ def sync_media_library(
     for source_file in source_files:
         report["objects"] += 1
         rel = source_file.relative_to(source_root)
-        expected_hash = source_file.name.split(".", 1)[0]
+        expected_hash = expected_by_source.get(
+            source_file,
+            source_file.name.split(".", 1)[0],
+        )
         source_hash = _file_sha256(source_file)
         if source_hash != expected_hash:
             report["failed"] += 1

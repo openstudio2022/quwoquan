@@ -241,7 +241,7 @@ def main() -> int:
         },
         "appBetaRuns": [
             {
-                "dataSource": "remote",
+                "composition": "production_remote",
                 "gatewayBaseUrl": args.gateway_base_url,
                 "httpEvidence": [
                     "content feed 200 via content-service handler",

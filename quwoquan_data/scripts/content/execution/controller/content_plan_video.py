@@ -23,7 +23,11 @@ from governance.content_supply_policy import load_content_supply_policy
 from core.paths import execution_root
 from content.execution.identity import parse_execution_id
 from content.post.video.source_video import SourcedVideoEvidence
-from governance.coverage.license import rights_proof_required
+from governance.coverage.license import (
+    RightsAuditStatus,
+    rights_proof_required,
+    validate_image_rights,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,10 +41,11 @@ class VideoFrameCandidate:
     sha256: str
     caption: str
     source_collection_id: str
+    source_use_mode: str
     rights_audit_status: str
     rights_audit_issues: tuple[str, ...]
 
-    def as_brief_value(self) -> dict[str, str]:
+    def as_brief_value(self) -> dict[str, object]:
         return {
             "assetRef": self.asset_ref,
             "sourceRef": self.source_ref,
@@ -51,6 +56,7 @@ class VideoFrameCandidate:
             "sha256": self.sha256,
             "caption": self.caption,
             "sourceCollectionId": self.source_collection_id,
+            "sourceUseMode": self.source_use_mode,
             "rightsAuditStatus": self.rights_audit_status,
             "rightsAuditIssues": list(self.rights_audit_issues),
         }
@@ -59,6 +65,7 @@ class VideoFrameCandidate:
 @dataclass(frozen=True, slots=True)
 class SourcedVideoCandidate:
     evidence: SourcedVideoEvidence
+    source_use_mode: str
 
     def as_brief_value(self) -> dict[str, object]:
         return self.evidence.to_dict()
@@ -92,6 +99,13 @@ def _source_frames(
             continue
         if str(meta.get("researchLane") or "") != "video":
             continue
+        source_use_mode = str(meta.get("sourceUseMode") or "").strip()
+        if source_use_mode not in {
+            "licensed_adaptation",
+            "factual_reference_only",
+        }:
+            reject("source_use_mode_invalid")
+            continue
         index_path = source_dir / "assets" / "index.json"
         try:
             rows = read_json(index_path).get("assets") or []
@@ -124,18 +138,32 @@ def _source_frames(
             authorization_proof = str(row.get("authorizationProof") or "").strip()
             rights_audit_status = str(row.get("rightsAuditStatus") or "").strip()
             rights_audit_issues = tuple(
-                str(issue) for issue in (row.get("rightsAuditIssues") or [])
+                str(issue).strip()
+                for issue in (row.get("rightsAuditIssues") or [])
+                if str(issue).strip()
             )
-            if require_rights_proof and not (
-                creator and license_name and authorization_proof
+            if require_rights_proof and validate_image_rights(
+                row,
+                vertical=ctx.spec.vertical,
             ):
                 reject("rights_evidence_incomplete")
                 continue
-            if not require_rights_proof and rights_audit_status not in {
-                "verified",
-                "unverified",
+            if rights_audit_status not in {
+                item.value for item in RightsAuditStatus
             }:
                 reject("rights_audit_status_missing")
+                continue
+            if (
+                rights_audit_status == RightsAuditStatus.UNVERIFIED.value
+                and not rights_audit_issues
+            ):
+                reject("rights_audit_issues_missing")
+                continue
+            if require_rights_proof and (
+                rights_audit_status != RightsAuditStatus.VERIFIED.value
+                or rights_audit_issues
+            ):
+                reject("rights_not_verified")
                 continue
             if not asset_path.is_file():
                 reject("asset_file_missing")
@@ -159,6 +187,7 @@ def _source_frames(
                     sha256=required["sha256"],
                     caption=str(row.get("caption") or row.get("relevance") or "").strip(),
                     source_collection_id=required["sourceCollectionId"],
+                    source_use_mode=source_use_mode,
                     rights_audit_status=rights_audit_status,
                     rights_audit_issues=rights_audit_issues,
                 )
@@ -175,11 +204,24 @@ def _sourced_videos(
     candidates: list[SourcedVideoCandidate] = []
     rejects: dict[str, int] = {}
     seen_sha: set[str] = set()
+    require_rights_proof = rights_proof_required(ctx.spec.vertical)
 
     def reject(reason: str) -> None:
         rejects[reason] = rejects.get(reason, 0) + 1
 
     for source_dir in iter_source_units(object_dir):
+        try:
+            meta = read_json(source_dir / "meta.json")
+        except (OSError, TypeError, ValueError):
+            reject("source_meta_unreadable")
+            continue
+        source_use_mode = str(meta.get("sourceUseMode") or "").strip()
+        if source_use_mode not in {
+            "licensed_adaptation",
+            "factual_reference_only",
+        }:
+            reject("source_use_mode_invalid")
+            continue
         evidence_path = source_dir / "sourced_video_evidence.json"
         if not evidence_path.is_file():
             continue
@@ -194,6 +236,12 @@ def _sourced_videos(
         evidence, issues = SourcedVideoEvidence.from_mapping(payload)
         if issues:
             reject("sourced_video_admission_blocked")
+            continue
+        if require_rights_proof and not (
+            evidence.commercial_authorization_status == "verified"
+            and evidence.publication_admission == "commercial_release"
+        ):
+            reject("sourced_video_rights_not_verified")
             continue
         refs = (
             evidence.asset_ref,
@@ -217,7 +265,12 @@ def _sourced_videos(
             reject("duplicate_sourced_video")
             continue
         seen_sha.add(evidence.sha256)
-        candidates.append(SourcedVideoCandidate(evidence=evidence))
+        candidates.append(
+            SourcedVideoCandidate(
+                evidence=evidence,
+                source_use_mode=source_use_mode,
+            )
+        )
     candidates.sort(key=lambda item: item.evidence.asset_ref)
     return candidates, rejects
 
@@ -261,6 +314,7 @@ def build_video_plan_for_target(
                 "entityTags": [target],
                 "templateId": "travel.entity.short_video",
                 "sourceMode": "sourced_video",
+                "sourceUseMode": candidate.source_use_mode,
                 "sourceVideo": source_video,
                 "assetRefs": [candidate.evidence.asset_ref],
                 "publishSchedule": publish_schedule,
@@ -288,9 +342,7 @@ def build_video_plan_for_target(
                     "sourceMode": "sourced_video",
                     "sourceVideo": source_video,
                     "assetRefs": [candidate.evidence.asset_ref],
-                    "sourceUseMode": (
-                        candidate.evidence.publication_admission
-                    ),
+                    "sourceUseMode": candidate.source_use_mode,
                     "publishSchedule": publish_schedule,
                     **creator_assignment,
                 }
@@ -337,6 +389,30 @@ def build_video_plan_for_target(
                 "minimumQualityPassed": False,
             },
         )
+    selected_modes = {
+        frame.source_use_mode for frame in frames[:required_frames]
+    }
+    if len(selected_modes) != 1:
+        issue = data_issue(
+            DataIssueCode.CONTRACT_INVALID,
+            stage=DataIssueStage.CONTENT_PLAN,
+            ref=target,
+            recovery=DataRecoveryAction.STOP,
+            message=f"{target}: video source frames have mixed sourceUseMode values",
+            attributes={"carrier": "video"},
+        )
+        return VideoPlanOutcome(
+            items=(),
+            issues=(issue,),
+            diagnostic={
+                "desiredVideoWorks": videos_per_target,
+                "requiredVideoFrames": required_frames,
+                "qualifiedVideoFrames": len(frames),
+                "videoRejects": rejects,
+                "minimumQualityPassed": False,
+            },
+        )
+    source_use_mode = next(iter(selected_modes))
     items: list[dict[str, Any]] = []
     entity_ref = f"/entity/{entity_type}/{target}"
     for index in range(videos_per_target):
@@ -357,6 +433,7 @@ def build_video_plan_for_target(
             "entityTags": [target],
             "templateId": "travel.entity.short_video",
             "sourceMode": "rights_cleared_image_sequence",
+            "sourceUseMode": source_use_mode,
             "sourceFrames": source_frames,
             "assetRefs": [frame.asset_ref for frame in selected],
             "publishSchedule": publish_schedule,
@@ -377,7 +454,7 @@ def build_video_plan_for_target(
                 "sourceMode": "rights_cleared_image_sequence",
                 "assetRefs": [frame.asset_ref for frame in selected],
                 "sourceFrames": source_frames,
-                "sourceUseMode": "licensed_adaptation",
+                "sourceUseMode": source_use_mode,
                 "publishSchedule": publish_schedule,
                 **creator_assignment,
             }

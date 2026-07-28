@@ -1,6 +1,6 @@
 # gamma-local target
 
-本目录定义提交前本地 gamma 镜像预测试的反代与设备连接说明。它不是额外环境；服务仍使用 `APP_ENV=gamma`，App 仍使用 `APP_RUNTIME_ENV=gamma`、`APP_DATA_SOURCE=remote`。
+本目录定义提交前本地 gamma 镜像预测试的反代与设备连接说明。它不是额外环境；服务仍使用 `APP_ENV=gamma`，App 使用 `APP_RUNTIME_ENV=gamma` 的 production Remote composition，运行时不存在 Mock/Remote 切换。
 
 ## 一键启动
 
@@ -32,12 +32,12 @@ python3 quwoquan_ops/cli/stackctl.py up --target gamma-local --skip-app
 需要让运行 App 的设备解析以下域名到本机 mirror：
 
 ```text
-gamma-api.quwoquan-env.test
-gamma-product-ops.quwoquan-env.test
-gamma-avatar.quwoquan-env.test
-gamma-image.quwoquan-env.test
-gamma-video.quwoquan-env.test
-gamma-upload.quwoquan-env.test
+api.gamma.quwoquan.com
+ops.gamma.quwoquan.com
+cdn.gamma.quwoquan.com
+cdn.gamma.quwoquan.com
+cdn.gamma.quwoquan.com
+upload.gamma.quwoquan.com
 ```
 
 建议：
@@ -50,11 +50,8 @@ gamma-upload.quwoquan-env.test
 
 默认 `Caddyfile` 使用 Caddy internal CA。真机/模拟器必须信任本地 CA，否则 HTTPS/WSS 会失败。
 
-可选方案：
-
-- 使用 Caddy internal CA，并将生成的 root CA 安装到设备。
-- 使用 `mkcert` 生成 `*.quwoquan-env.test` 证书后替换 `Caddyfile` 的 `tls internal`。
-- 仅调试时使用 HTTP runtime define，但这会偏离 committed gamma runtime config，不能作为最终提交前报告。
+本地公开入口必须使用 `*.gamma.quwoquan.com` 的 DNS-01 公共 CA 证书。禁止
+Caddy internal CA、`mkcert`、关闭证书校验或临时 HTTP runtime define。
 
 ## 本地覆盖边界
 

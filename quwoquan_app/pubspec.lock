@@ -1408,13 +1408,6 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
-  quwoquan_cloud_mock:
-    dependency: "direct dev"
-    description:
-      path: "packages/quwoquan_cloud_mock"
-      relative: true
-    source: path
-    version: "0.1.0"
   quwoquan_runtime_errors:
     dependency: "direct main"
     description:

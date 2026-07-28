@@ -18,10 +18,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
-from quwoquan_ops.cli.lib.local_target_tls import (
-    LocalTargetTlsError,
-    resolve_local_target_root_ca,
-)
 
 
 BUNDLE_PATH = (
@@ -75,7 +71,6 @@ MEDIA_ROOT = (
     / "test_fixtures"
     / "media"
 )
-DEFAULT_BASE_URL = "https://localhost:17100"
 DEFAULT_TARGET_BY_ENV = {
     "alpha": "alpha-local",
     "beta": "beta-local",
@@ -144,10 +139,6 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--env", choices=tuple(DEFAULT_TARGET_BY_ENV), default="alpha")
     parser.add_argument("--target", choices=tuple(DEFAULT_TARGET_BY_ENV.values()), default="")
-    parser.add_argument("--avatar-base-url", default="")
-    parser.add_argument("--media-base-url", default="")
-    parser.add_argument("--video-base-url", default="")
-    parser.add_argument("--cacert", default="")
     parser.add_argument(
         "--files-only",
         action="store_true",
@@ -159,9 +150,7 @@ def _build_parser() -> argparse.ArgumentParser:
 def _curl_probe(
     url: str,
     *,
-    cacert: Path,
     range_probe: bool = False,
-    resolve_local: bool = False,
 ) -> tuple[str, str]:
     cmd = [
         "curl",
@@ -176,17 +165,11 @@ def _curl_probe(
         "--retry-delay",
         "1",
         "--retry-all-errors",
-        "--cacert",
-        str(cacert),
         "-o",
         "/dev/null",
         "-w",
         "%{http_code}|%{content_type}",
     ]
-    if resolve_local:
-        parsed = urlsplit(url)
-        if parsed.hostname and parsed.port:
-            cmd.extend(["--resolve", f"{parsed.hostname}:{parsed.port}:127.0.0.1"])
     if range_probe:
         cmd.extend(["-H", "Range: bytes=0-1"])
     else:
@@ -364,39 +347,18 @@ def _resolve_target_name(env_name: str, explicit_target: str) -> str:
     return DEFAULT_TARGET_BY_ENV[env_name]
 
 
-def _resolve_public_bases(
-    env_name: str,
-    target_name: str,
-    args: argparse.Namespace,
-) -> dict[str, str]:
+def _resolve_public_bases(target_name: str) -> dict[str, str]:
     topology = load_environment_topology()
     target = get_target(topology, target_name)
     public_bases = target.get("publicBases") or {}
-    avatar_base_url = str(
-        args.avatar_base_url
-        or public_bases.get("mediaAvatar")
-        or public_bases.get("mediaImage")
-        or ""
-    )
-    media_base_url = str(args.media_base_url or public_bases.get("mediaImage") or avatar_base_url)
-    video_base_url = str(args.video_base_url or public_bases.get("mediaVideo") or media_base_url)
-    if env_name == "alpha" and not any(
-        (args.avatar_base_url, args.media_base_url, args.video_base_url)
-    ):
-        # The local runtime media gate can run with host-file/DNS mutation disabled.
-        # stackctl T4 still passes explicit topology public bases for env validation.
-        avatar_base_url = media_base_url = video_base_url = DEFAULT_BASE_URL
+    avatar_base_url = str(public_bases.get("mediaAvatar") or "")
+    media_base_url = str(public_bases.get("mediaImage") or "")
+    video_base_url = str(public_bases.get("mediaVideo") or "")
     return {
         "avatar": avatar_base_url.rstrip("/"),
         "image": media_base_url.rstrip("/"),
         "video": video_base_url.rstrip("/"),
     }
-
-
-def _resolve_local_root_ca(target_name: str, explicit_cacert: str) -> Path:
-    if explicit_cacert:
-        return Path(explicit_cacert)
-    return resolve_local_target_root_ca(target_name)
 
 
 def _base_url_for_object_key(object_key: str, base_urls: dict[str, str]) -> str:
@@ -407,22 +369,27 @@ def _base_url_for_object_key(object_key: str, base_urls: dict[str, str]) -> str:
     return base_urls["image"]
 
 
+def _public_url_for_object_key(object_key: str, base_urls: dict[str, str]) -> str:
+    base_url = _base_url_for_object_key(object_key, base_urls)
+    base_path = urlsplit(base_url).path.strip("/")
+    relative_key = object_key.lstrip("/")
+    if base_path and relative_key.startswith(f"{base_path}/"):
+        relative_key = relative_key[len(base_path) + 1 :]
+    return f"{base_url.rstrip('/')}/{relative_key}"
+
+
 def _probe_seeded_media_objects(
     object_keys: list[str],
     *,
     base_urls: dict[str, str],
-    cacert: Path,
-    resolve_local: bool,
 ) -> dict[str, tuple[str, str]]:
     """并发探测独立媒体对象，保留每个对象的完整 HTTP/MIME 验证。"""
 
     def probe(object_key: str) -> tuple[str, str]:
         is_video = _expected_content_type_prefix(object_key) == "video/"
         return _curl_probe(
-            f"{_base_url_for_object_key(object_key, base_urls)}/{object_key}",
-            cacert=cacert,
+            _public_url_for_object_key(object_key, base_urls),
             range_probe=is_video,
-            resolve_local=resolve_local,
         )
 
     if not object_keys:
@@ -491,15 +458,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    base_urls = _resolve_public_bases(env_name, target_name, args)
-    local_root_ca: Path | None
-    try:
-        local_root_ca = _resolve_local_root_ca(target_name, str(args.cacert or ""))
-    except LocalTargetTlsError as exc:
-        local_root_ca = None
-        issues.append(str(exc))
-    if local_root_ca is not None and not local_root_ca.is_file():
-        issues.append(f"{target_name} local root CA missing: {local_root_ca}")
+    base_urls = _resolve_public_bases(target_name)
     for label, base_url in base_urls.items():
         if not base_url.startswith("https://"):
             issues.append(f"{target_name} {label} base URL must be https: {base_url or '<empty>'}")
@@ -508,8 +467,6 @@ def main(argv: list[str] | None = None) -> int:
         for issue in issues:
             print(f"  - {issue}")
         return 1
-    assert local_root_ca is not None
-
     checked = 0
     video_checked = 0
     object_keys: set[str] = set()
@@ -552,27 +509,25 @@ def main(argv: list[str] | None = None) -> int:
     probe_results = _probe_seeded_media_objects(
         probe_keys,
         base_urls=base_urls,
-        cacert=local_root_ca,
-        resolve_local=target_name in DEFAULT_TARGET_BY_ENV.values(),
     )
     for object_key in probe_keys:
         is_video = _expected_content_type_prefix(object_key) == "video/"
         status, content_type = probe_results[object_key]
-        base_url = _base_url_for_object_key(object_key, base_urls)
+        public_url = _public_url_for_object_key(object_key, base_urls)
         expected_statuses = {"206"} if is_video else {"200", "206"}
         if is_video:
             video_checked += 1
         if status not in expected_statuses:
             issues.append(
                 f"{object_key} expected HTTP {sorted(expected_statuses)}, "
-                f"got {status}: {base_url}/{object_key}"
+                f"got {status}: {public_url}"
             )
             continue
         expected_content_type = _expected_content_type_prefix(object_key)
         if expected_content_type and not content_type.startswith(expected_content_type):
             issues.append(
                 f"{object_key} expected Content-Type {expected_content_type}*, "
-                f"got {content_type or '<empty>'}: {base_url}/{object_key}"
+                f"got {content_type or '<empty>'}: {public_url}"
             )
 
     if issues:

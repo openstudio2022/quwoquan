@@ -7,7 +7,7 @@ import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     as contracts;
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../support/cloud_services/repository_mock_reexports.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

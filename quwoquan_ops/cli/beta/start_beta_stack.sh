@@ -41,6 +41,27 @@ OPS_PORTAL_DIR="$ROOT_DIR/quwoquan_ops/portal"
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile gamma-local --format shell-defaults)"
 eval "$(PYTHONPATH="$ROOT_DIR" python3 -m quwoquan_ops.cli.lib.local_environment_auth --shell beta beta-local)"
+eval "$(
+  PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import shlex
+
+from quwoquan_ops.cli.lib.environment_topology import (
+    get_target,
+    load_environment_topology,
+)
+
+bases = get_target(load_environment_topology(), "beta-local")["publicBases"]
+for name, role in (
+    ("CANONICAL_GATEWAY_BASE_URL", "api"),
+    ("CANONICAL_PRODUCT_OPS_BASE_URL", "productOps"),
+    ("CANONICAL_MEDIA_AVATAR_BASE_URL", "mediaAvatar"),
+    ("CANONICAL_MEDIA_IMAGE_BASE_URL", "mediaImage"),
+    ("CANONICAL_MEDIA_VIDEO_BASE_URL", "mediaVideo"),
+    ("CANONICAL_MEDIA_UPLOAD_BASE_URL", "mediaUpload"),
+):
+    print(f"{name}={shlex.quote(str(bases[role]))}")
+PY
+)"
 
 if [[ $# -gt 0 ]]; then
   shift
@@ -55,7 +76,7 @@ BETA_POSTGRES_PORT="${BETA_POSTGRES_PORT}"
 BETA_MONGO_PORT="${BETA_MONGO_PORT}"
 BETA_REDIS_PORT="${BETA_REDIS_PORT}"
 OPS_POSTGRES_DSN="${OPS_POSTGRES_DSN:-postgres://quwoquan:quwoquan@127.0.0.1:${BETA_POSTGRES_PORT}/quwoquan?sslmode=disable}"
-CDN_DOMAIN="${CDN_DOMAIN:-cdn.beta.local}"
+BETA_OBJECT_STORAGE_CDN_DOMAIN="${BETA_OBJECT_STORAGE_CDN_DOMAIN:-cdn.beta.local}"
 DEVICE_ID="${DEVICE_ID:-}"
 START_APP="${START_APP:-1}"
 SKIP_BUILD=0
@@ -66,11 +87,11 @@ SEED_VERIFY_MODE="${SEED_VERIFY_MODE:-}"
 MEDIA_MODE="${MEDIA_MODE:-}"
 LOCAL_PUBLIC_HOST="${LOCAL_PUBLIC_HOST:-}"
 BETA_BACKEND_READY_TIMEOUT_SECONDS="${BETA_BACKEND_READY_TIMEOUT_SECONDS:-1200}"
-MEDIA_AVATAR_BASE_URL="${MEDIA_AVATAR_BASE_URL:-}"
-MEDIA_IMAGE_BASE_URL="${MEDIA_IMAGE_BASE_URL:-}"
-MEDIA_VIDEO_BASE_URL="${MEDIA_VIDEO_BASE_URL:-}"
-MEDIA_UPLOAD_BASE_URL="${MEDIA_UPLOAD_BASE_URL:-}"
-GATEWAY_BASE_URL_OVERRIDE="${GATEWAY_BASE_URL_OVERRIDE:-}"
+MEDIA_AVATAR_BASE_URL="${MEDIA_AVATAR_BASE_URL:-$CANONICAL_MEDIA_AVATAR_BASE_URL}"
+MEDIA_IMAGE_BASE_URL="${MEDIA_IMAGE_BASE_URL:-$CANONICAL_MEDIA_IMAGE_BASE_URL}"
+MEDIA_VIDEO_BASE_URL="${MEDIA_VIDEO_BASE_URL:-$CANONICAL_MEDIA_VIDEO_BASE_URL}"
+MEDIA_UPLOAD_BASE_URL="${MEDIA_UPLOAD_BASE_URL:-$CANONICAL_MEDIA_UPLOAD_BASE_URL}"
+GATEWAY_BASE_URL_OVERRIDE="${GATEWAY_BASE_URL_OVERRIDE:-$CANONICAL_GATEWAY_BASE_URL}"
 DEV_UP_HELPER="$ROOT_DIR/quwoquan_ops/cli/lib/dev_up.py"
 
 mkdir -p "$RUNTIME_CONFIG_DIR" "$STATE_DIR" "$LOG_DIR" "$QWQ_RUN_ROOT"
@@ -176,6 +197,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+for name in GATEWAY MEDIA_AVATAR MEDIA_IMAGE MEDIA_VIDEO MEDIA_UPLOAD; do
+  actual_name="${name}_BASE_URL"
+  [[ "$name" == "GATEWAY" ]] && actual_name="GATEWAY_BASE_URL_OVERRIDE"
+  canonical_name="CANONICAL_${name}_BASE_URL"
+  if [[ "${!actual_name}" != "${!canonical_name}" ]]; then
+    echo "GATE_BLOCK: ${actual_name} must equal canonical topology projection" >&2
+    exit 2
+  fi
+done
+
 case "$WORKLOAD" in
   content-release)
     # 内容导入与消费只依赖内容数据面；商业观测和运营控制面只属于 full。
@@ -202,10 +233,9 @@ fi
 write_env() {
   cat > "$ENV_FILE" <<EOF
 APP_RUNTIME_ENV=beta
-APP_DATA_SOURCE=remote
-CDN_DOMAIN=${CDN_DOMAIN}
-GATEWAY_BASE_URL=https://beta-api.quwoquan-env.test:${GATEWAY_PORT}
-PRODUCT_OPS_BASE_URL=https://beta-product-ops.quwoquan-env.test:${PRODUCT_OPS_PORT}
+CONTENT_CDN_DOMAIN=${BETA_OBJECT_STORAGE_CDN_DOMAIN}
+GATEWAY_BASE_URL=${CANONICAL_GATEWAY_BASE_URL}
+PRODUCT_OPS_BASE_URL=${CANONICAL_PRODUCT_OPS_BASE_URL}
 PLATFORM_OPS_BASE_URL=http://127.0.0.1:${PLATFORM_OPS_PORT}
 OPS_PORTAL_BASE_URL=http://127.0.0.1:${OPS_PORTAL_PORT}
 OBSERVABILITY_BASE_URL=http://127.0.0.1:9200
@@ -365,7 +395,7 @@ build_app_beta_command() {
     QWQ_OUTPUT_ROOT="$QWQ_OUTPUT_ROOT"
     QWQ_OBSERVABILITY_RUN_ROOT="$QWQ_OBSERVABILITY_RUN_ROOT"
     QWQ_RUN_ROOT="$QWQ_RUN_ROOT"
-    CDN_DOMAIN="${CDN_DOMAIN}"
+    CONTENT_CDN_DOMAIN="${BETA_OBJECT_STORAGE_CDN_DOMAIN}"
     "$APP_BETA"
     --restart
   )

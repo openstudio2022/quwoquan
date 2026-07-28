@@ -1,5 +1,7 @@
+# Alpha content-release 无 ES 集群。schema 默认 es.enabled=false；
+# 禁止在此覆盖为 true（空 endpoints 会 fail-closed）。回归由
+# quwoquan_ops/tests/local_contract/test_alpha_entity_es_disabled__local_contract_test.py 锁定。
 overrides:
-  sys.entity-service.es.enabled: true
   sys.entity-service.redis.rec.addr: 127.0.0.1:6379
 secretRefs:
   sys.entity-service.mongo.uri: ENTITY_MONGO_URI

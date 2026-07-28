@@ -28,6 +28,7 @@ import 'package:quwoquan_app/ui/settings/pages/settings_about_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_calls_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_dark_mode_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_notifications_page.dart';
+import '../../../../support/cloud_services/behavior_repository_double.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_permissions_page.dart';
 import '../../../../support/recording_app_telemetry_recorder.dart';
@@ -37,9 +38,9 @@ void main() {
 
   setUp(() {
     PackageInfo.setMockInitialValues(
-      appName: UITextConstants.loginBrandName,
+      appName: FoundationText.loginBrandName,
       packageName: 'com.quwoquan.app',
-      version: UITextConstants.settingsAboutDefaultVersion,
+      version: SettingsText.settingsAboutDefaultVersion,
       buildNumber: '1',
       buildSignature: '',
     );
@@ -51,17 +52,17 @@ void main() {
       await tester.pumpWidget(_buildSettingsApp());
       await tester.pumpAndSettle();
 
-      expect(find.text(UITextConstants.profileEditLabel), findsOneWidget);
-      expect(find.text(UITextConstants.profilePersonasLabel), findsOneWidget);
+      expect(find.text(ProfileText.profileEditLabel), findsOneWidget);
+      expect(find.text(ProfileText.profilePersonasLabel), findsOneWidget);
       expect(
-        find.text(UITextConstants.settingsPermissionManagement),
+        find.text(SettingsText.settingsPermissionManagement),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.settingsBlockedUsers), findsOneWidget);
-      expect(find.text(UITextConstants.settingsDarkMode), findsOneWidget);
-      expect(find.text(UITextConstants.settingsAboutQuwoquan), findsOneWidget);
-      expect(find.text(UITextConstants.switchAccount), findsOneWidget);
-      expect(find.text(UITextConstants.logout), findsOneWidget);
+      expect(find.text(ContentText.settingsBlockedUsers), findsOneWidget);
+      expect(find.text(SettingsText.settingsDarkMode), findsOneWidget);
+      expect(find.text(SettingsText.settingsAboutQuwoquan), findsOneWidget);
+      expect(find.text(FoundationText.switchAccount), findsOneWidget);
+      expect(find.text(FoundationText.logout), findsOneWidget);
 
       expect(find.text(AppConceptConstants.assistantLabel), findsNothing);
       expect(find.text(SettingsRemovedText.notification), findsNothing);
@@ -85,7 +86,7 @@ void main() {
       await tester.pumpWidget(_buildSettingsApp());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.profileEditLabel));
+      await tester.tap(find.text(ProfileText.profileEditLabel));
       await tester.pumpAndSettle();
       expect(find.text(_RouteProbe.profileEdit), findsOneWidget);
 
@@ -95,7 +96,7 @@ void main() {
       router.go(AppRoutePaths.settings);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.profilePersonasLabel));
+      await tester.tap(find.text(ProfileText.profilePersonasLabel));
       await tester.pumpAndSettle();
       expect(find.text(_RouteProbe.profilePersonas), findsOneWidget);
     });
@@ -104,24 +105,24 @@ void main() {
       await tester.pumpWidget(_buildSettingsApp());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.settingsPermissionManagement));
+      await tester.tap(find.text(SettingsText.settingsPermissionManagement));
       await tester.pumpAndSettle();
 
       expect(find.byType(SettingsPermissionsPage), findsOneWidget);
       expect(
-        find.text(UITextConstants.settingsContactsPermission),
+        find.text(SettingsText.settingsContactsPermission),
         findsOneWidget,
       );
       final actionCount =
-          find.text(UITextConstants.openSettings).evaluate().length +
+          find.text(FoundationText.openSettings).evaluate().length +
           find
-              .text(UITextConstants.settingsPermissionUnavailable)
+              .text(SettingsText.settingsPermissionUnavailable)
               .evaluate()
               .length;
       expect(actionCount, 1);
       expect(
         find
-            .textContaining(UITextConstants.settingsPermissionUnavailable)
+            .textContaining(SettingsText.settingsPermissionUnavailable)
             .evaluate()
             .length,
         lessThanOrEqualTo(1),
@@ -133,20 +134,17 @@ void main() {
       await tester.pumpWidget(_buildSettingsApp());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.settingsDarkMode));
+      await tester.tap(find.text(SettingsText.settingsDarkMode));
       await tester.pumpAndSettle();
 
       expect(find.byType(SettingsDarkModePage), findsOneWidget);
       expect(find.byType(CupertinoActionSheet), findsNothing);
-      expect(find.text(UITextConstants.settingsDarkModeSystem), findsWidgets);
+      expect(find.text(SettingsText.settingsDarkModeSystem), findsWidgets);
       expect(
-        find.text(UITextConstants.settingsDarkModeLightOption),
+        find.text(SettingsText.settingsDarkModeLightOption),
         findsOneWidget,
       );
-      expect(
-        find.text(UITextConstants.settingsDarkModeDarkOption),
-        findsWidgets,
-      );
+      expect(find.text(SettingsText.settingsDarkModeDarkOption), findsWidgets);
 
       await tester.tap(
         find.byKey(
@@ -185,16 +183,16 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(appearanceRepository.loadCount, 1);
-      expect(find.text(UITextConstants.loadFailed), findsOneWidget);
-      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+      expect(find.text(FoundationText.loadFailed), findsOneWidget);
+      expect(find.text(ContentText.tryAgain), findsOneWidget);
 
-      await tester.tap(find.text(UITextConstants.tryAgain));
+      await tester.tap(find.text(ContentText.tryAgain));
       await tester.pumpAndSettle();
 
       expect(appearanceRepository.loadCount, 2);
-      expect(find.text(UITextConstants.loadFailed), findsNothing);
-      expect(find.text(UITextConstants.tryAgain), findsNothing);
-      expect(find.text(UITextConstants.settingsDarkModeSystem), findsOneWidget);
+      expect(find.text(FoundationText.loadFailed), findsNothing);
+      expect(find.text(ContentText.tryAgain), findsNothing);
+      expect(find.text(SettingsText.settingsDarkModeSystem), findsOneWidget);
     });
 
     testWidgets('深色模式主行值贴右，账号操作为无图标居中按钮', (tester) async {
@@ -202,10 +200,10 @@ void main() {
       await tester.pumpWidget(_buildSettingsApp());
       await tester.pumpAndSettle();
 
-      final modeText = find.text(UITextConstants.settingsDarkModeSystem).first;
+      final modeText = find.text(SettingsText.settingsDarkModeSystem).first;
       final chevron = find.descendant(
         of: find.ancestor(
-          of: find.text(UITextConstants.settingsDarkMode),
+          of: find.text(SettingsText.settingsDarkMode),
           matching: find.byType(SettingsInsetNavigationRow),
         ),
         matching: find.byIcon(CupertinoIcons.chevron_forward),
@@ -227,11 +225,11 @@ void main() {
       );
 
       final switchAccountButton = find.ancestor(
-        of: find.text(UITextConstants.switchAccount),
+        of: find.text(FoundationText.switchAccount),
         matching: find.byType(CupertinoButton),
       );
       final logoutButton = find.ancestor(
-        of: find.text(UITextConstants.logout),
+        of: find.text(FoundationText.logout),
         matching: find.byType(CupertinoButton),
       );
       expect(
@@ -246,11 +244,11 @@ void main() {
       final viewportCenterX =
           tester.getSize(find.byType(MaterialApp)).width / 2;
       expect(
-        tester.getCenter(find.text(UITextConstants.switchAccount)).dx,
+        tester.getCenter(find.text(FoundationText.switchAccount)).dx,
         moreOrLessEquals(viewportCenterX, epsilon: AppSpacing.md),
       );
       expect(
-        tester.getCenter(find.text(UITextConstants.logout)).dx,
+        tester.getCenter(find.text(FoundationText.logout)).dx,
         moreOrLessEquals(viewportCenterX, epsilon: AppSpacing.md),
       );
     });
@@ -260,26 +258,26 @@ void main() {
       await tester.pumpWidget(_buildSettingsApp());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.settingsAboutQuwoquan));
+      await tester.tap(find.text(SettingsText.settingsAboutQuwoquan));
       await tester.pumpAndSettle();
 
       expect(find.byType(SettingsAboutPage), findsOneWidget);
-      expect(find.text(UITextConstants.loginBrandName), findsWidgets);
-      expect(find.text(UITextConstants.settingsVersion), findsOneWidget);
+      expect(find.text(FoundationText.loginBrandName), findsWidgets);
+      expect(find.text(SettingsText.settingsVersion), findsOneWidget);
       expect(
         find.text(
           UITextConstants.settingsVersionValue(
-            UITextConstants.settingsAboutDefaultVersion,
+            SettingsText.settingsAboutDefaultVersion,
           ),
         ),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.userAgreement), findsOneWidget);
-      expect(find.text(UITextConstants.privacyPolicy), findsOneWidget);
-      expect(find.text(UITextConstants.permissionsStatement), findsOneWidget);
-      expect(find.text(UITextConstants.thirdPartySdkList), findsOneWidget);
+      expect(find.text(FoundationText.userAgreement), findsOneWidget);
+      expect(find.text(FoundationText.privacyPolicy), findsOneWidget);
+      expect(find.text(FoundationText.permissionsStatement), findsOneWidget);
+      expect(find.text(FoundationText.thirdPartySdkList), findsOneWidget);
 
-      await tester.tap(find.text(UITextConstants.userAgreement));
+      await tester.tap(find.text(FoundationText.userAgreement));
       await tester.pumpAndSettle();
       expect(find.text(_RouteProbe.userAgreement), findsOneWidget);
 
@@ -289,21 +287,21 @@ void main() {
       router.go(AppRoutePaths.settingsAbout);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.privacyPolicy));
+      await tester.tap(find.text(FoundationText.privacyPolicy));
       await tester.pumpAndSettle();
       expect(find.text(_RouteProbe.privacyPolicy), findsOneWidget);
 
       router.go(AppRoutePaths.settingsAbout);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.permissionsStatement));
+      await tester.tap(find.text(FoundationText.permissionsStatement));
       await tester.pumpAndSettle();
       expect(find.text(_RouteProbe.permissions), findsOneWidget);
 
       router.go(AppRoutePaths.settingsAbout);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.thirdPartySdkList));
+      await tester.tap(find.text(FoundationText.thirdPartySdkList));
       await tester.pumpAndSettle();
       expect(find.text(_RouteProbe.thirdPartySdkList), findsOneWidget);
     });
@@ -326,19 +324,19 @@ void main() {
       await _openLogoutDialog(tester);
 
       expect(find.byType(CupertinoAlertDialog), findsOneWidget);
-      expect(find.text(UITextConstants.logoutDialogTitle), findsWidgets);
+      expect(find.text(FoundationText.logoutDialogTitle), findsWidgets);
       expect(find.byType(CupertinoActionSheet), findsNothing);
       expect(
         find.widgetWithText(
           CupertinoDialogAction,
-          UITextConstants.logoutDialogSoftAction,
+          FoundationText.logoutDialogSoftAction,
         ),
         findsOneWidget,
       );
       expect(
         find.widgetWithText(
           CupertinoDialogAction,
-          UITextConstants.logoutDialogHardAction,
+          FoundationText.logoutDialogHardAction,
         ),
         findsOneWidget,
       );
@@ -346,7 +344,7 @@ void main() {
       await tester.tap(
         find.widgetWithText(
           CupertinoDialogAction,
-          UITextConstants.logoutDialogSoftAction,
+          FoundationText.logoutDialogSoftAction,
         ),
       );
       await tester.pumpAndSettle();
@@ -379,7 +377,7 @@ void main() {
       await tester.tap(
         find.widgetWithText(
           CupertinoDialogAction,
-          UITextConstants.logoutDialogHardAction,
+          FoundationText.logoutDialogHardAction,
         ),
       );
       await tester.pumpAndSettle();
@@ -401,29 +399,29 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text(UITextConstants.settingsNotificationSection),
+        find.text(SettingsText.settingsNotificationSection),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.settingsCallSection), findsOneWidget);
+      expect(find.text(SettingsText.settingsCallSection), findsOneWidget);
 
-      await tester.tap(find.text(UITextConstants.settingsNotificationSection));
+      await tester.tap(find.text(SettingsText.settingsNotificationSection));
       await tester.pumpAndSettle();
-      expect(find.text(UITextConstants.settingsEnablePush), findsOneWidget);
+      expect(find.text(SettingsText.settingsEnablePush), findsOneWidget);
 
-      await tester.tap(find.text(UITextConstants.settingsEnablePush));
+      await tester.tap(find.text(SettingsText.settingsEnablePush));
       await tester.pumpAndSettle();
       expect(commands.notificationCommands, hasLength(1));
       expect(commands.notificationCommands.single.enablePush, isFalse);
 
       await tester.tap(find.byIcon(CupertinoIcons.back));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(UITextConstants.settingsCallSection));
+      await tester.tap(find.text(SettingsText.settingsCallSection));
       await tester.pumpAndSettle();
       expect(
-        find.text(UITextConstants.settingsCallRingtoneDefault),
+        find.text(SettingsText.settingsCallRingtoneDefault),
         findsOneWidget,
       );
-      await tester.tap(find.text(UITextConstants.settingsEnableCallVibration));
+      await tester.tap(find.text(SettingsText.settingsEnableCallVibration));
       await tester.pumpAndSettle();
       expect(commands.callCommands, hasLength(1));
       expect(commands.callCommands.single.enableCallVibration, isFalse);
@@ -438,13 +436,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.settingsNotificationSection));
+      await tester.tap(find.text(SettingsText.settingsNotificationSection));
       await tester.pumpAndSettle();
       final pushSwitchBefore = tester.widget<CupertinoSwitch>(
         find
             .descendant(
               of: find.ancestor(
-                of: find.text(UITextConstants.settingsEnablePush),
+                of: find.text(SettingsText.settingsEnablePush),
                 matching: find.byType(SettingsInsetSwitchRow),
               ),
               matching: find.byType(CupertinoSwitch),
@@ -453,14 +451,14 @@ void main() {
       );
       expect(pushSwitchBefore.value, isTrue);
 
-      await tester.tap(find.text(UITextConstants.settingsEnablePush));
+      await tester.tap(find.text(SettingsText.settingsEnablePush));
       await tester.pumpAndSettle();
 
       final pushSwitchAfter = tester.widget<CupertinoSwitch>(
         find
             .descendant(
               of: find.ancestor(
-                of: find.text(UITextConstants.settingsEnablePush),
+                of: find.text(SettingsText.settingsEnablePush),
                 matching: find.byType(SettingsInsetSwitchRow),
               ),
               matching: find.byType(CupertinoSwitch),
@@ -469,9 +467,9 @@ void main() {
       );
       expect(pushSwitchAfter.value, isTrue);
       expect(find.byType(CupertinoAlertDialog), findsOneWidget);
-      expect(find.text(UITextConstants.operationFailed), findsOneWidget);
-      expect(find.text(UITextConstants.operationFailedRetry), findsOneWidget);
-      await tester.tap(find.text(UITextConstants.cancel));
+      expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+      expect(find.text(SearchText.recoveryReloadLaterMessage), findsOneWidget);
+      await tester.tap(find.text(ContentText.gotIt));
       await tester.pumpAndSettle();
       expect(find.byType(CupertinoAlertDialog), findsNothing);
     });
@@ -507,7 +505,7 @@ void main() {
       await tester.tap(
         find.widgetWithText(
           CupertinoDialogAction,
-          UITextConstants.logoutDialogHardAction,
+          FoundationText.logoutDialogHardAction,
         ),
       );
       await tester.pumpAndSettle();
@@ -537,7 +535,7 @@ Future<void> _openLogoutDialog(WidgetTester tester) async {
   _useTallViewport(tester);
   await tester.pumpAndSettle();
 
-  await tester.tap(find.text(UITextConstants.logout));
+  await tester.tap(find.text(FoundationText.logout));
   await tester.pumpAndSettle();
 }
 

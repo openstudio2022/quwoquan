@@ -26,6 +26,7 @@ func Build(t testing.TB) string {
 		"repo",
 		"local",
 		"test-contract-views",
+		"cache",
 	)
 	if err := os.MkdirAll(viewParent, 0o755); err != nil {
 		t.Fatalf("create contract view parent: %v", err)

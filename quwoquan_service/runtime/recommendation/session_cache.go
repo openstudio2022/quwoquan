@@ -2,6 +2,7 @@ package recommendation
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -163,6 +164,18 @@ func (sc *SessionCache) FilterCandidates(ctx context.Context, userID string, can
 		return f.FilterCandidates(ctx, userID, candidates, at)
 	}
 	return candidates, nil
+}
+
+func (sc *SessionCache) FilterCandidatesRelaxedExposure(
+	ctx context.Context,
+	userID string,
+	candidates []ContentCandidate,
+	at time.Time,
+) ([]ContentCandidate, error) {
+	if f, ok := sc.inner.(RelaxedExposureFilter); ok {
+		return f.FilterCandidatesRelaxedExposure(ctx, userID, candidates, at)
+	}
+	return nil, fmt.Errorf("relaxed exposure filter is unavailable")
 }
 
 func (sc *SessionCache) evictOldest() {

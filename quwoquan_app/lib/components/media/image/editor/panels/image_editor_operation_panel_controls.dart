@@ -12,14 +12,14 @@ extension _ImageEditorOperationPanelControls on ImageEditorOperationPanel {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _panelChip(
-                UITextConstants.imageEditorMosaicPixel,
+                MediaText.imageEditorMosaicPixel,
                 mosaicType == ImageEditorMosaicType.pixelate,
                 onTap: () =>
                     onMosaicTypeChanged(ImageEditorMosaicType.pixelate),
               ),
               SizedBox(width: AppSpacing.intraGroupSm),
               _panelChip(
-                UITextConstants.imageEditorMosaicBlur,
+                MediaText.imageEditorMosaicBlur,
                 mosaicType == ImageEditorMosaicType.blur,
                 onTap: () => onMosaicTypeChanged(ImageEditorMosaicType.blur),
               ),
@@ -41,7 +41,7 @@ extension _ImageEditorOperationPanelControls on ImageEditorOperationPanel {
           Row(
             children: [
               Text(
-                UITextConstants.imageEditorMosaicSize,
+                MediaText.imageEditorMosaicSize,
                 style: TextStyle(
                   color: foregroundSecondary,
                   fontSize: AppTypography.sm,
@@ -98,7 +98,7 @@ extension _ImageEditorOperationPanelControls on ImageEditorOperationPanel {
                     ),
                     SizedBox(width: AppSpacing.xs),
                     Text(
-                      UITextConstants.imageEditorTextAdd,
+                      MediaText.imageEditorTextAdd,
                       style: TextStyle(
                         color: foregroundColor,
                         fontSize: AppTypography.md,
@@ -125,14 +125,14 @@ extension _ImageEditorOperationPanelControls on ImageEditorOperationPanel {
           Row(
             children: [
               _panelChip(
-                UITextConstants.imageEditorTextStylePlain,
+                MediaText.imageEditorTextStylePlain,
                 selected?.style == ImageEditorTextStyleKind.plain,
                 onTap: selected == null
                     ? null
                     : () => onTextStyleChanged(ImageEditorTextStyleKind.plain),
               ),
               _panelChip(
-                UITextConstants.imageEditorTextStyleOutline,
+                MediaText.imageEditorTextStyleOutline,
                 selected?.style == ImageEditorTextStyleKind.outline,
                 onTap: selected == null
                     ? null
@@ -140,7 +140,7 @@ extension _ImageEditorOperationPanelControls on ImageEditorOperationPanel {
                           onTextStyleChanged(ImageEditorTextStyleKind.outline),
               ),
               _panelChip(
-                UITextConstants.imageEditorTextStyleBar,
+                MediaText.imageEditorTextStyleBar,
                 selected?.style == ImageEditorTextStyleKind.backgroundBar,
                 onTap: selected == null
                     ? null
@@ -253,7 +253,7 @@ extension _ImageEditorOperationPanelControls on ImageEditorOperationPanel {
                                   ),
                                   SizedBox(width: AppSpacing.xs),
                                   Text(
-                                    UITextConstants.imageEditorCropReset,
+                                    MediaText.imageEditorCropReset,
                                     style: TextStyle(
                                       color: foregroundColor,
                                       fontSize: AppTypography.md,
@@ -358,7 +358,7 @@ extension _ImageEditorOperationPanelControls on ImageEditorOperationPanel {
                                   ),
                                   SizedBox(width: AppSpacing.xs),
                                   Text(
-                                    UITextConstants.imageEditorCropReset,
+                                    MediaText.imageEditorCropReset,
                                     style: TextStyle(
                                       color: AppColors.white,
                                       fontSize: AppTypography.md,
@@ -433,45 +433,45 @@ extension _ImageEditorOperationPanelControls on ImageEditorOperationPanel {
   Widget _buildCropRatioSelector() {
     final items = [
       _CropRatioEntry(
-        label: UITextConstants.imageEditorCropOriginal,
+        label: MediaText.imageEditorCropOriginal,
         value: 'original',
       ),
       _CropRatioEntry(
-        label: UITextConstants.imageEditorCropFree,
+        label: MediaText.imageEditorCropFree,
         value: 'free',
       ),
       _CropRatioEntry(
-        label: UITextConstants.imageEditorCropRatio1x1,
+        label: MediaText.imageEditorCropRatio1x1,
         value: '1x1',
         previewRatio: 1,
       ),
       _CropRatioEntry(
-        label: UITextConstants.imageEditorCropRatio2x3,
+        label: MediaText.imageEditorCropRatio2x3,
         value: '2x3',
         previewRatio: 2 / 3,
       ),
       _CropRatioEntry(
-        label: UITextConstants.imageEditorCropRatio3x2,
+        label: MediaText.imageEditorCropRatio3x2,
         value: '3x2',
         previewRatio: 3 / 2,
       ),
       _CropRatioEntry(
-        label: UITextConstants.imageEditorCropRatio3x4,
+        label: MediaText.imageEditorCropRatio3x4,
         value: '3x4',
         previewRatio: 3 / 4,
       ),
       _CropRatioEntry(
-        label: UITextConstants.imageEditorCropRatio4x3,
+        label: MediaText.imageEditorCropRatio4x3,
         value: '4x3',
         previewRatio: 4 / 3,
       ),
       _CropRatioEntry(
-        label: UITextConstants.imageEditorCropRatio9x16,
+        label: MediaText.imageEditorCropRatio9x16,
         value: '9x16',
         previewRatio: 9 / 16,
       ),
       _CropRatioEntry(
-        label: UITextConstants.imageEditorCropRatio16x9,
+        label: MediaText.imageEditorCropRatio16x9,
         value: '16x9',
         previewRatio: 16 / 9,
       ),

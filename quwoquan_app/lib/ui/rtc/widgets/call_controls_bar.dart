@@ -125,7 +125,7 @@ class _CallControlsBarState extends ConsumerState<CallControlsBar> {
       return <Widget>[
         _ControlButton(
           icon: CupertinoIcons.lock_open,
-          label: UITextConstants.callUnlockControls,
+          label: CallText.callUnlockControls,
           isActive: true,
           onTap: () {
             widget.onToggleInteractionLock?.call();
@@ -139,7 +139,7 @@ class _CallControlsBarState extends ConsumerState<CallControlsBar> {
       if (widget.callType.isVideo && widget.onToggleInteractionLock != null)
         _ControlButton(
           icon: CupertinoIcons.lock,
-          label: UITextConstants.callLockControls,
+          label: CallText.callLockControls,
           isActive: false,
           onTap: () {
             widget.onToggleInteractionLock?.call();
@@ -149,8 +149,8 @@ class _CallControlsBarState extends ConsumerState<CallControlsBar> {
       _ControlButton(
         icon: session.isMuted ? CupertinoIcons.mic_off : CupertinoIcons.mic,
         label: session.isMuted
-            ? UITextConstants.callMuted
-            : UITextConstants.callMute,
+            ? CallText.callMuted
+            : CallText.callMute,
         isActive: session.isMuted,
         onTap: () {
           ref.read(callSessionProvider.notifier).toggleMute();
@@ -163,8 +163,8 @@ class _CallControlsBarState extends ConsumerState<CallControlsBar> {
               ? CupertinoIcons.video_camera
               : CupertinoIcons.video_camera_solid,
           label: session.isCameraOn
-              ? UITextConstants.callCameraOff
-              : UITextConstants.callCameraOn,
+              ? CallText.callCameraOff
+              : CallText.callCameraOn,
           isActive: !session.isCameraOn,
           onTap: () {
             ref.read(callSessionProvider.notifier).toggleCamera();
@@ -174,7 +174,7 @@ class _CallControlsBarState extends ConsumerState<CallControlsBar> {
         if (session.isCameraOn && device.isCameraAvailable)
           _ControlButton(
             icon: CupertinoIcons.switch_camera,
-            label: UITextConstants.callFlipCamera,
+            label: CallText.callFlipCamera,
             isActive: false,
             onTap: () {
               unawaited(ref.read(mediaDeviceProvider.notifier).flipCamera());
@@ -186,8 +186,8 @@ class _CallControlsBarState extends ConsumerState<CallControlsBar> {
           _ControlButton(
             icon: CupertinoIcons.device_desktop,
             label: session.isLocalScreenSharing
-                ? UITextConstants.callStopScreenSharing
-                : UITextConstants.callShareScreen,
+                ? CallText.callStopScreenSharing
+                : CallText.callShareScreen,
             isActive: session.isLocalScreenSharing,
             onTap: () {
               final notifier = ref.read(callSessionProvider.notifier);
@@ -202,7 +202,7 @@ class _CallControlsBarState extends ConsumerState<CallControlsBar> {
       ],
       _ControlButton(
         icon: CupertinoIcons.person_add,
-        label: UITextConstants.callInvite,
+        label: CallText.callInvite,
         isActive: false,
         onTap: () {
           widget.onInvite?.call();
@@ -233,18 +233,18 @@ class _CallControlsBarState extends ConsumerState<CallControlsBar> {
   ) async {
     final selected = await showAppActionSheet<AudioOutput>(
       context,
-      title: UITextConstants.callAudioOutput,
+      title: CallText.callAudioOutput,
       sections: [
         AppActionSheetSection<AudioOutput>(
           items: [
             AppActionSheetItem<AudioOutput>(
               value: AudioOutput.earpiece,
-              label: UITextConstants.callAudioEarpiece,
+              label: CallText.callAudioEarpiece,
               isSelected: device.audioOutput == AudioOutput.earpiece,
             ),
             AppActionSheetItem<AudioOutput>(
               value: AudioOutput.speaker,
-              label: UITextConstants.callAudioSpeaker,
+              label: CallText.callAudioSpeaker,
               isSelected: device.audioOutput == AudioOutput.speaker,
             ),
           ],
@@ -342,7 +342,7 @@ class _HangupButton extends StatelessWidget {
             ),
             SizedBox(height: AppSpacing.xs),
             Text(
-              UITextConstants.callHangup,
+              CallText.callHangup,
               style: TextStyle(
                 color: AppColors.white,
                 fontSize: AppTypography.xs,

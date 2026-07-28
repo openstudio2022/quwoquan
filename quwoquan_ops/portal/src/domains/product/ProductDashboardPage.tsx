@@ -197,8 +197,8 @@ export function ProductDashboardPage() {
           <span className={`badge ${topAlert?.state === 'firing' ? 'badge--warning' : 'badge--success'}`}>
             {topAlert ? `告警=${topAlert.state}` : metricsPayload ? '暂无告警' : '等待告警数据'}
           </span>
-          <span className="badge badge--warning">双签待处理 {summary?.pendingDualReview ?? 0} 个</span>
-          <span className="badge badge--neutral">backlog={backlogCandidates.length}</span>
+          <span className="badge badge--warning">双签待处理 {summary ? summary.pendingDualReview : '—'} 个</span>
+          <span className="badge badge--neutral">backlog={triage ? backlogCandidates.length : '—'}</span>
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实产品控制面已接入' : '等待产品控制面连接'}
           </span>
@@ -227,11 +227,11 @@ export function ProductDashboardPage() {
         </div>
         <div className="metric-pill">
           <div className="metric-pill__label">待处理举报</div>
-          <div className="metric-pill__value">{openReports}</div>
+          <div className="metric-pill__value">{remoteReady ? openReports : '—'}</div>
         </div>
         <div className="metric-pill">
           <div className="metric-pill__label">精选池 active</div>
-          <div className="metric-pill__value">{activePremium}</div>
+          <div className="metric-pill__value">{remoteReady ? activePremium : '—'}</div>
         </div>
         <div className="metric-pill">
           <div className="metric-pill__label">实时指标来源</div>
@@ -239,7 +239,7 @@ export function ProductDashboardPage() {
         </div>
         <div className="metric-pill">
           <div className="metric-pill__label">最新 triage 事件量</div>
-          <div className="metric-pill__value">{triage?.eventSummary.totalCount ?? 0}</div>
+          <div className="metric-pill__value">{triage ? triage.eventSummary.totalCount : '—'}</div>
         </div>
       </div>
 
@@ -413,13 +413,22 @@ export function ProductDashboardPage() {
                 </div>
               </div>
             ))}
-            {backlogCandidates.length === 0 ? (
+            {triage && backlogCandidates.length === 0 ? (
               <div className="policy-item">
                 <div>
                   <p className="item-title">暂无 backlog</p>
                   <p className="item-subtitle">当前产品 triage 未生成新的修复待办。</p>
                 </div>
                 <span className="badge badge--success">quiet</span>
+              </div>
+            ) : null}
+            {!triage ? (
+              <div className="policy-item">
+                <div>
+                  <p className="item-title">等待产品 triage</p>
+                  <p className="item-subtitle">未取得真实 triage 投影时不推断 backlog 状态。</p>
+                </div>
+                <span className="badge badge--warning">unavailable</span>
               </div>
             ) : null}
           </div>
@@ -431,13 +440,13 @@ export function ProductDashboardPage() {
               <div>
                 <p className="item-title">实时元数据</p>
                 <p className="item-subtitle">
-                  source={metricsPayload?.source ?? 'n/a'} · freshness={metricsPayload?.freshness ?? 'n/a'} · window={metricsPayload?.window ?? 'n/a'}
+                  source={metricsPayload?.source ?? '—'} · freshness={metricsPayload?.freshness ?? '—'} · window={metricsPayload?.window ?? '—'}
                 </p>
                 <p className="item-subtitle">
-                  coverage={metricsPayload?.coverage.liveMetrics ?? 0}/{metricsPayload?.coverage.totalMetrics ?? 0} live
+                  coverage={metricsPayload ? `${metricsPayload.coverage.liveMetrics}/${metricsPayload.coverage.totalMetrics}` : '—'} live
                 </p>
               </div>
-              <span className="badge badge--neutral">{metricsPayload?.coverage.eventSignals ?? 0} signals</span>
+              <span className="badge badge--neutral">{metricsPayload ? metricsPayload.coverage.eventSignals : '—'} signals</span>
             </div>
             {alertStates.map((item) => (
               <div className="policy-item" key={item.id}>
@@ -456,13 +465,22 @@ export function ProductDashboardPage() {
                 </div>
               </div>
             ))}
-            {alertStates.length === 0 ? (
+            {metricsPayload && alertStates.length === 0 ? (
               <div className="policy-item">
                 <div>
                   <p className="item-title">暂无实时告警</p>
                   <p className="item-subtitle">当前实时聚合没有生成新的告警态。</p>
                 </div>
                 <span className="badge badge--success">quiet</span>
+              </div>
+            ) : null}
+            {!metricsPayload ? (
+              <div className="policy-item">
+                <div>
+                  <p className="item-title">等待实时告警投影</p>
+                  <p className="item-subtitle">未取得真实指标覆盖时不显示 quiet。</p>
+                </div>
+                <span className="badge badge--warning">unavailable</span>
               </div>
             ) : null}
           </div>

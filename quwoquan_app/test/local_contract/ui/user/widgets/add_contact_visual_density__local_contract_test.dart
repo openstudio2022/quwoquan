@@ -35,7 +35,7 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         const AppSearchField(
-          placeholder: UITextConstants.addContactSearchHubPlaceholder,
+          placeholder: ContactText.addContactSearchHubPlaceholder,
         ),
       ),
     );
@@ -55,15 +55,15 @@ void main() {
       _wrap(
         AddContactEntryCard(
           icon: CupertinoIcons.qrcode_viewfinder,
-          title: UITextConstants.editProfileQrScanAction,
-          subtitle: UITextConstants.addContactScanEntrySubtitle,
+          title: ProfileText.editProfileQrScanAction,
+          subtitle: ContactText.addContactScanEntrySubtitle,
           onTap: () {},
         ),
       ),
     );
 
     final title = tester.widget<Text>(
-      find.text(UITextConstants.editProfileQrScanAction),
+      find.text(ProfileText.editProfileQrScanAction),
     );
     expect(title.style?.fontWeight, AppTypography.regular);
   });
@@ -74,7 +74,7 @@ void main() {
     );
 
     final heading = tester.widget<Text>(
-      find.text(UITextConstants.editProfileQrCardHeading),
+      find.text(ProfileText.editProfileQrCardHeading),
     );
     final displayName = tester.widget<Text>(find.text(_qrCard.displayName));
     final qrSize = tester.getSize(find.byType(PrettyQrView));
@@ -83,7 +83,7 @@ void main() {
     expect(heading.style?.fontWeight, AppTypography.regular);
     expect(displayName.style?.fontSize, AppTypography.iosBody);
     expect(displayName.style?.fontWeight, AppTypography.regular);
-    expect(find.text(UITextConstants.editProfileQrCardHint), findsNothing);
+    expect(find.text(ProfileText.editProfileQrCardHint), findsNothing);
     expect(qrSize.width, lessThanOrEqualTo(AppSpacing.twoHundredTwenty));
     expect(qrSize.height, lessThanOrEqualTo(AppSpacing.twoHundredTwenty));
     expect(

@@ -2,6 +2,7 @@ package recommendation
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -48,8 +49,11 @@ func NewVectorRecallWithEmbedding(
 }
 
 func (v *VectorRecallWithEmbedding) Recall(ctx context.Context, req rtrec.RecallRequest) ([]rtrec.ContentCandidate, error) {
-	if v.embedder == nil || len(req.Tags) == 0 {
-		return nil, nil
+	if len(req.Tags) == 0 {
+		return nil, rtrec.SkipRecall("vector recall requires interest tags")
+	}
+	if v.embedder == nil {
+		return nil, fmt.Errorf("vector recall embedding gateway is unavailable")
 	}
 
 	queryText := ""
@@ -62,7 +66,7 @@ func (v *VectorRecallWithEmbedding) Recall(ctx context.Context, req rtrec.Recall
 
 	embedding, err := v.embedder.Embed(ctx, queryText)
 	if err != nil {
-		return nil, nil
+		return nil, fmt.Errorf("vector recall embed query: %w", err)
 	}
 
 	return v.source.RecallByVector(ctx, []float64(embedding), req.Limit, req.Vertical)

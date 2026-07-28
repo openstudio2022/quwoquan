@@ -1,10 +1,15 @@
 """规模化数据工程成熟度整改契约测试。"""
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+DATA_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if parent.name == "quwoquan_data"
+)
 TESTS_ROOT = DATA_ROOT / "tests"
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
 for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
@@ -17,8 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from core.io import read_json  # noqa: E402
-from content.release.environment.activation import write_activation_smoke_report  # noqa: E402
+from core.io import read_json, write_json  # noqa: E402
 from content.release.environment.consistency import scan_release_contract  # noqa: E402
 from governance.coverage.benchmark import evaluate_benchmark  # noqa: E402
 from governance.coverage.vertical_inventory import (  # noqa: E402
@@ -49,7 +53,10 @@ def test_vertical_script_governance_passes_with_campus_wrappers():
 
 
 def test_photography_image_rights_are_asset_level_not_platform_name_level():
-    issues = validate_image_rights({"url": "https://example.com/a.jpg", "platform": "Pinterest"}, vertical="photography")
+    issues = validate_image_rights(
+        {"url": "https://example.com/a.jpg", "platform": "Pinterest"},
+        vertical="photography",
+    )
     assert any("missing required field license" in issue for issue in issues)
     assert not any("Pinterest" in issue for issue in issues)
 
@@ -190,7 +197,7 @@ def test_travel_source_registry_is_part_of_vertical_quality():
     assert not any("source registry" in issue for issue in issues), issues
 
 
-def test_post_activation_requires_smoke_report_and_active_release_match():
+def test_post_activation_requires_real_applied_release_receipt():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         contract = {
@@ -209,12 +216,15 @@ def test_post_activation_requires_smoke_report_and_active_release_match():
         )
         assert report["status"] == "failed"
         assert report["blockingIssues"][0]["code"] == "environment_evidence_missing"
-        write_activation_smoke_report(
-            contract,
-            environment="gamma",
-            run_id="apply-1",
-            active_release_id="rel-1",
-            output_root=root,
+        write_json(
+            run / "applied_ref.json",
+            {
+                "schema": "quwoquan_data.applied_release_ref",
+                "environment": "gamma",
+                "releaseId": "rel-1",
+                "releaseRef": "data/releases/rel-1",
+                "evidenceRef": "env/gamma/runs/data-release/rel-1/apply-1",
+            },
         )
         report = scan_release_contract(
             contract,
@@ -224,12 +234,16 @@ def test_post_activation_requires_smoke_report_and_active_release_match():
             phase="post-activation",
         )
         assert report["status"] == "passed", report
-        assert read_json(run / "activation-smoke.json")["activeReleaseId"] == "rel-1"
+        assert read_json(run / "applied_ref.json")["releaseId"] == "rel-1"
 
 
 def test_benchmark_requires_a_runtime_measurement_receipt():
     report = evaluate_benchmark([1000, 10000, 100000])
-    assert [row["targetDailyPosts"] for row in report["targets"]] == [1000, 10000, 100000]
+    assert [row["targetDailyPosts"] for row in report["targets"]] == [
+        1000,
+        10000,
+        100000,
+    ]
     assert all(row["status"] == "blocked" for row in report["targets"])
     assert all(
         "runtime throughput and cost measurement receipt is required" in row["blockers"]
@@ -238,7 +252,9 @@ def test_benchmark_requires_a_runtime_measurement_receipt():
 
 
 def _run_all() -> None:
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
+    fns = [
+        v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)
+    ]
     for fn in fns:
         fn()
         print(f"PASS {fn.__name__}")

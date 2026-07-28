@@ -20,9 +20,8 @@ import 'package:quwoquan_app/ui/circle/widgets/circle_action_bar.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_shell.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_permission_guard.dart';
-import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 import '../typed_circle_query_test_double.dart';
 
@@ -312,11 +311,11 @@ void main() {
       expect(find.text('黄金 · 贵金属 · 资产配置'), findsWidgets);
       expect(find.text('围绕黄金、贵金属和长期资产配置展开事实讨论。'), findsWidgets);
       expect(find.text('8.4k'), findsOneWidget);
-      expect(find.text(UITextConstants.circleMembers), findsWidgets);
+      expect(find.text(CommunityText.circleMembers), findsWidgets);
       expect(find.text('1.2k'), findsOneWidget);
       expect(find.text('326'), findsWidgets);
       expect(find.byType(AppPageErrorState), findsNothing);
-      expect(find.text(UITextConstants.objectTabRecord), findsWidgets);
+      expect(find.text(ObjectHomepageText.objectTabRecord), findsWidgets);
       expect(find.text('讨论'), findsWidgets);
       expect(find.text('成员'), findsWidgets);
       expect(
@@ -343,7 +342,7 @@ void main() {
           of: find.byKey(
             const ValueKey<String>('circle-shell-primary-tabs-inline'),
           ),
-          matching: find.text(UITextConstants.objectTabRecord),
+          matching: find.text(ObjectHomepageText.objectTabRecord),
         ),
         findsOneWidget,
       );
@@ -383,7 +382,7 @@ void main() {
         of: find.byKey(
           const ValueKey<String>('circle-shell-primary-tabs-inline'),
         ),
-        matching: find.text(UITextConstants.objectTabDiscussion),
+        matching: find.text(ObjectHomepageText.objectTabDiscussion),
       );
       await tester.tap(discussionTab);
       await tester.pumpAndSettle();
@@ -397,7 +396,7 @@ void main() {
       await _pumpShell(tester, circleQuery: _ImpactCircleQuery());
 
       expect(
-        find.text(UITextConstants.objectImpactTitleCircle),
+        find.text(ObjectHomepageText.objectImpactTitleCircle),
         findsOneWidget,
       );
       expect(find.text('12人在这里建立了新连接'), findsOneWidget);
@@ -429,12 +428,12 @@ void main() {
       );
 
       expect(
-        find.text(UITextConstants.objectImpactTitleCircle),
+        find.text(ObjectHomepageText.objectImpactTitleCircle),
         findsOneWidget,
       );
       expect(find.text('12人在这里建立了新连接'), findsOneWidget);
       expect(
-        find.text(UITextConstants.objectIntersectionEmptyCircle),
+        find.text(ObjectHomepageText.objectIntersectionEmptyCircle),
         findsOneWidget,
       );
       expect(find.textContaining('成为第一个'), findsNothing);
@@ -448,7 +447,7 @@ void main() {
 
       expect(find.text('12人在这里建立了新连接'), findsWidgets);
       expect(
-        find.textContaining(UITextConstants.impactEnumerableHintCircle),
+        find.textContaining(ObjectHomepageText.impactEnumerableHintCircle),
         findsOneWidget,
       );
     });
@@ -456,14 +455,20 @@ void main() {
     testWidgets('圈子影响为空时整体收起', (tester) async {
       await _pumpShell(tester, circleQuery: _EmptyImpactCircleQuery());
 
-      expect(find.text(UITextConstants.objectImpactTitleCircle), findsNothing);
+      expect(
+        find.text(ObjectHomepageText.objectImpactTitleCircle),
+        findsNothing,
+      );
     });
 
     testWidgets('圈子影响错误时不阻塞主页并收起影响卡', (tester) async {
       await _pumpShell(tester, circleQuery: _ImpactErrorCircleQuery());
 
       expect(find.byType(CircleShell), findsOneWidget);
-      expect(find.text(UITextConstants.objectImpactTitleCircle), findsNothing);
+      expect(
+        find.text(ObjectHomepageText.objectImpactTitleCircle),
+        findsNothing,
+      );
     });
 
     testWidgets('私密圈子游客访问时显示内容门禁', (tester) async {
@@ -527,7 +532,7 @@ void main() {
         find.byKey(const ValueKey<String>('object-chrome-more')),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text(UITextConstants.callGroupVoice));
+      await tester.tap(find.text(CallText.callGroupVoice));
       await tester.pumpAndSettle();
 
       expect(pickerIntents, hasLength(1));
@@ -567,9 +572,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(AppBottomModalSurface), findsOneWidget);
-      expect(find.text(UITextConstants.copyLink), findsOneWidget);
+      expect(find.text(FoundationText.copyLink), findsOneWidget);
 
-      await tester.tap(find.text(UITextConstants.copyLink));
+      await tester.tap(find.text(FoundationText.copyLink));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 3));
 
@@ -591,7 +596,7 @@ void main() {
 
       final joinFinder = find.descendant(
         of: find.byType(CircleActionBar),
-        matching: find.text(UITextConstants.circleJoinApproval),
+        matching: find.text(CommunityText.circleJoinApproval),
       );
       await tester.tap(joinFinder);
       await tester.pump();
@@ -600,14 +605,14 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(CircleActionBar),
-          matching: find.text(UITextConstants.joinPending),
+          matching: find.text(CommunityText.joinPending),
         ),
         findsOneWidget,
       );
       expect(
         find.descendant(
           of: find.byType(CircleActionBar),
-          matching: find.text(UITextConstants.circleActionEnterDiscussion),
+          matching: find.text(ObjectHomepageText.circleActionEnterDiscussion),
         ),
         findsOneWidget,
       );
@@ -619,7 +624,7 @@ void main() {
       await _pumpShell(tester, circleQuery: _ErrorCircleQuery());
 
       expect(find.byType(AppPageErrorState), findsOneWidget);
-      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+      expect(find.text(SearchText.reload), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('circle-shell-error-back')),
         findsOneWidget,
@@ -639,7 +644,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.byIcon(CupertinoIcons.xmark), findsNothing);
-      expect(find.text(UITextConstants.back), findsNothing);
+      expect(find.text(ContentText.back), findsNothing);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('circle-shell-error-back')),

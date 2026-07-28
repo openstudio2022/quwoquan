@@ -33,7 +33,7 @@
 - [`homepage-content-and-question-aggregation`](./homepage-content-and-question-aggregation/spec.md)：记录/讨论聚合四态齐备且点击回流埋点在。
 - [`homepage-contextual-publish-entry`](./homepage-contextual-publish-entry/spec.md)：主页内入口与全局创作入口产出同一挂载语义。
 - [`homepage-overview-and-module-shell`](./homepage-overview-and-module-shell/spec.md)：用户可见文案禁止出现“实体”，按具体类型或对象名表达，例如 `大学 · 北京海淀`、`认识清华大学`、`大家在聊清华大学`；兜底使用“这个主页”。
-- [`homepage-review-read-and-score-summary`](./homepage-review-read-and-score-summary/spec.md)：五个 operation（create/update/delete/list/mine）在 alpha mock 与 remote 行为同构且全部 per-op commercial ready。
+- [`homepage-review-read-and-score-summary`](./homepage-review-read-and-score-summary/spec.md)：五个 operation（create/update/delete/list/mine）在四环境 Remote 与 local_contract typed double 行为同构且全部 per-op commercial ready。
 
 ## 5. 能力要求
 

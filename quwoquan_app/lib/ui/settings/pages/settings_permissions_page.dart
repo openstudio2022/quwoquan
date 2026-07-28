@@ -17,7 +17,7 @@ class SettingsPermissionsPage extends ConsumerWidget {
     final contactsAvailable = ref.watch(platformCapabilitiesProvider).contacts;
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
-      title: UITextConstants.settingsPermissionManagement,
+      title: SettingsText.settingsPermissionManagement,
       onBack: () {
         if (context.canPop()) {
           context.pop();
@@ -39,7 +39,7 @@ class SettingsPermissionsPage extends ConsumerWidget {
               SettingsInsetGroupedSection(
                 isDark: isDark,
                 density: SettingsInsetSectionDensity.compact,
-                header: UITextConstants.settingsPermissionLayerSection,
+                header: SettingsText.settingsPermissionLayerSection,
                 child: _ContactsPermissionRow(
                   isDark: isDark,
                   available: contactsAvailable,
@@ -63,12 +63,12 @@ class _ContactsPermissionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return SettingsInsetFormRow(
       isDark: isDark,
-      label: UITextConstants.settingsContactsPermission,
+      label: SettingsText.settingsContactsPermission,
       trailing: SettingsInsetTrailingText(
         isDark: isDark,
         value: available
-            ? UITextConstants.openSettings
-            : UITextConstants.settingsPermissionUnavailable,
+            ? FoundationText.openSettings
+            : SettingsText.settingsPermissionUnavailable,
       ),
       onTap: available
           ? () => unawaited(

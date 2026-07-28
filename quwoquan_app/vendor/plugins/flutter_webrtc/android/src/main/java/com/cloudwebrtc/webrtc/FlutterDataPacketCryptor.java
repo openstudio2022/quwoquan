@@ -29,7 +29,11 @@ class FlutterDataPacketCryptor {
 
     public boolean handleMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
         String method_name = call.method;
-        Map<String, Object> params = (Map<String, Object>) call.arguments;
+        if (!(call.arguments instanceof Map<?, ?>)) {
+            result.error("invalidArguments", "Flutter method arguments must be a map", null);
+            return true;
+        }
+        Map<String, Object> params = new ConstraintsMap((Map<?, ?>) call.arguments).toMap();
         if (method_name.equals("createDataPacketCryptor")) {
             createDataPacketCryptor(params, result);
         } else if(method_name.equals("dataPacketCryptorEncrypt")) {

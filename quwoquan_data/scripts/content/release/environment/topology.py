@@ -10,9 +10,13 @@ from typing import Any, Mapping
 from core.io import read_json
 from core.paths import OUTPUT_ROOT, REPO_ROOT
 from content.release.model import DeploymentEnvironment
+from quwoquan_ops.cli.lib.environment_topology import (
+    get_environment,
+    get_target,
+    load_environment_topology,
+)
 
 
-_ENVIRONMENTS_ROOT = REPO_ROOT / "quwoquan_ops" / "environments"
 _PORTS_PATH = REPO_ROOT / "quwoquan_ops" / "environments" / "local_env_port_manifest.yaml"
 
 
@@ -30,7 +34,9 @@ class EnvironmentReleaseTarget:
     mongo_uri: str
     user_postgres_dsn: str
     media_sync_root: Path | None
-    media_base_url: str
+    media_avatar_base_url: str
+    media_image_base_url: str
+    media_video_base_url: str
     api_base_url: str
     missing_requirements: tuple[str, ...]
 
@@ -40,11 +46,11 @@ class EnvironmentReleaseTarget:
 
     @property
     def api_resolve_host(self) -> str:
-        return "127.0.0.1" if self.mode is EnvironmentReleaseMode.LOCAL_IMPORT else ""
+        return ""
 
     @property
     def api_insecure_tls(self) -> bool:
-        return self.mode is EnvironmentReleaseMode.LOCAL_IMPORT
+        return False
 
 
 def _mapping(value: Any, *, label: str) -> Mapping[str, Any]:
@@ -66,21 +72,16 @@ def _local_port(port_manifest: Mapping[str, Any], profile: str, role: str) -> in
 
 def resolve_environment_release_target(env: str) -> EnvironmentReleaseTarget:
     environment = DeploymentEnvironment(str(env))
-    runtime_path = _ENVIRONMENTS_ROOT / environment.value / "runtime.yaml"
-    environment_row = _mapping(read_json(runtime_path), label=f"environment {environment.value}")
-    if (
-        environment_row.get("schema") != "environment-runtime"
-        or environment_row.get("environment") != environment.value
-    ):
-        raise RuntimeError(f"environment runtime identity mismatch: {runtime_path}")
-    targets = _mapping(environment_row.get("targets"), label="environment targets")
+    manifest = load_environment_topology()
+    environment_row = get_environment(manifest, environment.value)
     target_name = str(environment_row.get("dataReleaseTarget") or "").strip()
-    target = _mapping(targets.get(target_name), label=f"data release target {target_name}")
+    target = get_target(manifest, target_name)
     release = _mapping(target.get("dataRelease"), label=f"{target_name}.dataRelease")
     mode = EnvironmentReleaseMode(str(release.get("mode") or ""))
     public_bases = _mapping(target.get("publicBases"), label=f"{target_name}.publicBases")
-    media_base_key = str(release.get("mediaPublicBaseKey") or "")
-    media_base_url = str(public_bases.get(media_base_key) or "").rstrip("/")
+    media_avatar_base_url = str(public_bases.get("mediaAvatar") or "").rstrip("/")
+    media_image_base_url = str(public_bases.get("mediaImage") or "").rstrip("/")
+    media_video_base_url = str(public_bases.get("mediaVideo") or "").rstrip("/")
     api_base_url = str(public_bases.get("api") or "").rstrip("/")
     missing: list[str] = []
 
@@ -92,7 +93,9 @@ def resolve_environment_release_target(env: str) -> EnvironmentReleaseTarget:
             mongo_uri="",
             user_postgres_dsn="",
             media_sync_root=None,
-            media_base_url=media_base_url,
+            media_avatar_base_url=media_avatar_base_url,
+            media_image_base_url=media_image_base_url,
+            media_video_base_url=media_video_base_url,
             api_base_url=api_base_url,
             missing_requirements=(),
         )
@@ -116,7 +119,9 @@ def resolve_environment_release_target(env: str) -> EnvironmentReleaseTarget:
                 f"postgres://quwoquan:quwoquan@127.0.0.1:{postgres_port}/quwoquan?sslmode=disable"
             ),
             media_sync_root=OUTPUT_ROOT / "env" / environment.value / "local" / target_name / media_ref,
-            media_base_url=media_base_url,
+            media_avatar_base_url=media_avatar_base_url,
+            media_image_base_url=media_image_base_url,
+            media_video_base_url=media_video_base_url,
             api_base_url=api_base_url,
             missing_requirements=(),
         )
@@ -141,7 +146,9 @@ def resolve_environment_release_target(env: str) -> EnvironmentReleaseTarget:
         mongo_uri=mongo_uri,
         user_postgres_dsn=user_postgres_dsn,
         media_sync_root=Path(media_root).expanduser() if media_root else None,
-        media_base_url=media_base_url,
+        media_avatar_base_url=media_avatar_base_url,
+        media_image_base_url=media_image_base_url,
+        media_video_base_url=media_video_base_url,
         api_base_url=api_base_url,
         missing_requirements=tuple(missing),
     )

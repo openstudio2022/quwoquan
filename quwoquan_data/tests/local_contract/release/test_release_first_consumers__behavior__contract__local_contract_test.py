@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from core.media_asset_url import materialize_release_media
+from core.release_media_binding import bind_release_object_media_assets
 from content.release.canonical.build_lookup_indexes import build_publish_lookup_indexes
 from content.release.environment.consistency import scan_release_contract
 
@@ -48,7 +49,30 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
     _write(post / "evidence/rights.json", {"rights": {"mode": "licensed"}})
     _write(post / "creator.refs.json", {"creatorRefs": ["creator-a"]})
     _write(post / "tag.refs.json", {"tagRefs": ["Topic/旅行"]})
-    _write(post / "asset.refs.json", {"assets": [{"objectKey": key, "sha256": f"sha256:{digest}"}]})
+    _write(
+        post / "asset.refs.json",
+        {
+            "assets": [
+                {
+                    "assetId": "asset-a",
+                    "kind": "image",
+                    "mimeType": "image/jpeg",
+                    "objectKey": key,
+                    "sha256": f"sha256:{digest}",
+                }
+            ]
+        },
+    )
+    _write(
+        post / "rights_snapshots/asset-a.json",
+        {
+            "assetId": "asset-a",
+            "manifestAsset": {
+                "assetId": "asset-a",
+                "sha256": f"sha256:{digest}",
+            },
+        },
+    )
     creator_header = {
         "schema": "quwoquan_data.creator_object",
         "creatorId": "creator-a",
@@ -100,12 +124,16 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
         canonical / "tags/Topic/旅行",
         release / "payload/objects/tags/Topic/旅行",
     )
-    materialize_release_media(
+    media_manifest = materialize_release_media(
         release_id="release-a",
         post_refs=["posts/article/攻略/甲/1"],
         entity_refs=[],
         publish_root=canonical,
         release_root=tmp_path / "release",
+    )
+    bind_release_object_media_assets(
+        objects_root=release / "payload/objects",
+        manifest=media_manifest,
     )
     return canonical, release
 
@@ -133,6 +161,8 @@ def test_release_first_consumer_closure_and_deterministic_index(tmp_path: Path) 
     assert first["indexHash"] == second["indexHash"]
     media = json.loads((release / "payload" / "media_manifest.json").read_text(encoding="utf-8"))
     assert "cdnUrl" not in json.dumps(media)
+    assert "objectKey" not in json.dumps(media)
+    assert media["assets"][0]["publicSliceKey"].startswith("media/image/s/asset/")
 
 
 def test_release_consumer_rejects_noncanonical_schema_and_create_once_drift(tmp_path: Path) -> None:
@@ -164,7 +194,24 @@ def test_release_consumer_rejects_unrelated_canonical_media(tmp_path: Path) -> N
     _write(canonical / key, payload)
     media_path = release / "payload/media_manifest.json"
     media = json.loads(media_path.read_text(encoding="utf-8"))
-    media["assets"].append({"objectKey": key, "sha256": f"sha256:{digest}", "bytes": len(payload)})
+    media["assets"].append(
+        {
+            "assetId": "unrelated",
+            "kind": "image",
+            "version": 1,
+            "contentType": "image/jpeg",
+            "publicSliceKey": "media/image/s/asset/unrelated/v1/source.jpg",
+            "sha256": f"sha256:{digest}",
+            "bytes": len(payload),
+            "ownerRefs": ["posts/article/攻略/无关/1"],
+            "rightsSnapshotRefs": [],
+        }
+    )
+    _write(
+        release / "payload/media/image/s/asset/unrelated/v1/source.jpg",
+        payload,
+    )
+    media["counts"]["assets"] += 1
     _write(media_path, media)
 
     report = scan_release_contract(
@@ -175,3 +222,45 @@ def test_release_consumer_rejects_unrelated_canonical_media(tmp_path: Path) -> N
 
     assert report["status"] == "failed"
     assert any(issue["code"] == "release_media_closure_mismatch" for issue in report["blockingIssues"])
+
+
+def test_release_consumer_rejects_public_slice_identity_drift(tmp_path: Path) -> None:
+    canonical, release = _fixture(tmp_path)
+    media_path = release / "payload/media_manifest.json"
+    media = json.loads(media_path.read_text(encoding="utf-8"))
+    media["assets"][0]["kind"] = "video"
+    _write(media_path, media)
+
+    report = scan_release_contract(
+        json.loads((release / "payload/desired_state.json").read_text(encoding="utf-8")),
+        publish_root=canonical,
+        release_root=release,
+    )
+
+    assert report["status"] == "failed"
+    assert any(
+        issue["code"] == "release_media_public_slice_identity_mismatch"
+        for issue in report["blockingIssues"]
+    )
+
+
+def test_release_consumer_rejects_private_cas_in_object_snapshot(tmp_path: Path) -> None:
+    canonical, release = _fixture(tmp_path)
+    asset_refs_path = release / "payload/objects/posts/article/攻略/甲/1/asset.refs.json"
+    asset_refs = json.loads(asset_refs_path.read_text(encoding="utf-8"))
+    asset_refs["assets"][0]["objectKey"] = (
+        "media/objects/sha256/aa/bb/" + "a" * 64 + ".jpg"
+    )
+    _write(asset_refs_path, asset_refs)
+
+    report = scan_release_contract(
+        json.loads((release / "payload/desired_state.json").read_text(encoding="utf-8")),
+        publish_root=canonical,
+        release_root=release,
+    )
+
+    assert report["status"] == "failed"
+    assert any(
+        issue["code"] == "release_object_private_storage_leak"
+        for issue in report["blockingIssues"]
+    )

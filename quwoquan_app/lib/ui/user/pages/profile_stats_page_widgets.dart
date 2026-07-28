@@ -4,11 +4,13 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
   Widget _buildBody(BuildContext context, bool isDark) {
     if (_bundleError != null && _bundle == null) {
       return AppPageErrorState(
-        semantic: runtimeErrorSemantic(
-          context,
-          error: _bundleError!,
-          category: UiErrorCategory.pageLoad,
-          scope: UiErrorScope.page,
+        semantic: ensureRetryUiErrorSemantic(
+          runtimeErrorSemantic(
+            context,
+            error: _bundleError!,
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+          ),
         ),
         onAction: (action) async {
           if (action.type == UiErrorActionType.retry ||
@@ -42,11 +44,13 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
                 AppSpacing.containerLg,
               ),
               child: AppSectionErrorCard(
-                semantic: runtimeErrorSemantic(
-                  context,
-                  error: memory.loadError!,
-                  category: UiErrorCategory.sectionLoad,
-                  scope: UiErrorScope.section,
+                semantic: ensureRetryUiErrorSemantic(
+                  runtimeErrorSemantic(
+                    context,
+                    error: memory.loadError!,
+                    category: UiErrorCategory.sectionLoad,
+                    scope: UiErrorScope.section,
+                  ),
                 ),
                 onAction: (action) async {
                   if (action.type == UiErrorActionType.retry ||
@@ -119,11 +123,11 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
   Widget _buildPermissionState(bool isDark) {
     final blocked = _isBlockedProfile;
     final title = blocked
-        ? UITextConstants.profileStatsBlockedTitle
-        : UITextConstants.profileStatsPrivateTitle;
+        ? ProfileText.profileStatsBlockedTitle
+        : ProfileText.profileStatsPrivateTitle;
     final message = blocked
-        ? UITextConstants.profileStatsBlockedBody
-        : UITextConstants.profileStatsPrivateBody;
+        ? ProfileText.profileStatsBlockedBody
+        : ProfileText.profileStatsPrivateBody;
     return Center(
       child: Padding(
         padding: EdgeInsets.all(AppSpacing.containerMd),
@@ -165,7 +169,7 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
         SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsets.only(bottom: AppSpacing.containerLg),
-            child: Center(child: CupertinoActivityIndicator()),
+            child: AppRequestFeedback.section(),
           ),
         ),
       if (memory.appendError != null)
@@ -178,11 +182,13 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
               AppSpacing.containerLg,
             ),
             child: AppListAppendErrorFooter(
-              semantic: runtimeErrorSemantic(
-                context,
-                error: memory.appendError!,
-                category: UiErrorCategory.listAppend,
-                scope: UiErrorScope.section,
+              semantic: ensureRetryUiErrorSemantic(
+                runtimeErrorSemantic(
+                  context,
+                  error: memory.appendError!,
+                  category: UiErrorCategory.listAppend,
+                  scope: UiErrorScope.section,
+                ),
               ),
               onAction: (action) async {
                 if (action.type == UiErrorActionType.retry ||
@@ -253,7 +259,7 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
                       runSpacing: AppSpacing.intraGroupXs,
                       children: [
                         Text(
-                          '${circle.memberCount} ${UITextConstants.profileStatsCircleMembersUnit}',
+                          '${circle.memberCount} ${ProfileText.profileStatsCircleMembersUnit}',
                           style: TextStyle(
                             fontSize: AppTypography.iosFootnote,
                             color: subtitleColor,
@@ -267,7 +273,7 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
                           ),
                         ),
                         Text(
-                          '${circle.postCount} ${UITextConstants.profileStatsCircleCreationsUnit}',
+                          '${circle.postCount} ${ProfileText.profileStatsCircleCreationsUnit}',
                           style: TextStyle(
                             fontSize: AppTypography.iosFootnote,
                             color: subtitleColor,
@@ -406,21 +412,21 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
     }
     final (label, isPrimary, onPressed) = switch (capability.relationState) {
       'followed_by' => (
-        UITextConstants.followBack,
+        FoundationText.followBack,
         true,
         () => _handleFollowAction(row),
       ),
       'following' => (
-        UITextConstants.following,
+        FoundationText.following,
         false,
         () => _showFollowingActionSheet(row),
       ),
       'mutual' => (
-        UITextConstants.profileStatsMutual,
+        ProfileText.profileStatsMutual,
         false,
         () => _showFollowingActionSheet(row),
       ),
-      _ => (UITextConstants.follow, true, () => _handleFollowAction(row)),
+      _ => (FoundationText.follow, true, () => _handleFollowAction(row)),
     };
     final fillColor = isPrimary
         ? AppColors.iosAccent(context).withValues(alpha: 0.12)
@@ -472,18 +478,18 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
   ) {
     final segments = <String>[];
     if (capability.relationState == 'mutual') {
-      segments.add(UITextConstants.relatedMutualFollow);
+      segments.add(ContactText.relatedMutualFollow);
     } else if (capability.relationState == 'followed_by') {
-      segments.add(UITextConstants.profileStatsFollowedBy);
+      segments.add(ProfileText.profileStatsFollowedBy);
     } else if (capability.relationState == 'following') {
-      segments.add(UITextConstants.following);
+      segments.add(FoundationText.following);
     }
     final visibility = _profileVisibilityText(row.profileVisibility);
     if (visibility.isNotEmpty) {
       segments.add(visibility);
     }
     if (segments.isEmpty) {
-      return UITextConstants.visibilityPublic;
+      return CreationText.visibilityPublic;
     }
     return segments.join(' · ');
   }
@@ -493,27 +499,27 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
       case 'contacts':
       case 'followers':
       case 'semi':
-        return UITextConstants.profileStatsVisibilityContacts;
+        return ProfileText.profileStatsVisibilityContacts;
       case 'private':
-        return UITextConstants.profileStatsVisibilitySelfOnly;
+        return ProfileText.profileStatsVisibilitySelfOnly;
       case 'blocked':
       case 'restricted':
-        return UITextConstants.profileStatsVisibilityBlocked;
+        return ProfileText.profileStatsVisibilityBlocked;
       case 'public':
       default:
-        return UITextConstants.visibilityPublic;
+        return CreationText.visibilityPublic;
     }
   }
 
   String _circleVisibilityText(String raw) {
     switch (raw) {
       case 'members':
-        return UITextConstants.visibilityMembers;
+        return CommunityText.visibilityMembers;
       case 'private':
-        return UITextConstants.profileStatsVisibilitySelfOnly;
+        return ProfileText.profileStatsVisibilitySelfOnly;
       case 'public':
       default:
-        return UITextConstants.visibilityPublic;
+        return CreationText.visibilityPublic;
     }
   }
 
@@ -521,30 +527,30 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
     final title = switch (tab) {
       _ProfileStatsTab.fans =>
         (_bundle?.viewerContext.isOwner ?? false)
-            ? UITextConstants.profileStatsEmptyFansMineTitle
-            : UITextConstants.profileStatsEmptyFansOtherTitle,
+            ? ProfileText.profileStatsEmptyFansMineTitle
+            : ProfileText.profileStatsEmptyFansOtherTitle,
       _ProfileStatsTab.following =>
         (_bundle?.viewerContext.isOwner ?? false)
-            ? UITextConstants.profileStatsEmptyFollowingMineTitle
-            : UITextConstants.profileStatsEmptyFollowingOtherTitle,
+            ? ProfileText.profileStatsEmptyFollowingMineTitle
+            : ProfileText.profileStatsEmptyFollowingOtherTitle,
       _ProfileStatsTab.circles =>
         (_bundle?.viewerContext.isOwner ?? false)
-            ? UITextConstants.profileStatsEmptyCirclesMineTitle
-            : UITextConstants.profileStatsEmptyCirclesOtherTitle,
+            ? ProfileText.profileStatsEmptyCirclesMineTitle
+            : ProfileText.profileStatsEmptyCirclesOtherTitle,
     };
     final message = switch (tab) {
       _ProfileStatsTab.fans =>
         (_bundle?.viewerContext.isOwner ?? false)
-            ? UITextConstants.profileStatsEmptyFansMineBody
-            : UITextConstants.profileStatsEmptyFansOtherBody,
+            ? ProfileText.profileStatsEmptyFansMineBody
+            : ProfileText.profileStatsEmptyFansOtherBody,
       _ProfileStatsTab.following =>
         (_bundle?.viewerContext.isOwner ?? false)
-            ? UITextConstants.profileStatsEmptyFollowingMineBody
-            : UITextConstants.profileStatsEmptyFollowingOtherBody,
+            ? ProfileText.profileStatsEmptyFollowingMineBody
+            : ProfileText.profileStatsEmptyFollowingOtherBody,
       _ProfileStatsTab.circles =>
         (_bundle?.viewerContext.isOwner ?? false)
-            ? UITextConstants.profileStatsEmptyCirclesMineBody
-            : UITextConstants.profileStatsEmptyCirclesOtherBody,
+            ? ProfileText.profileStatsEmptyCirclesMineBody
+            : ProfileText.profileStatsEmptyCirclesOtherBody,
     };
     final showCirclesCta =
         tab == _ProfileStatsTab.circles &&
@@ -554,7 +560,7 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
       title: title,
       message: message,
       actionLabel: showCirclesCta
-          ? UITextConstants.profileStatsDiscoverCircles
+          ? ProfileText.profileStatsDiscoverCircles
           : null,
       onAction: showCirclesCta
           ? () async {

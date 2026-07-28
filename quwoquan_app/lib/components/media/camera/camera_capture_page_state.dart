@@ -28,8 +28,7 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
   bool _recordedVideoPreviewFailed = false;
   Timer? _recordTimer;
 
-  ImageEditorFilterRepository get _filterRepository =>
-      widget.filterRepository;
+  ImageEditorFilterRepository get _filterRepository => widget.filterRepository;
 
   bool get _isVideoMode => _mode == MediaPickerEntryMode.video;
 
@@ -134,16 +133,16 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
     return UiErrorSemantic(
       category: UiErrorCategory.pageLoad,
       scope: UiErrorScope.page,
-      title: UITextConstants.cameraUnavailableTitle,
-      message: UITextConstants.cameraUnavailable,
-      secondaryMessage: UITextConstants.cameraUnavailableRecovery,
+      title: MediaText.cameraUnavailableTitle,
+      message: MediaText.cameraUnavailable,
+      secondaryMessage: MediaText.cameraUnavailableRecovery,
       primaryAction: const UiErrorAction(
         type: UiErrorActionType.retry,
-        label: UITextConstants.tryAgain,
+        label: ContentText.tryAgain,
       ),
       secondaryAction: const UiErrorAction(
         type: UiErrorActionType.dismiss,
-        label: UITextConstants.back,
+        label: ContentText.back,
       ),
     );
   }
@@ -152,16 +151,16 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
     return UiErrorSemantic(
       category: UiErrorCategory.permissionRequired,
       scope: UiErrorScope.page,
-      title: UITextConstants.cameraPermissionRequiredTitle,
+      title: MediaText.cameraPermissionRequiredTitle,
       message: _isVideoMode
-          ? UITextConstants.cameraVideoPermissionRequired
-          : UITextConstants.cameraPermissionRequired,
+          ? MediaText.cameraVideoPermissionRequired
+          : MediaText.cameraPermissionRequired,
       secondaryMessage: _isVideoMode
-          ? UITextConstants.cameraVideoPermissionRequiredRecovery
-          : UITextConstants.cameraPermissionRequiredRecovery,
+          ? MediaText.cameraVideoPermissionRequiredRecovery
+          : MediaText.cameraPermissionRequiredRecovery,
       primaryAction: const UiErrorAction(
         type: UiErrorActionType.openSettings,
-        label: UITextConstants.openSettings,
+        label: FoundationText.openSettings,
       ),
     );
   }
@@ -212,11 +211,11 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
       semantic: const UiErrorSemantic(
         category: UiErrorCategory.submit,
         scope: UiErrorScope.global,
-        title: UITextConstants.cameraCaptureNotCompletedTitle,
-        message: UITextConstants.cameraCaptureFailed,
+        title: MediaText.cameraCaptureNotCompletedTitle,
+        message: MediaText.cameraCaptureFailed,
         primaryAction: UiErrorAction(
           type: UiErrorActionType.dismiss,
-          label: UITextConstants.confirm,
+          label: FoundationText.confirm,
         ),
         dismissible: true,
       ),
@@ -232,11 +231,11 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
       semantic: const UiErrorSemantic(
         category: UiErrorCategory.submit,
         scope: UiErrorScope.global,
-        title: UITextConstants.cameraVideoCaptureNotCompletedTitle,
-        message: UITextConstants.cameraVideoCaptureFailed,
+        title: MediaText.cameraVideoCaptureNotCompletedTitle,
+        message: MediaText.cameraVideoCaptureFailed,
         primaryAction: UiErrorAction(
           type: UiErrorActionType.dismiss,
-          label: UITextConstants.confirm,
+          label: FoundationText.confirm,
         ),
         dismissible: true,
       ),
@@ -610,9 +609,9 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
       if (_isRecording) {
         return _formatDuration(_recordedMs);
       }
-      return UITextConstants.cameraVideoModeTitle;
+      return MediaText.cameraVideoModeTitle;
     }
-    return UITextConstants.cameraPhotoModeTitle;
+    return MediaText.cameraPhotoModeTitle;
   }
 
   Widget _wrapWithCameraFilter(Widget child) {
@@ -750,6 +749,7 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
         }
         return;
       case UiErrorActionType.login:
+      case UiErrorActionType.openUpdate:
         return;
       case UiErrorActionType.openSettings:
         await AppPermissionCoordinator.instance.openSettings(
@@ -772,7 +772,7 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
       height: double.infinity,
       errorBuilder: (context, error, stackTrace) => Center(
         child: Text(
-          UITextConstants.cameraCaptureFailed,
+          MediaText.cameraCaptureFailed,
           style: TextStyle(
             color: AppColors.white,
             fontSize: AppTypography.base,
@@ -808,8 +808,8 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
     return _buildConfirmationActions(
       retakeKey: const ValueKey<String>('camera-retake-photo-action'),
       useKey: const ValueKey<String>('camera-use-photo-action'),
-      retakeLabel: UITextConstants.cameraRetakePhoto,
-      useLabel: UITextConstants.cameraUsePhoto,
+      retakeLabel: MediaText.cameraRetakePhoto,
+      useLabel: MediaText.cameraUsePhoto,
       onRetake: _retakePhoto,
       onUse: () => unawaited(_useCapturedPhoto()),
     );
@@ -819,8 +819,8 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
     return _buildConfirmationActions(
       retakeKey: const ValueKey<String>('camera-retake-video-action'),
       useKey: const ValueKey<String>('camera-use-video-action'),
-      retakeLabel: UITextConstants.cameraVideoRetake,
-      useLabel: UITextConstants.cameraVideoNext,
+      retakeLabel: MediaText.cameraVideoRetake,
+      useLabel: MediaText.cameraVideoNext,
       onRetake: _retakeVideo,
       onUse: _useRecordedVideo,
       previewUnavailable: _recordedVideoPreviewFailed,
@@ -898,7 +898,7 @@ class _RecordedVideoPreviewState extends State<_RecordedVideoPreview> {
                 ),
                 SizedBox(height: AppSpacing.interGroupSm),
                 Text(
-                  UITextConstants.cameraVideoPreviewUnavailable,
+                  MediaText.cameraVideoPreviewUnavailable,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.white,
@@ -908,7 +908,7 @@ class _RecordedVideoPreviewState extends State<_RecordedVideoPreview> {
                 ),
                 SizedBox(height: AppSpacing.intraGroupXs),
                 Text(
-                  UITextConstants.cameraVideoPreviewUnavailableHint,
+                  MediaText.cameraVideoPreviewUnavailableHint,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.white.withValues(alpha: 0.72),

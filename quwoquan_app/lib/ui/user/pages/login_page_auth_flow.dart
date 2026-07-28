@@ -32,7 +32,7 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
           accountHint: entryBeforeSubmit.accountHint,
           carrierHint: entryBeforeSubmit.carrierHint,
           phoneOtpState: entryBeforeSubmit.phoneOtpState,
-          message: UITextConstants.loginQuickLoginUnavailableHint,
+          message: FoundationText.loginQuickLoginUnavailableHint,
           primaryAction: entryBeforeSubmit.primaryAction,
           primaryProvider: entryBeforeSubmit.primaryProvider,
           quickLoginPhone: entryBeforeSubmit.quickLoginPhone,
@@ -65,11 +65,12 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
       }
       if (entryBeforeSubmit.resolvedPrimaryAction ==
           LoginPrimaryAction.continueSession) {
-        if (stored.refreshToken.trim().isNotEmpty) {
+        final quickLoginRefreshToken = stored.quickLoginRefreshToken;
+        if (quickLoginRefreshToken.isNotEmpty) {
           final result = await ref
               .read(accountSessionLifecycleCommandWriterProvider)
               .refreshToken(
-                RefreshTokenCommand(refreshToken: stored.refreshToken.trim()),
+                RefreshTokenCommand(refreshToken: quickLoginRefreshToken),
               );
           if (!_isCurrentLoginAttempt(attempt)) {
             return;
@@ -96,7 +97,7 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
             kind: LoginEntryKind.phoneOtp,
             phoneOtpState: LoginPhoneOtpState.idle(),
             primaryAction: LoginPrimaryAction.requestOtp,
-            message: UITextConstants.loginQuickLoginUnavailableHint,
+            message: FoundationText.loginQuickLoginUnavailableHint,
           ),
         );
         return;
@@ -120,15 +121,15 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
             .read(accountSessionLoginCommandWriterProvider)
             .loginOneTap(
               LoginOneTapCommand(
-              vendor: vendor,
-              carrierToken: token,
-              deviceId: session.installId.isNotEmpty
-                  ? session.installId
-                  : stored.installId,
-              platform: CloudRequestHeaders.platform(),
-              appVersion: CloudRequestHeaders.appVersion,
-              agreementVersion: AuthLegalConfig.agreementVersion,
-              privacyVersion: AuthLegalConfig.privacyVersion,
+                vendor: vendor,
+                carrierToken: token,
+                deviceId: session.installId.isNotEmpty
+                    ? session.installId
+                    : stored.installId,
+                platform: CloudRequestHeaders.platform(),
+                appVersion: CloudRequestHeaders.appVersion,
+                agreementVersion: AuthLegalConfig.agreementVersion,
+                privacyVersion: AuthLegalConfig.privacyVersion,
               ),
             );
       }

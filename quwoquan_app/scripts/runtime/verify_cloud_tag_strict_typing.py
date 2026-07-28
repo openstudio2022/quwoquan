@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """App 标签链路 StrictTyping 门禁。
 
-手写 Tag Remote、pure contracts 与 Alpha adapter 不得用 `dynamic` 或
+手写 Tag Remote 与 pure contracts 不得用 `dynamic` 或
 `Map<String, dynamic>` 穿透业务边界；`Object?` 只允许停留在解码入口，方法返回
 必须是 DTO 或 typed Slice。
 
 scope:
   - quwoquan_app/lib/cloud/remote/tag/**/*.dart
   - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/tag/**/*.dart
-  - quwoquan_app/packages/quwoquan_cloud_mock/lib/src/tag/**/*.dart
 
 FAIL 条件:
   - `dynamic` / `Map<String, dynamic>`。
@@ -33,13 +32,6 @@ TAG_SCOPES = (
     / "quwoquan_app"
     / "packages"
     / "quwoquan_cloud_contracts"
-    / "lib"
-    / "src"
-    / "tag",
-    ROOT
-    / "quwoquan_app"
-    / "packages"
-    / "quwoquan_cloud_mock"
     / "lib"
     / "src"
     / "tag",
@@ -96,7 +88,7 @@ def main() -> int:
 
     print(
         "verify_cloud_tag_strict_typing: OK"
-        "（Remote/pure contracts/Alpha adapter 无弱类型穿透）"
+        "（Remote/pure contracts 无弱类型穿透）"
     )
     return 0
 

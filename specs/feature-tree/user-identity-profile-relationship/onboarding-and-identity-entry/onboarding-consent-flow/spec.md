@@ -17,7 +17,7 @@
 ### In Scope
 
 - “引导同意流程”的输入、可观察主路径、失败语义以及与父能力的交接。
-- 登录页勾选用户协议 / 隐私政策后才允许手机号或一键登录提交。
+- 登录动作在协议未确认时弹出统一确认 sheet；确认后恢复且只恢复一次原待执行动作。
 - agreementVersion/privacyVersion 与 AuthLegalConfig 真相源一致。
 - one-tap 登录请求必须透传协议版本，后端能够消费并留痕。
 - 法律正文 URL 可达性与外部法务发布流程。
@@ -43,12 +43,15 @@
 ### REQ-003 未勾选协议不得登录，协议版本需进入登录契约
 
 - 手机号登录与一键登录共享同一勾选语义、协议文案、版本真相源，不存在第二套硬编码版本号。
+- 协议未确认时页面不显示红色协议错误；sheet 使用“请先阅读并同意相关协议 / 同意后即可继续登录 / 同意并继续 / 暂不”。
+- 一键、手机号和社交登录均携带同一 `AuthLegalConfig` 版本；社交后续绑定手机号不重复展示协议，但最终完成操作仍校验已接受版本。
 
 ## 4. 契约引用
 
 - canonical：`quwoquan_app/lib/ui/user/pages/login_page.dart`
 - canonical：`quwoquan_app/lib/core/auth/auth_legal_config.dart`
-- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/operations.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/account_session/operations.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/account/credential_binding/operations.yaml`
 
 ## 5. 验收场景
 
@@ -65,7 +68,7 @@
 
 - GIVEN 用户选择手机号或一键登录。
 - WHEN 用户未勾选协议，或勾选后提交登录。
-- THEN 未勾选时登录被阻止；提交时使用同一 AuthLegalConfig 的协议版本并由服务端留痕。
+- THEN 未确认时弹出统一 sheet 且不发起请求；“同意并继续”只恢复一次原动作，提交时使用同一 AuthLegalConfig 的协议版本并由服务端留痕。
 
 ## 6. 依赖
 

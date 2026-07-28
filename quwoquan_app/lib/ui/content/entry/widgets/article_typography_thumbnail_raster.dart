@@ -375,7 +375,7 @@ class ArticleTypographyRasterCell extends StatelessWidget {
                   child: SizedBox(
                     width: AppSpacing.iconSmall,
                     height: AppSpacing.iconSmall,
-                    child: const CupertinoActivityIndicator(),
+                    child: AppRequestFeedback.inline(),
                   ),
                 )
               : Center(

@@ -40,6 +40,7 @@ IMAGE_VERSION="${IMAGE_VERSION:-}"
 CONFIG_VERSION="${CONFIG_VERSION:-}"
 PREVIOUS_IMAGE_VERSION="${PREVIOUS_IMAGE_VERSION:-}"
 RELEASE_MANIFEST="${RELEASE_MANIFEST:-}"
+RELEASE_MANIFEST_DIGEST="${RELEASE_MANIFEST_DIGEST:-}"
 ROLLOUT_TIMEOUT_SECONDS="${ROLLOUT_TIMEOUT_SECONDS:-300}"
 PROD_SSH_KEY_DIR="${PROD_SSH_KEY_DIR:-$HOME/.ssh/quwoquan-prod}"
 SERVICE_FILTER="${SERVICE:-}"
@@ -63,6 +64,10 @@ fi
 
 if [[ "$DRY_RUN" != "true" && -z "$PREVIOUS_IMAGE_VERSION" ]]; then
   echo "::error::真实发布必须显式提供 PREVIOUS_IMAGE_VERSION，禁止无旧版本回滚" >&2
+  exit 2
+fi
+if [[ "$DRY_RUN" != "true" && ! "$RELEASE_MANIFEST_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  echo "::error::真实发布必须提供 canonical RELEASE_MANIFEST_DIGEST，配置 ACK 不允许脱离候选清单" >&2
   exit 2
 fi
 if [[ "$DRY_RUN" != "true" && "$PROD_IMAGE_DELIVERY_MODE" != "skip" && ! -s "$RELEASE_MANIFEST" ]]; then
@@ -265,6 +270,7 @@ PY
         --rollout-stage "$ROLLOUT_STAGE" \
         --config-version "$CONFIG_VERSION" \
         --image-version "$IMAGE_VERSION" \
+        --release-manifest-digest "$RELEASE_MANIFEST_DIGEST" \
         --output-dir "$render_dir" >/dev/null
       if [[ "$PROD_IMAGE_DELIVERY_MODE" == "skip" ]]; then
         echo "[skip] service plane image delivery skipped; assuming remote images are already prepared"
@@ -346,6 +352,26 @@ for service in ${governed_services}; do
 done
 echo \"[plane ${plane}] retained exactly current/previous release image tags\""
   fi
+  local config_ack_wait=""
+  if [[ "$plane" == "service" && " $startup_services " == *" platform-ops-service "* ]]; then
+    config_ack_wait="
+config_ack_deadline=\$((SECONDS + ${ROLLOUT_TIMEOUT_SECONDS}))
+while true; do
+  platform_container=\"\$(podman ps --filter \"label=com.docker.compose.project=${project}\" --filter 'label=com.docker.compose.service=platform-ops-service' --format '{{.ID}}' | awk 'NR == 1 { print; exit }')\"
+  if [[ -n \"\$platform_container\" ]]; then
+    config_ack_response=\"\$(podman exec \"\$platform_container\" wget -qO- http://127.0.0.1:18088/readyz/config-convergence 2>/dev/null || true)\"
+    if [[ \"\$config_ack_response\" == *'\"status\":\"ready\"'* ]]; then
+      echo \"[plane service] config ACK convergence ready\"
+      break
+    fi
+  fi
+  if (( SECONDS >= config_ack_deadline )); then
+    echo \"FAIL: all governed service instances did not reach config ACK convergence within ${ROLLOUT_TIMEOUT_SECONDS}s\" >&2
+    exit 2
+  fi
+  sleep 2
+done"
+  fi
   local remote_cmd
   remote_cmd="set -euo pipefail
 cd '${compose_root}'
@@ -367,6 +393,7 @@ systemctl --user enable \"\$unit\"
 systemctl --user restart \"\$unit\"
 systemctl --user is-enabled --quiet \"\$unit\"
 systemctl --user is-active --quiet \"\$unit\"
+${config_ack_wait}
 ${image_retention}
 echo \"[plane ${plane}] rollout ok project=${project} unit=\$unit services=[${startup_services}]\""
 

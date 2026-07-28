@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
-import 'package:quwoquan_cloud_mock/quwoquan_cloud_mock.dart';
+import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
@@ -250,7 +250,7 @@ void main() {
     expect(state.videoPath, '/tmp/video_android');
     expect(state.originalVideoPath, '/tmp/video_android');
     expect(
-      find.text(UITextConstants.videoEditorCapabilityUnavailable),
+      find.text(MediaText.videoEditorCapabilityUnavailable),
       findsOneWidget,
     );
     expect(find.byType(VideoEditorPage), findsNothing);

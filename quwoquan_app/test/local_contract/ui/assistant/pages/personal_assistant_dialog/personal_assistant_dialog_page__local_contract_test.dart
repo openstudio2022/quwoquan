@@ -94,6 +94,7 @@ void main() {
           runtimeFailure: testRuntimeFailure(
             code: AssistantErrorCode.skillConsentRequired.code,
             kind: RuntimeFailureKind.permission,
+            nature: RuntimeFailureNature.requiresPermission,
           ),
         ),
       );
@@ -102,11 +103,8 @@ void main() {
       await _sendUatText(tester, '帮我整理今天的待办');
 
       final state = container.read(personalAssistantStreamControllerProvider);
-      // 结构化错误进入 errorMessage 通道（服务端 userMessage 优先），不崩溃。
-      expect(
-        state.errorMessage,
-        AssistantErrorCode.skillConsentRequired.defaultMessage,
-      );
+      // 结构化错误保留在 provider，用户可见文案由唯一恢复组决定。
+      expect(state.errorMessage, SearchText.recoveryEnablePermissionMessage);
       expect(state.running, isFalse);
       // 禁止伪造数据：无回答、transcript 仅保留用户消息，未出现伪造 assistant 行。
       expect(state.answer, isEmpty);
@@ -114,12 +112,20 @@ void main() {
       expect(state.transcript.single, isA<UserTranscriptTimelineRow>());
       // 页面本体展示映射后的错误与恢复动作，不再只把错误藏在 provider state。
       expect(
-        find.text(AssistantErrorCode.skillConsentRequired.defaultMessage),
+        find.text(SearchText.recoveryEnablePermissionTitle),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+      expect(
+        find.text(SearchText.recoveryEnablePermissionMessage),
+        findsOneWidget,
+      );
+      expect(
+        find.text(AssistantErrorCode.skillConsentRequired.defaultMessage),
+        findsNothing,
+      );
+      expect(find.text(ContentText.tryAgain), findsOneWidget);
       // 第一次失败后替身恢复；重试沿用同一输入且不重复追加用户消息。
-      await tester.tap(find.text(UITextConstants.tryAgain));
+      await tester.tap(find.text(ContentText.tryAgain));
       await tester.pumpAndSettle();
       final retried = container.read(personalAssistantStreamControllerProvider);
       expect(retried.errorMessage, isEmpty);

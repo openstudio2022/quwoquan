@@ -213,10 +213,17 @@ func (s *MongoTagNodeStore) HasCompleteSnapshot(
 	releaseID string,
 	expectedNodeCount int,
 ) (bool, error) {
-	if expectedNodeCount <= 0 {
+	if expectedNodeCount < 0 {
 		return false, nil
 	}
-	count, err := s.coll.CountDocuments(ctx, bson.M{
+	total, err := s.coll.CountDocuments(ctx, bson.M{"releaseId": releaseID})
+	if err != nil || total != int64(expectedNodeCount) {
+		return false, err
+	}
+	if expectedNodeCount == 0 {
+		return true, nil
+	}
+	complete, err := s.coll.CountDocuments(ctx, bson.M{
 		"releaseId":       releaseID,
 		"tagRef":          bson.M{"$type": "string", "$ne": ""},
 		"lifecycleStatus": bson.M{"$in": bson.A{"active", "deprecated"}},
@@ -224,7 +231,7 @@ func (s *MongoTagNodeStore) HasCompleteSnapshot(
 	if err != nil {
 		return false, err
 	}
-	return count == int64(expectedNodeCount), nil
+	return complete == int64(expectedNodeCount), nil
 }
 
 // ValidateReleaseProjection rejects incomplete legacy snapshots instead of
@@ -232,17 +239,26 @@ func (s *MongoTagNodeStore) HasCompleteSnapshot(
 func (s *MongoTagNodeStore) ValidateReleaseProjection(
 	ctx context.Context,
 	releaseID string,
+	expectedNodeCount int,
 ) error {
 	releaseID = strings.TrimSpace(releaseID)
-	if releaseID == "" {
-		return errors.New("taxonomy release id is required")
+	if releaseID == "" || expectedNodeCount < 0 {
+		return errors.New("taxonomy release identity is invalid")
 	}
 	total, err := s.coll.CountDocuments(ctx, bson.M{"releaseId": releaseID})
 	if err != nil {
 		return err
 	}
-	if total == 0 {
-		return errors.New("taxonomy release snapshot is empty")
+	if total != int64(expectedNodeCount) {
+		return fmt.Errorf(
+			"taxonomy release %s node count drift: expected=%d actual=%d",
+			releaseID,
+			expectedNodeCount,
+			total,
+		)
+	}
+	if expectedNodeCount == 0 {
+		return nil
 	}
 	invalid, err := s.coll.CountDocuments(ctx, bson.M{
 		"releaseId": releaseID,

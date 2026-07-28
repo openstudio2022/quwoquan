@@ -329,6 +329,7 @@ func doHandlerJSON(
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("X-Client-User-Id", userID)
+	req.Header.Set("X-Client-Sub-Account-Id", userID)
 	if method != http.MethodGet && method != http.MethodHead {
 		req = commandOperationContext(req, path, userID)
 	}

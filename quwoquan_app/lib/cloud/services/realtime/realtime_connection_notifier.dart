@@ -52,7 +52,9 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
       invalidate: ref.invalidate,
       currentUserIdResolver: () => currentUserIdResolver(ref),
       authTokenProvider: ProviderBackedCloudAuthTokenProvider(
-        () => ref.read(authSessionControllerProvider).accessToken,
+        () => ref
+            .read(authSessionControllerProvider.notifier)
+            .accessTokenForRequest(),
       ),
       onStateChanged: onStateChanged,
       telemetryRecorder:

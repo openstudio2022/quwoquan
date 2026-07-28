@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
@@ -113,7 +114,7 @@ class _ForwardRecipientPickerRouteState
             ),
             child: AppSearchField(
               controller: _searchController,
-              placeholder: UITextConstants.search,
+              placeholder: DiscoveryText.search,
               elevated: false,
               onChanged: (value) => setState(() => _query = value.trim()),
             ),
@@ -123,17 +124,19 @@ class _ForwardRecipientPickerRouteState
               future: _future,
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CupertinoActivityIndicator());
+                  return AppRequestFeedback.section();
                 }
                 if (snapshot.hasError) {
                   return _ForwardPickerErrorState(
-                    semantic: runtimeErrorSemantic(
-                      context,
-                      error:
-                          snapshot.error ??
-                          StateError(ChatText.forwardCardUnavailable),
-                      category: UiErrorCategory.sectionLoad,
-                      scope: UiErrorScope.section,
+                    semantic: ensureRetryUiErrorSemantic(
+                      runtimeErrorSemantic(
+                        context,
+                        error:
+                            snapshot.error ??
+                            StateError(ChatText.forwardCardUnavailable),
+                        category: UiErrorCategory.sectionLoad,
+                        scope: UiErrorScope.section,
+                      ),
                     ),
                     onRetry: () => setState(() => _future = _load()),
                   );

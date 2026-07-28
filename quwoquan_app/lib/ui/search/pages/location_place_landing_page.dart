@@ -10,7 +10,6 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/location_place_read_query.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
-import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 
 /// 一方地点（`location.place`）落地页路由参数。
 ///
@@ -67,7 +66,7 @@ class _LocationPlaceLandingPageState
     _ =>
       widget.placeName.trim().isNotEmpty
           ? widget.placeName.trim()
-          : UITextConstants.locationPlaceLandingTitle,
+          : CreationText.locationPlaceLandingTitle,
   };
 
   String get _address => switch (_resolved) {
@@ -151,15 +150,10 @@ class _LocationPlaceLandingPageState
     }
     if (_loadFailure != null || readUnavailable) {
       final semantic = _loadFailure == null
-          ? const UiErrorSemantic(
+          ? AppUserRecoveryContract.semanticFor(
+              group: AppUserRecoveryGroup.contentUnavailable,
               category: UiErrorCategory.notFound,
               scope: UiErrorScope.page,
-              title: UITextConstants.searchResultUnavailableTitle,
-              message: UITextConstants.searchResultUnavailableTitle,
-              primaryAction: UiErrorAction(
-                type: UiErrorActionType.dismiss,
-                label: UITextConstants.searchEditQuery,
-              ),
               sourceSurfaceId: 'location_place_landing',
             )
           : runtimeErrorSemantic(
@@ -170,7 +164,7 @@ class _LocationPlaceLandingPageState
             );
       return CupertinoPageScaffold(
         navigationBar: CupertinoNavigationBar(
-          middle: const Text(UITextConstants.locationPlaceLandingTitle),
+          middle: const Text(CreationText.locationPlaceLandingTitle),
           leading: CupertinoButton(
             padding: EdgeInsets.zero,
             onPressed: _handleClose,
@@ -179,7 +173,9 @@ class _LocationPlaceLandingPageState
         ),
         child: SafeArea(
           child: AppPageErrorState(
-            semantic: semantic,
+            semantic: _loadFailure == null
+                ? semantic
+                : ensureRetryUiErrorSemantic(semantic),
             onAction: (action) async {
               if (action.type == UiErrorActionType.retry) {
                 await _startCanonicalRead();
@@ -197,7 +193,7 @@ class _LocationPlaceLandingPageState
       key: TestKeys.locationPlaceLandingPage,
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
       navigationBar: CupertinoNavigationBar(
-        middle: const Text(UITextConstants.locationPlaceLandingTitle),
+        middle: const Text(CreationText.locationPlaceLandingTitle),
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: _handleClose,
@@ -220,7 +216,7 @@ class _LocationPlaceLandingPageState
             ),
             SizedBox(height: AppSpacing.interGroupMd),
             Text(
-              UITextConstants.locationPlaceLandingDescription,
+              CreationText.locationPlaceLandingDescription,
               style: TextStyle(
                 fontSize: AppTypography.iosSubheadline,
                 height: AppTypography.lineHeightRelaxed,
@@ -231,7 +227,7 @@ class _LocationPlaceLandingPageState
             CupertinoButton.filled(
               key: TestKeys.locationPlaceLandingPromoteButton,
               onPressed: _promoteToHomepage,
-              child: const Text(UITextConstants.locationPlaceLandingPromoteCta),
+              child: const Text(CreationText.locationPlaceLandingPromoteCta),
             ),
           ],
         ),
@@ -320,7 +316,7 @@ class _LocationPlaceCard extends StatelessWidget {
             Text(
               address.isNotEmpty
                   ? address
-                  : UITextConstants.locationPlaceLandingMissingAddress,
+                  : CreationText.locationPlaceLandingMissingAddress,
               style: TextStyle(
                 fontSize: AppTypography.iosSubheadline,
                 color: AppColors.iosSecondaryLabel(context),
@@ -351,7 +347,7 @@ class _TempBadge extends StatelessWidget {
           vertical: AppSpacing.intraGroupXs,
         ),
         child: Text(
-          UITextConstants.locationPlaceLandingTempBadge,
+          CreationText.locationPlaceLandingTempBadge,
           style: TextStyle(
             fontSize: AppTypography.iosCaption2,
             fontWeight: AppTypography.medium,

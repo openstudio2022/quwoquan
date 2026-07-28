@@ -11,14 +11,14 @@ import 'package:quwoquan_app/ui/user/pages/add_contact_page.dart';
 import '../../../../../support/fakes/contact_profile_queries.dart';
 
 const _qrCard = ProfileQrCardData(
-  publicProfileUrl: 'https://app.quwoquan.com/u/current',
-  qrPayload: 'https://app.quwoquan.com/u/current?qr=fixture',
+  publicProfileUrl: 'https://quwoquan.com/u/current',
+  qrPayload: 'https://quwoquan.com/u/current?qr=fixture',
   qrTokenId: 'fixture-qr',
   styleVersion: 'v1',
   avatarUrl: '',
   displayName: '当前用户',
   region: '杭州',
-  shareText: 'https://app.quwoquan.com/u/current?qr=fixture',
+  shareText: 'https://quwoquan.com/u/current?qr=fixture',
 );
 
 void main() {
@@ -55,15 +55,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(UITextConstants.addContactSearchHubPlaceholder),
+      find.text(ContactText.addContactSearchHubPlaceholder),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.editProfileQrScanAction), findsOneWidget);
+    expect(find.text(ProfileText.editProfileQrScanAction), findsOneWidget);
     expect(
-      find.text(UITextConstants.addContactPhoneEntryTitle),
+      find.text(ContactText.addContactPhoneEntryTitle),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.editProfileQrCardHeading), findsOneWidget);
+    expect(find.text(ProfileText.editProfileQrCardHeading), findsOneWidget);
 
     await tester.tap(
       find.byKey(const ValueKey<String>('add-contact-search-entry')),

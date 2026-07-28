@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+import 'account_session_contracts.dart';
 
 /// CredentialBinding 聚合查询/命令的 pure contracts。
 /// 真相源：quwoquan_service/services/user-service/contracts/account/credential_binding/{service,fields}.yaml。
@@ -47,6 +48,38 @@ final class BindCarrierPhoneCredentialCommand {
   final String deviceId;
   final String platform;
   final String? displayLabel;
+}
+
+final class CompleteFederatedPhoneBindingCommand {
+  CompleteFederatedPhoneBindingCommand({
+    required String bindingTicket,
+    required String phone,
+    required String otpCode,
+    required String challengeId,
+    required String deviceId,
+    required String platform,
+    required String appVersion,
+    required String agreementVersion,
+    required String privacyVersion,
+  }) : bindingTicket = _required(bindingTicket, 'bindingTicket'),
+       phone = _required(phone, 'phone'),
+       otpCode = _required(otpCode, 'otpCode'),
+       challengeId = _required(challengeId, 'challengeId'),
+       deviceId = _required(deviceId, 'deviceId'),
+       platform = _required(platform, 'platform'),
+       appVersion = _required(appVersion, 'appVersion'),
+       agreementVersion = _required(agreementVersion, 'agreementVersion'),
+       privacyVersion = _required(privacyVersion, 'privacyVersion');
+
+  final String bindingTicket;
+  final String phone;
+  final String otpCode;
+  final String challengeId;
+  final String deviceId;
+  final String platform;
+  final String appVersion;
+  final String agreementVersion;
+  final String privacyVersion;
 }
 
 final class UnbindCredentialCommand {
@@ -111,6 +144,10 @@ abstract interface class CredentialBindingQuery {
 ///
 /// metadata 中的通用 BindCredential 只服务非 App 管理能力，不进入本 Facet。
 abstract interface class CredentialBindingCommandWriter {
+  Future<AuthSessionGrant> completeFederatedPhoneBinding(
+    CompleteFederatedPhoneBindingCommand command,
+  );
+
   Future<CredentialBindingCommandResult> bindPhoneCredential(
     BindPhoneCredentialCommand command,
   );
@@ -139,6 +176,22 @@ CloudOperationRequestPayload encodeBindPhoneCredentialCommand(
     'phone': command.phone,
     'otpCode': command.otpCode,
     if (command.displayLabel != null) 'displayLabel': command.displayLabel,
+  },
+);
+
+CloudOperationRequestPayload encodeCompleteFederatedPhoneBindingCommand(
+  CompleteFederatedPhoneBindingCommand command,
+) => CloudOperationRequestPayload(
+  body: <String, Object?>{
+    'bindingTicket': command.bindingTicket,
+    'phone': command.phone,
+    'otpCode': command.otpCode,
+    'challengeId': command.challengeId,
+    'deviceId': command.deviceId,
+    'platform': command.platform,
+    'appVersion': command.appVersion,
+    'agreementVersion': command.agreementVersion,
+    'privacyVersion': command.privacyVersion,
   },
 );
 

@@ -23,10 +23,10 @@ extension _ProfileShellBuildersMore on _ProfileShellState {
     try {
       final result = await SharePlus.instance.share(
         ShareParams(
-          title: UITextConstants.profileShareHomepage,
+          title: ContentText.profileShareHomepage,
           subject: displayName.isNotEmpty
               ? displayName
-              : UITextConstants.profileShareHomepage,
+              : ContentText.profileShareHomepage,
           text: shareText,
         ),
       );
@@ -84,7 +84,7 @@ extension _ProfileShellBuildersMore on _ProfileShellState {
           },
         );
         if (context.mounted) {
-          AppToast.show(context, UITextConstants.commentReportSubmitted);
+          AppToast.show(context, ContentText.commentReportSubmitted);
         }
       } catch (error) {
         await journeyTracker.trackAction(
@@ -117,13 +117,13 @@ extension _ProfileShellBuildersMore on _ProfileShellState {
   Future<void> _showMoreOptions(BuildContext context) async {
     final action = await showAppActionSheet<_ProfileMoreAction>(
       context,
-      title: UITextConstants.profileMoreOptionsTitle,
+      title: ContentText.profileMoreOptionsTitle,
       sections: const [
         AppActionSheetSection<_ProfileMoreAction>(
           items: [
             AppActionSheetItem<_ProfileMoreAction>(
               value: _ProfileMoreAction.share,
-              label: UITextConstants.share,
+              label: FoundationText.share,
               icon: CupertinoIcons.arrowshape_turn_up_right,
             ),
           ],
@@ -132,12 +132,12 @@ extension _ProfileShellBuildersMore on _ProfileShellState {
           items: [
             AppActionSheetItem<_ProfileMoreAction>(
               value: _ProfileMoreAction.block,
-              label: UITextConstants.profileBlockUser,
+              label: ContentText.profileBlockUser,
               icon: CupertinoIcons.person_crop_circle_badge_xmark,
             ),
             AppActionSheetItem<_ProfileMoreAction>(
               value: _ProfileMoreAction.report,
-              label: UITextConstants.report,
+              label: ContentText.report,
               icon: CupertinoIcons.flag,
               isDestructive: true,
             ),
@@ -163,14 +163,14 @@ extension _ProfileShellBuildersMore on _ProfileShellState {
     runWhenLoggedIn(ref, context, AuthGateReason.blockUser, () async {
       final confirmed = await showAppActionSheet<bool>(
         context,
-        title: UITextConstants.profileBlockConfirmTitle,
-        message: UITextConstants.profileBlockConfirmMessage,
+        title: ContentText.profileBlockConfirmTitle,
+        message: ContentText.profileBlockConfirmMessage,
         sections: const [
           AppActionSheetSection<bool>(
             items: [
               AppActionSheetItem<bool>(
                 value: true,
-                label: UITextConstants.profileBlockUser,
+                label: ContentText.profileBlockUser,
                 icon: CupertinoIcons.person_crop_circle_badge_xmark,
                 isDestructive: true,
               ),
@@ -214,7 +214,7 @@ extension _ProfileShellBuildersMore on _ProfileShellState {
       if (!context.mounted) {
         return;
       }
-      AppToast.show(context, UITextConstants.profileBlockSuccess);
+      AppToast.show(context, ContentText.profileBlockSuccess);
       _leaveProfile(context);
     } catch (error) {
       unawaited(

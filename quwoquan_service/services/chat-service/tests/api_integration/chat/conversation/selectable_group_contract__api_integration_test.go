@@ -216,6 +216,7 @@ func getSelectableJSON(t *testing.T, handler http.Handler, path, viewer string) 
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	req.Header.Set("X-Client-User-Id", viewer)
+	req.Header.Set("X-Client-Sub-Account-Id", viewer)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	var payload map[string]any

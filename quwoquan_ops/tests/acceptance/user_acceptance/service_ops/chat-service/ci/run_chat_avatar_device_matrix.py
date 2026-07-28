@@ -31,6 +31,11 @@ from quwoquan_ops.ci.device_matrix.evidence import (
     write_discovered_devices_snapshot,
     write_json,
 )
+from quwoquan_ops.cli.lib.environment_topology import (
+    ENVIRONMENT_CANONICAL_TARGET,
+    get_target,
+    load_environment_topology,
+)
 
 
 REPO_ROOT = _find_repo_root()
@@ -49,7 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--platform", choices=("android", "ios", "all"), default="all")
     parser.add_argument("--device-id", action="append", default=[])
     parser.add_argument("--gateway-base-url", default="")
-    parser.add_argument("--media-base-url", default="")
+    parser.add_argument("--media-avatar-base-url", default="")
     parser.add_argument("--test-auth-token", default=os.environ.get("GAMMA_TEST_AUTH_TOKEN", ""))
     parser.add_argument("--report", default=str(DEFAULT_REPORT))
     parser.add_argument("--test-timeout-seconds", type=int, default=600)
@@ -213,21 +218,29 @@ def envs(raw: str) -> list[str]:
 
 
 def default_base_url(env_name: str, override: str) -> str:
-    if override:
-        return override.rstrip("/")
-    if env_name == "gamma":
-        return os.environ.get("GAMMA_BASE_URL", "").rstrip("/")
-    if env_name == "prod":
-        return os.environ.get("PROD_GATEWAY_BASE_URL", "").rstrip("/")
-    return os.environ.get("CHAT_AVATAR_GATEWAY_BASE_URL", "http://127.0.0.1:18080").rstrip("/")
+    canonical = str(
+        get_target(
+            load_environment_topology(),
+            ENVIRONMENT_CANONICAL_TARGET[env_name],
+        )["publicBases"]["api"]
+    ).rstrip("/")
+    if override and override.rstrip("/") != canonical:
+        raise ValueError("--gateway-base-url must equal canonical topology projection")
+    return canonical
 
 
 def default_media_url(env_name: str, override: str) -> str:
-    if override:
-        return override.rstrip("/")
-    if env_name == "prod":
-        return os.environ.get("PROD_MEDIA_BASE_URL", "").rstrip("/")
-    return os.environ.get("MEDIA_AVATAR_CDN_BASE_URL", "").rstrip("/")
+    canonical = str(
+        get_target(
+            load_environment_topology(),
+            ENVIRONMENT_CANONICAL_TARGET[env_name],
+        )["publicBases"]["mediaAvatar"]
+    ).rstrip("/")
+    if override and override.rstrip("/") != canonical:
+        raise ValueError(
+            "--media-avatar-base-url must equal canonical topology projection"
+        )
+    return canonical
 
 
 def adb_reverse_if_needed(device: dict[str, Any], urls: list[str]) -> list[dict[str, Any]]:
@@ -267,7 +280,7 @@ def run_probe(
         str(args.probe_timeout_seconds),
     ]
     if media_url:
-        command.extend(["--media-base-url", media_url])
+        command.extend(["--media-avatar-base-url", media_url])
     if args.test_auth_token:
         command.extend(["--test-auth-token", args.test_auth_token])
     if args.skip_media_check:
@@ -332,7 +345,6 @@ def run_patrol(
         device["id"],
         "--dart-define=RUN_T4_PATROL=true",
         f"--dart-define=APP_RUNTIME_ENV={env_name}",
-        "--dart-define=APP_DATA_SOURCE=remote",
         f"--dart-define=API_CONTRACT_ENV={env_name}",
         f"--dart-define=CLOUD_GATEWAY_BASE_URL={base_url}",
         f"--dart-define=API_CONTRACT_BASE_URL={base_url}",
@@ -439,7 +451,7 @@ def main() -> int:
         failed = False
         for env_name in requested_envs:
             base_url = default_base_url(env_name, args.gateway_base_url)
-            media_url = default_media_url(env_name, args.media_base_url)
+            media_url = default_media_url(env_name, args.media_avatar_base_url)
             for device in devices:
                 run_dir = evidence_root / env_name / sanitize_device_id(str(device.get("id", "")))
                 run_dir.mkdir(parents=True, exist_ok=True)
@@ -451,7 +463,7 @@ def main() -> int:
                     extra={
                         "platformFilter": args.platform,
                         "gatewayBaseUrl": base_url,
-                        "mediaBaseUrl": media_url,
+                        "mediaAvatarBaseUrl": media_url,
                     },
                 )
                 before_screenshot = capture_device_screenshot(device, run_dir / "before.png")
@@ -510,7 +522,7 @@ def main() -> int:
                     "env": env_name,
                     "device": device,
                     "gatewayBaseUrl": base_url,
-                    "mediaBaseUrl": media_url,
+                    "mediaAvatarBaseUrl": media_url,
                     "adbReverse": reverse,
                     "probe": probe,
                     "patrol": patrol,

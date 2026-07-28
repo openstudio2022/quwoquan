@@ -16,13 +16,15 @@ import subprocess
 import sys
 from typing import Any
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib import external_provider_governance as governance
-from quwoquan_ops.cli.lib.output_paths import output_root
+from quwoquan_ops.cli.lib.output_paths import output_root, service_deployment_package_dir
 
 
 EVIDENCE_SCHEMA = ROOT / "quwoquan_ops" / "environments" / "provider_conformance_evidence.schema.json"
@@ -401,6 +403,98 @@ def capability_assertion_id(capability: Mapping[str, Any]) -> str:
 
 def _digest_bytes(value: bytes) -> str:
     return f"sha256:{hashlib.sha256(value).hexdigest()}"
+
+
+def candidate_image_digest(
+    environment: str,
+    *,
+    registry: Mapping[str, Any] | None = None,
+) -> str:
+    """Derive the immutable local candidate from capability-owner packages."""
+    if environment not in ENVIRONMENTS:
+        raise ValueError(
+            "local candidate image digest only supports alpha/beta/gamma"
+        )
+    catalog = registry if registry is not None else governance.load_registry()
+    capabilities = catalog.get("capabilities")
+    if not isinstance(capabilities, list):
+        raise ValueError("Provider registry has no capability catalog")
+    services = sorted(
+        {
+            str(capability.get("service_id") or "").strip()
+            for capability in capabilities
+            if isinstance(capability, Mapping)
+        }
+    )
+    if not services or any(not service for service in services):
+        raise ValueError("Provider capabilities must declare owning service_id")
+    current_commit = _current_commit()
+    if current_commit is None:
+        raise ValueError("cannot derive Provider candidate without current Git revision")
+
+    image_set: list[dict[str, str]] = []
+    target = f"{environment}-local"
+    for service in services:
+        package = service_deployment_package_dir(
+            environment,
+            service,
+            target=target,
+        )
+        image_lock_path = package / "image.lock"
+        provenance_path = package / "provenance.json"
+        if not image_lock_path.is_file() or not provenance_path.is_file():
+            raise ValueError(
+                f"{environment} Provider candidate package is incomplete: {service}"
+            )
+        try:
+            image_lock = yaml.safe_load(
+                image_lock_path.read_text(encoding="utf-8")
+            ) or {}
+            provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, yaml.YAMLError) as exc:
+            raise ValueError(
+                f"{environment} Provider candidate package is unreadable: {service}"
+            ) from exc
+        if not isinstance(image_lock, Mapping) or not isinstance(provenance, Mapping):
+            raise ValueError(
+                f"{environment} Provider candidate package is invalid: {service}"
+            )
+        provenance_digests = provenance.get("digests")
+        if not isinstance(provenance_digests, Mapping):
+            raise ValueError(
+                f"{environment} Provider candidate provenance has no digests: "
+                f"{service}"
+            )
+        image_digest = str(image_lock.get("digest") or "")
+        source_tree_digest = str(provenance_digests.get("sourceTree") or "")
+        if (
+            image_lock.get("service") != service
+            or image_lock.get("digestSource") != "build-input"
+            or not SHA256_PATTERN.fullmatch(image_digest)
+            or image_digest != source_tree_digest
+            or provenance.get("service") != service
+            or provenance.get("environment") != environment
+            or provenance.get("gitRevision") != current_commit
+        ):
+            raise ValueError(
+                f"{environment} Provider candidate package is stale or inconsistent: "
+                f"{service}"
+            )
+        image_set.append({"service": service, "imageDigest": image_digest})
+
+    return _digest_bytes(
+        json.dumps(
+            {
+                "schema": "provider-conformance-candidate-image-set",
+                "version": 1,
+                "commit": current_commit,
+                "services": image_set,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    )
 
 
 def implementation_digest(path: Path) -> str | None:
@@ -1185,7 +1279,7 @@ def validate_evidence(
         discover_test_sources() if source_catalog is None else (dict(source_catalog), [])
     )
     issues.extend(source_issues)
-    expected_image = (
+    configured_expected_image = (
         expected_image_digest
         if expected_image_digest is not None
         else os.environ.get("QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST", "")
@@ -1488,11 +1582,21 @@ def validate_evidence(
             issues.append(_issue(location, "commit must be a git commit digest"))
         elif current_commit is not None and item["commit"] != current_commit:
             issues.append(_issue(location, "commit does not match the current source revision"))
+        expected_image = configured_expected_image
+        if expected_image_digest is None and environment in ENVIRONMENTS:
+            try:
+                expected_image = candidate_image_digest(
+                    str(environment),
+                    registry=registry,
+                )
+            except ValueError as exc:
+                issues.append(_issue(location, str(exc)))
+                expected_image = ""
         if not isinstance(expected_image, str) or not SHA256_PATTERN.fullmatch(expected_image):
             issues.append(
                 _issue(
                     location,
-                    "QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST must identify the active immutable image",
+                    "active immutable candidate image digest is unavailable",
                 )
             )
         elif item.get("imageDigest") != expected_image:

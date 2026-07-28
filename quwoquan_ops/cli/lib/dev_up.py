@@ -17,10 +17,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
-from quwoquan_ops.cli.lib.local_target_tls import (
-    LOCAL_TLS_TARGETS,
-    materialize_local_target_trust_bundle,
-)
 from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
 from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
 
@@ -49,12 +45,6 @@ DEV_UP_ENV_DESCRIPTIONS = {
     "prod-sim": "prod-sim App 连接",
     "prod": "prod-hosted edge health + App",
 }
-ANDROID_LOCAL_LOOPBACK_SUFFIX = ".localhost"
-ANDROID_LOCAL_DEBUG_CA_ENV = "QWQ_ANDROID_LOCAL_ENV_CA_PATH"
-ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV = "QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED"
-ANDROID_LOCAL_DEBUG_CA_TARGETS = LOCAL_TLS_TARGETS
-
-
 def _configured_root(env_name: str, default_name: str) -> Path:
     configured = os.environ.get(env_name, "").strip()
     path = Path(configured).expanduser() if configured else ROOT / default_name
@@ -419,27 +409,11 @@ def resolve_app_endpoint_overrides(
     target_name = app_target_for_env(env_name)
     target = get_target(manifest, target_name)
     public_bases = dict(target.get("publicBases") or {})
-    if str(target.get("backend", "")).strip() == "local" and device_kind.startswith("android"):
-        # alpha's repo-owned TLS plane is port-routed. Pure localhost is the
-        # only portable Android physical-device target with adb reverse.
-        collapse_to_localhost = env_name == "alpha"
-        public_bases = {
-            key: _rewrite_android_local_base(
-                str(value),
-                collapse_to_localhost=collapse_to_localhost,
-            )
-            for key, value in public_bases.items()
-        }
     gateway_base_url = str(public_bases["api"]).rstrip("/")
-    legal_base_url = (
-        "https://quwoquan.com/legal"
-        if env_name == "prod"
-        else f"{gateway_base_url}/legal"
-    )
     return {
         "target": target_name,
         "gatewayBaseUrl": gateway_base_url,
-        "legalBaseUrl": legal_base_url,
+        "legalBaseUrl": str(public_bases["legal"]).rstrip("/"),
         "mediaAvatarBaseUrl": str(public_bases["mediaAvatar"]).rstrip("/"),
         "mediaImageBaseUrl": str(public_bases["mediaImage"]).rstrip("/"),
         "mediaVideoBaseUrl": str(public_bases["mediaVideo"]).rstrip("/"),
@@ -467,6 +441,8 @@ def build_start_app_command(
         "quwoquan_app/scripts/device/start_app_instance.sh",
         "--env",
         runtime_env_for_dev_env(env_name),
+        "--target",
+        app_target_for_env(env_name),
         "--device-id",
         device_id,
         "--gateway-base-url",
@@ -512,10 +488,6 @@ def launch_app(
     command_env = os.environ.copy()
     if str(target.get("backend", "")).strip() == "local" and device_kind.startswith("android"):
         enable_android_adb_reverse(device_id, target_name, topology=manifest)
-        command_env[ANDROID_LOCAL_DEBUG_CA_ENV] = str(
-            local_target_android_debug_ca_cert(target_name)
-        )
-        command_env[ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV] = "1"
     if (
         str(target.get("backend", "")).strip() == "local"
         and str(device.get("targetPlatform", "")).strip().lower() == "ios"
@@ -582,6 +554,30 @@ def enable_android_adb_reverse(
             raise RuntimeError(
                 f"GATE_BLOCK: adb reverse tcp:{port} failed for {device_id}: {detail or 'unknown adb failure'}"
             )
+    listed = subprocess.run(
+        [adb, "-s", device_id, "reverse", "--list"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if listed.returncode != 0:
+        detail = (listed.stderr or listed.stdout or "").strip()
+        raise RuntimeError(
+            f"GATE_BLOCK: cannot verify adb reverse for {device_id}: {detail or 'unknown adb failure'}"
+        )
+    missing = [
+        port
+        for port in ports
+        if not any(
+            line.split().count(f"tcp:{port}") >= 2
+            for line in listed.stdout.splitlines()
+        )
+    ]
+    if missing:
+        raise RuntimeError(
+            "GATE_BLOCK: adb reverse verification is incomplete for "
+            f"{device_id}; missing ports={','.join(str(port) for port in missing)}"
+        )
     return ports
 
 
@@ -606,53 +602,6 @@ def local_target_ports(
         for port in profile_ports(load_port_manifest(), profile_name).values():
             ports.add(int(port))
     return sorted(ports)
-
-
-def local_target_android_debug_ca_cert(target_name: str) -> Path:
-    if target_name not in ANDROID_LOCAL_DEBUG_CA_TARGETS:
-        raise RuntimeError(
-            f"GATE_BLOCK: local Android debug CA path is undefined for target {target_name}"
-        )
-    return materialize_local_target_trust_bundle(target_name)
-
-
-def _android_local_loopback_host(host: str, *, collapse_to_localhost: bool = False) -> str:
-    if collapse_to_localhost:
-        return "localhost"
-    if host == "127.0.0.1":
-        return "localhost"
-    if host == "localhost" or host.endswith(ANDROID_LOCAL_LOOPBACK_SUFFIX):
-        return host
-    suffix = ".quwoquan-env.test"
-    if host.endswith(suffix):
-        return host[: -len(suffix)] + ANDROID_LOCAL_LOOPBACK_SUFFIX
-    return host
-
-
-def _rewrite_android_local_base(url: str, *, collapse_to_localhost: bool = False) -> str:
-    parsed = urllib.parse.urlparse(url)
-    if not parsed.scheme or not parsed.hostname:
-        return url
-    host = _android_local_loopback_host(
-        parsed.hostname,
-        collapse_to_localhost=collapse_to_localhost,
-    )
-    if parsed.port:
-        netloc = f"{host}:{parsed.port}"
-    else:
-        netloc = host
-    return urllib.parse.urlunparse(parsed._replace(netloc=netloc))
-
-
-def _rewrite_localhost_base(url: str, host: str) -> str:
-    parsed = urllib.parse.urlparse(url)
-    if parsed.hostname not in {"127.0.0.1", "localhost"}:
-        return url
-    if parsed.port:
-        netloc = f"{host}:{parsed.port}"
-    else:
-        netloc = host
-    return urllib.parse.urlunparse(parsed._replace(netloc=netloc))
 
 
 def _build_parser() -> argparse.ArgumentParser:

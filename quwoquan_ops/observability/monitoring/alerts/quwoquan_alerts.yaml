@@ -569,7 +569,7 @@ groups:
     # - P0 已激活：recommendation_feed_served/impressed/visible/dwell/interaction/negative、
     #   recommendation_behavior_ingest(_dropped)、rec_hotpath_dropped、
     #   recommendation_exposure_filter_smembers_fallback、recommendation_feed_served_by_attribution_total、
-    #   recommendation_behavior_by_attribution_total。
+    #   recommendation_behavior_by_attribution_total、recommendation_feed_terminal_total。
     # - 仍为预置告警：ExposureGini / ContentCoverage / PolicyTakedownEjection / ABValidity
     #   等 P1/P2 指标，真实 emitter 落地前不代表已具备触发数据。
     rules:
@@ -615,15 +615,27 @@ groups:
 
       - alert: RecEmptyFeedRateHigh
         expr: |
-          sum(rate(rec_pipeline_empty_results_total[5m]))
-          / (sum(rate(rec_pipeline_requests_total[5m])) + 0.001) > 0.05
+          sum(rate(recommendation_feed_terminal_total{request_class="initial_recommend",outcome="empty"}[5m]))
+          / (sum(rate(recommendation_feed_terminal_total{request_class="initial_recommend"}[5m])) + 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+        annotations:
+          summary: "推荐首刷成功空 Feed 率 > 0.1%"
+          description: "discovery/recommend 首刷违反“非空或 canonical failure”契约，当前 {{ $value | humanizePercentage }}；following 与 continuation 合法空态已排除。"
+
+      - alert: RecInitialRecommendTerminalFailureRateHigh
+        expr: |
+          sum(rate(recommendation_feed_terminal_total{request_class="initial_recommend",outcome="failure"}[5m]))
+          / (sum(rate(recommendation_feed_terminal_total{request_class="initial_recommend"}[5m])) + 0.001) > 0.005
         for: 10m
         labels:
           severity: warning
           layer: l2
         annotations:
-          summary: "推荐空 Feed 率 > 5%"
-          description: "用户收到空 feed 比例过高，当前 {{ $value | humanizePercentage }}"
+          summary: "推荐首刷 canonical failure 率 > 0.5%"
+          description: "按 failure_stage 排查 recall/scorer/active_supply/hydration/exposure 终态，当前 {{ $value | humanizePercentage }}。"
 
       # N1-1 死告警清理：RecScoreDistributionAnomaly 已删除——rec_score_value
       # histogram 无任何 emitter，该告警从未可求值。分数分布/特征漂移监控的
@@ -2234,6 +2246,35 @@ groups:
         annotations:
           summary: "内容发布后台重试已耗尽"
           description: "按 content_type、object_state 和 failReasonCode 在 SLS content_publication_funnel 下钻；不得把终态任务伪装为成功。"
+
+      - alert: ArticleReaderEnterLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(ops_article_reader_enter_duration_seconds_bucket{result="success"}[10m])) by (le)
+          ) > 1.2
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "文章阅读器进入 P95 超过 1.2s"
+          description: "文章阅读器 SLI 为成功 enter 事件的客户端可用时延；按 SLS article_reader_lifecycle 的 surfaceId、errorCode 和 recoveryAction 下钻。"
+
+      - alert: ArticleReaderErrorRateHigh
+        expr: |
+          sum(rate(ops_article_reader_events_total{stage="error",result="failure"}[10m]))
+          / clamp_min(sum(rate(ops_article_reader_events_total{stage="enter",result="success"}[10m])), 0.001) > 0.01
+        for: 10m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "文章阅读器错误率超过 1%"
+          description: "文章阅读器可用性 SLO 为 enter 后无 error 的比例至少 99%；检查 typed Remote failure 的 errorCode 与 recoveryAction。"
+
+      - alert: ArticleReaderRecoveryFailure
+        expr: sum(increase(ops_article_reader_events_total{stage="recovery",result="failure"}[10m])) > 0
+        for: 2m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "文章阅读器重试恢复失败"
+          description: "用户触发的阅读器恢复仍失败；按 SLS article_reader_lifecycle 的 errorCode 和 recoveryAction 定位 Remote 或数据面问题。"
 
       - alert: VideoPreviewTrackLoadFailureRateHigh
         expr: |

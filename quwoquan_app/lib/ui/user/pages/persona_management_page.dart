@@ -26,31 +26,11 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
   late final DateTime _enteredAt;
 
   UiErrorSemantic _resolvePageErrorSemantic(Object error) {
-    final resolved = runtimeErrorSemantic(
+    return runtimeErrorSemantic(
       context,
       error: error,
       category: UiErrorCategory.pageLoad,
       scope: UiErrorScope.page,
-    );
-    return UiErrorSemantic(
-      category: resolved.category,
-      scope: resolved.scope,
-      title: UITextConstants.personaManagementLoadFailedTitle,
-      message: resolved.message,
-      secondaryMessage: resolved.secondaryMessage,
-      primaryAction:
-          resolved.primaryAction ??
-          const UiErrorAction(
-            type: UiErrorActionType.retry,
-            label: UITextConstants.tryAgain,
-          ),
-      secondaryAction: resolved.secondaryAction,
-      dismissible: resolved.dismissible,
-      sourceCode: resolved.sourceCode,
-      failureKind: resolved.failureKind,
-      recoveryAction: resolved.recoveryAction,
-      presentation: resolved.presentation,
-      tone: resolved.tone,
     );
   }
 
@@ -79,7 +59,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
           ? resolved.primaryAction
           : const UiErrorAction(
               type: UiErrorActionType.retry,
-              label: UITextConstants.tryAgain,
+              label: ContentText.tryAgain,
             ),
       secondaryAction: resolved.secondaryAction,
       dismissible: resolved.dismissible,
@@ -164,7 +144,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
           onPressed: () => context.pop(),
         ),
         middle: Text(
-          UITextConstants.personaManage,
+          ProfileText.personaManage,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
         ),
         trailing: enabled && canCreate
@@ -177,12 +157,12 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
       body: !enabled
           ? Center(
               child: Text(
-                UITextConstants.personaManage,
+                ProfileText.personaManage,
                 style: TextStyle(color: AppColors.iosSecondaryLabel(context)),
               ),
             )
           : state.isLoading
-          ? const Center(child: CupertinoActivityIndicator())
+          ? AppRequestFeedback.section()
           : pageErrorSemantic != null
           ? AppPageErrorState(
               semantic: pageErrorSemantic,
@@ -257,7 +237,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                           CupertinoButton(
                             padding: EdgeInsets.zero,
                             onPressed: () => _showCreateDialog(notifier),
-                            child: const Text(UITextConstants.personaCreate),
+                            child: const Text(ProfileText.personaCreate),
                           ),
                       ],
                     ),
@@ -270,7 +250,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                       horizontal: AppSpacing.containerMd,
                     ),
                     child: Text(
-                      UITextConstants.personaDefaultOnlyHint,
+                      ProfileText.personaDefaultOnlyHint,
                       style: TextStyle(
                         fontSize: AppTypography.iosFootnote,
                         height: AppSpacing.textLineHeightFootnote,
@@ -324,7 +304,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
       }
       AppToast.show(
         context,
-        UITextConstants.profileSubAccountMaxReachedTemplate.replaceFirst(
+        ProfileText.profileSubAccountMaxReachedTemplate.replaceFirst(
           '%s',
           '${quota.maxSubAccounts}',
         ),
@@ -350,11 +330,11 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     await showAppCupertinoDialog<void>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
-        title: const Text(UITextConstants.personaCreateSuccess),
+        title: const Text(ProfileText.personaCreateSuccess),
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text(UITextConstants.personaSwitchLater),
+            child: const Text(ProfileText.personaSwitchLater),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
@@ -362,7 +342,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
               Navigator.of(dialogContext).pop();
               await notifier.activatePersona(created.subAccountId);
             },
-            child: const Text(UITextConstants.personaSwitchNow),
+            child: const Text(ProfileText.personaSwitchNow),
           ),
         ],
       ),
@@ -397,9 +377,9 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
       final confirmed = await showAppCupertinoDialog<bool>(
         context: context,
         builder: (dialogContext) => CupertinoAlertDialog(
-          title: const Text(UITextConstants.personaRetire),
+          title: const Text(ProfileText.personaRetire),
           content: Text(
-            UITextConstants.personaRetireConfirmTemplate.replaceFirst(
+            ProfileText.personaRetireConfirmTemplate.replaceFirst(
               '%s',
               persona.displayName,
             ),
@@ -407,12 +387,12 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
           actions: <Widget>[
             CupertinoDialogAction(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text(UITextConstants.cancel),
+              child: const Text(FoundationText.cancel),
             ),
             CupertinoDialogAction(
               isDestructiveAction: true,
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text(UITextConstants.personaRetire),
+              child: const Text(ProfileText.personaRetire),
             ),
           ],
         ),
@@ -424,8 +404,8 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
       if (mounted) {
         await _showActionErrorFeedback(
           error: e,
-          title: UITextConstants.personaRetireErrorTitle,
-          fallbackMessage: UITextConstants.personaRetireErrorMessage,
+          title: ContentText.personaRetireErrorTitle,
+          fallbackMessage: ContentText.personaRetireErrorMessage,
         );
       }
     }
@@ -433,11 +413,11 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
 
   String _retireBlockedMessage(String blockedReason) {
     return switch (blockedReason) {
-      'blocked_primary_persona' => UITextConstants.personaRetirePrimaryBlocked,
-      'blocked_last_persona' => UITextConstants.personaRetireLastBlocked,
-      'blocked_active_persona' => UITextConstants.personaRetireActiveBlocked,
-      'blocked_retired_persona' => UITextConstants.personaRetireAlreadyBlocked,
-      _ => UITextConstants.personaRetireBlocked,
+      'blocked_primary_persona' => ProfileText.personaRetirePrimaryBlocked,
+      'blocked_last_persona' => ProfileText.personaRetireLastBlocked,
+      'blocked_active_persona' => ProfileText.personaRetireActiveBlocked,
+      'blocked_retired_persona' => ProfileText.personaRetireAlreadyBlocked,
+      _ => ProfileText.personaRetireBlocked,
     };
   }
 
@@ -451,8 +431,8 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
       if (mounted) {
         await _showActionErrorFeedback(
           error: e,
-          title: UITextConstants.personaSyncErrorTitle,
-          fallbackMessage: UITextConstants.personaSyncErrorMessage,
+          title: ContentText.personaSyncErrorTitle,
+          fallbackMessage: ContentText.personaSyncErrorMessage,
           onRetry: () async {
             await _applySuggestion(notifier, suggestion);
           },
@@ -472,7 +452,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => CupertinoAlertDialog(
-          title: const Text(UITextConstants.personaSyncApplySelected),
+          title: const Text(ProfileText.personaSyncApplySelected),
           content: SizedBox(
             width: double.maxFinite,
             child: Column(
@@ -511,7 +491,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
           actions: <Widget>[
             CupertinoDialogAction(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text(UITextConstants.cancel),
+              child: const Text(FoundationText.cancel),
             ),
             CupertinoDialogAction(
               isDefaultAction: true,
@@ -529,7 +509,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                   targetPersonaIds: targetIds,
                 );
               },
-              child: const Text(UITextConstants.confirm),
+              child: const Text(FoundationText.confirm),
             ),
           ],
         ),
@@ -559,10 +539,10 @@ class _SuggestionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(UITextConstants.personaSyncSuggestionTitle),
+          const Text(ProfileText.personaSyncSuggestionTitle),
           SizedBox(height: AppSpacing.intraGroupXs),
           Text(
-            UITextConstants.personaSyncSuggestionBody,
+            ProfileText.personaSyncSuggestionBody,
             style: TextStyle(color: AppColors.iosSecondaryLabel(context)),
           ),
           SizedBox(height: AppSpacing.containerSm),
@@ -573,17 +553,17 @@ class _SuggestionCard extends StatelessWidget {
               CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: onApplyAll,
-                child: const Text(UITextConstants.personaSyncApplyAll),
+                child: const Text(ProfileText.personaSyncApplyAll),
               ),
               CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: onSelectTargets,
-                child: const Text(UITextConstants.personaSyncApplySelected),
+                child: const Text(ProfileText.personaSyncApplySelected),
               ),
               CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: onIgnore,
-                child: const Text(UITextConstants.personaSyncIgnore),
+                child: const Text(ProfileText.personaSyncIgnore),
               ),
             ],
           ),
@@ -613,13 +593,13 @@ class _PersonaCard extends StatelessWidget {
     final isRetired = persona.isRetired;
     final inheritanceLabel = persona.inheritsProfileFromOwner
         ? (persona.lastProfileSyncAt != null
-              ? UITextConstants.personaInheritanceSynced
-              : UITextConstants.personaInheritanceDefault)
-        : UITextConstants.personaInheritanceCustom;
+              ? ProfileText.personaInheritanceSynced
+              : ProfileText.personaInheritanceDefault)
+        : ProfileText.personaInheritanceCustom;
     final syncLabel = !persona.hasContactInfo
-        ? UITextConstants.personaSyncStatusMissing
+        ? ProfileText.personaSyncStatusMissing
         : (persona.lastProfileSyncAt != null
-              ? UITextConstants.personaSyncStatusReady
+              ? ProfileText.personaSyncStatusReady
               : inheritanceLabel);
 
     return ProfileIosSectionCard(
@@ -659,26 +639,26 @@ class _PersonaCard extends StatelessWidget {
                                 AppSpacing.radiusTwenty,
                               ),
                             ),
-                            child: const Text(UITextConstants.personaPrimary),
+                            child: const Text(ProfileText.personaPrimary),
                           ),
                         ],
                       ],
                     ),
                     SizedBox(height: AppSpacing.intraGroupXs),
                     Text(
-                      '${UITextConstants.personaUserHandleLabel}: ${persona.userHandle.isEmpty ? '-' : persona.userHandle}',
+                      '${ProfileText.personaUserHandleLabel}: ${persona.userHandle.isEmpty ? '-' : persona.userHandle}',
                       style: TextStyle(
                         color: AppColors.iosSecondaryLabel(context),
                       ),
                     ),
                     Text(
-                      '${UITextConstants.personaPhoneLabel}: ${persona.phone.isEmpty ? '-' : persona.phone}',
+                      '${ProfileText.personaPhoneLabel}: ${persona.phone.isEmpty ? '-' : persona.phone}',
                       style: TextStyle(
                         color: AppColors.iosSecondaryLabel(context),
                       ),
                     ),
                     Text(
-                      '${UITextConstants.personaEmailLabel}: ${persona.email.isEmpty ? '-' : persona.email}',
+                      '${ProfileText.personaEmailLabel}: ${persona.email.isEmpty ? '-' : persona.email}',
                       style: TextStyle(
                         color: AppColors.iosSecondaryLabel(context),
                       ),
@@ -709,10 +689,10 @@ class _PersonaCard extends StatelessWidget {
                 ),
                 child: Text(
                   isRetired
-                      ? UITextConstants.personaRetired
+                      ? ProfileText.personaRetired
                       : isCurrent
-                      ? UITextConstants.personaCurrentUsing
-                      : UITextConstants.personaInactive,
+                      ? ProfileText.personaCurrentUsing
+                      : ProfileText.personaInactive,
                   style: TextStyle(
                     color: !isRetired && isCurrent
                         ? AppColors.white
@@ -735,23 +715,23 @@ class _PersonaCard extends StatelessWidget {
                 onPressed: isCurrent || isRetired ? null : onActivate,
                 child: Text(
                   isRetired
-                      ? UITextConstants.personaRetired
+                      ? ProfileText.personaRetired
                       : isCurrent
-                      ? UITextConstants.personaCurrentUsing
-                      : UITextConstants.personaSwitchNow,
+                      ? ProfileText.personaCurrentUsing
+                      : ProfileText.personaSwitchNow,
                 ),
               ),
               CupertinoButton(
                 key: ValueKey<String>('persona-edit-${persona.subAccountId}'),
                 padding: EdgeInsets.zero,
                 onPressed: isRetired ? null : onEdit,
-                child: const Text(UITextConstants.profileEditLabel),
+                child: const Text(ProfileText.profileEditLabel),
               ),
               if (!persona.isPrimary && !isRetired)
                 CupertinoButton(
                   padding: EdgeInsets.zero,
                   onPressed: onRetire,
-                  child: const Text(UITextConstants.personaRetire),
+                  child: const Text(ProfileText.personaRetire),
                 ),
             ],
           ),

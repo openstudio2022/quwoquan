@@ -67,12 +67,13 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
     super.dispose();
   }
 
-  bool get _canSave => !_saving && _displayNameController.text.trim().isNotEmpty;
+  bool get _canSave =>
+      !_saving && _displayNameController.text.trim().isNotEmpty;
 
   Future<void> _submit() async {
     final displayName = _displayNameController.text.trim();
     if (displayName.isEmpty) {
-      AppToast.show(context, UITextConstants.personaFormNameRequiredHint);
+      AppToast.show(context, ProfileText.personaFormNameRequiredHint);
       return;
     }
     setState(() => _saving = true);
@@ -112,15 +113,15 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
           category: resolved.category,
           scope: resolved.scope,
           title: widget.isCreate
-              ? UITextConstants.personaCreateErrorTitle
-              : UITextConstants.personaEditErrorTitle,
+              ? ContentText.personaCreateErrorTitle
+              : ContentText.personaEditErrorTitle,
           message: resolved.message,
           secondaryMessage: resolved.secondaryMessage,
           primaryAction:
               resolved.primaryAction ??
               const UiErrorAction(
                 type: UiErrorActionType.retry,
-                label: UITextConstants.tryAgain,
+                label: ContentText.tryAgain,
               ),
           secondaryAction: resolved.secondaryAction,
           dismissible: resolved.dismissible,
@@ -243,18 +244,18 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
       title: widget.isCreate
-          ? UITextConstants.personaCreateTitle
-          : UITextConstants.personaEditTitle,
+          ? ProfileText.personaCreateTitle
+          : ProfileText.personaEditTitle,
       onBack: () => Navigator.of(context).pop(),
       trailing: _saving
-          ? const CupertinoActivityIndicator()
+          ? AppRequestFeedback.inline()
           : CupertinoButton(
               padding: EdgeInsets.zero,
               onPressed: _canSave ? _submit : null,
               child: Text(
                 widget.isCreate
-                    ? UITextConstants.create
-                    : UITextConstants.editProfileSaveAction,
+                    ? DiscoveryText.create
+                    : ProfileText.editProfileSaveAction,
                 style: TextStyle(
                   fontSize: AppTypography.lg,
                   color: _canSave
@@ -273,30 +274,29 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
         children: <Widget>[
           SettingsInsetGroupedSection(
             isDark: isDark,
-            header: UITextConstants.personaFormBasicSection,
+            header: ProfileText.personaFormBasicSection,
             density: SettingsInsetSectionDensity.compact,
             child: Column(
               children: <Widget>[
                 _textFieldRow(
                   isDark: isDark,
-                  label: UITextConstants.editProfileNicknameLabel,
+                  label: ProfileText.editProfileNicknameLabel,
                   controller: _displayNameController,
-                  placeholder:
-                      UITextConstants.profileSubAccountNamePlaceholder,
+                  placeholder: ProfileText.profileSubAccountNamePlaceholder,
                 ),
                 if (widget.isCreate) ...<Widget>[
                   divider,
                   _textFieldRow(
                     isDark: isDark,
-                    label: UITextConstants.personaCreateTitle,
+                    label: ProfileText.personaCreateTitle,
                     controller: _purposeController,
-                    placeholder: UITextConstants.personaFormPurposePlaceholder,
+                    placeholder: ProfileText.personaFormPurposePlaceholder,
                   ),
                 ] else ...<Widget>[
                   divider,
                   SettingsInsetFormRow(
                     isDark: isDark,
-                    label: UITextConstants.personaUserHandleLabel,
+                    label: ProfileText.personaUserHandleLabel,
                     trailing: Text(
                       persona!.userHandle.isEmpty ? '-' : persona.userHandle,
                       style: TextStyle(
@@ -313,23 +313,23 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
             SizedBox(height: AppSpacing.interGroupMd),
             SettingsInsetGroupedSection(
               isDark: isDark,
-              header: UITextConstants.personaFormContactSection,
+              header: ProfileText.personaFormContactSection,
               density: SettingsInsetSectionDensity.compact,
               child: Column(
                 children: <Widget>[
                   _textFieldRow(
                     isDark: isDark,
-                    label: UITextConstants.personaPhoneLabel,
+                    label: ProfileText.personaPhoneLabel,
                     controller: _phoneController,
-                    placeholder: UITextConstants.personaPhoneLabel,
+                    placeholder: ProfileText.personaPhoneLabel,
                     keyboardType: TextInputType.phone,
                   ),
                   divider,
                   _textFieldRow(
                     isDark: isDark,
-                    label: UITextConstants.personaEmailLabel,
+                    label: ProfileText.personaEmailLabel,
                     controller: _emailController,
-                    placeholder: UITextConstants.personaEmailLabel,
+                    placeholder: ProfileText.personaEmailLabel,
                     keyboardType: TextInputType.emailAddress,
                   ),
                 ],
@@ -339,27 +339,26 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
           SizedBox(height: AppSpacing.interGroupMd),
           SettingsInsetGroupedSection(
             isDark: isDark,
-            header: UITextConstants.personaFormVisibilitySection,
+            header: ProfileText.personaFormVisibilitySection,
             density: SettingsInsetSectionDensity.compact,
             child: Column(
               children: <Widget>[
                 _isolationOptionRow(
                   isDark: isDark,
                   level: PersonaIsolationLevel.open,
-                  description: UITextConstants.profileSubAccountOpenDescription,
+                  description: ProfileText.profileSubAccountOpenDescription,
                 ),
                 divider,
                 _isolationOptionRow(
                   isDark: isDark,
                   level: PersonaIsolationLevel.semi,
-                  description: UITextConstants.profileSubAccountSemiDescription,
+                  description: ProfileText.profileSubAccountSemiDescription,
                 ),
                 divider,
                 _isolationOptionRow(
                   isDark: isDark,
                   level: PersonaIsolationLevel.strict,
-                  description:
-                      UITextConstants.profileSubAccountStrictDescription,
+                  description: ProfileText.profileSubAccountStrictDescription,
                 ),
               ],
             ),

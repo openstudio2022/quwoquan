@@ -68,21 +68,21 @@ void main() {
     );
 
     expect(
-      find.text(UITextConstants.scanQrCameraUnavailableTitle),
+      find.text(ContactText.scanQrCameraUnavailableTitle),
       findsOneWidget,
     );
     expect(
-      find.text(UITextConstants.scanQrCameraUnavailableBody),
+      find.text(ContactText.scanQrCameraUnavailableBody),
       findsOneWidget,
     );
     expect(find.textContaining('Scanning is not supported'), findsNothing);
     expect(find.textContaining('No cameras available'), findsNothing);
-    expect(find.text(UITextConstants.scanQrAlbum), findsOneWidget);
+    expect(find.text(ContactText.scanQrAlbum), findsOneWidget);
   });
 
   testWidgets('相机不可用但相册可用时，选择联系人二维码可解析到添加确认页', (tester) async {
     final analyzer = _FakeContactQrImageAnalyzer(
-      raw: 'https://app.quwoquan.com/u/alice?qr=token_alice',
+      raw: 'https://quwoquan.com/u/alice?qr=token_alice',
     );
     final repository = _ResolvingUserProfileRepository();
 
@@ -94,7 +94,7 @@ void main() {
       profileEditQuery: repository,
     );
 
-    await tester.tap(find.text(UITextConstants.scanQrAlbum));
+    await tester.tap(find.text(ContactText.scanQrAlbum));
     await tester.pumpAndSettle();
 
     expect(analyzer.lastPath, '/tmp/alice_qr.png');
@@ -112,10 +112,10 @@ void main() {
       profileEditQuery: _ResolvingUserProfileRepository(),
     );
 
-    await tester.tap(find.text(UITextConstants.scanQrAlbum));
+    await tester.tap(find.text(ContactText.scanQrAlbum));
     await tester.pump();
 
-    expect(find.text(UITextConstants.scanQrNoCodeFound), findsOneWidget);
+    expect(find.text(ContactText.scanQrNoCodeFound), findsOneWidget);
     AppToast.dismiss();
     await tester.pump();
   });
@@ -126,7 +126,7 @@ void main() {
       capabilities: CapabilityProfile.desktop.copyWith(camera: false),
     );
 
-    expect(find.text(UITextConstants.scanQrAlbum), findsNothing);
+    expect(find.text(ContactText.scanQrAlbum), findsNothing);
   });
 }
 
@@ -176,7 +176,7 @@ class _ResolvingUserProfileRepository extends MockUserProfileRepository {
     return ProfileQrResolveWireDto(
       subAccountId: 'user_alice',
       userHandle: 'alice',
-      publicProfileUrl: 'https://app.quwoquan.com/u/alice',
+      publicProfileUrl: 'https://quwoquan.com/u/alice',
       scanStatus: 'accepted',
     );
   }

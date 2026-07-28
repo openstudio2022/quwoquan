@@ -188,6 +188,12 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       await AppStartupRuntime.instance.hydrateNativeProcessSegments(
         cancellationSignal: _disposedCompleter.future,
       );
+      if (mounted && !_terminal) {
+        // Native process time may only tighten the absolute startup budget.
+        // Re-arm immediately so a late hydration cannot leave the old,
+        // longer Dart-only timer running.
+        _armDeadline();
+      }
     } catch (error, stackTrace) {
       // MethodChannel 超时或未知平台错误只降级到 Dart 时钟，但必须留下诊断。
       _reportNonBlockingFailure(
@@ -645,7 +651,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           child: !_hintVisible
               ? const SizedBox.shrink()
               : Text(
-                  UITextConstants.startupStillStartingInline,
+                  FoundationText.startupStillStartingInline,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,

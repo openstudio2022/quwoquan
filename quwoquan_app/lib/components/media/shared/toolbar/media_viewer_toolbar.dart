@@ -240,8 +240,8 @@ class MediaViewerTopBar extends StatelessWidget {
 
   Widget _buildFollowButton(BuildContext context, {required double height}) {
     final buttonText = isFollowing
-        ? UITextConstants.following
-        : UITextConstants.follow;
+        ? FoundationText.following
+        : FoundationText.follow;
     return CupertinoButton(
       padding: EdgeInsets.zero,
       minimumSize: Size.zero,

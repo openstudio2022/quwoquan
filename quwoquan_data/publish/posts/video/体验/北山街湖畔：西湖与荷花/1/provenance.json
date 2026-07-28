@@ -1,0 +1,42 @@
+{
+  "executionId": "20260728--travel-video-golden--hangzhou-west-lake--pilot-007",
+  "agentRunId": "run-5db4da32-08b7-426f-9ba8-2cc46001449c",
+  "agentModel": "Cursor Grok 4.5",
+  "renderStrategy": "sourced_video_transcode",
+  "outputAudioStatus": "none",
+  "sources": [
+    {
+      "assetRef": "sources/杭州西湖__tourism_video_site__fcee686a/assets/source.webm",
+      "sourceRef": "https://commons.wikimedia.org/wiki/File:%E8%A5%BF%E6%B9%96_%E5%8C%97%E5%B1%B1%E8%A1%97%E6%97%81%E7%9A%84%E8%A5%BF%E6%B9%96%E4%B8%8E%E8%8D%B7%E8%8A%B1.webm",
+      "rightsRef": "sources/杭州西湖__tourism_video_site__fcee686a/rights/permission_evidence.json",
+      "mediaProbeRef": "sources/杭州西湖__tourism_video_site__fcee686a/media/probe.json",
+      "watermarkEvidenceRef": "sources/杭州西湖__tourism_video_site__fcee686a/media/watermark_evidence.json",
+      "audioRightsEvidenceRef": "sources/杭州西湖__tourism_video_site__fcee686a/rights/audio_rights_evidence.json",
+      "sha256": "sha256:fb2aac514e69c15799e2e5bb565a2767683ba111e12c0067ad8c8998da8b7777",
+      "isOriginal": false,
+      "originalCreatorId": null,
+      "originalCreatorName": "Liuxingy",
+      "originalCreatorProfileUrl": null,
+      "platform": "Wikimedia Commons",
+      "sourcePostUrl": "https://commons.wikimedia.org/wiki/File:%E8%A5%BF%E6%B9%96_%E5%8C%97%E5%B1%B1%E8%A1%97%E6%97%81%E7%9A%84%E8%A5%BF%E6%B9%96%E4%B8%8E%E8%8D%B7%E8%8A%B1.webm",
+      "originalAssetUrl": "https://upload.wikimedia.org/wikipedia/commons/b/b3/%E8%A5%BF%E6%B9%96_%E5%8C%97%E5%B1%B1%E8%A1%97%E6%97%81%E7%9A%84%E8%A5%BF%E6%B9%96%E4%B8%8E%E8%8D%B7%E8%8A%B1.webm",
+      "attributionText": "西湖 北山街旁的西湖与荷花.webm — Liuxingy — CC BY-SA 4.0 — https://commons.wikimedia.org/wiki/File:%E8%A5%BF%E6%B9%96_%E5%8C%97%E5%B1%B1%E8%A1%97%E6%97%81%E7%9A%84%E8%A5%BF%E6%B9%96%E4%B8%8E%E8%8D%B7%E8%8A%B1.webm",
+      "rightsBasis": "CC BY-SA 4.0",
+      "commercialAuthorizationStatus": "verified",
+      "publicationAdmission": "commercial_release",
+      "authorizationProofUrl": "https://commons.wikimedia.org/wiki/File:%E8%A5%BF%E6%B9%96_%E5%8C%97%E5%B1%B1%E8%A1%97%E6%97%81%E7%9A%84%E8%A5%BF%E6%B9%96%E4%B8%8E%E8%8D%B7%E8%8A%B1.webm",
+      "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "riskAcceptanceId": null,
+      "watermarkStatus": "absent",
+      "audioRightsStatus": "no_audio",
+      "modelReleaseStatus": "not_required",
+      "propertyReleaseStatus": "not_required",
+      "collectedAt": "2026-07-28T05:24:41.968511+00:00",
+      "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+      "directDownload": true,
+      "accessControlBypassed": false,
+      "drmDetected": false,
+      "basis": "CC BY-SA 4.0"
+    }
+  ]
+}

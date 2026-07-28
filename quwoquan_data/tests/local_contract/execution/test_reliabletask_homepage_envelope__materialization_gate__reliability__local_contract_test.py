@@ -202,6 +202,7 @@ def test_homepage_repair_feedback_is_appended_only_after_typed_contract_validati
 
     assert checkpoint == "build_homepage"
     assert prompt.startswith("保留冻结正文。")
+    assert "必须先用符合冻结正文合同的完整主页正文替换该占位" in prompt
     assert "[DATA.QUALITY.FAILED] 标题层级不符合页面合同" in prompt
 
 
@@ -378,3 +379,171 @@ def test_homepage_finalization_writes_typed_repair_report_for_materialization_fa
     assert repair_report["issues"][0]["code"] == "DATA.QUALITY.FAILED"
     assert repair_report["issues"][0]["stage"] == "build_homepage"
     assert repair_report["issues"][0]["recovery"] == "retry_agent"
+
+
+def test_homepage_finalization_writes_typed_repair_report_for_placeholder_draft(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from content.execution.agent.outcome import AgentRunOutcome, ManagedAgentJobOutcome
+    from content.execution.controller import homepage_author_finalization
+    from content.homepage import homepage_review
+    from core.control_types import AgentProvider
+
+    entity = "测试实体甲"
+    draft_dir = tmp_path / "4.draft"
+    draft_dir.mkdir(parents=True)
+    (draft_dir / "page.md").write_text(
+        "<!-- QWQ_AWAITING_AGENT_DRAFT -->\n# 测试实体甲\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(homepage_review, "_entity_draft_dir", lambda *_args: draft_dir)
+    target = SimpleNamespace(name=entity, entity_type="地点/景区")
+    ctx = SimpleNamespace(
+        execution_id="20260722--travel-homepage-generate--test-region-a--pilot-901",
+        spec=SimpleNamespace(scope=SimpleNamespace(coverage_targets=(target,))),
+        model="grok-4.5",
+    )
+    outcome = ManagedAgentJobOutcome(
+        outcome=AgentRunOutcome.finished(
+            provider=AgentProvider.CURSOR_SDK,
+            run_id="cursor-run-001",
+        ),
+        job_index=0,
+        lane="homepage",
+        ref="/entity/地点/景区/测试实体甲",
+    )
+
+    finalized = homepage_author_finalization._finalize_managed_homepage_outputs(
+        ctx,
+        ["冻结提示词"],
+        [outcome],
+    )
+
+    repair_report = json.loads(
+        (draft_dir.parent / "5.review" / "repair_report.json").read_text(encoding="utf-8")
+    )
+    assert finalized[0].gate_issues == (
+        "homepage author finished with placeholder 4.draft/page.md",
+    )
+    assert repair_report["issues"] == [
+        {
+            "code": "DATA.QUALITY.FAILED",
+            "stage": "build_homepage",
+            "ref": outcome.ref,
+            "lane": "homepage",
+            "recovery": "retry_agent",
+            "message": "homepage author finished with placeholder 4.draft/page.md",
+            "attrs": {},
+        }
+    ]
+
+
+def test_homepage_finalization_accepts_typed_failure_protocol_with_placeholder(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """failure.json must short-circuit placeholder rejection and avoid author retry."""
+    from content.execution.agent.outcome import AgentRunOutcome, ManagedAgentJobOutcome
+    from content.execution.controller import homepage_author_finalization
+    from content.homepage import homepage_review
+    from core.control_types import AgentProvider
+
+    entity = "测试实体甲"
+    draft_dir = tmp_path / "4.draft"
+    draft_dir.mkdir(parents=True)
+    (draft_dir.parent / "5.review").mkdir(parents=True)
+    (draft_dir.parent / "5.review" / "repair_report.json").write_text(
+        "{}",
+        encoding="utf-8",
+    )
+    (draft_dir / "page.md").write_text(
+        "<!-- QWQ_AWAITING_AGENT_DRAFT -->\n# 测试实体甲\n",
+        encoding="utf-8",
+    )
+    (draft_dir / "prompt.md").write_text("prompt", encoding="utf-8")
+    (draft_dir / "author_job_packet.json").write_text(
+        json.dumps(
+            {
+                "executionId": "20260722--travel-homepage-generate--test-region-a--pilot-901",
+                "objectRef": "/entity/地点/景区/测试实体甲",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (draft_dir / "failure.json").write_text(
+        json.dumps(
+            {
+                "schema": "quwoquan_data.entity_page_failure",
+                "targetEntity": entity,
+                "failureKind": "source_insufficient",
+                "reasons": ["底稿事实不足以支撑主页"],
+                "evidence": [{"field": "baseDraft", "quote": "stub"}],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (draft_dir / "draft_meta.json").write_text(
+        json.dumps(
+            {
+                "schema": "quwoquan_data.draft_meta",
+                "stage": "4.draft",
+                "executionId": "20260722--travel-homepage-generate--test-region-a--pilot-901",
+                "executionBinding": "frozen",
+                "objectRef": "/entity/地点/景区/测试实体甲",
+                "status": "pending_agent",
+                "provider": "cursor_sdk",
+                "model": "grok-4.5",
+                "agentRunId": "pending",
+                "promptSha256": "sha256:" + ("a" * 64),
+                "draftSha256": None,
+                "selfCheck": {"status": "pending", "issues": []},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(homepage_review, "_entity_draft_dir", lambda *_args: draft_dir)
+    monkeypatch.setattr(
+        homepage_author_finalization.store,
+        "now_iso",
+        lambda: "2026-07-27T00:00:00Z",
+    )
+    monkeypatch.setattr(
+        homepage_author_finalization,
+        "_write_homepage_author_evidence",
+        lambda *args, **kwargs: None,
+    )
+    from core import schema
+
+    monkeypatch.setattr(schema, "assert_valid", lambda *_args, **_kwargs: None)
+    target = SimpleNamespace(name=entity, entity_type="地点/景区")
+    ctx = SimpleNamespace(
+        execution_id="20260722--travel-homepage-generate--test-region-a--pilot-901",
+        spec=SimpleNamespace(scope=SimpleNamespace(coverage_targets=(target,))),
+        model="grok-4.5",
+    )
+    outcome = ManagedAgentJobOutcome(
+        outcome=AgentRunOutcome.finished(
+            provider=AgentProvider.CURSOR_SDK,
+            run_id="cursor-run-failure-protocol",
+        ),
+        job_index=0,
+        lane="homepage",
+        ref="/entity/地点/景区/测试实体甲",
+    )
+
+    finalized = homepage_author_finalization._finalize_managed_homepage_outputs(
+        ctx,
+        ["冻结提示词"],
+        [outcome],
+    )
+
+    assert finalized[0].succeeded
+    assert finalized[0].gate_issues == ()
+    assert not (draft_dir.parent / "5.review" / "repair_report.json").is_file()
+    meta = json.loads((draft_dir / "draft_meta.json").read_text(encoding="utf-8"))
+    assert meta["status"] == "failed"
+    assert meta["selfCheck"]["issues"][0].startswith("failureProtocol:source_insufficient:")

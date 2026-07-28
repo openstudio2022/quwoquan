@@ -1,6 +1,6 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-from content.execution.coverage import coverage_entity_type
+from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueStage, DataIssueLane, DataRecoveryAction, ExecutionContext, Mapping, Path, Sequence, _download_diagnostic_image_repair_hints, _download_issue_repair_hints, _research_image_repair_hints, data_issue, execution_command_root, execution_root, issue_messages, read_json, store, write_json
 
 def _record_download_repair(ctx: ExecutionContext, issues: Sequence[DataIssue]) -> Path:
@@ -9,7 +9,7 @@ def _record_download_repair(ctx: ExecutionContext, issues: Sequence[DataIssue]) 
     from content.execution.recovery.download_unresolved import _issue_mentions_entity_id
     from core.download_diagnostics import entity_download_diagnostics
     from content.source.source_unit import resolve_entity_object_dir
-    etype = coverage_entity_type(ctx.spec)
+    batch_etype = coverage_entity_type(ctx.spec)
     entities: list[dict[str, Any]] = []
     root = execution_root(ctx.execution_id)
     result_root = execution_command_root(ctx.execution_id, "source") / "results"
@@ -40,13 +40,21 @@ def _record_download_repair(ctx: ExecutionContext, issues: Sequence[DataIssue]) 
         if not any(issue in rows for rows in issue_entity_hits.values())
     ]
     for entity_id in ctx.entity_ids:
+        entity_etype = (
+            coverage_entity_type_for_entity(ctx.spec, entity_id) or batch_etype
+        )
         entity_issue_records = list(issue_entity_hits.get(entity_id) or [])
         if not entity_issue_records and len(ctx.entity_ids) == 1:
             entity_issue_records.extend(general_issues)
         if not entity_issue_records:
             continue
         research_lane_issue_records = {
-            lane: _download_research_lane_issues(ctx, entity_id, etype, lane)
+            lane: _download_research_lane_issues(
+                ctx,
+                entity_id,
+                entity_etype,
+                lane,
+            )
             for lane in ("homepage", "article", "image")
         }
         combined_issue_records = list(entity_issue_records)
@@ -59,7 +67,7 @@ def _record_download_repair(ctx: ExecutionContext, issues: Sequence[DataIssue]) 
             resolve_entity_object_dir(
                 ctx.execution_id,
                 entity_id,
-                etype_hint=etype,
+                etype_hint=entity_etype,
             )
             / "1.download"
         )
@@ -79,7 +87,9 @@ def _record_download_repair(ctx: ExecutionContext, issues: Sequence[DataIssue]) 
             combined_issue_records,
             entity_id=entity_id,
         )
-        image_repair_hints.extend(_research_image_repair_hints(ctx, entity_id, etype))
+        image_repair_hints.extend(
+            _research_image_repair_hints(ctx, entity_id, entity_etype)
+        )
         image_repair_hints.extend(
             _download_diagnostic_image_repair_hints(diagnostics, entity_id=entity_id)
         )
