@@ -8,7 +8,7 @@
     "rtc": {"exposure": "public", "scheme": "wss", "host": "rtc.quwoquan.com", "portRole": null, "pathBase": "/", "tlsProfile": "public-ca-prod", "consumers": ["app.rtc", "ops.health"]},
     "productOps": {"exposure": "public", "scheme": "https", "host": "ops.quwoquan.com", "portRole": null, "pathBase": "/", "tlsProfile": "public-ca-prod", "consumers": ["app.recovery", "ops.release"]},
     "publicWeb": {"exposure": "public", "scheme": "https", "host": "quwoquan.com", "portRole": null, "pathBase": "/", "tlsProfile": "public-ca-prod", "consumers": ["app.public-links", "web.release", "native.app-links"]},
-    "appDownload": {"exposure": "public", "scheme": "https", "host": "cdn.quwoquan.com", "portRole": null, "pathBase": "/app/download", "tlsProfile": "public-ca-prod", "consumers": ["app.recovery", "web.download"]},
+    "appDownload": {"exposure": "public", "scheme": "https", "host": "cdn.quwoquan.com", "portRole": null, "pathBase": "/download", "tlsProfile": "public-ca-prod", "consumers": ["app.recovery", "web.download"]},
     "legal": {"exposure": "public", "scheme": "https", "host": "quwoquan.com", "portRole": null, "pathBase": "/legal", "tlsProfile": "public-ca-prod", "consumers": ["app.legal", "web.legal"]},
     "mediaAvatar": {"exposure": "public", "scheme": "https", "host": "cdn.quwoquan.com", "portRole": null, "pathBase": "/media/avatar", "tlsProfile": "public-ca-prod", "consumers": ["app.media", "data.release", "service.chat"]},
     "mediaImage": {"exposure": "public", "scheme": "https", "host": "cdn.quwoquan.com", "portRole": null, "pathBase": "/media/image", "tlsProfile": "public-ca-prod", "consumers": ["app.media", "data.release", "service.content"]},
