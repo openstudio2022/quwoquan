@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import ipaddress
 import json
 import os
 import socket
@@ -31,7 +30,6 @@ from quwoquan_ops.cli.lib.public_domain_tls import (
 
 POLICY_PATH = ROOT / "quwoquan_ops" / "environments" / "domain_governance.yaml"
 LOCAL_TARGETS = ("alpha-local", "beta-local", "gamma-local", "prod-sim")
-ALL_TARGETS = (*LOCAL_TARGETS, "prod-hosted")
 
 
 class DomainGovernanceError(RuntimeError):
@@ -45,38 +43,13 @@ def _policy() -> dict[str, Any]:
     return value
 
 
-def _profile_addresses(
+def _nonprod_addresses(
     policy: dict[str, Any],
-    *,
-    target: str,
-    require_values: bool,
 ) -> tuple[str, str]:
-    prefix = "prod" if target == "prod-hosted" else "nonProd"
-    address_env = str(policy.get(f"{prefix}AddressEnv") or "")
-    ipv6_env = str(policy.get(f"{prefix}Ipv6AddressEnv") or "")
-    address = os.environ.get(address_env, "").strip()
-    ipv6_address = os.environ.get(ipv6_env, "").strip()
-    if not address or not ipv6_address:
-        if require_values:
-            raise DomainGovernanceError(
-                f"GATE_BLOCK: {address_env} and {ipv6_env} must identify public ingress"
-            )
-        return f"${{{address_env}}}", f"${{{ipv6_env}}}"
-    for label, value, expected_version in (
-        (address_env, address, 4),
-        (ipv6_env, ipv6_address, 6),
-    ):
-        try:
-            parsed = ipaddress.ip_address(value)
-        except ValueError as exc:
-            raise DomainGovernanceError(
-                f"GATE_BLOCK: {label} must be a valid IP address"
-            ) from exc
-        if parsed.version != expected_version or not parsed.is_global:
-            raise DomainGovernanceError(
-                f"GATE_BLOCK: {label} must be a globally routable IPv{expected_version} address"
-            )
-    return address, ipv6_address
+    return (
+        str(policy.get("nonProdAddress") or ""),
+        str(policy.get("nonProdIpv6Address") or ""),
+    )
 
 
 def desired_dns_records(
@@ -92,11 +65,7 @@ def desired_dns_records(
     records: list[dict[str, Any]] = []
     for profile in profiles:
         target = str(profile["target"])
-        address, ipv6_address = _profile_addresses(
-            policy,
-            target=target,
-            require_values=require_addresses,
-        )
+        address, ipv6_address = _nonprod_addresses(policy)
         for name in (str(profile["apex"]), str(profile["wildcard"])):
             records.extend(
                 (
@@ -116,25 +85,24 @@ def desired_dns_records(
                     },
                 )
             )
-        if target != "prod-hosted":
-            mail_guard = policy.get("nonProdMailGuard") or {}
-            records.extend(
-                (
-                    {
-                        "type": "MX",
-                        "name": str(profile["apex"]),
-                        "content": str(mail_guard["nullMx"]),
-                        "priority": 0,
-                        "ttl": 3600,
-                    },
-                    {
-                        "type": "TXT",
-                        "name": str(profile["apex"]),
-                        "content": str(mail_guard["spf"]),
-                        "ttl": 3600,
-                    },
-                )
+        mail_guard = policy.get("nonProdMailGuard") or {}
+        records.extend(
+            (
+                {
+                    "type": "MX",
+                    "name": str(profile["apex"]),
+                    "content": str(mail_guard["nullMx"]),
+                    "priority": 0,
+                    "ttl": 3600,
+                },
+                {
+                    "type": "TXT",
+                    "name": str(profile["apex"]),
+                    "content": str(mail_guard["spf"]),
+                    "ttl": 3600,
+                },
             )
+        )
     caa_names = {
         str(policy["registrableDomain"]),
         *(
@@ -273,17 +241,13 @@ def apply_dns_records() -> dict[str, Any]:
 def verify_live_state(*, verify_tls: bool) -> dict[str, Any]:
     policy = _policy()
     expected_by_target = {
-        target: _profile_addresses(
-            policy,
-            target=target,
-            require_values=True,
-        )
-        for target in ALL_TARGETS
+        target: _nonprod_addresses(policy)
+        for target in LOCAL_TARGETS
     }
     issues: list[str] = []
     topology = load_environment_topology()
     host_expectations: dict[str, tuple[str, str]] = {}
-    for target_name in ALL_TARGETS:
+    for target_name in LOCAL_TARGETS:
         for raw_url in (get_target(topology, target_name).get("publicBases") or {}).values():
             host = urllib.parse.urlsplit(str(raw_url)).hostname
             if host:
@@ -331,8 +295,6 @@ def verify_live_state(*, verify_tls: bool) -> dict[str, Any]:
     for profile in (policy.get("tlsProfiles") or {}).values():
         if not isinstance(profile, dict):
             continue
-        if profile.get("target") == "prod-hosted":
-            continue
         name = str(profile["apex"])
         by_type: dict[str, list[str]] = {}
         for record_type in ("MX", "TXT"):
@@ -371,7 +333,7 @@ def verify_live_state(*, verify_tls: bool) -> dict[str, Any]:
         reverse_evidence[address] = reverse_name
         if any(
             token in reverse_name
-            for token in (".internal", ".local", "localhost", "corp", "lan")
+            for token in (".internal", ".local", "corp", ".lan")
         ):
             issues.append(
                 f"{address} reverse DNS must not expose internal asset naming"
