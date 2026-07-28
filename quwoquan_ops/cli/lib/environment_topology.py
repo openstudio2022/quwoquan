@@ -101,7 +101,7 @@ ROLE_PATH_BASES = {
     "rtc": "/",
     "productOps": "/",
     "publicWeb": "/",
-    "appDownload": "/app/download",
+    "appDownload": "/download",
     "legal": "/legal",
     "mediaAvatar": "/media/avatar",
     "mediaImage": "/media/image",
