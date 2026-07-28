@@ -14,13 +14,12 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.domain_governance import ALL_TARGETS, desired_dns_records
+from quwoquan_ops.cli.domain_governance import LOCAL_TARGETS, desired_dns_records
 from quwoquan_ops.cli.lib.common import load_json_yaml
 from quwoquan_ops.cli.lib.environment_topology import (
     ENVIRONMENTS,
     ENVIRONMENT_CANONICAL_TARGET,
     ROLE_PATH_BASES,
-    TARGETS,
     URL_FIELDS,
     get_target,
     load_environment_topology,
@@ -111,14 +110,10 @@ def main() -> int:
     )
     if policy.get("registrableDomain") != "quwoquan.com":
         issues.append("domain governance registrableDomain must be quwoquan.com")
-    for field in (
-        "nonProdAddressEnv",
-        "nonProdIpv6AddressEnv",
-        "prodAddressEnv",
-        "prodIpv6AddressEnv",
-    ):
-        if not re.fullmatch(r"QWQ_[A-Z0-9_]+", str(policy.get(field) or "")):
-            issues.append(f"domain governance {field} must name a secret/runtime variable")
+    if policy.get("nonProdAddress") != "127.0.0.1":
+        issues.append("non-production public DNS must project canonical hosts to 127.0.0.1")
+    if policy.get("nonProdIpv6Address") != "::1":
+        issues.append("non-production public DNS must project canonical hosts to ::1")
     endpoint_registry = policy.get("endpointRegistry")
     if not isinstance(endpoint_registry, list):
         issues.append("domain governance endpointRegistry must be a list")
@@ -225,7 +220,7 @@ def main() -> int:
     if len(record_identities) != len(set(record_identities)):
         issues.append("DNS plan contains duplicate record identities")
     topology_local_hosts: set[str] = set()
-    for target_name in ALL_TARGETS:
+    for target_name in LOCAL_TARGETS:
         for value in (get_target(topology, target_name).get("publicBases") or {}).values():
             host = urlsplit(str(value)).hostname
             if host:
@@ -283,8 +278,8 @@ def main() -> int:
         for profile in tls_profiles.values()
         if isinstance(profile, dict)
     }
-    if profile_targets != set(TARGETS):
-        issues.append("TLS profiles must cover every topology target exactly once")
+    if profile_targets != set(LOCAL_TARGETS):
+        issues.append("DNS-01 TLS profiles must cover every local topology target exactly once")
     if len(tls_profiles) != len(profile_targets):
         issues.append("TLS profiles must not duplicate topology targets")
     for profile_name, profile in tls_profiles.items():
@@ -305,6 +300,13 @@ def main() -> int:
             issues.append(f"{profile_name}.apex must be {expected_apex}")
         if profile.get("wildcard") != f"*.{expected_apex}":
             issues.append(f"{profile_name}.wildcard must be *.{expected_apex}")
+    prod_roles = get_target(topology, "prod-hosted").get("resolvedUrlRoles") or {}
+    if any(
+        role.get("tlsProfile") != "public-ca-prod"
+        for role in prod_roles.values()
+        if isinstance(role, dict)
+    ):
+        issues.append("prod-hosted roles must use externally managed public-ca-prod")
 
     for scan_root in PRIVATE_TRUST_SCAN_ROOTS:
         for path in scan_root.rglob("*"):
