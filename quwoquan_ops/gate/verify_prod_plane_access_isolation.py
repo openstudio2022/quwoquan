@@ -68,6 +68,14 @@ def main() -> int:
     if access.get("rolloutStages") != EXPECTED_STAGES:
         errors.append(f"rolloutStages 必须为 {EXPECTED_STAGES}")
 
+    management = access.get("management") or {}
+    management_host = str(management.get("sshHost") or "").strip()
+    if (
+        management.get("purpose") != "ssh-only-management"
+        or not re.fullmatch(r"[A-Za-z0-9.-]+", management_host)
+    ):
+        errors.append("management 必须声明仅 SSH 使用的 bare sshHost")
+
     relay = access.get("relayAccount") or {}
     if relay.get("name") != "prod-ops":
         errors.append("relayAccount.name 必须为 prod-ops（非 root 中转）")

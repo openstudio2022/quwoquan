@@ -24,6 +24,27 @@ type filterCatalogStageFixture struct {
 	RecommendedFallbackPresetIDs []string                                      `json:"recommendedFallbackPresetIds"`
 }
 
+func TestFilterCatalogDirectStagePreservesIdempotencyHeader(t *testing.T) {
+	handler, store := newFilterCatalogDirectStageAPI(t)
+	fixture := validFilterCatalogStageFixture(t, "filter-release-direct-stage", 12)
+	response := performFilterCatalogCommand(
+		t,
+		handler,
+		"/internal/content/filter-catalog-releases",
+		fixture,
+		"filter-stage-direct",
+	)
+	if response["releaseId"] != fixture.ReleaseID {
+		t.Fatalf("unexpected direct Stage response: %+v", response)
+	}
+	if receipts := countFilterCatalogReceipts(t); receipts != 1 {
+		t.Fatalf("direct Stage persisted %d receipts, want 1", receipts)
+	}
+	if _, found, err := store.Load(context.Background(), fixture.ReleaseID); err != nil || !found {
+		t.Fatalf("direct Stage release missing: found=%v err=%v", found, err)
+	}
+}
+
 func TestFilterCatalogStageDigestIdempotent(t *testing.T) {
 	handler, store := newFilterCatalogAPI(t)
 	first := validFilterCatalogStageFixture(t, "filter-release-stage-a", 12)

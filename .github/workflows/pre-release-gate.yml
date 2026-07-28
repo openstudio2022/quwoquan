@@ -43,7 +43,7 @@ concurrency:
 jobs:
   resolve_profile:
     name: Resolve validation profile
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     outputs:
       profile: ${{ steps.resolve.outputs.profile }}
     steps:
@@ -58,7 +58,7 @@ jobs:
     needs:
       - resolve_profile
     if: ${{ needs.resolve_profile.outputs.profile != 'pr_light' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Require explicit release environment URL
@@ -82,12 +82,13 @@ jobs:
             --only-check global_search \
             --report ".qwq_output/env/${SEARCH_ENV}/runs/pre-release/search-runtime-smoke.json"
       - name: Upload search runtime evidence
-        if: always()
+        if: ${{ failure() && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: pre-release-search-runtime-smoke
           path: .qwq_output/env/*/runs/pre-release/search-runtime-smoke.json
           if-no-files-found: error
+          retention-days: 3
 
   release-evidence-summary:
     name: 04. Pre-Release Gate
@@ -95,7 +96,7 @@ jobs:
       - resolve_profile
       - search_runtime_smoke
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: 输出 04 PR gate 摘要

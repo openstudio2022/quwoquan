@@ -124,6 +124,11 @@ def write_baseline() -> int:
             "R03 文件行数预算（ratchet 只降不升）。由 verify_file_line_budget.py "
             "--write-baseline 生成。清理后请重跑收紧基线；新增超标即门禁 BLOCK。"
         ),
+        "governance": {
+            "owner": "repository-architecture",
+            "reason": "超过行数红线的存量文件只减不增",
+            "expires_when": "allow 为空时删除本文件",
+        },
         "block_threshold": threshold,
         "allow": allow,
     }

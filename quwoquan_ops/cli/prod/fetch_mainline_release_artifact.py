@@ -7,8 +7,15 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.prod.registry_transport import run_with_bounded_retry
 
 
 IMMUTABLE_REF = re.compile(r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}")
@@ -21,6 +28,11 @@ def parse_args() -> argparse.Namespace:
     source.add_argument("--source-sha")
     parser.add_argument("--repository", default="")
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument(
+        "--platform",
+        choices=("linux/amd64",),
+        default="linux/amd64",
+    )
     return parser.parse_args()
 
 
@@ -28,13 +40,25 @@ def run(argv: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(argv, text=True, capture_output=True, check=False)
 
 
-def fetch(ref: str, output_dir: Path) -> dict[str, str]:
+def pull(argv: list[str]) -> subprocess.CompletedProcess[str]:
+    return run_with_bounded_retry(lambda: run(argv))
+
+
+def fetch(
+    ref: str,
+    output_dir: Path,
+    *,
+    platform: str = "linux/amd64",
+) -> dict[str, str]:
     if IMMUTABLE_REF.fullmatch(ref) is None or "/release-artifact@" not in ref:
         raise ValueError("release artifact must be a GHCR release-artifact digest ref")
-    pull = run(["docker", "pull", ref])
-    if pull.returncode != 0:
+    if platform != "linux/amd64":
+        raise ValueError("release artifact platform must be linux/amd64")
+    pull_result = pull(["docker", "pull", "--platform", platform, ref])
+    if pull_result.returncode != 0:
         raise RuntimeError(
-            f"release artifact pull failed: {pull.stderr.strip() or pull.stdout.strip()}"
+            "release artifact pull failed after 3 bounded attempts: "
+            f"{pull_result.stderr.strip() or pull_result.stdout.strip()}"
         )
     inspect = run(
         ["docker", "image", "inspect", "--format", "{{json .RepoDigests}}", ref]
@@ -46,7 +70,7 @@ def fetch(ref: str, output_dir: Path) -> dict[str, str]:
         raise RuntimeError("pulled release artifact digest does not match requested ref")
 
     with tempfile.TemporaryDirectory(prefix="qwq-release-artifact-") as temporary:
-        create = run(["docker", "create", ref])
+        create = run(["docker", "create", "--platform", platform, ref])
         if create.returncode != 0:
             raise RuntimeError(
                 f"release artifact container creation failed: "
@@ -73,18 +97,25 @@ def fetch(ref: str, output_dir: Path) -> dict[str, str]:
     return {"ref": ref, "manifest": str(output_dir / "manifest.json")}
 
 
-def discover(repository: str, source_sha: str) -> str:
+def discover(
+    repository: str,
+    source_sha: str,
+    *,
+    platform: str = "linux/amd64",
+) -> str:
     if re.fullmatch(r"[0-9a-f]{40}", source_sha) is None:
         raise ValueError("release artifact source SHA is invalid")
     normalized = repository.strip("/").lower()
     if re.fullmatch(r"[a-z0-9._-]+/[a-z0-9._-]+", normalized) is None:
         raise ValueError("release artifact repository is invalid")
     tag_ref = f"ghcr.io/{normalized}/release-artifact:sha-{source_sha}"
-    pull = run(["docker", "pull", tag_ref])
-    if pull.returncode != 0:
+    if platform != "linux/amd64":
+        raise ValueError("release artifact platform must be linux/amd64")
+    pull_result = pull(["docker", "pull", "--platform", platform, tag_ref])
+    if pull_result.returncode != 0:
         raise RuntimeError(
-            f"release artifact discovery pull failed: "
-            f"{pull.stderr.strip() or pull.stdout.strip()}"
+            "release artifact discovery pull failed after 3 bounded attempts: "
+            f"{pull_result.stderr.strip() or pull_result.stdout.strip()}"
         )
     inspect = run(
         ["docker", "image", "inspect", "--format", "{{json .RepoDigests}}", tag_ref]
@@ -103,9 +134,17 @@ def main() -> int:
         ref = (
             args.ref.strip()
             if args.ref
-            else discover(args.repository, args.source_sha.strip())
+            else discover(
+                args.repository,
+                args.source_sha.strip(),
+                platform=args.platform,
+            )
         )
-        report = fetch(ref, args.output_dir.resolve())
+        report = fetch(
+            ref,
+            args.output_dir.resolve(),
+            platform=args.platform,
+        )
         if args.source_sha:
             manifest = json.loads(
                 Path(report["manifest"]).read_text(encoding="utf-8")

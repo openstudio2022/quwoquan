@@ -38,7 +38,7 @@
 
 - `prod-hosted` 可在独立 namespace 消费 reviewed main 的 Service Pipeline digest 制品，验证第一方容器、隔离空数据栈和 rootless user systemd 持久运行。
 - ReleaseManifest 配置包必须从 GHCR OCI digest 解包；Actions Artifact 配额不足不得诱发部署时重生、`latest` 或跳过制品门。
-- 受限单机只能按清单回收未运行旧容器和未使用镜像，必须保留恢复容器与所有 volume，并在镜像传输前重新证明真实可用空间。
+- 受限单机只能按清单回收未运行旧容器和未使用镜像；Buildah external working container 仅在 `storage`、`PID=0`、名称与最小年龄全部命中时可回收。必须保留恢复容器与所有 volume，并在镜像传输前重新证明真实可用空间。
 - 预验证不得接受 rollout/SLO/rollback 参数，不得读取或写入正式 release ledger/receipt；容器部署结果与正式发布资格必须分别报告。
 - 隔离投影不得继承正式 credentials；商业登录、Push、模型、SLS 与 RTC Provider 只能明确 unavailable，禁止切到非生产 fixture 或 Mock。
 - 缺 Provider、SFU/TURN、正式数据、观测、灾备、DNS/TLS 或灰度回滚证据时，正式发布资格始终保持 `GATE_BLOCK`。
@@ -76,7 +76,7 @@
 - GIVEN reviewed main 的 deployable ReleaseManifest、GHCR digest、四平面 SSH key 与满足阈值的 prod-hosted 主机。
 - WHEN 执行 `stackctl deploy --target prod-hosted --mode prevalidate --prevalidate-scope first-party`。
 - THEN 镜像传输前硬校验账号隔离、CPU、内存、容器空间、架构与端口，任一不足即 `GATE_BLOCK`。
-- THEN 当前可用空间、可回收空间和回收后实测空间分别可见；任何 volume、恢复容器或运行中容器都不进入回收范围。
+- THEN 当前可用空间、可回收空间和回收后实测空间分别可见；Buildah external working container 只有在 `storage`、`PID=0`、名称与最小年龄全部匹配时才进入回收范围，任何 volume、恢复容器或运行中容器都不进入回收范围。
 - THEN `integration-service` 只校验镜像和配置而不启动，LiveKit SFU、Coturn 与外部 Provider 不进入运行投影。
 - THEN service/edge user systemd unit 为 enabled/active，运行容器 digest 与 manifest 交付内容一致；隔离数据无 seed、无正式数据且不构成发布证据。
 - THEN container runtime 与 Provider readiness 分轴输出；被排除的 SLS 等 readiness 保持 `GATE_BLOCK`，不得污染第一方镜像/进程部署结论。

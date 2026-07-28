@@ -10,7 +10,6 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
 
 import yaml
 
@@ -20,6 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
+from quwoquan_ops.cli.lib.prod_management_access import prod_management_ssh_host
 
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 
@@ -42,16 +42,8 @@ def _load_yaml(path: Path) -> dict:
 
 
 def _resolve_prod_host(topology: dict) -> str:
-    env_host = os.environ.get("PROD_SSH_HOST", "").strip()
-    if env_host:
-        return env_host
-    api_base = (
-        ((topology.get("targets") or {}).get("prod-hosted") or {}).get("publicBases") or {}
-    ).get("api", "")
-    host = urlparse(str(api_base)).hostname or ""
-    if not host:
-        raise RuntimeError("无法从 topology 解析 prod SSH host，请设置 PROD_SSH_HOST")
-    return host
+    del topology
+    return prod_management_ssh_host()
 
 
 def _resolve_service_plane(access: dict, topology: dict, instance_suffix: str) -> ServicePlaneAccess:

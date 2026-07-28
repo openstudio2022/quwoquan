@@ -184,7 +184,7 @@ CloudOperationRequestPayload encodeCanonicalSearchQuery(
     'query': query.query,
     'mode': query.mode.wireValue,
     'objectTypes': query.objectTypes,
-    'ids': query.ids,
+    if (query.ids.isNotEmpty) 'ids': query.ids,
     'limit': query.limit,
   },
 );

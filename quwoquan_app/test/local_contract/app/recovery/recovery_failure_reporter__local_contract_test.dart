@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/app/recovery/recovery_failure_reporter.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_api_metadata.g.dart';
 import 'package:quwoquan_app/core/platform/app_recovery_native_bridge.dart';
 
 void main() {
@@ -20,6 +21,7 @@ void main() {
   test('persists secure envelope before exact ten-field upload', () async {
     final store = _MemoryStore();
     Map<String, Object?>? uploaded;
+    Uri? uploadUri;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           if (call.method != 'getRecoveryContext') return null;
@@ -29,6 +31,7 @@ void main() {
       store: store,
       nativeBridge: AppRecoveryNativeBridge(channel: channel),
       client: MockClient((request) async {
+        uploadUri = request.url;
         uploaded = (jsonDecode(request.body) as Map).cast<String, Object?>();
         return http.Response('', 204);
       }),
@@ -51,6 +54,7 @@ void main() {
     expect(uploaded?['errorMessage'], isNot(contains('user@example.com')));
     expect(uploaded?['stackTrace'], isNot(contains('/Users/alice')));
     expect(uploaded?['stackTrace'], isNot(contains('a=1')));
+    expect(uploadUri?.path, OpsApiMetadata.reportRecoveryFailurePath);
     expect(store.raw, isNull);
   });
 

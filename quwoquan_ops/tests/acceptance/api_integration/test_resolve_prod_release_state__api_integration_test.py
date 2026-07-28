@@ -22,10 +22,19 @@ _SPEC.loader.exec_module(resolve_prod_release_state)
 
 class ResolveProdReleaseStateTest(unittest.TestCase):
     def test_resolve_prod_host_prefers_env(self) -> None:
-        topology = {"targets": {"prod-hosted": {"publicBases": {"api": "http://198.51.100.10:19000"}}}}
         with mock.patch.dict(os.environ, {"PROD_SSH_HOST": "203.0.113.20"}, clear=False):
-            host = resolve_prod_release_state._resolve_prod_host(topology)
+            host = resolve_prod_release_state._resolve_prod_host({})
         self.assertEqual(host, "203.0.113.20")
+
+    def test_resolve_prod_host_uses_management_endpoint(self) -> None:
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with mock.patch.object(
+                resolve_prod_release_state,
+                "prod_management_ssh_host",
+                return_value="198.51.100.10",
+            ):
+                host = resolve_prod_release_state._resolve_prod_host({})
+        self.assertEqual(host, "198.51.100.10")
 
     def test_run_remote_probe_parses_success_payload(self) -> None:
         access = resolve_prod_release_state.ServicePlaneAccess(

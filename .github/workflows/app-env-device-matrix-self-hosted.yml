@@ -467,6 +467,7 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: quwoquan_service/go.mod
+          cache: false
       - name: Install Flutter (PATH)
         run: |
           command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
@@ -873,18 +874,13 @@ jobs:
             echo "::error::Mobile matrix encountered ${failures} failing environment(s)"
             exit 1
           fi
-      - name: Upload mobile matrix report
-        id: upload_mobile_matrix_report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: app-env-device-matrix-${{ needs.discover_devices.outputs.artifact_key }}-mobile
-          path: |
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/*/runs/device-matrix/**
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/beta/runs/**
-          if-no-files-found: ignore
-          compression-level: 0
+      - name: Verify mobile matrix evidence in producing job
+        if: ${{ always() && !cancelled() }}
+        run: |
+          python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/gate/verify_device_matrix_evidence.py \
+            --artifact-root "$QWQ_OUTPUT_ROOT" \
+            --report-glob "env/*/runs/device-matrix/**/*-android.json" \
+            --report-glob "env/*/runs/device-matrix/**/*-ios.json"
       - name: Teardown beta-local stack after mainline auto prod
         if: ${{ always() && needs.discover_devices.outputs.profile == 'mainline_auto_prod' }}
         continue-on-error: true
@@ -893,18 +889,6 @@ jobs:
           python3 quwoquan_ops/cli/stackctl.py down \
             --target beta-local \
             --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-down"
-      - name: Retry mobile matrix report upload
-        if: always() && steps.upload_mobile_matrix_report.outcome == 'failure'
-        continue-on-error: true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: app-env-device-matrix-${{ needs.discover_devices.outputs.artifact_key }}-mobile
-          path: |
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/*/runs/device-matrix/**
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/beta/runs/**
-          if-no-files-found: ignore
-          compression-level: 0
-          overwrite: true
       - id: finish
         if: always()
         name: Finish timer
@@ -922,7 +906,7 @@ jobs:
       - discover_devices
       - mobile_matrix
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     outputs:
       critical_path_seconds: ${{ steps.timing.outputs.critical_path_seconds }}
       summary_result: ${{ steps.summary.outputs.result }}
@@ -956,7 +940,7 @@ jobs:
               --critical-path-seconds "${CRITICAL_PATH_SECONDS:-0}" \
               --phase "discover_devices=${DISCOVER_SECONDS:-0}" \
               --phase "mobile_matrix=${MOBILE_SECONDS:-0}" \
-              --note "self-hosted matrix 已统一为单 runner 单 checkout 的 mobile job；PR 默认允许缺席平台跳过，已发现的平台必须成功，详细耗时保存在 device-matrix artifacts。" \
+              --note "self-hosted matrix 已统一为单 runner 单 checkout 的 mobile job；PR 默认允许缺席平台跳过，已发现的平台必须成功，证据在 producing job 内验证。" \
               --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/app-env-device-matrix-summary.json" \
               --write-step-summary
           fi
@@ -989,27 +973,3 @@ jobs:
             --has-ios "${HAS_IOS}" \
             "${args[@]}"
           echo "result=success" >> "$GITHUB_OUTPUT"
-      - name: 下载设备矩阵 artifacts
-        if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          pattern: app-env-device-matrix-*
-          path: ${{ runner.temp }}/app-env-device-matrix-artifacts
-      - name: 校验设备矩阵证据产物
-        if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
-        continue-on-error: true
-        run: |
-          python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/gate/verify_device_matrix_evidence.py \
-            --artifact-root "${RUNNER_TEMP}/app-env-device-matrix-artifacts" \
-            --report-glob "**/*-android.json" \
-            --report-glob "**/*-ios.json"
-      - name: Upload app env timing summary
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: app-env-device-matrix-timing-summary
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/ci-timing/app-env-device-matrix-summary.json
-          if-no-files-found: error
-          compression-level: 0

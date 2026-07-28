@@ -193,10 +193,51 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
         self.assertTrue(reclaim["enabled"])
         self.assertFalse(reclaim["removeVolumes"])
         self.assertIn("quwoquan-data-recovery-mongodb", reclaim["preservedContainers"])
+        external = reclaim["externalBuildContainers"]
+        self.assertTrue(external["enabled"])
+        self.assertEqual(external["allowedStates"], ["storage"])
+        self.assertTrue(external["requirePidZero"])
+        self.assertGreaterEqual(external["minimumAgeSeconds"], 86400)
+        self.assertRegex("golang-working-container", external["namePattern"])
+        self.assertRegex("327ccb6c43b2-working-container-1", external["namePattern"])
+        self.assertNotRegex("quwoquan-data-recovery-mongodb", external["namePattern"])
         self.assertGreaterEqual(
             spec["minimumHostResources"]["containerEffectiveFreeBytes"],
             spec["minimumHostResources"]["postReclaimContainerFreeBytes"],
         )
+
+    def test_remote_reclaim_script_supports_host_python_3_6(self) -> None:
+        spec, projections = prevalidate.load_projection()
+        script = prevalidate._remote_reclaim_script(
+            projection=projections["service"],
+            policy=spec["staleRuntimeReclaimPolicy"],
+        )
+        compile(script, "<prod-hosted-reclaim>", "exec")
+        self.assertIn("universal_newlines=True", script)
+        self.assertNotIn("text=True", script)
+        self.assertNotIn("capture_output=True", script)
+        self.assertIn("while remaining:", script)
+        self.assertIn('["podman", "rm", name]', script)
+        self.assertNotIn('["podman", "rm", *sorted(set(selected))]', script)
+
+    def test_remote_reclaim_removes_only_scoped_dependents_in_safe_order(self) -> None:
+        spec, projections = prevalidate.load_projection()
+        script = prevalidate._remote_reclaim_script(
+            projection=projections["service"],
+            policy=spec["staleRuntimeReclaimPolicy"],
+        )
+        self.assertIn("while remaining:", script)
+        self.assertIn('["podman", "rm", name]', script)
+        self.assertIn("dependency-order retries", script)
+        self.assertIn('"ps", "--external", "-a", "--format", "json"', script)
+        self.assertIn('state not in external_states', script)
+        self.assertIn('pid != 0', script)
+        self.assertIn('now - created < minimum_age_seconds', script)
+        self.assertIn('external_name_pattern.fullmatch', script)
+        self.assertIn('["podman", "rm", container_id]', script)
+        self.assertNotIn('["podman", "rm", *sorted(set(selected))]', script)
+        self.assertNotIn('["podman", "rm", "-f"', script)
+        self.assertNotIn("--volumes", script)
 
     def test_oci_release_artifact_is_materialized_by_digest_only(self) -> None:
         digest = "d" * 64

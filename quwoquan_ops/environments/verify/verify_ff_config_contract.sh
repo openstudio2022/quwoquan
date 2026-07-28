@@ -19,7 +19,7 @@ for spec in "${spec_files[@]}"; do
     continue
   fi
   for token in "REQ-" "GWT-"; do
-    if ! rg -n "$token" "$spec" >/dev/null; then
+    if ! grep -nF -- "$token" "$spec" >/dev/null; then
       echo "[verify] FAIL: $spec missing $token" >&2
       failures=$((failures + 1))
     fi

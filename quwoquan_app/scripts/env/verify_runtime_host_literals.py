@@ -65,9 +65,17 @@ def main() -> int:
                 continue
             for match in URL_RE.finditer(line):
                 url = match.group(0)
-                if "$" in url:
+                # Raw RegExp fragments such as ``r'(https://[^\\s?#]+)'`` are
+                # patterns, not runtime URL literals.  URL_RE intentionally
+                # stays small, so exclude escaped pattern fragments before
+                # handing the candidate to urllib's IPv6-aware parser.
+                if "$" in url or "\\" in url:
                     continue
-                host = urlparse(url).hostname or ""
+                try:
+                    host = urlparse(url).hostname or ""
+                except ValueError:
+                    issues.append(f"{rel}:{line_no}: invalid URL literal ({url})")
+                    continue
                 if not host or _is_allowed_host(host):
                     continue
                 issues.append(f"{rel}:{line_no}: {host} ({url})")

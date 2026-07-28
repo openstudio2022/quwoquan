@@ -69,6 +69,28 @@ class ProdImageContentDigestContractTest(unittest.TestCase):
         self.assertIn("inspect", command)
         self.assertNotIn("latest", command)
 
+    @patch.object(load_prod_plane_images.subprocess, "run")
+    def test_remote_digest_normalizes_legacy_podman_bare_image_id(
+        self,
+        run,
+    ) -> None:
+        run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=("c" * 64) + "\n",
+            stderr="",
+        )
+
+        self.assertEqual(
+            load_prod_plane_images._remote_image_digest(
+                "localhost/realtime-gateway:release",
+                "svc-edge",
+                "203.0.113.10",
+                Path("/tmp/test-key"),
+            ),
+            "sha256:" + ("c" * 64),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -24,30 +24,30 @@ high_risk_changed=0
 
 runtime_config_re='^quwoquan_service/(services/[^/]+|control-plane/platform-ops)/(config/schema|environments/(alpha|beta|gamma|prod)/config)\.ya?ml$'
 
-if echo "$changed" | rg "$runtime_config_re" >/dev/null 2>&1; then
+if echo "$changed" | grep -E "$runtime_config_re" >/dev/null 2>&1; then
   config_changed=1
 fi
 if [[ "$config_changed" -eq 1 ]]; then
   # Check high-risk key modifications in changed config files.
   while IFS= read -r f; do
     [[ -f "$f" ]] || continue
-    if git diff --no-renames -- "$f" | rg '^[+-].*(mode:|addrs:|addr:|password:|tls:)' >/dev/null 2>&1; then
+    if git diff --no-renames -- "$f" | grep -E '^[+-].*(mode:|addrs:|addr:|password:|tls:)' >/dev/null 2>&1; then
       high_risk_changed=1
       break
     fi
-  done < <(echo "$changed" | rg "$runtime_config_re")
+  done < <(echo "$changed" | grep -E "$runtime_config_re")
 fi
 
 failures=0
 
 if find quwoquan_service/services quwoquan_service/control-plane/platform-ops \
-  -type d -name configs -print -quit | rg . >/dev/null 2>&1; then
+  -type d -name configs -print -quit | grep -q . >/dev/null 2>&1; then
   echo "[verify] FAIL: retired service configs/** path returned" >&2
   failures=$((failures + 1))
 fi
 
 if [[ "$high_risk_changed" -eq 1 ]]; then
-  if ! echo "$changed" | rg '^specs/feature-tree/(?:.*/)?(?:spec|design)\.md$' >/dev/null 2>&1; then
+  if ! echo "$changed" | grep -E '^specs/feature-tree/(.*/)?(spec|design)\.md$' >/dev/null 2>&1; then
     echo "[verify] FAIL: high-risk config keys changed but feature-tree spec/design was not updated" >&2
     failures=$((failures + 1))
   fi

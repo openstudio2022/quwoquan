@@ -6,17 +6,22 @@ import json
 import os
 import re
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.prod.registry_transport import run_with_bounded_retry
+from quwoquan_ops.cli.lib.prod_management_access import prod_management_ssh_host
+
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 DEFAULT_KEY_DIR = Path.home() / ".ssh/quwoquan-prod"
-DEFAULT_HOST = "118.31.239.122"
 OCI_DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
 
 
@@ -144,16 +149,27 @@ def _release_image_sources(
     return manifest_digest, sources
 
 
-def _pull_and_tag_release_image(source_ref: str, target_ref: str) -> None:
-    pull = subprocess.run(
-        ["docker", "pull", source_ref],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        check=False,
+def _pull_and_tag_release_image(
+    source_ref: str,
+    target_ref: str,
+    *,
+    platform: str,
+) -> None:
+    argv = ["docker", "pull", "--platform", platform, source_ref]
+    pull = run_with_bounded_retry(
+        lambda: subprocess.run(
+            argv,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+        )
     )
     if pull.returncode != 0:
-        raise SystemExit(f"FAIL: docker pull failed for {source_ref}:\n{pull.stdout}")
+        raise SystemExit(
+            f"FAIL: docker pull failed after 3 bounded attempts for {source_ref}:\n"
+            f"{pull.stdout}"
+        )
     tag = subprocess.run(
         ["docker", "tag", source_ref, target_ref],
         stdout=subprocess.PIPE,
@@ -200,6 +216,8 @@ def _remote_image_digest(
     if result.returncode != 0:
         return None
     digest = result.stdout.strip()
+    if re.fullmatch(r"[0-9a-f]{64}", digest):
+        digest = f"sha256:{digest}"
     return digest if re.fullmatch(r"sha256:[0-9a-f]{64}", digest) else None
 
 
@@ -251,10 +269,14 @@ def parse_args() -> argparse.Namespace:
         description="Load local Docker service images into a prod plane rootless Podman store.",
     )
     parser.add_argument("--plane", default="service")
-    parser.add_argument("--host", default=DEFAULT_HOST)
+    parser.add_argument("--host", default=prod_management_ssh_host())
     parser.add_argument("--key-dir", type=Path, default=DEFAULT_KEY_DIR)
     parser.add_argument("--services", default="")
-    parser.add_argument("--platform", default="linux/amd64")
+    parser.add_argument(
+        "--platform",
+        choices=("linux/amd64",),
+        default="linux/amd64",
+    )
     parser.add_argument(
         "--image-version",
         default=os.environ.get("IMAGE_VERSION", ""),
@@ -299,7 +321,11 @@ def main() -> int:
             target_ref = image_refs.get(service)
             if not target_ref:
                 raise SystemExit(f"FAIL: rendered image target missing for {service}")
-            _pull_and_tag_release_image(source_ref, target_ref)
+            _pull_and_tag_release_image(
+                source_ref,
+                target_ref,
+                platform=args.platform,
+            )
     target_arch = _target_arch(args.platform)
     rebuild_services: list[str] = []
     missing: list[str] = []

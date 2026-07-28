@@ -230,7 +230,7 @@ def recommendation_lines(over_budget_keys: set[str], missing_evidence: list[str]
         if line and line not in recommendations:
             recommendations.append(line)
     if missing_evidence:
-        recommendations.append("存在耗时证据缺口，需补齐对应 artifact/summary.json，否则无法稳定定位慢点与 flaky 来源。")
+        recommendations.append("存在耗时证据缺口，需补齐对应受控 summary.json 或运行面证据，否则无法稳定定位慢点与 flaky 来源。")
     return recommendations
 
 
@@ -500,19 +500,22 @@ def main() -> int:
     over_budget_items.sort(key=lambda item: int(item.get("deltaSeconds", 0) or 0), reverse=True)
 
     missing_evidence: list[str] = []
-    if service_summary is None:
-        missing_evidence.append("缺少 02.service_pipeline timing artifact（service-pipeline-summary.json）。")
-    if delivery_summary is None:
-        missing_evidence.append("缺少 03.delivery_gate timing artifact（delivery-gate-summary.json）。")
-    if beta_summary is None:
-        missing_evidence.append("缺少 05.app_env_device_matrix timing artifact（app-env-device-matrix-summary.json）。")
-    if not alpha_evidence:
+    # 成功路径不再把 Actions Artifact 当作跨 job 证据仓。调用方若显式给出
+    # 本地/受控运行面根目录，才要求相应细节证据；主链 phase 输出本身仍构成
+    # 时序门禁的最小事实来源。
+    if args.service_pipeline_root and service_summary is None:
+        missing_evidence.append("缺少 02.service_pipeline timing summary.json。")
+    if args.delivery_gate_root and delivery_summary is None:
+        missing_evidence.append("缺少 03.delivery_gate timing summary.json。")
+    if args.beta_summary_root and beta_summary is None:
+        missing_evidence.append("缺少 05.app_env_device_matrix timing summary.json。")
+    if args.alpha_runs_root and not alpha_evidence:
         missing_evidence.append("缺少 alpha-local stackctl summary.json 证据。")
-    if not beta_evidence:
+    if args.beta_stackctl_root and not beta_evidence:
         missing_evidence.append("缺少 beta-local stackctl summary.json 证据。")
-    if not prod_initial_evidence:
+    if args.prod_initial_stackctl_root and not prod_initial_evidence:
         missing_evidence.append("缺少 prod initial stackctl summary.json 证据。")
-    if not prod_full_evidence:
+    if args.prod_full_stackctl_root and not prod_full_evidence:
         missing_evidence.append("缺少 prod full stackctl summary.json 证据。")
 
     payload = {

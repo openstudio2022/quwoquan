@@ -5,3 +5,39 @@ governance:
   expires_when: allow 为空时删除本文件
 block_threshold: 1000
 allow:
+- path: quwoquan_app/lib/core/constants/ui_text_constants_values.dart
+  max_lines: 2792
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence/elasticsearch_event_log_store.go
+  max_lines: 1283
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_app/lib/ui/content/entry/providers/post_publication_intent_queue_provider.dart
+  max_lines: 1128
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_app/lib/application/content/media/content_media_upload_coordinator.dart
+  max_lines: 1109
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/conversation_service.go
+  max_lines: 1089
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/skill_subscription_service.go
+  max_lines: 1073
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_service/services/chat-service/internal/chat/conversation/application/member_service.go
+  max_lines: 1060
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_app/lib/ui/assistant/providers/personal_assistant_stream_controller.dart
+  max_lines: 1026
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_app/lib/core/design_system/spacing/app_spacing_values.dart
+  max_lines: 1013
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_service/services/content-service/cmd/api/main.go
+  max_lines: 1013
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_service/services/chat-service/internal/chat/conversation/application/message_service.go
+  max_lines: 1005
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_app/lib/app/navigation/app_router.dart
+  max_lines: 1002
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)

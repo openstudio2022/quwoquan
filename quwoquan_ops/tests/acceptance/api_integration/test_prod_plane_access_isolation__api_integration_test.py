@@ -14,6 +14,7 @@ except ImportError:  # pragma: no cover
 
 ROOT = Path(__file__).resolve().parents[4]
 ACCESS = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
+RUNTIME = ROOT / "quwoquan_ops/environments/prod/runtime.yaml"
 
 
 def _run(argv: list[str], **env_overrides: str) -> subprocess.CompletedProcess[str]:
@@ -64,6 +65,14 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
     @unittest.skipIf(yaml is None, "PyYAML required")
     def test_planes_accounts_and_secrets_single_source(self) -> None:
         data = yaml.safe_load(ACCESS.read_text(encoding="utf-8"))
+        runtime = yaml.safe_load(RUNTIME.read_text(encoding="utf-8"))
+        self.assertEqual(data["management"]["purpose"], "ssh-only-management")
+        self.assertRegex(data["management"]["sshHost"], r"^[A-Za-z0-9.-]+$")
+        self.assertNotIn("sshHost", runtime["targets"]["prod-hosted"])
+        self.assertNotIn(
+            data["management"]["sshHost"],
+            "\n".join(runtime["targets"]["prod-hosted"]["publicBases"].values()),
+        )
         planes = {p["plane"]: p for p in data["planes"]}
         self.assertEqual(set(planes), {"edge", "media", "service", "data"})
         for plane, spec in planes.items():

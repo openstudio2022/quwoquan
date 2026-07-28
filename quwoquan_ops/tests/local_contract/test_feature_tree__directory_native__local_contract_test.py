@@ -89,6 +89,27 @@ def test_contract_path_resolves_from_l1_engineering_ownership(tmp_path: Path, mo
     assert owner.node_id == "domain"
 
 
+def test_ci_path_resolves_from_l1_engineering_ownership(tmp_path: Path, monkeypatch) -> None:
+    root = build_tree(tmp_path).resolve()
+    workflow = root / ".github" / "workflows" / "service_pipeline.yml"
+    write(workflow, "name: service pipeline\n")
+    l1_spec = root / "specs" / "feature-tree" / "domain" / "spec.md"
+    l1_spec.write_text(
+        "# L1 Domain Service：领域 (`domain`)\n\n"
+        "## 7. 工程归属\n\n"
+        "- CI：`.github/workflows`\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(feature_tree, "REPO_ROOT", root)
+    monkeypatch.setattr(feature_tree, "TREE_ROOT", root / "specs" / "feature-tree")
+
+    owner = feature_tree.resolve_target(
+        ".github/workflows/service_pipeline.yml", feature_tree.discover_nodes()
+    )
+
+    assert owner.node_id == "domain"
+
+
 def test_duplicate_same_priority_owner_is_blocked(tmp_path: Path, monkeypatch) -> None:
     root = build_tree(tmp_path)
     write(root / "quwoquan_app" / "lib" / "feature.dart", "void main() {}\n")

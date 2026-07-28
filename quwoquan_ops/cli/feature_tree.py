@@ -24,9 +24,11 @@ ID_RE = re.compile(r"^#{3,6}\s+(REQ|UAT|DOM|SIT|GWT|DEC|OPEN)-(\d{3,})\b", re.MU
 ACCEPTANCE_ID_RE = re.compile(r"^#{3,6}\s+(UAT|DOM|SIT|GWT)-(\d{3,})\b", re.MULTILINE)
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
 LINK_RE = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
-PATH_RE = re.compile(r"`((?:quwoquan_app|quwoquan_service|quwoquan_data|quwoquan_ops)(?:/[^`\s；，]+)*)`")
+PATH_RE = re.compile(
+    r"`((?:quwoquan_app|quwoquan_service|quwoquan_data|quwoquan_ops|\.github)(?:/[^`\s；，]+)*)`"
+)
 ENGINEERING_CLAIM_RE = re.compile(
-    r"^-\s+(App|Contracts|Metadata|Service|Data|Ops)(?:（[^）]*）)?："
+    r"^-\s+(App|Contracts|Metadata|Service|Data|Ops|CI)(?:（[^）]*）)?："
 )
 SPEC_REF_RE = re.compile(
     r"specs/feature-tree/(?:[A-Za-z0-9_.-]+/)*spec\.md#[A-Za-z0-9_.%\-\u4e00-\u9fff]+"

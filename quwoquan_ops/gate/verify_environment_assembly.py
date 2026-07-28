@@ -54,8 +54,44 @@ def validate_service_build_image_contract() -> list[str]:
         dockerfile_text = dockerfile.read_text(encoding="utf-8")
         if "ARG GO_BASE_IMAGE\n" not in dockerfile_text:
             issues.append(f"{dockerfile.relative_to(ROOT)} must not default GO_BASE_IMAGE")
+        if "FROM --platform=${BUILDPLATFORM} ${GO_BASE_IMAGE} AS builder" not in dockerfile_text:
+            issues.append(
+                f"{dockerfile.relative_to(ROOT)} must build Go on BUILDPLATFORM"
+            )
+        if "ARG TARGETOS\n" not in dockerfile_text or "ARG TARGETARCH\n" not in dockerfile_text:
+            issues.append(
+                f"{dockerfile.relative_to(ROOT)} must declare target OS and architecture"
+            )
+        if "CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH}" not in dockerfile_text:
+            issues.append(
+                f"{dockerfile.relative_to(ROOT)} must cross-compile Go for the image target"
+            )
         if "ARG ALPINE_BASE_IMAGE\n" not in dockerfile_text:
             issues.append(f"{dockerfile.relative_to(ROOT)} must not default ALPINE_BASE_IMAGE")
+        if "--allow-untrusted" in dockerfile_text:
+            issues.append(
+                f"{dockerfile.relative_to(ROOT)} must not bypass package signature checks"
+            )
+
+    service_pipeline = (
+        ROOT / ".github/workflows/service_pipeline.yml"
+    ).read_text(encoding="utf-8")
+    if 'runtime["targets"]["prod-hosted"]["buildImages"]' not in service_pipeline:
+        issues.append("service pipeline must read prod-hosted governed build images")
+    for image_variable, output in (
+        ("GO_BASE_IMAGE", "go_base_image"),
+        ("ALPINE_BASE_IMAGE", "alpine_base_image"),
+        ("PYTHON_BASE_IMAGE", "python_base_image"),
+    ):
+        if (
+            f"{image_variable}: ${{{{ steps.base_images.outputs.{output} }}}}"
+            not in service_pipeline
+            or f'--build-arg "{image_variable}=${image_variable}"'
+            not in service_pipeline
+        ):
+            issues.append(
+                f"service pipeline must pass {image_variable} to release image builds"
+            )
     return issues
 
 

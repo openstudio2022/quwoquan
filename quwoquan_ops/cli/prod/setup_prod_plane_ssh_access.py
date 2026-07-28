@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 import yaml
 
@@ -23,8 +22,8 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
 from quwoquan_ops.cli.lib.output_paths import deployment_target_path
+from quwoquan_ops.cli.lib.prod_management_access import prod_management_ssh_host
 
 
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
@@ -76,15 +75,10 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 
 def _resolve_prod_host(override: str | None) -> str:
-    if override:
-        return override
-    topology = load_environment_topology()
-    target = get_target(topology, "prod-hosted")
-    api_base = str((target.get("publicBases") or {}).get("api", "")).strip()
-    host = urlparse(api_base).hostname
-    if not host:
-        raise SystemExit(f"FAIL: 无法从 prod-hosted api 地址解析 hostname: {api_base}")
-    return host
+    try:
+        return prod_management_ssh_host(override=override)
+    except RuntimeError as error:
+        raise SystemExit(f"FAIL: {error}") from error
 
 
 def _load_account_specs(key_dir: Path) -> list[ProdAccountSpec]:
@@ -573,7 +567,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--host",
         default=None,
-        help="覆盖 prod-hosted 目标 host；默认从 prod/runtime.yaml 解析",
+        help="覆盖 prod-hosted SSH host；默认读取 prod/access-isolation.yaml management.sshHost",
     )
     parser.add_argument(
         "--include-relay",
