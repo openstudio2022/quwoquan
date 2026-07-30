@@ -22,7 +22,13 @@
     "schema": { "const": "quwoquan_data.content_campaign_report" },
     "rootExecutionId": { "type": "string", "minLength": 1 },
     "status": {
-      "enum": ["awaiting_submissions", "running", "succeeded", "blocked"]
+      "enum": [
+        "awaiting_submissions",
+        "running",
+        "succeeded",
+        "succeeded_partial",
+        "blocked"
+      ]
     },
     "phase": {
       "enum": [
@@ -30,7 +36,6 @@
         "freeze",
         "clone",
         "review",
-        "quota_barrier",
         "publish",
         "cleanup",
         "completed"
@@ -82,6 +87,9 @@
         "approvedQuota",
         "qualifiedCount",
         "finalizedCount",
+        "selectedCount",
+        "discardedCount",
+        "shortfallCount",
         "error"
       ],
       "additionalProperties": false,
@@ -93,6 +101,7 @@
             "clone_ready",
             "reviewed",
             "review_qualified",
+            "partial",
             "published",
             "finalized",
             "blocked"
@@ -119,6 +128,9 @@
         "approvedQuota": { "type": ["integer", "null"], "minimum": 1 },
         "qualifiedCount": { "type": ["integer", "null"], "minimum": 0 },
         "finalizedCount": { "type": ["integer", "null"], "minimum": 0 },
+        "selectedCount": { "type": ["integer", "null"], "minimum": 0 },
+        "discardedCount": { "type": ["integer", "null"], "minimum": 0 },
+        "shortfallCount": { "type": ["integer", "null"], "minimum": 0 },
         "error": { "type": ["string", "null"] }
       }
     }

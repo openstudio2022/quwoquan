@@ -302,6 +302,39 @@ def execution_readiness_issues(
             for publish_ref in closure.qualified_publish_refs
         ]
 
+    if content_type is ContentType.HOMEPAGE and mode == "commercial":
+        try:
+            from content.execution.controller.homepage_authoring import (
+                homepage_quota_verdict,
+            )
+            from content.execution import store as execution_store
+            from types import SimpleNamespace
+
+            verdict = homepage_quota_verdict(
+                SimpleNamespace(
+                    execution_id=execution_id,
+                    spec=execution_store.load_spec_model(execution_id),
+                )
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            issues.append(f"homepage review partition is invalid: {exc}")
+            return issues
+        qualified_names = {
+            str(label).split("/", 2)[-1]
+            for label in verdict.qualified_refs
+            if str(label).count("/") >= 2
+        }
+        objects = [
+            object_root
+            for object_root in objects
+            if object_root.name in qualified_names
+        ]
+        if verdict.qualified_count > 0 and not objects:
+            issues.append(
+                "homepage readiness could not map qualified refs to objects"
+            )
+            return issues
+
     object_issue_groups = [
         _reviewed_object_issues(
             root,
@@ -312,17 +345,8 @@ def execution_readiness_issues(
         )
         for object_root in objects
     ]
+    # Pass-rate denominator is the qualified set only; typed discards never veto.
     selected_count = len(objects)
-    selection_path = root / "_shared" / "target_selection.json"
-    if content_type is ContentType.HOMEPAGE and selection_path.is_file():
-        try:
-            selection = read_json(selection_path)
-            selected_count = max(
-                selected_count,
-                int(selection.get("selectedCount") or 0),
-            )
-        except (OSError, ValueError, TypeError):
-            issues.append("target selection is unreadable")
     passed_count = sum(1 for group in object_issue_groups if not group)
     pass_rate = passed_count / selected_count if selected_count else 0.0
     if pass_rate < min_pass_rate:

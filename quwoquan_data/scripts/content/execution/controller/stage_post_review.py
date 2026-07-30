@@ -387,12 +387,14 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
         object_issues=object_issues,
     )
     write_post_review_closure(closure)
-    if closure.passed:
+    # Quota is a milestone, not a publish veto: any qualified objects may proceed.
+    if closure.qualified_count > 0:
+        milestone = "met" if closure.passed else "partial"
         return StageResult(
             ExecutionStage.POST_REVIEW,
             AUTO,
             StageStatus.DONE,
-            "post_review quota met "
+            f"post_review quota {milestone} "
             f"(qualified={closure.qualified_count}/{closure.approved_quota}, "
             f"discarded={len(closure.discarded)})",
         )
@@ -429,7 +431,7 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
         ExecutionStage.POST_REVIEW,
         AUTO,
         StageStatus.FAILED,
-        "post_review quota shortfall "
+        "post_review has zero qualified objects "
         f"(qualified={closure.qualified_count}/{closure.approved_quota}, "
         f"discarded={len(closure.discarded)})",
         fallback_stage=fallback,

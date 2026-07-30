@@ -11,7 +11,11 @@
     "status",
     "approvedQuota",
     "qualifiedCount",
-    "finalizedCount"
+    "finalizedCount",
+    "selectedCount",
+    "discardedCount",
+    "discards",
+    "shortfallCount"
   ],
   "additionalProperties": false,
   "properties": {
@@ -33,7 +37,7 @@
       "enum": ["review", "publish"]
     },
     "status": {
-      "enum": ["qualified", "finalized"]
+      "enum": ["qualified", "partial", "blocked", "finalized"]
     },
     "approvedQuota": {
       "type": "integer",
@@ -46,6 +50,59 @@
     "finalizedCount": {
       "type": "integer",
       "minimum": 0
+    },
+    "selectedCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "discardedCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "shortfallCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "discards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["objectRef", "issues"],
+        "additionalProperties": false,
+        "properties": {
+          "objectRef": { "type": "string", "minLength": 1 },
+          "issues": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "phase": { "const": "review" } },
+        "required": ["phase"]
+      },
+      "then": {
+        "properties": {
+          "status": { "enum": ["qualified", "partial", "blocked"] },
+          "finalizedCount": { "const": 0 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "phase": { "const": "publish" } },
+        "required": ["phase"]
+      },
+      "then": {
+        "properties": {
+          "status": { "enum": ["finalized", "partial", "blocked"] }
+        }
+      }
+    }
+  ]
 }

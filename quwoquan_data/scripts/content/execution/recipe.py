@@ -35,7 +35,6 @@ SELECTION_QUOTA_FIELDS = (
     "imageWorksPerTarget", "videoWorksPerTarget",
 )
 
-
 def _default_invoke_cli(argv: list[str]) -> int:
     proc = subprocess.run([sys.executable, str(_CLI_PATH), *argv], check=False)
     return int(proc.returncode)
@@ -323,14 +322,17 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         return
     if campaign_bound and stage == "run":
         from content.execution.campaign_receipt import (
-            require_campaign_quota_barrier,
+            require_lane_review_receipt,
         )
 
         try:
-            require_campaign_quota_barrier(root_execution_id)
+            require_lane_review_receipt(
+                root_execution_id,
+                execution_id=identity.execution_id,
+            )
         except (OSError, TypeError, ValueError) as exc:
             raise SystemExit(
-                f"[task execute] GATE_BLOCK campaign quota barrier: {exc}"
+                f"[task execute] GATE_BLOCK campaign lane review: {exc}"
             ) from exc
     # A task-output purge between plan-only and run destroys its frozen input,
     from content.execution.agent.agent_conflicts import (

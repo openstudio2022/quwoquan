@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/content_copy_ready_receipt.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "status",
+    "rootExecutionId",
+    "campaignPlanDigest",
+    "gitBranch",
+    "gitCommitSha",
+    "sourceDigest",
+    "entityCatalogDigest",
+    "minimums",
+    "totalDiscardedCount",
+    "lanes",
+    "assessedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "quwoquan_data.content_copy_ready_receipt" },
+    "status": { "const": "copy_ready" },
+    "rootExecutionId": { "type": "string", "minLength": 1 },
+    "campaignPlanDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "gitBranch": { "type": "string", "minLength": 1 },
+    "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "sourceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "entityCatalogDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "assessmentRef": { "type": "string", "minLength": 1 },
+    "minimums": {
+      "type": "object",
+      "required": ["quotaPerLane", "candidateCountPerLane"],
+      "additionalProperties": false,
+      "properties": {
+        "quotaPerLane": { "type": "integer", "minimum": 1 },
+        "candidateCountPerLane": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "totalDiscardedCount": { "type": "integer", "minimum": 0 },
+    "lanes": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": { "$ref": "#/$defs/lane" },
+        "article": { "$ref": "#/$defs/lane" },
+        "image": { "$ref": "#/$defs/lane" },
+        "video": { "$ref": "#/$defs/lane" }
+      }
+    },
+    "assessedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "lane": {
+      "type": "object",
+      "required": [
+        "executionId",
+        "requestedQuota",
+        "requestedCount",
+        "selectedCount",
+        "qualifiedCount",
+        "discardedCount",
+        "finalizedCount",
+        "reviewReceiptRef",
+        "publishReceiptRef"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "executionId": { "type": "string", "minLength": 1 },
+        "requestedQuota": { "type": "integer", "minimum": 1 },
+        "requestedCount": { "type": "integer", "minimum": 1 },
+        "selectedCount": { "type": "integer", "minimum": 0 },
+        "qualifiedCount": { "type": "integer", "minimum": 0 },
+        "discardedCount": { "type": "integer", "minimum": 0 },
+        "finalizedCount": { "type": "integer", "minimum": 0 },
+        "reviewReceiptRef": { "type": "string", "minLength": 1 },
+        "publishReceiptRef": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

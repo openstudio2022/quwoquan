@@ -123,10 +123,17 @@ def run_phase(
     timeout_seconds: float,
     worker_count: int,
     lane_runner: LaneRunner | None = None,
+    carriers: tuple[str, ...] | None = None,
 ) -> dict[str, tuple[int, str | None]]:
     runner = lane_runner or _default_lane_runner
+    selected = carriers or CAMPAIGN_CARRIERS
+    unknown = [carrier for carrier in selected if carrier not in CAMPAIGN_CARRIERS]
+    if unknown:
+        raise ValueError(f"campaign phase carriers are invalid: {', '.join(unknown)}")
     results: dict[str, tuple[int, str | None]] = {}
-    with ThreadPoolExecutor(max_workers=worker_count) as pool:
+    if not selected:
+        return results
+    with ThreadPoolExecutor(max_workers=max(1, min(worker_count, len(selected)))) as pool:
         futures = {
             pool.submit(
                 _run_lane,
@@ -138,7 +145,7 @@ def run_phase(
                 timeout_seconds=timeout_seconds,
                 lane_runner=runner,
             ): carrier
-            for carrier in CAMPAIGN_CARRIERS
+            for carrier in selected
         }
         for future in as_completed(futures):
             results[futures[future]] = future.result()

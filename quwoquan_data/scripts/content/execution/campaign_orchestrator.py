@@ -1,25 +1,32 @@
-"""Fail-closed four-lane campaign orchestration behind ``task execute``."""
+"""Fail-closed four-lane campaign orchestration behind ``task execute``.
+
+Lane failures stay lane-local: qualified objects on other carriers still publish.
+"""
 from __future__ import annotations
 
-import fcntl
-import hashlib
-import json
-import time
-from contextlib import contextmanager
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
-from core.io import read_json, write_json
 from core.runtime_policy import DEFAULT_RUNTIME_PROFILE_ID, load_runtime_policy
-from core.schema import assert_valid
+from content.execution.campaign_copy_ready import maybe_write_copy_ready_receipt
+from content.execution.campaign_plan import (
+    aggregate_status,
+    apply_receipt_fields,
+    controller_lock,
+    empty_lane,
+    freeze_plan,
+    load_review_for_lane,
+    report_path,
+    utc_now,
+    wait_for_submissions,
+    write_report,
+)
 from content.execution.campaign_receipt import load_lane_receipt
 from content.execution.campaign_process import (
     CAMPAIGN_CARRIERS,
     LaneRunner,
     run_phase,
 )
-from content.execution.campaign_submission import campaign_root, load_submissions
 from content.execution.campaign_workspace import (
     CampaignRuntimePaths,
     DetachedClone,
@@ -32,291 +39,8 @@ from content.execution.campaign_workspace import (
 from content.execution.identity import validate_execution_id
 
 
-CAMPAIGN_SUBMISSION_POLL_SECONDS = 2
 _REVIEW_STAGE = "review-only"
 _PUBLISH_STAGE = "run"
-
-
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _sha256(payload: dict[str, Any]) -> str:
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
-
-
-def _campaign_path(runtime: CampaignRuntimePaths, root_execution_id: str) -> Path:
-    return campaign_root(root_execution_id, root=runtime.campaigns_root)
-
-
-def _plan_path(runtime: CampaignRuntimePaths, root_execution_id: str) -> Path:
-    return _campaign_path(runtime, root_execution_id) / "campaign_plan.json"
-
-
-def _report_path(runtime: CampaignRuntimePaths, root_execution_id: str) -> Path:
-    return _campaign_path(runtime, root_execution_id) / "campaign_report.json"
-
-
-@contextmanager
-def _controller_lock(
-    runtime: CampaignRuntimePaths,
-    root_execution_id: str,
-) -> Iterator[None]:
-    path = _campaign_path(runtime, root_execution_id) / ".controller.lock"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a+", encoding="utf-8") as handle:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise RuntimeError(
-                f"campaign controller already active: {root_execution_id}"
-            ) from exc
-        try:
-            yield
-        finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-
-
-def _empty_lane(execution_id: str = "pending") -> dict[str, Any]:
-    return {
-        "executionId": execution_id,
-        "status": "pending",
-        "phase": "submission",
-        "reviewReturnCode": None,
-        "publishReturnCode": None,
-        "cloneRef": None,
-        "cloneCommitSha": None,
-        "cloneSourceDigest": None,
-        "cloneDetached": None,
-        "cleanupStatus": "not_created",
-        "approvedQuota": None,
-        "qualifiedCount": None,
-        "finalizedCount": None,
-        "error": None,
-    }
-
-
-def _write_report(
-    runtime: CampaignRuntimePaths,
-    root_execution_id: str,
-    *,
-    status: str,
-    phase: str,
-    plan_digest: str | None,
-    git_branch: str | None,
-    git_commit_sha: str | None,
-    source_digest: str | None,
-    entity_catalog_digest: str | None,
-    lanes: dict[str, dict[str, Any]],
-    started_at: str,
-    failure: str | None,
-) -> Path:
-    payload = {
-        "schema": "quwoquan_data.content_campaign_report",
-        "rootExecutionId": root_execution_id,
-        "status": status,
-        "phase": phase,
-        "planDigest": plan_digest,
-        "gitBranch": git_branch,
-        "gitCommitSha": git_commit_sha,
-        "sourceDigest": source_digest,
-        "entityCatalogDigest": entity_catalog_digest,
-        "lanes": lanes,
-        "failure": failure,
-        "startedAt": started_at,
-        "updatedAt": _utc_now(),
-    }
-    assert_valid(
-        payload,
-        "execution",
-        "content_campaign_report",
-        label=f"campaign report:{root_execution_id}",
-    )
-    path = _report_path(runtime, root_execution_id)
-    write_json(path, payload)
-    return path
-
-
-def _wait_for_submissions(
-    runtime: CampaignRuntimePaths,
-    root_execution_id: str,
-    *,
-    timeout_seconds: int,
-    lanes: dict[str, dict[str, Any]],
-    started_at: str,
-) -> dict[str, dict[str, Any]]:
-    if timeout_seconds < 1:
-        raise ValueError("campaign submission timeout must be positive")
-    deadline = time.monotonic() + timeout_seconds
-    while True:
-        submissions = load_submissions(
-            root_execution_id,
-            root=runtime.campaigns_root,
-        )
-        missing = set(CAMPAIGN_CARRIERS) - set(submissions)
-        if not missing:
-            return submissions
-        _write_report(
-            runtime,
-            root_execution_id,
-            status="awaiting_submissions",
-            phase="submission",
-            plan_digest=None,
-            git_branch=None,
-            git_commit_sha=None,
-            source_digest=None,
-            entity_catalog_digest=None,
-            lanes=lanes,
-            started_at=started_at,
-            failure=None,
-        )
-        if time.monotonic() >= deadline:
-            raise TimeoutError(
-                "campaign submissions timed out; missing "
-                + ", ".join(sorted(missing))
-            )
-        time.sleep(
-            min(
-                CAMPAIGN_SUBMISSION_POLL_SECONDS,
-                max(0.0, deadline - time.monotonic()),
-            )
-        )
-
-
-def _freeze_plan(
-    runtime: CampaignRuntimePaths,
-    root_execution_id: str,
-    submissions: dict[str, dict[str, Any]],
-) -> tuple[dict[str, Any], str]:
-    branches = {str(row.get("gitBranch") or "") for row in submissions.values()}
-    commits = {str(row.get("gitCommitSha") or "") for row in submissions.values()}
-    source_digests = {
-        str((row.get("sourceDigest") or {}).get("digest") or "")
-        for row in submissions.values()
-    }
-    catalog_digests = {
-        str(row.get("entityCatalogDigest") or "") for row in submissions.values()
-    }
-    regions = {str(row.get("regionRef") or "") for row in submissions.values()}
-    if (
-        len(branches) != 1
-        or not next(iter(branches))
-        or len(commits) != 1
-        or len(source_digests) != 1
-        or len(catalog_digests) != 1
-    ):
-        raise ValueError(
-            "campaign lanes must share one branch, commit, sourceDigest, "
-            "and entityCatalogDigest"
-        )
-    if len(regions) != 1:
-        raise ValueError("campaign lanes must share one regionRef")
-    if str(submissions["homepage"].get("executionId") or "") != root_execution_id:
-        raise ValueError("homepage submission executionId must equal campaign root")
-    frozen_commit = next(iter(commits))
-    frozen_source = next(iter(source_digests))
-    assert_frozen_main_tree(
-        runtime.repo_root,
-        git_branch=next(iter(branches)),
-        commit_sha=frozen_commit,
-        source_digest=frozen_source,
-    )
-    stable = {
-        "schema": "quwoquan_data.content_campaign_plan",
-        "rootExecutionId": root_execution_id,
-        "gitBranch": next(iter(branches)),
-        "gitCommitSha": frozen_commit,
-        "sourceDigest": frozen_source,
-        "entityCatalogDigest": next(iter(catalog_digests)),
-        "submissionDigests": {
-            carrier: str(submissions[carrier]["requestDigest"])
-            for carrier in CAMPAIGN_CARRIERS
-        },
-        "executionIds": {
-            carrier: str(submissions[carrier]["executionId"])
-            for carrier in CAMPAIGN_CARRIERS
-        },
-        "frozenAt": _utc_now(),
-    }
-    path = _plan_path(runtime, root_execution_id)
-    if path.is_file():
-        existing = read_json(path)
-        digest = str(existing.get("planDigest") or "")
-        digest_input = {key: value for key, value in existing.items() if key != "planDigest"}
-        if digest != _sha256(digest_input):
-            raise ValueError("campaign planDigest drift")
-        stable_keys = set(stable) - {"frozenAt"}
-        if any(existing.get(key) != stable[key] for key in stable_keys):
-            raise ValueError("campaign plan is immutable and already differs")
-        assert_valid(
-            existing,
-            "execution",
-            "content_campaign_plan",
-            label=f"campaign plan:{root_execution_id}",
-        )
-        return existing, digest
-    digest = _sha256(stable)
-    plan = {**stable, "planDigest": digest}
-    assert_valid(
-        plan,
-        "execution",
-        "content_campaign_plan",
-        label=f"campaign plan:{root_execution_id}",
-    )
-    write_json(path, plan)
-    return plan, digest
-
-
-def _apply_receipts(
-    runtime: CampaignRuntimePaths,
-    root_execution_id: str,
-    submissions: dict[str, dict[str, Any]],
-    lanes: dict[str, dict[str, Any]],
-    *,
-    phase: str,
-) -> None:
-    for carrier in CAMPAIGN_CARRIERS:
-        receipt = load_lane_receipt(
-            root_execution_id,
-            carrier,
-            phase,
-            root=runtime.campaigns_root,
-        )
-        if str(receipt.get("executionId") or "") != str(
-            submissions[carrier]["executionId"]
-        ):
-            raise ValueError(f"{carrier} campaign receipt executionId drift")
-        approved = int(receipt["approvedQuota"])
-        qualified = int(receipt["qualifiedCount"])
-        finalized = int(receipt["finalizedCount"])
-        if approved != int(submissions[carrier]["quota"]) or qualified < approved:
-            raise ValueError(
-                f"{carrier} campaign quota barrier failed: "
-                f"qualified={qualified} approvedQuota={approved}"
-            )
-        if phase == "publish" and finalized != qualified:
-            raise ValueError(
-                f"{carrier} campaign finalization differs from qualified closure"
-            )
-        lanes[carrier].update(
-            {
-                "approvedQuota": approved,
-                "qualifiedCount": qualified,
-                "finalizedCount": finalized,
-                "status": (
-                    "review_qualified"
-                    if phase == "review"
-                    else "finalized"
-                ),
-                "phase": phase,
-            }
-        )
 
 
 def run_campaign(
@@ -336,8 +60,8 @@ def run_campaign(
     effective_lane_timeout = (
         lane_timeout_seconds or policy.campaign_lane_timeout_seconds
     )
-    started_at = _utc_now()
-    lanes = {carrier: _empty_lane() for carrier in CAMPAIGN_CARRIERS}
+    started_at = utc_now()
+    lanes = {carrier: empty_lane() for carrier in CAMPAIGN_CARRIERS}
     clones: dict[str, DetachedClone] = {}
     plan: dict[str, Any] | None = None
     plan_digest: str | None = None
@@ -346,10 +70,10 @@ def run_campaign(
     failure: str | None = None
     caught: Exception | None = None
 
-    with _controller_lock(runtime, root_id):
+    with controller_lock(runtime, root_id):
         try:
             require_clean_main_tree(runtime.repo_root)
-            submissions = _wait_for_submissions(
+            submissions = wait_for_submissions(
                 runtime,
                 root_id,
                 timeout_seconds=effective_submission_timeout,
@@ -361,8 +85,8 @@ def run_campaign(
                     submissions[carrier]["executionId"]
                 )
             final_phase = "freeze"
-            plan, plan_digest = _freeze_plan(runtime, root_id, submissions)
-            _write_report(
+            plan, plan_digest = freeze_plan(runtime, root_id, submissions)
+            write_report(
                 runtime,
                 root_id,
                 status="running",
@@ -414,36 +138,43 @@ def run_campaign(
                 worker_count=policy.campaign_lane_workers,
                 lane_runner=lane_runner,
             )
+            publishable: list[str] = []
             for carrier, (code, error) in review.items():
                 lanes[carrier].update(
                     {
                         "reviewReturnCode": code,
-                        "status": "reviewed" if code == 0 else "blocked",
                         "phase": "review",
                         "error": error,
                     }
                 )
-            if any(code != 0 for code, _error in review.values()):
-                raise RuntimeError("one or more campaign lanes failed review")
-            _apply_receipts(
-                runtime,
-                root_id,
-                submissions,
-                lanes,
-                phase="review",
-            )
-            final_phase = "quota_barrier"
-            assert_frozen_main_tree(
-                runtime.repo_root,
-                git_branch=str(plan["gitBranch"]),
-                commit_sha=str(plan["gitCommitSha"]),
-                source_digest=str(plan["sourceDigest"]),
-            )
-            _write_report(
+                if code != 0:
+                    lanes[carrier]["status"] = "blocked"
+                    continue
+                receipt = load_review_for_lane(
+                    runtime,
+                    root_id,
+                    carrier,
+                    expected_execution_id=str(submissions[carrier]["executionId"]),
+                    expected_quota=int(submissions[carrier]["quota"]),
+                )
+                if receipt is None:
+                    lanes[carrier]["status"] = "blocked"
+                    lanes[carrier]["error"] = (
+                        error or f"{carrier} review receipt missing after success"
+                    )
+                    continue
+                apply_receipt_fields(lanes, carrier, receipt, phase="review")
+                if int(receipt["qualifiedCount"]) > 0 and str(
+                    receipt["status"]
+                ) in {"qualified", "partial"}:
+                    publishable.append(carrier)
+                else:
+                    lanes[carrier]["status"] = "blocked"
+            write_report(
                 runtime,
                 root_id,
                 status="running",
-                phase="quota_barrier",
+                phase="publish",
                 plan_digest=plan_digest,
                 git_branch=str(plan["gitBranch"]),
                 git_commit_sha=str(plan["gitCommitSha"]),
@@ -454,42 +185,86 @@ def run_campaign(
                 failure=None,
             )
             final_phase = "publish"
-            published = run_phase(
-                clones,
-                submissions,
-                stage=_PUBLISH_STAGE,
-                runtime=runtime,
-                root_execution_id=root_id,
-                timeout_seconds=effective_lane_timeout,
-                worker_count=policy.campaign_lane_workers,
-                lane_runner=lane_runner,
-            )
-            for carrier, (code, error) in published.items():
-                lanes[carrier].update(
-                    {
-                        "publishReturnCode": code,
-                        "status": "published" if code == 0 else "blocked",
-                        "phase": "publish",
-                        "error": error,
-                    }
+            if publishable:
+                assert_frozen_main_tree(
+                    runtime.repo_root,
+                    git_branch=str(plan["gitBranch"]),
+                    commit_sha=str(plan["gitCommitSha"]),
+                    source_digest=str(plan["sourceDigest"]),
                 )
-            if any(code != 0 for code, _error in published.values()):
-                raise RuntimeError("one or more campaign lanes failed publish")
-            _apply_receipts(
-                runtime,
-                root_id,
-                submissions,
-                lanes,
-                phase="publish",
-            )
+                published = run_phase(
+                    clones,
+                    submissions,
+                    stage=_PUBLISH_STAGE,
+                    runtime=runtime,
+                    root_execution_id=root_id,
+                    timeout_seconds=effective_lane_timeout,
+                    worker_count=policy.campaign_lane_workers,
+                    lane_runner=lane_runner,
+                    carriers=tuple(publishable),
+                )
+                for carrier, (code, error) in published.items():
+                    lanes[carrier].update(
+                        {
+                            "publishReturnCode": code,
+                            "phase": "publish",
+                            "error": error if code != 0 else None,
+                        }
+                    )
+                    if code != 0:
+                        lanes[carrier]["status"] = "blocked"
+                        continue
+                    try:
+                        receipt = load_lane_receipt(
+                            root_id,
+                            carrier,
+                            "publish",
+                            root=runtime.campaigns_root,
+                        )
+                    except (OSError, ValueError) as exc:
+                        lanes[carrier]["status"] = "blocked"
+                        lanes[carrier]["error"] = str(exc)
+                        continue
+                    if str(receipt.get("executionId") or "") != str(
+                        submissions[carrier]["executionId"]
+                    ):
+                        lanes[carrier]["status"] = "blocked"
+                        lanes[carrier]["error"] = (
+                            f"{carrier} publish receipt executionId drift"
+                        )
+                        continue
+                    apply_receipt_fields(lanes, carrier, receipt, phase="publish")
             assert_frozen_revision(
                 runtime.repo_root,
                 git_branch=str(plan["gitBranch"]),
                 commit_sha=str(plan["gitCommitSha"]),
                 source_digest=str(plan["sourceDigest"]),
             )
-            final_status = "succeeded"
+            final_status = aggregate_status(lanes)
             final_phase = "completed"
+            if final_status == "blocked":
+                failure = "campaign produced no publishable qualified objects"
+                caught = RuntimeError(failure)
+            else:
+                lane_failures = [
+                    f"{carrier}:{lanes[carrier].get('error') or lanes[carrier]['status']}"
+                    for carrier in CAMPAIGN_CARRIERS
+                    if str(lanes[carrier].get("status") or "") == "blocked"
+                    or int(lanes[carrier].get("finalizedCount") or 0) <= 0
+                ]
+                if lane_failures and final_status == "succeeded_partial":
+                    failure = "partial campaign; blocked lanes: " + ", ".join(
+                        lane_failures
+                    )
+                maybe_write_copy_ready_receipt(
+                    root_execution_id=root_id,
+                    plan=plan,
+                    submissions=submissions,
+                    lanes=lanes,
+                    campaigns_root=runtime.campaigns_root,
+                    output_root=runtime.output_root,
+                    assessed_at=utc_now(),
+                )
         except Exception as exc:  # noqa: BLE001
             caught = exc
             failure = f"{type(exc).__name__}: {exc}"
@@ -510,7 +285,7 @@ def run_campaign(
                 )
                 if caught is None:
                     caught = RuntimeError(failure)
-            _write_report(
+            write_report(
                 runtime,
                 root_id,
                 status=final_status,
@@ -532,9 +307,9 @@ def run_campaign(
                 started_at=started_at,
                 failure=failure,
             )
-    if caught is not None:
+    if caught is not None and final_status == "blocked":
         raise caught
-    return _report_path(runtime, root_id)
+    return report_path(runtime, root_id)
 
 
 __all__ = [

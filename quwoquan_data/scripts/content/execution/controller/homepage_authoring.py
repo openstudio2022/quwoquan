@@ -96,9 +96,11 @@ def homepage_quota_verdict(ctx: ExecutionContext) -> HomepageQuotaVerdict:
 
 
 def _homepages_done(ctx: ExecutionContext) -> tuple[bool, list[str]]:
-    """build_homepage checkpoint：达标主页对象数是否已满足准出配额。"""
+    """build_homepage checkpoint：至少有一个合格主页即可推进；quota 是里程碑。"""
     verdict = homepage_quota_verdict(ctx)
-    return verdict.passed, verdict.blocking_issues()
+    if verdict.qualified_count > 0:
+        return True, []
+    return False, verdict.blocking_issues()
 
 def _homepage_independent_review_issues(
     ctx: ExecutionContext,
